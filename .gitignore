@@ -1,0 +1,5 @@
+node_modules/
+.env
+*.log
+.automation-state.json
+.DS_Store

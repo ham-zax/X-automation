@@ -1,0 +1,408 @@
+import 'dotenv/config';
+import { Scraper } from 'xactions';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// ============================================================================
+// ANSI Color Formatting
+// ============================================================================
+const colors = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  cyan: '\x1b[36m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  magenta: '\x1b[35m',
+  blue: '\x1b[34m',
+  red: '\x1b[31m',
+  white: '\x1b[37m',
+};
+
+// ============================================================================
+// 1. Hacker News Top Stories Fetcher
+// ============================================================================
+export async function fetchHackerNews(limit = 5) {
+  try {
+    const topIdsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+    if (!topIdsRes.ok) throw new Error(`HN API error: ${topIdsRes.status}`);
+    const topIds = await topIdsRes.json();
+    const idsToFetch = topIds.slice(0, limit);
+
+    const stories = await Promise.all(
+      idsToFetch.map(async (id) => {
+        try {
+          const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+          return await itemRes.json();
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    return stories.filter(Boolean).map((s) => ({
+      source: 'hn',
+      title: s.title,
+      url: s.url || `https://news.ycombinator.com/item?id=${s.id}`,
+      score: s.score || 0,
+      by: s.by,
+      comments: s.descendants || 0,
+      timestamp: s.time ? s.time * 1000 : 0,
+      hnUrl: `https://news.ycombinator.com/item?id=${s.id}`,
+    }));
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+// ============================================================================
+// 2. GitHub Trending & Hot Repositories Fetcher
+// ============================================================================
+export async function fetchGitHubTrending(limit = 5) {
+  try {
+    const createdAfter = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const fetchLimit = Math.min(Math.max(limit * 4, 20), 100);
+    const url = `https://api.github.com/search/repositories?q=created:>${createdAfter}+stars:>5&sort=stars&order=desc&per_page=${fetchLimit}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'xactions-tech-news/1.0',
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
+
+    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
+    const data = await res.json();
+
+    return (data.items || [])
+      .map((repo) => {
+        const createdAt = Date.parse(repo.created_at);
+        const ageDays = Math.max((Date.now() - createdAt) / 86_400_000, 1);
+        return {
+          source: 'github',
+          name: repo.full_name,
+          description: repo.description || 'No description provided.',
+          stars: repo.stargazers_count,
+          starsPerDay: repo.stargazers_count / ageDays,
+          language: repo.language || 'Code',
+          url: repo.html_url,
+          forks: repo.forks_count,
+          createdAt,
+          pushedAt: Date.parse(repo.pushed_at),
+        };
+      })
+      .sort((a, b) => b.starsPerDay - a.starsPerDay)
+      .slice(0, limit);
+  } catch (err) {
+    return { error: err.message };
+  }
+}
+
+// ============================================================================
+// 3. X / Twitter Tech News Highlights via XActions
+// ============================================================================
+export async function fetchXTechNews(accounts = ['github', 'OpenAI', 'ycombinator', 'TechCrunch'], limitPerAccount = 1) {
+  const tweets = [];
+  try {
+    const scraper = new Scraper();
+
+    for (const username of accounts) {
+      try {
+        let count = 0;
+        for await (const t of scraper.getTweets(username, limitPerAccount)) {
+          tweets.push({
+            source: 'x',
+            author: `@${username}`,
+            text: (t.text || t.fullText || '').replace(/\s+/g, ' ').trim(),
+            likes: t.likes || 0,
+            retweets: t.retweets || 0,
+            replies: t.replies || 0,
+            views: t.views || 0,
+            timestamp: t.timestamp || (t.timeParsed ? Date.parse(t.timeParsed) : 0),
+            url: t.permanentUrl || (t.id ? `https://x.com/${username}/status/${t.id}` : `https://x.com/${username}`),
+          });
+          count++;
+          if (count >= limitPerAccount) break;
+        }
+      } catch (err) {
+        // Continue with other accounts if one fails
+      }
+    }
+  } catch (err) {
+    return { error: err.message };
+  }
+  return tweets;
+}
+
+// ============================================================================
+// 4. Thread Generator (Converts News into an X Thread)
+// ============================================================================
+export function generateNewsThread(hnStories, ghRepos, xPosts) {
+  const thread = [];
+
+  // Tweet 1: Intro / HN Highlights
+  let tweet1 = '⚡ Top Tech & Dev News Today (Thread 🧵)\n\n🔥 Hacker News Highlights:';
+  if (Array.isArray(hnStories)) {
+    hnStories.slice(0, 2).forEach((s, idx) => {
+      tweet1 += `\n• ${s.title.substring(0, 75)}... (${s.score} pts)`;
+    });
+  }
+  thread.push(tweet1);
+
+  // Tweet 2: GitHub Trending Repos
+  let tweet2 = '⭐ Trending Open Source Projects on GitHub:\n';
+  if (Array.isArray(ghRepos)) {
+    ghRepos.slice(0, 2).forEach((r) => {
+      tweet2 += `\n• ${r.name} [${r.language}]: ${r.description.substring(0, 60)}... (⭐ ${r.stars.toLocaleString()})`;
+    });
+  }
+  thread.push(tweet2);
+
+  // Tweet 3: X highlight with a stable 280-character bound.
+  if (Array.isArray(xPosts) && xPosts[0]) {
+    thread.push(fitWithUrl(`🚀 Tech signal from ${xPosts[0].author}:\n\n`, xPosts[0].text, xPosts[0].url));
+  } else if (Array.isArray(hnStories) && hnStories[0]) {
+    thread.push(fitWithUrl('🚀 Tech signal:\n\n', hnStories[0].title, hnStories[0].url));
+  } else {
+    thread.push('🚀 Tech signal: no additional high-confidence item in this digest.');
+  }
+
+  return thread;
+}
+
+function configuredTopics() {
+  return (process.env.TOPICS || 'ai,agents,llm,mcp,coding,developer,devtools,open source,typescript,node,automation')
+    .split(',')
+    .map((topic) => topic.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function relevanceScore(text, topics) {
+  const haystack = String(text || '').toLowerCase();
+  return Math.min(30, topics.filter((topic) => haystack.includes(topic)).length * 10);
+}
+
+function freshnessScore(timestamp) {
+  if (!timestamp) return 0;
+  const hoursOld = Math.max((Date.now() - timestamp) / 3_600_000, 0);
+  return Math.max(0, 20 - hoursOld / 6);
+}
+
+export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics = configuredTopics()) {
+  const candidates = [];
+
+  if (Array.isArray(hnStories)) {
+    for (const story of hnStories) {
+      const momentum = Math.min(50, story.score / 18 + story.comments / 25);
+      candidates.push({
+        key: story.url,
+        source: 'hn',
+        title: story.title,
+        text: story.title,
+        url: story.url,
+        score: Math.round(Math.min(100, momentum + relevanceScore(story.title, topics) + freshnessScore(story.timestamp))),
+        metrics: { points: story.score, comments: story.comments },
+      });
+    }
+  }
+
+  if (Array.isArray(ghRepos)) {
+    for (const repo of ghRepos) {
+      const momentum = Math.min(50, Math.log10(repo.starsPerDay + 1) * 22);
+      const text = `${repo.name} ${repo.description}`;
+      candidates.push({
+        key: repo.url,
+        source: 'github',
+        title: repo.name,
+        text: repo.description,
+        url: repo.url,
+        score: Math.round(Math.min(100, momentum + relevanceScore(text, topics) + freshnessScore(repo.createdAt))),
+        metrics: { stars: repo.stars, starsPerDay: Math.round(repo.starsPerDay) },
+      });
+    }
+  }
+
+  if (Array.isArray(xPosts)) {
+    for (const post of xPosts) {
+      const engagement = post.views + post.likes * 20 + post.retweets * 50 + post.replies * 20;
+      const momentum = Math.min(50, Math.log10(engagement + 1) * 10);
+      candidates.push({
+        key: post.url,
+        source: 'x',
+        title: post.author,
+        text: post.text,
+        url: post.url,
+        score: Math.round(Math.min(100, momentum + relevanceScore(post.text, topics) + freshnessScore(post.timestamp))),
+        metrics: { likes: post.likes, retweets: post.retweets, replies: post.replies, views: post.views },
+      });
+    }
+  }
+
+  return [...new Map(candidates.map((candidate) => [candidate.key, candidate])).values()]
+    .sort((a, b) => b.score - a.score);
+}
+
+function fitWithUrl(prefix, body, url) {
+  const suffix = `\n\n${url}`;
+  const maxBody = Math.max(0, 280 - prefix.length - suffix.length);
+  const trimmed = body.length > maxBody
+    ? `${body.slice(0, Math.max(0, maxBody - 1)).trimEnd()}…`
+    : body;
+  return `${prefix}${trimmed}${suffix}`;
+}
+
+export function generateMomentumPost(candidate) {
+  if (!candidate) throw new Error('No ranked candidate available.');
+
+  if (candidate.source === 'github') {
+    const metrics = candidate.metrics?.starsPerDay ? ` (~${candidate.metrics.starsPerDay} stars/day)` : '';
+    return fitWithUrl(`Open-source momentum: ${candidate.title}\n\n`, `${candidate.text}${metrics}`, candidate.url);
+  }
+
+  if (candidate.source === 'hn') {
+    const metrics = ` (${candidate.metrics?.points || 0} pts, ${candidate.metrics?.comments || 0} comments)`;
+    return fitWithUrl('Worth watching on Hacker News:\n\n', `${candidate.title}${metrics}`, candidate.url);
+  }
+
+  return fitWithUrl(`Worth watching from ${candidate.title}:\n\n`, candidate.text, candidate.url);
+}
+
+// ============================================================================
+// Main Execution
+// ============================================================================
+async function main() {
+  const args = process.argv.slice(2);
+  const showHn = args.includes('--hn') || (!args.includes('--github') && !args.includes('--x'));
+  const showGithub = args.includes('--github') || (!args.includes('--hn') && !args.includes('--x'));
+  const showX = args.includes('--x') || (!args.includes('--hn') && !args.includes('--github'));
+  const toThread = args.includes('--to-thread');
+  const showRanked = args.includes('--ranked');
+  const toPost = args.includes('--to-post');
+  const jsonOutput = args.includes('--json');
+  const xAccounts = (process.env.X_NEWS_ACCOUNTS || 'github,OpenAI,ycombinator,TechCrunch')
+    .split(',')
+    .map((account) => account.trim().replace(/^@/, ''))
+    .filter(Boolean);
+
+  let limit = 5;
+  const limitArg = args.find((a) => a.startsWith('--limit=') || a === '-l');
+  if (limitArg) {
+    if (limitArg.includes('=')) {
+      limit = parseInt(limitArg.split('=')[1], 10) || 5;
+    } else {
+      const idx = args.indexOf(limitArg);
+      if (args[idx + 1]) limit = parseInt(args[idx + 1], 10) || 5;
+    }
+  }
+
+  if (!jsonOutput) {
+    console.log(`\n${colors.bold}${colors.cyan}======================================================${colors.reset}`);
+    console.log(`${colors.bold}${colors.cyan}  🚀 LATEST TECH & DEVELOPER NEWS DIGEST${colors.reset}`);
+    console.log(`${colors.dim}  ${new Date().toLocaleString()} | Powered by XActions & APIs${colors.reset}`);
+    console.log(`${colors.bold}${colors.cyan}======================================================${colors.reset}\n`);
+    console.log(`${colors.yellow}⏳ Fetching latest updates from Hacker News, GitHub & X...${colors.reset}\n`);
+  }
+
+  const [hnResult, ghResult, xResult] = await Promise.allSettled([
+    showHn ? fetchHackerNews(limit) : Promise.resolve([]),
+    showGithub ? fetchGitHubTrending(limit) : Promise.resolve([]),
+    showX ? fetchXTechNews(xAccounts, Math.max(1, Math.min(limit, 3))) : Promise.resolve([]),
+  ]);
+
+  const hnStories = hnResult.status === 'fulfilled' ? hnResult.value : { error: hnResult.reason };
+  const ghRepos = ghResult.status === 'fulfilled' ? ghResult.value : { error: ghResult.reason };
+  const xPosts = xResult.status === 'fulfilled' ? xResult.value : { error: xResult.reason };
+  const ranked = rankNews({ hnStories, ghRepos, xPosts });
+
+  if (jsonOutput) {
+    console.log(JSON.stringify({ hnStories, ghRepos, xPosts, ranked }, null, 2));
+    return;
+  }
+
+  // --- Display Hacker News ---
+  if (showHn) {
+    console.log(`${colors.bold}${colors.magenta}🔥 TOP HACKER NEWS STORIES${colors.reset}`);
+    console.log(`${colors.dim}------------------------------------------------------${colors.reset}`);
+    if (hnStories.error) {
+      console.log(`${colors.red}  Error fetching HN: ${hnStories.error}${colors.reset}`);
+    } else if (Array.isArray(hnStories) && hnStories.length > 0) {
+      hnStories.forEach((s, idx) => {
+        console.log(`  ${colors.bold}${idx + 1}. ${s.title}${colors.reset}`);
+        console.log(`     ${colors.green}⭐ ${s.score} points${colors.reset} | ${colors.cyan}💬 ${s.comments} comments${colors.reset} | by ${colors.yellow}${s.by}${colors.reset}`);
+        console.log(`     ${colors.dim}🔗 ${s.url}${colors.reset}\n`);
+      });
+    } else {
+      console.log('  No stories found.\n');
+    }
+  }
+
+  // --- Display GitHub Trending ---
+  if (showGithub) {
+    console.log(`${colors.bold}${colors.green}⭐ EMERGING OPEN SOURCE REPOSITORIES (GitHub)${colors.reset}`);
+    console.log(`${colors.dim}------------------------------------------------------${colors.reset}`);
+    if (ghRepos.error) {
+      console.log(`${colors.red}  Error fetching GitHub: ${ghRepos.error}${colors.reset}`);
+    } else if (Array.isArray(ghRepos) && ghRepos.length > 0) {
+      ghRepos.forEach((r, idx) => {
+        console.log(`  ${colors.bold}${idx + 1}. ${r.name}${colors.reset} ${colors.yellow}[${r.language}]${colors.reset}`);
+        console.log(`     ${r.description}`);
+        console.log(`     ${colors.green}⭐ ${r.stars.toLocaleString()} stars${colors.reset} | ${colors.cyan}🍴 ${r.forks.toLocaleString()} forks${colors.reset}`);
+        console.log(`     ${colors.yellow}⚡ ~${Math.round(r.starsPerDay).toLocaleString()} stars/day since creation${colors.reset}`);
+        console.log(`     ${colors.dim}🔗 ${r.url}${colors.reset}\n`);
+      });
+    } else {
+      console.log('  No repositories found.\n');
+    }
+  }
+
+  // --- Display X Tech Highlights ---
+  if (showX) {
+    console.log(`${colors.bold}${colors.blue}🐦 X/TWITTER TECH & DEV HIGHLIGHTS${colors.reset}`);
+    console.log(`${colors.dim}------------------------------------------------------${colors.reset}`);
+    if (xPosts.error) {
+      console.log(`${colors.red}  Error fetching X posts: ${xPosts.error}${colors.reset}`);
+    } else if (Array.isArray(xPosts) && xPosts.length > 0) {
+      xPosts.forEach((t, idx) => {
+        console.log(`  ${colors.bold}${idx + 1}. ${colors.cyan}${t.author}${colors.reset}`);
+        console.log(`     ${t.text}`);
+        console.log(`     ${colors.green}❤️ ${t.likes.toLocaleString()} likes${colors.reset} | ${colors.yellow}🔁 ${t.retweets.toLocaleString()} retweets${colors.reset} | ${colors.dim}👁️ ${t.views.toLocaleString()} views${colors.reset}`);
+        console.log(`     ${colors.dim}🔗 ${t.url}${colors.reset}\n`);
+      });
+    } else {
+      console.log(`  No tweets found.\n`);
+    }
+  }
+
+  // --- Option: To Thread Format ---
+  if (toThread) {
+    const thread = generateNewsThread(hnStories, ghRepos, xPosts);
+    console.log(`${colors.bold}${colors.yellow}🧵 GENERATED X THREAD READY TO POST:${colors.reset}`);
+    console.log(`${colors.dim}------------------------------------------------------${colors.reset}`);
+    thread.forEach((t, i) => {
+      console.log(`\n--- Tweet ${i + 1}/${thread.length} (${t.length}/280 chars) ---`);
+      console.log(t);
+    });
+    console.log(`\n💡 To publish this thread, run:`);
+    console.log(`   node post_thread.js ${thread.map((t) => `"${t.replace(/"/g, '\\"')}"`).join(' ')}`);
+  }
+
+  if (showRanked) {
+    console.log(`\n${colors.bold}${colors.cyan}📈 RANKED MOMENTUM CANDIDATES${colors.reset}`);
+    ranked.slice(0, limit).forEach((candidate, index) => {
+      console.log(`  ${index + 1}. [${candidate.score}/100] ${candidate.source.toUpperCase()} — ${candidate.title}`);
+      console.log(`     ${colors.dim}${candidate.url}${colors.reset}`);
+    });
+  }
+
+  if (toPost && ranked[0]) {
+    const post = generateMomentumPost(ranked[0]);
+    console.log(`\n${colors.bold}${colors.yellow}✍️ TOP MOMENTUM POST (${post.length}/280)${colors.reset}`);
+    console.log(post);
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('Error running news digest:', err);
+    process.exit(1);
+  });
+}

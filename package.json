@@ -1,0 +1,20 @@
+{
+  "name": "x_test",
+  "version": "1.0.0",
+  "description": "Local X research, momentum ranking, and HTTP publishing automation",
+  "main": "automation.js",
+  "scripts": {
+    "news": "node tech_news.js --ranked --to-post",
+    "post": "node post_thread.js",
+    "http:check": "node post_thread.js --http-check",
+    "web": "node dashboard.js",
+    "automation": "node automation.js",
+    "automation:once": "node automation.js --once"
+  },
+  "keywords": [],
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "xactions": "^3.5.0"
+  }
+}
