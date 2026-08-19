@@ -80,6 +80,8 @@ export async function fetchGitHubTrending(limit = 5) {
       .replace(/&#39;|&apos;/g, "'")
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
+      .replace(/&#x([0-9a-f]+);/gi, (_, value) => String.fromCodePoint(Number.parseInt(value, 16)))
+      .replace(/&#(\d+);/g, (_, value) => String.fromCodePoint(Number(value)))
       .replace(/\s+/g, ' ')
       .trim();
     const metric = (article, repoName, suffix) => {
@@ -88,16 +90,16 @@ export async function fetchGitHubTrending(limit = 5) {
       return Number(String(match?.[1] || '0').replace(/,/g, ''));
     };
 
-    return articles.map((match, index) => {
+    const repos = articles.map((match, index) => {
       const article = match[1];
       const repoName = article.match(/<h2[^>]*>[\s\S]*?<a[^>]*href="\/([^"?#]+\/[^"?#]+)"[^>]*>/)?.[1] || '';
-      const description = decodeText(article.match(/<p class="col-9 color-fg-muted my-1 pr-4">([\s\S]*?)<\/p>/)?.[1] || '');
+      const description = decodeText(article.match(/<p[^>]*class="[^"]*color-fg-muted[^"]*"[^>]*>([\s\S]*?)<\/p>/)?.[1] || '');
       const language = decodeText(article.match(/<span itemprop="programmingLanguage">([\s\S]*?)<\/span>/)?.[1] || '');
       const starsToday = Number(String(article.match(/([\d,]+)\s+stars?\s+today/i)?.[1] || '0').replace(/,/g, ''));
       return {
         source: 'github',
         name: repoName,
-        description: description || 'No description provided.',
+        description,
         stars: metric(article, repoName, 'stargazers'),
         starsToday,
         language: language || 'Code',
@@ -107,6 +109,29 @@ export async function fetchGitHubTrending(limit = 5) {
         fetchedAt,
       };
     }).filter((repo) => repo.name);
+
+    const apiHeaders = {
+      'User-Agent': 'xactions-tech-news/1.0',
+      Accept: 'application/vnd.github+json',
+      ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    };
+    return Promise.all(repos.map(async (repo) => {
+      if (repo.description && repo.stars && repo.forks && repo.language !== 'Code') return repo;
+      try {
+        const metadataRes = await fetch(`https://api.github.com/repos/${repo.name}`, { headers: apiHeaders });
+        if (!metadataRes.ok) return repo;
+        const metadata = await metadataRes.json();
+        return {
+          ...repo,
+          description: repo.description || String(metadata.description || ''),
+          stars: repo.stars || Number(metadata.stargazers_count || 0),
+          forks: repo.forks || Number(metadata.forks_count || 0),
+          language: repo.language !== 'Code' ? repo.language : String(metadata.language || 'Code'),
+        };
+      } catch {
+        return repo;
+      }
+    }));
   } catch (err) {
     return { error: err.message };
   }
@@ -624,9 +649,14 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
   }
 }
 
-export function fetchXNichePosts(limit = 30) {
+export async function fetchXNichePosts(limit = 30) {
   const queries = X_DISCOVERY_QUERIES.map((query) => `(${query}) lang:en -filter:replies -filter:retweets`);
-  return fetchXSearchPosts(queries, limit, 'live', 3);
+  const result = await fetchXSearchPosts(queries, limit, 'live', 3);
+  if (result.error) return result;
+  return {
+    ...result,
+    posts: [...result.posts].sort((a, b) => Number(b.timestamp || 0) - Number(a.timestamp || 0)),
+  };
 }
 
 export async function fetchXViralPosts(limit = 60, passes = 4, fast = false) {
@@ -773,7 +803,7 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         url: story.url,
         timestamp: story.timestamp,
         score: Math.round(Math.min(100, momentum + relevanceScore(story.title, topics) + freshnessScore(story.timestamp))),
-        metrics: { points: story.score, comments: story.comments, rank: story.rank || null, hnUrl: story.hnUrl || '' },
+        metrics: { points: story.score, comments: story.comments, by: story.by || '', rank: story.rank || null, hnUrl: story.hnUrl || '' },
       });
     }
   }

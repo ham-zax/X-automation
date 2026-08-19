@@ -42,7 +42,8 @@ function candidateMetricLine(candidate: DiscoveredCandidate): string {
     return `${formatNumber(metrics.stars as number)} stars · ~${formatNumber(metrics.starsPerDay as number)} stars/day since creation · legacy heuristic`
   }
   if (metrics.kind === 'hn' || metrics.kind === 'hn_legacy') {
-    return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments${metrics.kind === 'hn_legacy' ? ' · historical collected candidate' : ''}`
+    const author = metrics.by ? ` · by ${metrics.by}` : ''
+    return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments${author}${metrics.kind === 'hn_legacy' ? ' · historical collected candidate' : ''}`
   }
   return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies`
 }
@@ -117,7 +118,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         </Disclosure>
       )}
 
-      <p className="mt-3 text-sm leading-6 text-slate-700 break-words">{candidate.displayText}</p>
+      {candidate.displayText && <p className="mt-3 text-sm leading-6 text-slate-700 break-words">{candidate.displayText}</p>}
       <div className="mt-2 text-xs text-slate-500">{candidateMetricLine(candidate)}</div>
 
       {!completion && queue?.recommendedPipeline && (

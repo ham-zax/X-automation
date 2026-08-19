@@ -7,7 +7,6 @@ import {
   fetchHackerNews,
   fetchXNichePosts,
   fetchXViralPosts,
-  generateMomentumPost,
   rankNews,
   rankXViralPosts,
 } from './tech_news.js';
@@ -322,7 +321,10 @@ export async function collectResearch(source) {
     const result = await fetchXNichePosts(Math.max(NEWS_LIMIT * 6, 48));
     const ranked = personalizeCandidates(rankNews({ xPosts: result.posts }), preference);
     upsertCandidates(ranked);
-    if (!result.error) persistDiscoverSnapshot('x', ranked);
+    if (!result.error) {
+      const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
+      persistDiscoverSnapshot('x', result.posts.map((post) => byKey.get(post.url)).filter(Boolean));
+    }
     return result.error;
   }
 
@@ -364,7 +366,10 @@ export async function collectResearch(source) {
     const githubRanked = Array.isArray(repos) ? personalizeCandidates(rankNews({ ghRepos: repos }), preference) : [];
     const hnRanked = Array.isArray(stories) ? personalizeCandidates(rankNews({ hnStories: stories }), preference) : [];
     upsertCandidates([...xRanked, ...githubRanked, ...hnRanked]);
-    if (!xResult.error) persistDiscoverSnapshot('x', xRanked);
+    if (!xResult.error) {
+      const byKey = new Map(xRanked.map((candidate) => [candidate.key, candidate]));
+      persistDiscoverSnapshot('x', xResult.posts.map((post) => byKey.get(post.url)).filter(Boolean));
+    }
     if (Array.isArray(repos)) {
       const byKey = new Map(githubRanked.map((candidate) => [candidate.key, candidate]));
       persistDiscoverSnapshot('github', repos.map((repo) => byKey.get(repo.url)).filter(Boolean));
@@ -412,7 +417,7 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
     key: candidate.key,
     title: candidate.title || candidate.text?.slice(0, 80) || 'Untitled',
     text: candidate.text || '',
-    displayText: candidate.source === 'x' ? candidate.text : generateMomentumPost(candidate),
+    displayText: candidate.source === 'hn' && candidate.text === candidate.title ? '' : candidate.text,
     url: candidate.url || '',
     source: candidate.source || 'unknown',
     timestamp: candidate.timestamp || null,
@@ -431,7 +436,7 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
         : { stars: metrics.stars, starsPerDay: metrics.starsPerDay, kind: 'github_legacy' }
       : candidate.source === 'hn'
         ? metrics.rank != null
-          ? { points: metrics.points, comments: metrics.comments, rank: metrics.rank, hnUrl: metrics.hnUrl, kind: 'hn' }
+          ? { points: metrics.points, comments: metrics.comments, by: metrics.by, rank: metrics.rank, hnUrl: metrics.hnUrl, kind: 'hn' }
           : { points: metrics.points, comments: metrics.comments, kind: 'hn_legacy' }
         : { views: metrics.views, likes: metrics.likes, retweets: metrics.retweets, replies: metrics.replies, kind: 'x' },
     niche: {
