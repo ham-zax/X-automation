@@ -7,8 +7,23 @@ import {
   TARGET_CLASSES,
   refreshRelationshipProfile,
 } from './relationship.js';
+import {
+  analyzeReplyRepetition,
+  calculateInteractionYield,
+  calculateSaturationPressure,
+  deriveAccountHealth,
+  summarizeNetworkQuality,
+} from './health.js';
 
 export const DB_FILE = path.resolve('.x-research.sqlite');
+export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
+  'under_the_hood_snapshot',
+  'visibility_label_observed',
+  'visibility_label_cleared',
+  'platform_challenge_observed',
+  'platform_restriction_observed',
+  'operator_note',
+];
 
 const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
@@ -149,6 +164,17 @@ db.exec(`
     metadata_json TEXT NOT NULL DEFAULT '{}'
   );
 
+  CREATE TABLE IF NOT EXISTS account_health_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'info',
+    source TEXT NOT NULL,
+    source_ref TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    observed_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS queue_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     candidate_key TEXT NOT NULL UNIQUE,
@@ -201,6 +227,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_relationship_events_type_time ON relationship_events(event_type, occurred_at DESC);
   CREATE INDEX IF NOT EXISTS idx_relationship_events_source ON relationship_events(source_tweet_id);
   CREATE INDEX IF NOT EXISTS idx_relationship_events_ours ON relationship_events(our_tweet_id);
+  CREATE INDEX IF NOT EXISTS idx_health_observed_at ON account_health_observations(observed_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_health_type_observed ON account_health_observations(type, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
 
@@ -1173,6 +1201,243 @@ export function recordRelationshipEvent(event) {
     db.exec('ROLLBACK');
     throw error;
   }
+}
+
+function decodeAccountHealthObservation(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    type: row.type,
+    severity: row.severity,
+    source: row.source,
+    sourceRef: row.source_ref || '',
+    metadata: json(row.metadata_json, {}),
+    observedAt: Number(row.observed_at || 0),
+    createdAt: Number(row.created_at || 0),
+  };
+}
+
+export function recordAccountHealthObservation(observation = {}) {
+  const type = String(observation.type || '');
+  if (!ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type || 'missing'}.`);
+  const source = String(observation.source || '').trim();
+  if (!source) throw new Error('Account health observation source is required.');
+  const sourceRef = String(observation.sourceRef ?? observation.source_ref ?? '').trim();
+  if (['visibility_label_observed', 'visibility_label_cleared', 'platform_challenge_observed', 'platform_restriction_observed'].includes(type) && !sourceRef) {
+    throw new Error(`${type} requires sourceRef provenance.`);
+  }
+  const observedAt = Number(observation.observedAt ?? observation.observed_at ?? Date.now());
+  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Account health observation observedAt must be a positive timestamp.');
+  const metadata = observation.metadata && typeof observation.metadata === 'object' && !Array.isArray(observation.metadata)
+    ? observation.metadata
+    : {};
+  const inserted = db.prepare(`INSERT INTO account_health_observations(
+    type, severity, source, source_ref, metadata_json, observed_at, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+    type,
+    String(observation.severity || 'info'),
+    source,
+    sourceRef,
+    JSON.stringify(metadata),
+    observedAt,
+    Date.now(),
+  );
+  return decodeAccountHealthObservation(db.prepare('SELECT * FROM account_health_observations WHERE id = ?').get(Number(inserted.lastInsertRowid)));
+}
+
+export function listAccountHealthObservations({ type, limit = 100 } = {}) {
+  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type}.`);
+  const bounded = Math.max(1, Math.min(1000, Number(limit || 100)));
+  const rows = type
+    ? db.prepare('SELECT * FROM account_health_observations WHERE type = ? ORDER BY observed_at DESC, id DESC LIMIT ?').all(type, bounded)
+    : db.prepare('SELECT * FROM account_health_observations ORDER BY observed_at DESC, id DESC LIMIT ?').all(bounded);
+  return rows.map(decodeAccountHealthObservation);
+}
+
+export function getLatestHealthObservation(type = null) {
+  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type}.`);
+  const row = type
+    ? db.prepare('SELECT * FROM account_health_observations WHERE type = ? ORDER BY observed_at DESC, id DESC LIMIT 1').get(type)
+    : db.prepare('SELECT * FROM account_health_observations ORDER BY observed_at DESC, id DESC LIMIT 1').get();
+  return decodeAccountHealthObservation(row);
+}
+
+export function recordUnderTheHoodSnapshot(report) {
+  if (report?.available !== true) return null;
+  return recordAccountHealthObservation({
+    type: 'under_the_hood_snapshot',
+    severity: 'info',
+    source: 'x_under_the_hood',
+    sourceRef: 'https://x.com/i/under_the_hood',
+    observedAt: Number(report.capturedAt || Date.now()),
+    metadata: {
+      accountLabels: Array.isArray(report.accountLabels) ? report.accountLabels : [],
+      postLabels: Array.isArray(report.postLabels) ? report.postLabels : [],
+      period: report.period ?? null,
+      rawSummary: report.rawSummary && typeof report.rawSummary === 'object' ? report.rawSummary : {},
+    },
+  });
+}
+
+export function listRecentPublishedReplies({ targetUsername = null, topic = null, since = null, limit = 30 } = {}) {
+  const bounded = Math.max(1, Math.min(200, Number(limit || 30)));
+  const sinceTimestamp = since == null ? 0 : Number(since);
+  if (!Number.isFinite(sinceTimestamp) || sinceTimestamp < 0) throw new Error('Recent reply since must be a non-negative timestamp.');
+  const rows = db.prepare(`SELECT a.commentary AS text, a.created_at,
+      q.target_username, q.reply_archetype,
+      (SELECT r.topic FROM relationship_events r
+        WHERE r.candidate_key = a.candidate_key AND r.event_type = 'our_reply'
+        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1) AS topic
+    FROM candidate_actions a LEFT JOIN queue_items q ON q.candidate_key = a.candidate_key
+    WHERE a.action = 'reply' AND a.created_at >= ? AND TRIM(COALESCE(a.commentary, '')) <> ''
+    ORDER BY a.created_at DESC LIMIT ?`).all(sinceTimestamp, Math.max(bounded, 100));
+  const usernameFilter = targetUsername ? normalizeRelationshipUsername(targetUsername) : null;
+  const topicFilter = topic ? String(topic).trim().toLowerCase() : null;
+  return rows
+    .map((row) => ({
+      text: row.text || '',
+      targetUsername: normalizeRelationshipUsername(row.target_username),
+      archetype: row.reply_archetype || '',
+      topic: String(row.topic || '').trim().toLowerCase(),
+      createdAt: Number(row.created_at || 0),
+    }))
+    .filter((reply) => (!usernameFilter || reply.targetUsername === usernameFilter) && (!topicFilter || reply.topic === topicFilter))
+    .slice(0, bounded);
+}
+
+function recentRelationshipEvents(since, limit = 5000) {
+  return db.prepare('SELECT * FROM relationship_events WHERE occurred_at >= ? ORDER BY occurred_at ASC, id ASC LIMIT ?')
+    .all(Number(since || 0), Math.max(1, Math.min(5000, Number(limit || 5000))))
+    .map(decodeRelationshipEvent);
+}
+
+function meaningfulHealthEvent(event) {
+  return event?.metadata?.meaningful !== false;
+}
+
+function currentUnderTheHoodEvidence(observations) {
+  const latest = observations.find((observation) => observation.type === 'under_the_hood_snapshot') || null;
+  if (!latest) return [];
+  const labels = [
+    ...(Array.isArray(latest.metadata?.accountLabels) ? latest.metadata.accountLabels : []),
+    ...(Array.isArray(latest.metadata?.postLabels) ? latest.metadata.postLabels : []),
+  ];
+  return labels.filter((label) => String(label?.label || '').trim()).map((label) => ({
+    type: 'visibility_label_observed',
+    source: latest.source,
+    sourceRef: latest.sourceRef,
+    observedAt: latest.observedAt,
+    metadata: {
+      label: String(label.label),
+      about: label.about || '',
+      effect: label.effect || '',
+      underTheHoodSnapshotId: latest.id,
+    },
+  }));
+}
+
+function countRecentRecurringTransitions(since) {
+  const events = db.prepare(`SELECT username, source_tweet_id, candidate_key, occurred_at, metadata_json
+    FROM relationship_events WHERE event_type = 'conversation_continued'
+    ORDER BY occurred_at ASC, id ASC LIMIT 5000`).all();
+  const byUser = new Map();
+  let count = 0;
+  for (const row of events) {
+    if (json(row.metadata_json, {}).meaningful === false) continue;
+    const username = normalizeRelationshipUsername(row.username);
+    const key = String(row.source_tweet_id || row.candidate_key || row.occurred_at || '');
+    const state = byUser.get(username) || { keys: new Set(), reached: false };
+    state.keys.add(key);
+    if (!state.reached && state.keys.size >= 2) {
+      state.reached = true;
+      if (Number(row.occurred_at || 0) >= since) count++;
+    }
+    byUser.set(username, state);
+  }
+  return count;
+}
+
+export function getAccountHealthSummary({ now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Account health summary now must be numeric.');
+  const sevenDaysAgo = timestamp - 7 * 24 * 3_600_000;
+  const thirtyDaysAgo = timestamp - 30 * 24 * 3_600_000;
+  const observations = listAccountHealthObservations({ limit: 200 });
+  const effectiveObservations = [
+    ...observations.filter((observation) => observation.type !== 'under_the_hood_snapshot'),
+    ...currentUnderTheHoodEvidence(observations),
+  ];
+  const profiles = listRelationshipProfiles({ minTargetScore: 0, limit: 1000 });
+  const events30d = recentRelationshipEvents(thirtyDaysAgo);
+  const events7d = events30d.filter((event) => event.occurredAt >= sevenDaysAgo);
+  const eventsByUsername = new Map();
+  for (const event of events30d) {
+    const current = eventsByUsername.get(event.username) || [];
+    current.push(event);
+    eventsByUsername.set(event.username, current);
+  }
+  const saturationTargets = profiles
+    .map((profile) => {
+      const events = eventsByUsername.get(profile.username) || [];
+      if (!events.length && Number(profile.meaningfulInteractions || 0) === 0) return null;
+      return { username: profile.username, ...calculateSaturationPressure(profile, events, { now: timestamp }) };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.pressure - left.pressure || left.username.localeCompare(right.username));
+  const saturationDistribution = { low: 0, mild: 0, meaningful: 0, high: 0 };
+  for (const target of saturationTargets) saturationDistribution[target.band]++;
+
+  const networkQuality = summarizeNetworkQuality(profiles, events30d);
+  const recentReplies = listRecentPublishedReplies({ since: sevenDaysAgo, limit: 50 });
+  const repetition = analyzeReplyRepetition(recentReplies);
+  const meaningfulOutbound30d = events30d.filter((event) => ['our_reply', 'our_quote'].includes(event.eventType) && meaningfulHealthEvent(event));
+  const responseEvents30d = events30d.filter((event) => ['target_reply', 'target_quote', 'target_repost'].includes(event.eventType) && meaningfulHealthEvent(event));
+  const interactionYield = calculateInteractionYield({
+    authorResponses: responseEvents30d.length,
+    continuedConversations: events30d.filter((event) => event.eventType === 'conversation_continued' && meaningfulHealthEvent(event)).length,
+    newRecurringRelationships: countRecentRecurringTransitions(thirtyDaysAgo),
+    relevantTargetFollows: new Set(events30d.filter((event) => event.eventType === 'target_follow').map((event) => event.username)).size,
+    newMutualConnections: new Set(events30d.filter((event) => event.eventType === 'mutual_reached').map((event) => event.username)).size,
+    meaningfulInteractions: meaningfulOutbound30d.length,
+  });
+  const topTargetUsername = networkQuality.components?.topTargetConcentration?.username || null;
+  const topTargetActiveConversation = topTargetUsername
+    ? saturationTargets.find((target) => target.username === topTargetUsername)?.overrideReasons?.includes('active_conversation') === true
+    : false;
+  const health = deriveAccountHealth({
+    observations: effectiveObservations,
+    relationshipSummary: networkQuality,
+    engagementSummary: { saturationPressure: saturationTargets, topTargetActiveConversation },
+    repetitionSummary: repetition,
+  });
+
+  return {
+    generatedAt: timestamp,
+    health,
+    observations,
+    latestObservation: observations[0] || null,
+    latestUnderTheHood: observations.find((observation) => observation.type === 'under_the_hood_snapshot') || null,
+    networkQuality,
+    interactionYield,
+    repetition,
+    recentReplies,
+    saturation: {
+      distribution: saturationDistribution,
+      targets: saturationTargets,
+      highest: saturationTargets[0] || null,
+    },
+    interactionCounts: {
+      meaningfulInteractions7d: events7d.filter((event) => ['our_reply', 'our_quote'].includes(event.eventType) && meaningfulHealthEvent(event)).length,
+      meaningfulInteractions30d: meaningfulOutbound30d.length,
+      authorResponses30d: responseEvents30d.length,
+    },
+    evidence: {
+      hard: health.reasons
+        .filter((reason) => reason.level === 'constrained')
+        .map((reason) => ({ code: reason.code, evidence: reason.evidence, provenance: reason.provenance })),
+      soft: ['saturation', 'repetition', 'network_quality', 'interaction_yield'],
+    },
+  };
 }
 
 function decodeDraft(row) {

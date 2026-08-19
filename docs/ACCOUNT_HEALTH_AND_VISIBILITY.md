@@ -70,9 +70,9 @@ A guessed timing pattern, follower-count bucket, daily reply count, or soft satu
 
 ## 3. Observable evidence first
 
-Planned account-health evidence should be stored with provenance.
+Account-health evidence is stored append-only with provenance.
 
-Suggested health observation types:
+Persisted observation types:
 
 ```text
 under_the_hood_snapshot
@@ -80,13 +80,12 @@ visibility_label_observed
 visibility_label_cleared
 platform_challenge_observed
 platform_restriction_observed
-reply_repetition_warning
-target_saturation_warning
-network_concentration_warning
-interaction_yield_warning
+operator_note
 ```
 
-Every observation should record:
+Reply repetition, target saturation, network concentration, and InteractionYield warnings are derived from existing history rather than persisted as if they were platform observations.
+
+Every observation records:
 
 ```text
 type
@@ -101,7 +100,7 @@ Do not transform an inferred classifier theory into an observed platform event.
 
 ## 4. Under the Hood snapshots
 
-When available to the authenticated account, the planned system may capture or manually record X's aggregate **Under the Hood** visibility information.
+When available to the authenticated account, the system can capture X's aggregate **Under the Hood** visibility information through the bounded reader; manual provenance-backed observations remain available when automatic parsing is unavailable.
 
 Persist only what is actually observable:
 
@@ -361,9 +360,9 @@ not:
 23 replies generated because capacity exists
 ```
 
-## 12. Dashboard contract — planned
+## 12. Dashboard contract — current
 
-Add an **Account Health** view with:
+The **Account Health** view shows:
 
 ### Current state
 
@@ -398,9 +397,9 @@ and explicit reasons/provenance.
 
 No panel should claim to expose X's hidden bot score, reputation score, or enforcement probability.
 
-## 13. Agent contract — planned
+## 13. Agent contract — current
 
-Planned bridge commands:
+Current bridge commands:
 
 ```text
 account-health
@@ -412,9 +411,9 @@ health-under-the-hood
 
 `health-observe` records an explicit observed event with source/provenance; it does not accept speculative detector guesses as facts.
 
-`health-under-the-hood` records/refreshes an observable Under the Hood snapshot when the authenticated surface is available.
+`health-under-the-hood` attempts the bounded authenticated read and records an observable Under the Hood snapshot only when `available:true`. An unavailable/unreadable surface returns cleanly without creating health evidence.
 
-These commands are planned until implementation.
+`health-observe` requires a supported observation type, source, source reference, and explicit observation timestamp. Visibility-label observations/clears also require the observed label name. Speculative shadowban/bot/reputation theories are rejected rather than persisted as evidence.
 
 ## 14. Evidence classification
 
@@ -453,4 +452,6 @@ Account Health & Visibility is complete when the system can:
 7. calculate InteractionYield with raw component counts;
 8. apply soft health modifiers to Engage Next while preserving human override;
 9. use actual observed visibility/enforcement evidence as a real constraint;
-10. feed health/network observations into Phase 4 experiments and Phase 5 learned strategy.
+10. expose structured health/network observations for Phase 4 experiments and later Phase 5 learned strategy without requiring UI-text parsing.
+
+The runtime now satisfies items 1–9 and exposes the structured inputs required by item 10. Phase 4/5 remain separate owners for measurement/learning behavior.

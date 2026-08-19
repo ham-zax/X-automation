@@ -607,8 +607,14 @@ function hardObservationReasons(observations) {
     if (!HARD_OBSERVATION_TYPES.has(type)) continue;
     const metadata = observationMetadata(observation);
     if (metadata.active === false || metadata.resolved === true || metadata.cleared === true) continue;
+    const key = observationKey(observation);
+    const resolvedLater = ordered.some((later) => {
+      if (observationTime(later) <= observationTime(observation) || observationType(later) !== type || observationKey(later) !== key) return false;
+      const laterMetadata = observationMetadata(later);
+      return laterMetadata.active === false || laterMetadata.resolved === true || laterMetadata.cleared === true;
+    });
+    if (resolvedLater) continue;
     if (type === 'visibility_label_observed') {
-      const key = observationKey(observation);
       const clearedLater = visibilityClears.some((clear) => (
         observationTime(clear) > observationTime(observation)
         && (observationKey(clear) === key || observationKey(clear) === 'visibility_label')
@@ -636,14 +642,16 @@ function explicitConstraintReasons(engagementSummary) {
   const supplied = engagementSummary?.observedConstraint;
   const constraints = Array.isArray(supplied) ? supplied : supplied ? [supplied] : [];
   return constraints
-    .filter((constraint) => constraint !== false && constraint?.active !== false && constraint?.supported !== false)
+    .filter((constraint) => constraint && typeof constraint === 'object'
+      && constraint.active !== false
+      && constraint.supported === true
+      && String(constraint.source || '').trim()
+      && String(constraint.sourceRef ?? constraint.source_ref ?? '').trim())
     .map((constraint) => ({
-      code: typeof constraint === 'string' ? constraint : String(constraint?.code || constraint?.type || 'observed_constraint'),
+      code: String(constraint?.code || constraint?.type || 'observed_constraint'),
       level: 'constrained',
-      message: typeof constraint === 'string'
-        ? `Caller supplied an active observed/project hard constraint: ${constraint}.`
-        : String(constraint?.message || 'Caller supplied an active observed/project hard constraint.'),
-      provenance: typeof constraint === 'object' ? constraint : { value: constraint },
+      message: String(constraint?.message || 'Caller supplied an active observed/project hard constraint.'),
+      provenance: constraint,
       evidence: OBSERVED_EVIDENCE,
     }));
 }
@@ -679,7 +687,8 @@ export function deriveAccountHealth({
   const activeConversation = engagementSummary?.activeConversation === true || engagementSummary?.active_conversation === true;
   for (const saturation of saturationSummaries(engagementSummary)) {
     const pressure = finite(saturation?.pressure) ? Number(saturation.pressure) : finite(saturation) ? Number(saturation) : null;
-    if (!activeConversation && pressure != null && pressure >= HEALTH_WATCH_THRESHOLDS.saturationPressure) {
+    const saturationActiveConversation = activeConversation || saturation?.overrideReasons?.includes('active_conversation');
+    if (!saturationActiveConversation && pressure != null && pressure >= HEALTH_WATCH_THRESHOLDS.saturationPressure) {
       watchReasons.push({
         code: 'saturation_pressure',
         level: 'watch',
@@ -713,6 +722,7 @@ export function deriveAccountHealth({
   const components = relationshipSummary?.components || relationshipSummary || {};
   const concentration = components?.topTargetConcentration;
   if (!activeConversation
+    && engagementSummary?.topTargetActiveConversation !== true
     && finite(concentration?.rate)
     && nonNegative(concentration?.meaningfulInteractions) >= HEALTH_WATCH_THRESHOLDS.minimumInitialReplies
     && Number(concentration.rate) >= HEALTH_WATCH_THRESHOLDS.topTargetConcentration) {

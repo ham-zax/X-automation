@@ -222,7 +222,8 @@ export function getEngagementExpiry(opportunity = {}, { now } = {}) {
 function softPressureModifier(opportunity = {}) {
   const saturation = scoreValue(opportunity.saturation);
   const repetition = scoreValue(opportunity.repetition);
-  const rawModifier = -Math.min(20, round((saturation ?? 0) / 10 + (repetition ?? 0) / 10));
+  const healthWatch = opportunity.healthState === 'watch' ? 5 : 0;
+  const rawModifier = -Math.min(25, round((saturation ?? 0) / 10 + (repetition ?? 0) / 10 + healthWatch));
   const overrideReasons = [];
   if (opportunity.directQuestion) overrideReasons.push('direct_question');
   if (opportunity.targetReplied) overrideReasons.push('target_replied');
@@ -235,6 +236,8 @@ function softPressureModifier(opportunity = {}) {
     overrideReasons,
     saturation,
     repetition,
+    healthState: opportunity.healthState || 'healthy',
+    healthWatchPenalty: healthWatch,
     evidence: EMPIRICAL_VARIABLE,
   };
 }
@@ -294,6 +297,9 @@ export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
   if (opportunity.nearDuplicate === true || opportunity.exactDuplicate === true) {
     rejectionReasons.push(rejection('NEAR_DUPLICATE', 'Caller-supplied duplicate evidence marks the proposed reply as exact/near-duplicate.'));
   }
+  if (opportunity.observedConstraint) {
+    rejectionReasons.push(rejection('OBSERVED_CONSTRAINT', opportunity.observedConstraint.message || 'Supported observed platform/project constraint is active.'));
+  }
   if (opportunity.sameSourceExhausted === true && opportunity.newValue !== true) {
     rejectionReasons.push(rejection('SOURCE_EXHAUSTED', 'The same source was already acted on and the caller supplied no new value.'));
   }
@@ -336,6 +342,11 @@ export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
       weights: { ...PRIORITY_WEIGHTS },
       missingComponents,
       softPressure: pressure,
+      healthState: opportunity.healthState || 'healthy',
+      healthReasons: Array.isArray(opportunity.healthReasons) ? opportunity.healthReasons : [],
+      saturationSummary: opportunity.saturationSummary || null,
+      repetitionSummary: opportunity.repetitionSummary || null,
+      observedConstraint: opportunity.observedConstraint || null,
       empiricalVariables: ['freshness', 'replyVisibility', 'expiry', 'softPressure'],
       note: 'EngagePriority is an internal prioritization heuristic, not an X ranking score.',
     },
@@ -438,11 +449,12 @@ export async function refreshEngagementOpportunities({
   targetSinceHours = 24,
   responseSinceHours = 72,
 } = {}) {
-  const [store, tech, opportunity, strategy] = await Promise.all([
+  const [store, tech, opportunity, strategy, health] = await Promise.all([
     import('./store.js'),
     import('./tech_news.js'),
     import('./opportunity.js'),
     import('./strategy.js'),
+    import('./health.js'),
   ]);
   const coldProfiles = store.listRelationshipProfiles({ minTargetScore, limit: Math.max(1, Math.min(50, Number(targetLimit || 12))) });
   const allResponseProfiles = store.listRelationshipProfiles({ minTargetScore: 0, limit: 1000 });
@@ -458,6 +470,10 @@ export async function refreshEngagementOpportunities({
   const createdOrRefreshed = [];
   const rejected = [];
   const errors = [];
+  const accountHealth = store.getAccountHealthSummary({ now });
+  const observedConstraint = accountHealth.health.state === 'constrained'
+    ? accountHealth.health.reasons.find((reason) => reason.level === 'constrained') || null
+    : null;
 
   const candidateFromPost = (post, profile = null, response = false) => {
     const classified = strategy.classifyNiche(post.text || '');
@@ -504,9 +520,24 @@ export async function refreshEngagementOpportunities({
       now,
       relationship: profile ? { ...profile, nicheTags: profile.primaryTopics || [] } : null,
     });
+    const targetUsername = context.targetUsername || profile?.username || sourceUsername(candidate);
+    const targetEvents = targetUsername ? store.listRelationshipEvents(targetUsername, { limit: 1000 }) : [];
+    const saturationSummary = health.calculateSaturationPressure({
+      ...(profile || {}),
+      username: targetUsername,
+      activeConversation: context.response === true,
+      directQuestion: context.directQuestion === true,
+      newVerifiedEvidence: context.newVerifiedEvidence === true,
+    }, targetEvents, { now });
+    const recentReplies = targetUsername
+      ? store.listRecentPublishedReplies({ targetUsername, since: now - 7 * 24 * 3_600_000, limit: 20 })
+      : [];
+    const repetitionSummary = health.analyzeReplyRepetition(recentReplies, { targetUsername });
+    const repetitionPressure = Math.max(Number(repetitionSummary.archetypeConcentration || 0), Number(repetitionSummary.phraseSimilarity || 0));
     const scored = scoreEngagementOpportunity({
+
       candidate,
-      targetUsername: context.targetUsername || profile?.username || sourceUsername(candidate),
+      targetUsername,
       targetTweetId,
       engagementKind: context.engagementKind || 'initial_reply',
       relationship: profile || {},
@@ -516,6 +547,14 @@ export async function refreshEngagementOpportunities({
       profileReplyVisibility: profile?.replyVisibility ?? undefined,
       expiryClass: context.response === true ? undefined : engagementExpiryClass(candidate),
       contribution,
+      saturation: saturationSummary.pressure,
+      repetition: repetitionPressure,
+      healthState: accountHealth.health.state,
+      healthReasons: accountHealth.health.reasons,
+      saturationSummary,
+      repetitionSummary,
+      observedConstraint,
+      newVerifiedEvidence: context.newVerifiedEvidence === true,
       directQuestion: context.directQuestion === true,
       targetReplied: context.response === true,
       activeConversation: context.response === true,

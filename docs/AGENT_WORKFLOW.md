@@ -161,21 +161,39 @@ npm run agent -- engage-resolve <<<'{"key":"https://x.com/example/status/123","a
 
 The bridge has no engagement-approval command. Human approval lives in the dashboard and recomputes the Phase-2 reply gates, then snapshots the exact approved reply text. Editing/rerouting invalidates that approval. `engage-resolve` can use `action: send` only after that approval exists and requires `confirmSend: true`; the send path verifies the saved draft still matches the approved text exactly before issuing one `replyTo` write. Successful sends record the queue result, candidate `reply` action, and append-only `our_reply` relationship event. Transport failures become recoverable `failed` items; a post that succeeds remotely but cannot finish local recording remains `publishing` for reconciliation rather than being sent again.
 
-### Planned Account Health upgrade — not implemented yet
+### Account Health — current
 
-Phase 1D adds an advisory account-health/visibility layer. It must distinguish actual platform/visibility evidence from internal efficiency warnings.
+Phase 1D provides an advisory-first account-health/visibility layer that distinguishes actual platform/visibility evidence from internal efficiency warnings.
 
-Planned states:
+Current states:
 
-- `HEALTHY` — no material observed concern;
+- `HEALTHY` — no material supported observed concern;
 - `WATCH` — soft saturation/repetition/concentration/InteractionYield warning;
-- `CONSTRAINED` — observed visibility/enforcement evidence or another explicit hard boundary.
+- `CONSTRAINED` — supported observed visibility/enforcement evidence or an explicit provenance-backed project/platform hard boundary.
 
-Target saturation, daily reply count, repeated reply archetype, and crowded conversations are **not** automatic bans. A direct target question, active bidirectional exchange, or new verified evidence can justify engaging despite a WATCH-level warning.
+Inspect structured health/network diagnostics:
 
-There is no fixed daily reply quota and no human-looking jitter/circadian timing requirement. Exact/near-duplicate replies remain hard failures; repeated archetypes/structures are advisory unless the text is genuinely near-duplicate.
+```bash
+npm run agent -- account-health <<<'{}'
+```
 
-Future commands are specified in `plans/PHASE_1D_ACCOUNT_HEALTH.md`. Until implemented, do not invent `account-health`, `health-observe`, or `health-under-the-hood` behavior.
+Record only directly observed evidence, with explicit provenance and observation time:
+
+```bash
+npm run agent -- health-observe <<<'{"type":"visibility_label_observed","severity":"constraint","source":"operator","sourceRef":"visible X account label","metadata":{"label":"example visible label"},"observedAt":1787100000000}'
+```
+
+Attempt the bounded authenticated Under-the-Hood read with:
+
+```bash
+npm run agent -- health-under-the-hood <<<'{}'
+```
+
+A snapshot is persisted only when the reader returns `available:true`. `available:false` is a clean read result and does not imply HEALTHY, WATCH, or CONSTRAINED.
+
+Target saturation, daily reply count, repeated reply archetype, crowded conversations, low reach, and InteractionYield are **not** automatic bans. A direct target question, active bidirectional exchange, or new verified evidence can neutralize WATCH-level priority pressure. WATCH never removes the explicit human review/send path. Exact/near-duplicate *draft text* remains a Phase-2 hard failure; archetype/style concentration remains advisory unless the actual text is genuinely duplicate/near-duplicate.
+
+There is no fixed daily reply quota and no human-looking jitter/circadian timing requirement. Health outputs are structured data for later Phase-4 measurement; downstream work must not reverse-engineer the dashboard text.
 
 ## When the user manually gives the agent an X post
 

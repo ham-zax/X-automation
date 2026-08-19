@@ -1,6 +1,6 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, surfaces freshness-aware Engage Next opportunities, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The network-first architecture now includes human-reviewed engagement before owned-content conversion, measurement, and learned targeting/content/timing.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The network-first architecture now includes human-reviewed engagement and account-health observability before measurement and learned targeting/content/timing.
 
 ## Components
 
@@ -9,12 +9,12 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `strategy.js` — executable niche taxonomy, keyword lanes, classification, saved-preference ranking boost, and Direct/Quote/Repost/Reply/Ignore decision method.
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
-- `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, format-aware drafts/editor/gate metadata, main/engagement queue state, Phase-3 schedule/claim/publication metadata, and performance snapshots.
+- `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, authenticated Under-the-Hood visibility observations, Hacker News, GitHub, ranking, and account-performance reads.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, append-only health observations, current health/network diagnostics, format-aware drafts/editor/gate metadata, main/engagement queue state, Phase-3 schedule/claim/publication metadata, and performance snapshots.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, Engage Next inspection/drafting/resolution, `writer-packet`, `apply-writer-output`, and read-only `schedule-next` / `schedule-inspect`; it cannot approve or publish main-feed content.
-- `dashboard.js` — Bootstrap research/workflow workbench with Engage Next/Active Conversations, format-aware draft editing, hard-gate review, scheduler reasoning/override controls, publication state, Relationships, Audience, and Performance.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, Account Health observation/inspection, Engage Next inspection/drafting/resolution, `writer-packet`, `apply-writer-output`, and read-only `schedule-next` / `schedule-inspect`; it cannot approve or publish main-feed content.
+- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next/Active Conversations, format-aware draft editing, hard-gate review, scheduler reasoning/override controls, publication state, Relationships, Audience, and Performance.
 - `automation.js` — research plus engagement-opportunity refresh, followed by scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
 
 ## Operating standards
@@ -26,7 +26,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
 - [`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`](docs/NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategic source of truth for conversation insertion, relationship conversion, owned-content conversion, target classes, network metrics, and the two-lane operating model.
 - [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — implemented target scoring, relationship profiles/events/stages, Engage Next discovery/follow-up workflow, and network analytics contracts.
-- [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — planned HEALTHY/WATCH/CONSTRAINED observability, Under the Hood snapshots, soft saturation/repetition diagnostics, network quality, and InteractionYield.
+- [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — implemented HEALTHY/WATCH/CONSTRAINED observability, provenance-preserving Under-the-Hood snapshots, soft saturation/repetition diagnostics, Network Quality, and InteractionYield.
 - [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — separates current code-backed X mechanisms, official product/policy claims, empirical variables, and retired folklore.
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
@@ -45,13 +45,15 @@ Phase 2 Content Quality is implemented through the human-review boundary: routed
 
 Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; the pure scheduler explains urgency/expiry/coverage/semantic timing; optional human schedule overrides are stored separately from approval; enabled automation atomically claims one Original/Quote/Thread row before transport; success/failure remains inspectable in queue state. Reposts remain manual and engagement replies remain outside this scheduler.
 
+Phase 1D Account Health is implemented: append-only observed health/visibility evidence retains provenance; `health.js` derives HEALTHY/WATCH/CONSTRAINED plus SaturationPressure, reply repetition, Network Quality, and InteractionYield; the dashboard/bridge expose the structured diagnostics; Under the Hood is recorded only when observable; WATCH changes warnings/priority only, while supported hard evidence blocks explicit engagement send.
+
 The remaining network-first architecture is:
 
-**Account Health/visibility observability -> media attachment readiness -> follower/relationship/health experiments -> learned strategy.**
+**media attachment readiness -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Account Health/Under the Hood capture, actual media upload/attachment readiness, the experiment engine, and learned strategy remain planned until their matching phase is implemented.
+Actual media upload/attachment readiness, full experiment measurement/capture integration, and learned strategy remain planned until their matching phases are implemented.
 
 ## Setup
 

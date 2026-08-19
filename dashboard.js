@@ -6,6 +6,7 @@ import {
   fetchAccountPerformance,
   fetchGitHubTrending,
   fetchHackerNews,
+  fetchXUnderTheHoodReport,
   fetchXNichePosts,
   fetchXViralPosts,
   generateMomentumPost,
@@ -30,9 +31,11 @@ import {
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import {
+  ACCOUNT_HEALTH_OBSERVATION_TYPES,
   candidateKey,
   countQueueItems,
   countSavedCandidates,
+  getAccountHealthSummary,
   getAudienceSummary,
   getCandidate,
   getDraft,
@@ -52,7 +55,9 @@ import {
   listQueueItems,
   listRecentMainFeedPublications,
   listRelationshipProfiles,
+  recordAccountHealthObservation,
   recordPerformanceSnapshot,
+  recordUnderTheHoodSnapshot,
   saveDraft,
   setMainFeedSchedule,
   upsertCandidates,
@@ -439,7 +444,57 @@ function relationshipsView(className = '', stage = '') {
   return summary + filters + (cards || '<div class="alert alert-secondary">No relationship profiles match these filters.</div>');
 }
 
-function engagementCard(queueItem) {
+function accountHealthView() {
+  const summary = getAccountHealthSummary();
+  const state = summary.health.state;
+  const stateClass = state === 'constrained' ? 'text-bg-danger' : state === 'watch' ? 'text-bg-warning' : 'text-bg-success';
+  const components = summary.networkQuality.components || {};
+  const responseRate = components.authorResponseRate || {};
+  const continuationRate = components.conversationContinuationRate || {};
+  const concentration = components.topTargetConcentration || {};
+  const yieldComponents = summary.interactionYield.components || {};
+  const audience = getAudienceSummary();
+  const latest = summary.latestUnderTheHood;
+  const latestLabels = latest
+    ? [...(latest.metadata?.accountLabels || []), ...(latest.metadata?.postLabels || [])]
+    : [];
+  const reasons = summary.health.reasons || [];
+  const observations = summary.observations.slice(0, 20);
+  const manualTypes = ACCOUNT_HEALTH_OBSERVATION_TYPES.filter((type) => type !== 'under_the_hood_snapshot');
+  const reasonHtml = reasons.length
+    ? reasons.map((reason) => `<li><strong>${escapeHtml(relationshipLabel(reason.code))}</strong> — ${escapeHtml(reason.message)} <span class="text-secondary">(${escapeHtml(reason.evidence || '')})</span></li>`).join('')
+    : '<li>No current health reasons.</li>';
+  const observationHtml = observations.length
+    ? observations.map((observation) => `<tr><td>${escapeHtml(new Date(observation.observedAt).toLocaleString())}</td><td>${escapeHtml(relationshipLabel(observation.type))}</td><td>${escapeHtml(observation.severity)}</td><td>${escapeHtml(observation.source)}</td><td>${escapeHtml(observation.sourceRef || '')}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-secondary">No recorded health observations.</td></tr>';
+  const topSaturation = summary.saturation.targets.slice(0, 8).map((target) => `<tr><td>@${escapeHtml(target.username)}</td><td>${escapeHtml(target.pressure)}</td><td>${escapeHtml(target.band)}</td><td>${escapeHtml(target.overrideReasons.join(', ') || 'none')}</td></tr>`).join('');
+  const repetitionWarnings = summary.repetition.warnings.length
+    ? summary.repetition.warnings.map((warning) => `<span class="badge text-bg-warning me-1">${escapeHtml(relationshipLabel(warning.code))}</span>`).join('')
+    : '<span class="text-secondary">none</span>';
+
+  return `<div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-4"><div><h2 class="h4 mb-1">Account Health <span class="badge ${stateClass} text-uppercase">${escapeHtml(state)}</span></h2><div class="text-secondary">${escapeHtml(summary.health.explanation)}</div></div><div class="small text-secondary">Derived ${escapeHtml(new Date(summary.generatedAt).toLocaleString())}</div></div>
+    <div class="card border-0 shadow-sm mb-4"><div class="card-body"><h3 class="h5">State reasons &amp; provenance</h3><ul class="mb-0">${reasonHtml}</ul></div></div>
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Meaningful interactions</div><div class="fs-4 fw-semibold">${summary.interactionCounts.meaningfulInteractions7d} / ${summary.interactionCounts.meaningfulInteractions30d}</div><div class="small text-secondary">7d / 30d</div></div></div></div>
+      <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Author response rate</div><div class="fs-4 fw-semibold">${responseRate.rate == null ? 'n/a' : `${escapeHtml(responseRate.rate)}%`}</div><div class="small text-secondary">${escapeHtml(responseRate.targetsWhoReplied || 0)} responders / ${escapeHtml(responseRate.meaningfulInitialReplies || 0)} initial replies</div></div></div></div>
+      <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Continuation rate</div><div class="fs-4 fw-semibold">${continuationRate.rate == null ? 'n/a' : `${escapeHtml(continuationRate.rate)}%`}</div><div class="small text-secondary">${escapeHtml(continuationRate.interactionsWithFollowUp || 0)} continued / ${escapeHtml(continuationRate.meaningfulInitialReplies || 0)} initial replies</div></div></div></div>
+      <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">InteractionYield</div><div class="fs-4 fw-semibold">${Number(summary.interactionYield.value || 0).toFixed(2)}</div><div class="small text-secondary">${escapeHtml(summary.interactionYield.numerator)} weighted outcomes / ${escapeHtml(summary.interactionYield.denominator)} interactions</div></div></div></div>
+    </div>
+    <div class="row g-3 mb-4"><div class="col-lg-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><h3 class="h5">Network Quality</h3><div class="small">Targets ${escapeHtml(components.targetDiversity?.uniqueTargets || 0)} · classes ${escapeHtml(components.classDiversity?.uniqueClasses || 0)} · topics ${escapeHtml(components.topicDiversity?.uniqueTopics || 0)}</div><div class="small mt-2">Recurring ${escapeHtml(components.recurringRelationshipCount || 0)} · connected ${escapeHtml(components.connectedTargetCount || 0)} · mutual ${escapeHtml(components.mutualTargetCount || 0)}</div><div class="small mt-2">Top-target concentration ${escapeHtml(concentration.rate || 0)}%${concentration.username ? ` at @${escapeHtml(concentration.username)}` : ''}</div><div class="small mt-2">Niche-aligned followers ${escapeHtml(audience.relevant_followers || 0)} / ${escapeHtml(audience.followers || 0)} observed followers</div><div class="small text-secondary mt-2">Components remain authoritative; no hidden reputation/network score is assigned.</div></div></div></div>
+    <div class="col-lg-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><h3 class="h5">InteractionYield components</h3><div class="small">Author responses ${escapeHtml(yieldComponents.authorResponses || 0)} · continued conversations ${escapeHtml(yieldComponents.continuedConversations || 0)} · new recurring relationships ${escapeHtml(yieldComponents.newRecurringRelationships || 0)} · relevant target follows ${escapeHtml(yieldComponents.relevantTargetFollows || 0)} · new mutuals ${escapeHtml(yieldComponents.newMutualConnections || 0)}</div><div class="small text-secondary mt-2">Internal comparative diagnostic, not an X score.</div></div></div></div></div>
+    <div class="card border-0 shadow-sm mb-4"><div class="card-body"><h3 class="h5">Saturation &amp; reply repetition</h3><div class="d-flex gap-2 flex-wrap mb-3">${Object.entries(summary.saturation.distribution).map(([band, count]) => `<span class="badge text-bg-light border">${escapeHtml(band)} ${escapeHtml(count)}</span>`).join('')}<span class="badge text-bg-light border">archetype concentration ${escapeHtml(summary.repetition.archetypeConcentration)}%</span><span class="badge text-bg-light border">phrase similarity ${escapeHtml(summary.repetition.phraseSimilarity)}%</span></div><div class="small mb-3">Repetition warnings: ${repetitionWarnings}</div><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Target</th><th>Pressure</th><th>Band</th><th>Overrides</th></tr></thead><tbody>${topSaturation || '<tr><td colspan="4" class="text-secondary">No target interaction pressure yet.</td></tr>'}</tbody></table></div><div class="small text-secondary">Saturation and archetype/style repetition are EMPIRICAL_VARIABLE advisory diagnostics; active/direct/new-evidence context can neutralize their Engage Next penalty.</div></div></div>
+    <div class="card border-0 shadow-sm mb-4"><div class="card-body"><div class="d-flex justify-content-between gap-3 flex-wrap"><div><h3 class="h5 mb-1">Visibility observations</h3><div class="small text-secondary">Actual platform evidence is kept separate from internal efficiency diagnostics.</div></div><form method="post" action="/health/under-the-hood"><button class="btn btn-outline-primary btn-sm" type="submit">Read Under the Hood</button></form></div>${latest ? `<div class="alert alert-light border mt-3 mb-0"><strong>Latest Under the Hood:</strong> ${escapeHtml(new Date(latest.observedAt).toLocaleString())} · ${latestLabels.length} observable label(s)${latest.metadata?.period?.label ? ` · ${escapeHtml(latest.metadata.period.label)}` : ''}</div>` : '<div class="alert alert-secondary mt-3 mb-0">No observable Under-the-Hood snapshot recorded.</div>'}<div class="table-responsive mt-3"><table class="table table-sm"><thead><tr><th>Observed</th><th>Type</th><th>Severity</th><th>Source</th><th>Source ref</th></tr></thead><tbody>${observationHtml}</tbody></table></div></div></div>
+    <form method="post" action="/health/observe" class="card border-0 shadow-sm mb-4"><div class="card-body"><h3 class="h5">Record observed evidence</h3><div class="row g-2"><div class="col-md-4"><label class="form-label small">Type</label><select class="form-select form-select-sm" name="type">${manualTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(relationshipLabel(type))}</option>`).join('')}</select></div><div class="col-md-2"><label class="form-label small">Severity</label><select class="form-select form-select-sm" name="severity"><option>info</option><option>warning</option><option>constraint</option></select></div><div class="col-md-3"><label class="form-label small">Source</label><input class="form-control form-control-sm" name="source" required></div><div class="col-md-3"><label class="form-label small">Source ref / path</label><input class="form-control form-control-sm" name="sourceRef" required></div><div class="col-md-4"><label class="form-label small">Label/name when applicable</label><input class="form-control form-control-sm" name="label"></div><div class="col-md-8"><label class="form-label small">Operator note</label><input class="form-control form-control-sm" name="note"></div></div><button class="btn btn-dark btn-sm mt-3" type="submit">Record observation</button><div class="small text-secondary mt-2">Only directly observed evidence belongs here; missing reach, activity, timing, or guessed shadowban/bot/reputation theories are not observations.</div></div></form>`;
+}
+
+function assertEngagementHealthAllowsSend() {
+  const summary = getAccountHealthSummary();
+  if (summary.health.state !== 'constrained') return summary;
+  const reason = summary.health.reasons.find((item) => item.level === 'constrained');
+  throw new Error(`Engagement send blocked by supported observed constraint: ${reason?.message || 'account health constrained'}`);
+}
+
+function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   const candidate = getCandidate(queueItem.candidateKey);
   if (!candidate) return '';
   const draft = getDraftByCandidate(queueItem.candidateKey);
@@ -453,15 +508,24 @@ function engagementCard(queueItem) {
   const expiryLabel = queueItem.expiresAt ? new Date(queueItem.expiresAt).toLocaleString() : 'unavailable';
   const activeOverride = expiry.activeConversationOverride === true;
   const pressure = score.explanation?.softPressure;
+  const saturationSummary = score.explanation?.saturationSummary;
+  const repetitionSummary = score.explanation?.repetitionSummary;
+  const currentConstrained = accountHealth.health.state === 'constrained';
   const pressureWarning = Number(pressure?.rawModifier || 0) < 0
-    ? `<div class="alert alert-warning py-2 mt-3 mb-0">Soft saturation/repetition adjustment ${escapeHtml(pressure.rawModifier)}${pressure.appliedModifier === 0 ? ' · neutralized by active/direct-response evidence' : ''}. This is advisory, not a hard block.</div>`
+    ? `<div class="alert alert-warning py-2 mt-3 mb-0">Soft health adjustment ${escapeHtml(pressure.rawModifier)}${pressure.appliedModifier === 0 ? ' · neutralized by active/direct-response/new-evidence context' : ''}. Saturation ${escapeHtml(saturationSummary?.pressure ?? pressure?.saturation ?? 0)}/100; repetition ${escapeHtml(pressure?.repetition ?? 0)}/100. WATCH is advisory and does not remove human review.</div>`
+    : '';
+  const repetitionWarning = repetitionSummary?.warnings?.length
+    ? `<div class="small text-warning-emphasis mt-2">Repetition context: ${escapeHtml(repetitionSummary.warnings.map((warning) => relationshipLabel(warning.code)).join(', '))}. Historical archetype/style concentration is warning-level; the Phase-2 gate checks the actual draft for exact/near duplication.</div>`
+    : '';
+  const hardHealthWarning = currentConstrained
+    ? `<div class="alert alert-danger py-2 mt-3 mb-0">Current Account Health is CONSTRAINED from supported observed evidence. Drafting/review may continue, but approval/send is unavailable until the hard evidence is cleared/resolved.</div>`
     : '';
   const relationshipBadges = profile
     ? `<div class="d-flex gap-1 flex-wrap mt-2">${(profile.classes || []).map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('')}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">TargetScore ${Math.round(profile.targetScore)}</span></div>`
     : '<div class="small text-secondary mt-2">Relationship profile unavailable.</div>';
   const canReview = draft && ['drafting', 'needs_review', 'failed'].includes(queueItem.status);
-  const canApproveSend = queueItem.status === 'needs_review' && draft?.qualityScore >= 40 && draft?.gates?.passed === true;
-  const approved = queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
+  const canApproveSend = !currentConstrained && queueItem.status === 'needs_review' && draft?.qualityScore >= 40 && draft?.gates?.passed === true;
+  const approved = !currentConstrained && queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
   const contribution = queueItem.contributionSummary || score.contribution?.summary || '';
   const archetype = queueItem.replyArchetype || score.contribution?.archetype || '';
   const components = score.components || {};
@@ -474,6 +538,8 @@ function engagementCard(queueItem) {
     <div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary mb-1">Exact source</div><div class="text-break">${escapeHtml(candidate.text)}</div></div></div>
     ${draft ? `<div class="mt-3">${gatePanel(draft.gates)}<div class="small text-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</div><div class="mt-2 text-break">${escapeHtml(draft.body || '')}</div></div>` : ''}
     ${pressureWarning}
+    ${repetitionWarning}
+    ${hardHealthWarning}
     ${(score.rejectionReasons || []).length ? `<div class="alert alert-danger py-2 mt-3 mb-0">${escapeHtml(score.rejectionReasons.map((item) => item.code || item.reason).join(', '))}</div>` : ''}
     <div class="d-flex gap-2 flex-wrap mt-3 align-items-end">
       <form method="post" action="/engage/draft"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-primary btn-sm" type="submit">${draft ? 'Edit reply' : 'Draft reply'}</button></form>
@@ -490,11 +556,17 @@ function engagementCard(queueItem) {
 
 function engageView(error = null) {
   const items = listEngagementItems({ limit: 200 });
+  const accountHealth = getAccountHealthSummary();
   const active = items.filter((item) => item.engagementKind !== 'initial_reply');
   const cold = items.filter((item) => item.engagementKind === 'initial_reply');
   const warning = error ? `<div class="alert alert-warning">Engage refresh failed: ${escapeHtml(error)}</div>` : '';
-  const group = (title, note, rows) => `<h2 class="h5 mt-4">${escapeHtml(title)} <span class="badge text-bg-light border">${rows.length}</span></h2><p class="small text-secondary">${escapeHtml(note)}</p>${rows.map(engagementCard).join('') || '<div class="alert alert-secondary">No items in this group.</div>'}`;
-  return warning
+  const group = (title, note, rows) => `<h2 class="h5 mt-4">${escapeHtml(title)} <span class="badge text-bg-light border">${rows.length}</span></h2><p class="small text-secondary">${escapeHtml(note)}</p>${rows.map((item) => engagementCard(item, accountHealth)).join('') || '<div class="alert alert-secondary">No items in this group.</div>'}`;
+  const healthBanner = accountHealth.health.state === 'constrained'
+    ? '<div class="alert alert-danger">Account Health is CONSTRAINED from supported observed evidence. New opportunities may be rejected and approval/send controls are disabled.</div>'
+    : accountHealth.health.state === 'watch'
+      ? '<div class="alert alert-warning">Account Health is WATCH. These are advisory efficiency/concentration/repetition diagnostics; useful human-reviewed actions remain available.</div>'
+      : '';
+  return warning + healthBanner
     + group('Active conversations', 'Observed replies/quotes to our existing posts or replies are shown before cold opportunities.', active)
     + group('New opportunities', 'Fresh target posts and reply-suitable research candidates with a concrete proposed contribution.', cold);
 }
@@ -608,6 +680,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
 
   const drafts = activeSource === 'drafts' ? listDrafts({ limit: 100 }) : [];
   const performance = activeSource === 'performance' ? getPerformanceSnapshot(30) : null;
+  const accountHealth = activeSource === 'health' || activeSource === 'engage' ? getAccountHealthSummary() : null;
 
   let decision;
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
@@ -630,6 +703,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     const shownCount = listRelationshipProfiles({ className: relationshipClass || undefined, stage: relationshipStage || undefined, limit: 100 }).length;
     decision = `Showing ${shownCount} top strategic relationship profiles for the current filters; Relationship Intelligence remains read-only in Phase 1B.`;
   }
+  else if (activeSource === 'health') decision = `Account Health ${accountHealth.health.state.toUpperCase()} · ${accountHealth.interactionCounts.meaningfulInteractions7d} meaningful interactions in 7d · ${accountHealth.saturation.distribution.high} high-saturation target(s).`;
   else decision = `${visible.length} persisted candidates for this research view.`;
 
   const relationshipQuery = activeSource === 'relationships'
@@ -646,6 +720,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['drafts', 'Drafts'],
     ['opportunities', 'Opportunities'],
     ['relationships', 'Relationships'],
+    ['health', `Account Health${accountHealth ? ` · ${accountHealth.health.state.toUpperCase()}` : ''}`],
     ['audience', 'Audience'],
     ['performance', 'Performance'],
     ['github', 'GitHub'],
@@ -659,6 +734,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
   else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
+  else if (activeSource === 'health') content = accountHealthView();
   else if (activeSource === 'audience') content = audienceView(audienceError);
   else content = visible.slice(0, 50).map((item, index) => candidateCard(item, index, returnTo)).join('') || '<div class="alert alert-secondary">No candidates found for this view.</div>';
 
@@ -745,6 +821,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && requestUrl.pathname === '/engage/approve-send') {
       const form = await readForm(req);
       const key = form.get('key');
+      assertEngagementHealthAllowsSend();
       approveEngagementQueueItem(key, {
         factualityConfirmed: form.get('factualityConfirmed') === '1',
         evidenceConfirmed: form.get('evidenceConfirmed') === '1',
@@ -755,8 +832,35 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && requestUrl.pathname === '/engage/send') {
       const form = await readForm(req);
+      assertEngagementHealthAllowsSend();
       await sendApprovedEngagementReply(form.get('key'));
       res.writeHead(303, { location: '/?source=engage' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/health/observe') {
+      const form = await readForm(req);
+      const type = String(form.get('type') || '');
+      if (!ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type) || type === 'under_the_hood_snapshot') throw new Error(`Unsupported manual health observation type: ${type || 'missing'}.`);
+      const source = String(form.get('source') || '').trim();
+      const sourceRef = String(form.get('sourceRef') || '').trim();
+      if (!source || !sourceRef) throw new Error('Health observations require source and sourceRef provenance.');
+      const label = String(form.get('label') || '').trim();
+      if (['visibility_label_observed', 'visibility_label_cleared'].includes(type) && !label) throw new Error(`${type} requires the observed label name.`);
+      recordAccountHealthObservation({
+        type,
+        severity: String(form.get('severity') || 'info'),
+        source,
+        sourceRef,
+        observedAt: Date.now(),
+        metadata: { label: label || undefined, note: String(form.get('note') || '').trim() },
+      });
+      res.writeHead(303, { location: '/?source=health' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/health/under-the-hood') {
+      const report = await fetchXUnderTheHoodReport();
+      if (report.available === true) recordUnderTheHoodSnapshot(report);
+      res.writeHead(303, { location: '/?source=health' }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/queue/approve') {
@@ -869,7 +973,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'audience', 'performance', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';

@@ -388,6 +388,10 @@ The August 2026 repository documents `under-the-hood/` jobs/serving code and an 
 
 Observed Under the Hood state is stronger account-health evidence than inferred "bot risk" from posting volume or timing.
 
+**System implementation:**
+
+The current Account Health reader attempts the authenticated Under-the-Hood surface once, records a provenance-preserving snapshot only when the report is observable, and treats `available:false` as absence of evidence rather than a health state. Observable report labels may support a hard account-health constraint; saturation, repetition, target concentration, activity volume, timing, reach, and InteractionYield remain `EMPIRICAL_VARIABLE` diagnostics.
+
 **Do not infer:**
 
 - that the surface exposes every internal label/rule;

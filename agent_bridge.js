@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { syncAudience } from './audience.js';
+import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
@@ -13,7 +14,9 @@ import {
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import {
+  ACCOUNT_HEALTH_OBSERVATION_TYPES,
   candidateKey,
+  getAccountHealthSummary,
   getAudienceSummary,
   getCandidate,
   getDraft,
@@ -34,7 +37,9 @@ import {
   listRecentPublishedContent,
   listRelationshipEvents,
   listRelationshipProfiles,
+  recordAccountHealthObservation,
   recordCandidateAction,
+  recordUnderTheHoodSnapshot,
   saveDraft,
   upsertCandidates,
 } from './store.js';
@@ -357,6 +362,7 @@ async function main() {
     const packets = items.map(engagementPacket);
     result({
       refresh: refresh ? { refreshed: refresh.refreshed, rejected: refresh.rejected, expired: refresh.expired, errors: refresh.errors } : null,
+      accountHealth: getAccountHealthSummary(),
       activeConversations: packets.filter((item) => item.queueItem.engagementKind !== 'initial_reply'),
       newOpportunities: packets.filter((item) => item.queueItem.engagementKind === 'initial_reply'),
     });
@@ -423,10 +429,58 @@ async function main() {
     }
     if (action === 'send') {
       if (payload.confirmSend !== true) throw new Error('engage-resolve send requires confirmSend=true for the explicit send action.');
+      const accountHealth = getAccountHealthSummary();
+      if (accountHealth.health.state === 'constrained') {
+        const reason = accountHealth.health.reasons.find((item) => item.level === 'constrained');
+        throw new Error(`Engagement send blocked by supported observed constraint: ${reason?.message || 'account health constrained'}`);
+      }
       result(await sendApprovedEngagementReply(key));
       return;
     }
     throw new Error(`Invalid engage-resolve action: ${action || 'missing'}.`);
+  }
+
+  if (command === 'account-health') {
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    if (!Number.isFinite(now)) throw new Error('account-health now must be numeric when supplied.');
+    result(getAccountHealthSummary({ now }));
+    return;
+  }
+
+  if (command === 'health-observe') {
+    const type = String(payload.type || '');
+    if (!ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type) || type === 'under_the_hood_snapshot') {
+      throw new Error(`Unsupported manual health observation type: ${type || 'missing'}.`);
+    }
+    const source = String(payload.source || '').trim();
+    const sourceRef = String(payload.sourceRef ?? payload.source_ref ?? '').trim();
+    const observedAt = Number(payload.observedAt ?? payload.observed_at);
+    if (!source || !sourceRef) throw new Error('health-observe requires source and sourceRef provenance.');
+    if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('health-observe requires a positive observedAt timestamp.');
+    const metadata = payload.metadata && typeof payload.metadata === 'object' && !Array.isArray(payload.metadata)
+      ? { ...payload.metadata }
+      : {};
+    if (payload.label != null && metadata.label == null) metadata.label = String(payload.label);
+    if (['visibility_label_observed', 'visibility_label_cleared'].includes(type) && !String(metadata.label || '').trim()) {
+      throw new Error(`${type} requires metadata.label.`);
+    }
+    const observation = recordAccountHealthObservation({
+      type,
+      severity: payload.severity || 'info',
+      source,
+      sourceRef,
+      metadata,
+      observedAt,
+    });
+    result({ observation, accountHealth: getAccountHealthSummary({ now: Math.max(Date.now(), observedAt) }) });
+    return;
+  }
+
+  if (command === 'health-under-the-hood') {
+    const report = await fetchXUnderTheHoodReport();
+    const observation = report.available === true ? recordUnderTheHoodSnapshot(report) : null;
+    result({ report, recorded: Boolean(observation), observation, accountHealth: getAccountHealthSummary() });
+    return;
   }
 
   if (command === 'relationship-targets') {
@@ -472,7 +526,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {
