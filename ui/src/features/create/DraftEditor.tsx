@@ -33,6 +33,7 @@ function displayRiskFlags(flags: string[]): string {
 export function DraftEditor({ data }: { data: DraftEditorData }) {
   const { draft, pipeline, flags } = data
   const isThread = pipeline === 'thread'
+  const readOnly = flags.readOnly
   const editorMeta = (draft.editor || {}) as {
     decision?: string
     riskFlags?: string[]
@@ -157,7 +158,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {flags.engagementReply ? 'Reply draft' : 'Post draft'}
+            {readOnly ? (flags.engagementReply ? 'Sent reply' : 'Published post') : flags.engagementReply ? 'Reply draft' : 'Post draft'}
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">{data.candidate.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -168,15 +169,17 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${qualityClass}`}>
-            Draft quality {score}/50 · approval threshold 40 {previewPending && dirty ? '· checking…' : ''}
+            {readOnly ? 'Recorded quality' : 'Draft quality'} {score}/50 {!readOnly && <>· approval threshold 40 {previewPending && dirty ? '· checking…' : ''}</>}
           </span>
-          <button
-            onClick={handleGenerate}
-            disabled={generate.isPending}
-            className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50"
-          >
-            {generate.isPending ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleGenerate}
+              disabled={generate.isPending}
+              className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+            >
+              {generate.isPending ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
+            </button>
+          )}
           {data.candidate.url && (
             <a
               href={data.candidate.url}
@@ -190,39 +193,51 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
       </div>
 
-      {generate.isPending && (
-        <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
-          <Pending label="Generating a draft with AI…" />
+      {readOnly ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+          <strong>{flags.engagementReply ? 'This is the reply that was sent.' : 'This is the text that was published.'}</strong>
+          {' '}It is kept as read-only history so later edits cannot rewrite what actually went out.
+          {data.queueItem?.outputUrl && (
+            <> <a href={data.queueItem.outputUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-sky-700 underline">View on X ↗</a></>
+          )}
         </div>
+      ) : (
+        <>
+          {generate.isPending && (
+            <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+              <Pending label="Generating a draft with AI…" />
+            </div>
+          )}
+
+          {generationOutcome && !generate.isPending && (
+            generationOutcome.decision === 'DO_NOT_POST' ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <strong>AI suggestion: don’t post yet.</strong>
+                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+                <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                <strong>Generation completed.</strong> The editor below has been updated with the new AI draft.
+              </div>
+            )
+          )}
+
+          {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <strong>AI suggestion: don’t post yet.</strong>
+              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || []) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+              <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
+            </div>
+          ) : (editorMeta.decision || body) ? (
+            <div className="text-sm text-slate-500">
+              AI prepared this candidate. Review the exact text and complete the confirmations that apply before approval.
+            </div>
+          ) : null)}
+
+          <GatePanel gates={gatesView} />
+        </>
       )}
-
-      {generationOutcome && !generate.isPending && (
-        generationOutcome.decision === 'DO_NOT_POST' ? (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <strong>AI suggestion: don’t post yet.</strong>
-            <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
-            <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            <strong>Generation completed.</strong> The editor below has been updated with the new AI draft.
-          </div>
-        )
-      )}
-
-      {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>AI suggestion: don’t post yet.</strong>
-          <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || []) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
-          <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
-        </div>
-      ) : (editorMeta.decision || body) ? (
-        <div className="text-sm text-slate-500">
-          AI prepared this candidate. Review the exact text and complete the confirmations that apply before approval.
-        </div>
-      ) : null)}
-
-      <GatePanel gates={gatesView} />
 
       <div>
         <div className="mb-2 flex items-center justify-between">
@@ -241,57 +256,67 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
                 <textarea
                   rows={4}
                   value={part}
+                  readOnly={readOnly}
                   onChange={(event) => {
                     markDirty()
                     setThreadParts((parts) => parts.map((p, i) => (i === index ? event.target.value : p)))
                   }}
-                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+                  className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
                 />
               </div>
             ))}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { markDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
-                disabled={threadParts.length >= 6}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Add part
-              </button>
-              <button
-                onClick={() => { markDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
-                disabled={threadParts.length <= 2}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Remove last
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { markDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
+                  disabled={threadParts.length >= 6}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Add part
+                </button>
+                <button
+                  onClick={() => { markDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
+                  disabled={threadParts.length <= 2}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Remove last
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <textarea
             rows={7}
             value={body}
+            readOnly={readOnly}
             onChange={(event) => { markDirty(); setBody(event.target.value) }}
             placeholder="Generate a draft or edit the final text here."
-            className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none"
+            className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
           />
         )}
       </div>
 
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality</div>
-        {hasDraftContent
+        {readOnly ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            Recorded quality at completion: <strong>{draft.qualityScore}/50</strong>. Component scores are not shown as historical facts because they are recalculated by the current scorer.
+          </div>
+        ) : hasDraftContent
           ? <QualityBreakdown breakdown={breakdown} />
           : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Quality feedback will appear after AI writes a draft or you start typing.
             </div>
           )}
-        <div className="mt-2 text-xs text-slate-500">
-          This feedback updates from the exact text you are editing. It helps improve the draft; the approval-readiness panel above decides whether it is ready.
-        </div>
+        {!readOnly && (
+          <div className="mt-2 text-xs text-slate-500">
+            This feedback updates from the exact text you are editing. It helps improve the draft; the approval-readiness panel above decides whether it is ready.
+          </div>
+        )}
       </div>
 
-      {!flags.engagementReply && (
+      {!readOnly && !flags.engagementReply && (
         <Disclosure summary="Visual plan">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={mediaRequired} onChange={(event) => { markDirty(); setMediaRequired(event.target.checked) }} />
@@ -336,20 +361,24 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
         <div className="max-w-2xl text-sm text-slate-500">
-          {flags.engagementReply
-            ? 'This exact reply sends only after explicit approval. It is never scheduled.'
-            : 'Saving does not publish. Approval and the publishing plan remain separate decisions.'}
+          {readOnly
+            ? 'Completed text is preserved as a read-only historical snapshot.'
+            : flags.engagementReply
+              ? 'This exact reply sends only after explicit approval. It is never scheduled.'
+              : 'Saving does not publish. Approval and the publishing plan remain separate decisions.'}
         </div>
-        <div className="flex items-center gap-3">
-          {dirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
-          <button
-            onClick={handleSave}
-            disabled={save.isPending}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-3">
+            {dirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
+            <button
+              onClick={handleSave}
+              disabled={save.isPending}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {save.isPending ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        )}
       </div>
 
       {save.isError && (

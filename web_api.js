@@ -17,12 +17,13 @@ import {
   approveEngagementQueueItem,
   approveQueueItem,
   discardCandidateDraft,
+  ensureCandidateWorkflow,
   inspectWorkflow,
+  recordManualRepost,
   refreshQueueRecommendation,
   requestQueueReview,
   resolveEngagementItem,
   routeCandidate,
-  saveCandidateToWorkflow,
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
@@ -59,6 +60,7 @@ import {
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
+  markCandidateSaved,
   recordPerformanceSnapshot,
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
@@ -75,7 +77,7 @@ const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
-const DISCOVER_FEEDS = new Set(['for-you', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved']);
+const DISCOVER_FEEDS = new Set(['for-you', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
 const REFRESHABLE_FEEDS = new Set(['x', 'viral', 'github', 'hn', 'all']);
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
@@ -128,8 +130,8 @@ export const STATUS_LABELS = Object.freeze({
   drafting: 'Draft in progress',
   needs_review: 'Needs review',
   approved: 'Approved',
-  publishing: 'In progress',
-  published: 'Completed',
+  publishing: 'Publishing',
+  published: 'Published',
   watching: 'On hold',
   ignored: 'Skipped',
   expired: 'Expired',
@@ -195,11 +197,30 @@ function queueStatusLabel(queueItem) {
   const engagement = queueItem.lane === 'engagement';
   if (queueItem.status === 'drafting') return engagement ? (queueItem.draftId ? 'Reply draft in progress' : 'Reply not drafted') : 'Draft in progress';
   if (queueItem.status === 'needs_review') return engagement ? 'Reply needs review' : 'Needs review';
-  if (queueItem.status === 'approved') return engagement ? 'Approved · ready to send' : 'Approved · awaiting publish';
+  if (queueItem.status === 'approved') {
+    if (engagement) return 'Approved · ready to send';
+    if (queueItem.pipeline === 'repost') return 'Approved · repost manually';
+    return 'Approved · awaiting publish';
+  }
   if (queueItem.status === 'publishing') return engagement ? 'Sending now' : 'Publishing now';
-  if (queueItem.status === 'published') return engagement ? 'Reply sent' : 'Published';
+  if (queueItem.status === 'published') {
+    if (engagement) return 'Reply sent';
+    if (queueItem.pipeline === 'repost') return 'Reposted';
+    return 'Published';
+  }
   if (queueItem.status === 'failed') return engagement ? 'Send failed' : 'Publish failed';
   return label(STATUS_LABELS, queueItem.status);
+}
+
+function candidateActionView(action, queueItem) {
+  const type = String(action?.action || '');
+  const occurredAt = Number(action?.created_at || action?.createdAt || 0) || null;
+  const outputUrl = action?.output_url || action?.outputUrl || null;
+  if (type === 'quote') return { action: type, label: 'Quoted', summary: 'You quoted this source.', outputUrl, occurredAt };
+  if (type === 'reply') return { action: type, label: 'Replied', summary: 'You replied to this source.', outputUrl, occurredAt };
+  if (type === 'repost') return { action: type, label: 'Reposted', summary: 'You reposted this source.', outputUrl, occurredAt };
+  if (queueItem?.pipeline === 'thread') return { action: type, label: 'Published thread', summary: 'You published a thread from this source.', outputUrl, occurredAt };
+  return { action: type || 'direct', label: 'Published post', summary: 'You published a post from this source.', outputUrl, occurredAt };
 }
 
 function opportunityLabel(score) {
@@ -242,7 +263,10 @@ export function evaluateDraftQuality(candidate, draft, pipeline) {
 export async function generateDraftCandidate(current) {
   const candidate = getCandidate(current.candidateKey);
   if (!candidate) throw new Error('Draft source candidate not found.');
-  const queueItem = getQueueItemByCandidate(candidate.key) || saveCandidateToWorkflow(candidate.key, true).queueItem;
+  const queueItem = getQueueItemByCandidate(candidate.key) || ensureCandidateWorkflow(candidate.key).queueItem;
+  if (current.status === 'published' || queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw new Error('Published text is historical record and cannot be regenerated.');
+  }
   const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
   const username = String(queueItem.engagementTargetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
   const packet = buildWriterPacket({
@@ -331,6 +355,15 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
   }
   const draft = includeQueue && queueItem?.draftId ? getDraft(queueItem.draftId) : null;
   const actions = includeQueue ? listCandidateActions(candidate.key) : [];
+  const actionViews = actions.map((action) => candidateActionView(action, queueItem));
+  const publishedWithoutAction = includeQueue && queueItem && (queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId)
+    ? candidateActionView({
+        action: queueItem.pipeline === 'quote' ? 'quote' : queueItem.pipeline === 'reply' ? 'reply' : queueItem.pipeline === 'repost' ? 'repost' : 'direct',
+        outputUrl: queueItem.outputUrl || null,
+        createdAt: queueItem.publishedAt || null,
+      }, queueItem)
+    : null;
+  const completion = actionViews[0] || publishedWithoutAction;
   return {
     key: candidate.key,
     title: candidate.title || candidate.text?.slice(0, 80) || 'Untitled',
@@ -380,7 +413,8 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
           },
         }
       : null,
-    actions: actions.map((action) => ({ action: action.action, outputUrl: action.output_url || action.outputUrl || null })),
+    completion,
+    actions: actionViews,
   };
 }
 
@@ -486,6 +520,7 @@ function draftEditorPayload(draftId) {
   const health = getAccountHealthSummary();
   const engagementConstrained = engagementReply && health.health.state === 'constrained';
   const gatesPassed = draft.gates?.passed === true;
+  const readOnly = draft.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
   let schedule = null;
   if (queueItem?.status === 'approved' && ['main', 'main_feed'].includes(queueItem.lane) && SCHEDULABLE_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) {
     const item = getMainFeedScheduleItem(queueItem.candidateKey);
@@ -533,7 +568,8 @@ function draftEditorPayload(draftId) {
     flags: {
       engagementReply,
       engagementConstrained,
-      canReview: CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status),
+      readOnly,
+      canReview: !readOnly && CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status),
       canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && draft.qualityScore >= 40 && gatesPassed,
       canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && draft.qualityScore >= 40 && gatesPassed,
       canSendApproved: engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
@@ -937,16 +973,16 @@ export async function handleApi(req, res, requestUrl) {
       let candidates;
       switch (feed) {
         case 'trending':
-          candidates = listCandidates({ source: 'x', viralOnly: true, withinHours: 24, limit: 100 });
+          candidates = listCandidates({ source: 'x', viralOnly: true, withinHours: 24, resolution: 'actionable', limit: 100 });
           break;
         case 'opportunities':
-          candidates = listCandidates({ source: 'x', withinHours: 168, limit: 250 }).filter(isOpportunityCandidate);
+          candidates = listCandidates({ source: 'x', withinHours: 168, resolution: 'actionable', limit: 250 }).filter(isOpportunityCandidate);
           break;
         case 'github':
-          candidates = listCandidates({ source: 'github', withinHours: 168, limit: 100 });
+          candidates = listCandidates({ source: 'github', withinHours: 168, resolution: 'actionable', limit: 100 });
           break;
         case 'hn':
-          candidates = listCandidates({ source: 'hn', withinHours: 168, limit: 100 });
+          candidates = listCandidates({ source: 'hn', withinHours: 168, resolution: 'actionable', limit: 100 });
           break;
         case 'all':
           candidates = listCandidates({ withinHours: 168, limit: 150 });
@@ -954,14 +990,17 @@ export async function handleApi(req, res, requestUrl) {
         case 'saved':
           candidates = listCandidates({ saved: true, limit: 150 });
           break;
+        case 'handled':
+          candidates = listCandidates({ resolution: 'handled', limit: 150 });
+          break;
         default:
-          candidates = listCandidates({ source: 'x', withinHours: 72, limit: 120 });
+          candidates = listCandidates({ source: 'x', withinHours: 72, resolution: 'actionable', limit: 120 });
       }
       if (tag) candidates = candidates.filter((item) => item.niche?.tags?.includes(tag));
       const visible = candidates.slice(0, 60).map((candidate) => formatCandidate(candidate));
       return sendSuccess({
         feed,
-        refreshable: feed === 'opportunities' || feed === 'saved' ? null : (feed === 'for-you' ? 'x' : feed === 'trending' ? 'viral' : feed),
+        refreshable: ['opportunities', 'saved', 'handled'].includes(feed) ? null : (feed === 'for-you' ? 'x' : feed === 'trending' ? 'viral' : feed),
         topicFilters: Object.entries(NICHE_LABELS).map(([value, labelText]) => ({ value, label: labelText })),
         candidates: visible,
         total: candidates.length,
@@ -984,12 +1023,12 @@ export async function handleApi(req, res, requestUrl) {
       if (!candidate) throw new Error('Candidate not found. Refresh research first.');
 
       if (action === 'save') {
-        const { queueItem } = saveCandidateToWorkflow(key, true);
-        return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
+        const candidate = markCandidateSaved(key, true);
+        return sendSuccess({ action, candidate: { key: candidate.key, saved: candidate.saved }, queueItem: formatQueueItem(getQueueItemByCandidate(key)) });
       }
       if (action === 'unsave') {
-        const { queueItem } = saveCandidateToWorkflow(key, false);
-        return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
+        const candidate = markCandidateSaved(key, false);
+        return sendSuccess({ action, candidate: { key: candidate.key, saved: candidate.saved }, queueItem: formatQueueItem(getQueueItemByCandidate(key)) });
       }
       if (action === 'discard') {
         const queueItem = discardCandidateDraft(key);
@@ -997,16 +1036,15 @@ export async function handleApi(req, res, requestUrl) {
       }
       if (['original', 'quote', 'thread', 'repost', 'research', 'watch'].includes(action)) {
         if (action === 'quote' && candidate.source !== 'x') throw new Error('Quote posts require an X source.');
-        saveCandidateToWorkflow(key, true);
+        ensureCandidateWorkflow(key);
+        const priorDraft = getDraftByCandidate(key);
+        const needsInitialGeneration = !priorDraft;
+        routeCandidate(key, action, { actor: 'human' });
         let draft = getDraftByCandidate(key);
-        const needsInitialGeneration = !draft;
-        if (needsInitialGeneration) {
-          routeCandidate(key, action, { actor: 'human' });
-          draft = getDraftByCandidate(key);
-        }
         let generated = null;
         if (needsInitialGeneration && draft && ['original', 'quote', 'thread'].includes(action)) {
           generated = await generateDraftCandidate(draft);
+          draft = generated.saved;
         }
         const queueItem = getQueueItemByCandidate(key);
         return sendSuccess({
@@ -1150,10 +1188,12 @@ export async function handleApi(req, res, requestUrl) {
       const items = listQueueItems({ lane: 'main', limit: 250 });
       const context = schedulerContext();
       const groups = [
-        { id: 'ideas', title: 'Sources to decide', note: 'Choose a drafting route, research further, pause, or skip.', statuses: ['triage', 'researching', 'watching'] },
+        { id: 'ideas', title: 'Sources to decide', note: 'Choose a drafting route, research further, pause, or skip.', statuses: ['triage'] },
+        { id: 'research', title: 'Needs research', note: 'Sources you deliberately held until stronger evidence or context is available.', statuses: ['researching'] },
+        { id: 'onHold', title: 'On hold', note: 'Sources you paused so they do not compete with active decisions.', statuses: ['watching'] },
         { id: 'drafting', title: 'Drafts in progress', note: 'Posts currently being written or edited.', statuses: ['drafting'] },
         { id: 'needsReview', title: 'Needs review', note: 'Required review confirmations or your approval decision are still pending.', statuses: ['needs_review'] },
-        { id: 'approved', title: 'Approved · awaiting publish', note: 'Approved by you and waiting for publication.', statuses: ['approved'] },
+        { id: 'approved', title: 'Approved', note: 'Approved posts await publication; approved reposts await your manual repost.', statuses: ['approved'] },
         { id: 'publishing', title: 'Publishing', note: 'A publish action is currently in progress.', statuses: ['publishing'] },
         { id: 'failed', title: 'Publish failed', note: 'A publishing attempt failed and requires your decision.', statuses: ['failed'] },
         { id: 'published', title: 'Published', note: 'Completed main-feed work retained for context.', statuses: ['published'] },
@@ -1187,7 +1227,7 @@ export async function handleApi(req, res, requestUrl) {
           items: formatted.filter((item) => group.statuses.includes(item.status)),
         })).filter((group) => group.items.length > 0),
         counts: {
-          ideas: items.filter((item) => ['triage', 'researching', 'watching'].includes(item.status)).length,
+          ideas: items.filter((item) => item.status === 'triage').length,
           drafting: items.filter((item) => item.status === 'drafting').length,
           review: items.filter((item) => item.status === 'needs_review').length,
           approvedWaiting: items.filter((item) => item.status === 'approved').length,
@@ -1212,6 +1252,10 @@ export async function handleApi(req, res, requestUrl) {
       if (!candidate) throw new Error('Draft source candidate not found.');
       const queueItem = getQueueItemByCandidate(candidate.key);
       const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
+      const readOnly = current.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
+      if (readOnly && ['save', 'generate', 'thread-parts'].includes(action)) {
+        throw new Error('Published text is historical record and cannot be edited.');
+      }
 
       if (action === 'preview') {
         const updated = applyEditorPayload(current, payload);
@@ -1226,7 +1270,7 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'save') {
-        let queue = queueItem || saveCandidateToWorkflow(candidate.key, true).queueItem;
+        let queue = queueItem || ensureCandidateWorkflow(candidate.key).queueItem;
         const updated = applyEditorPayload(current, payload);
         const scheduledRaw = payload.scheduledAt;
         const scheduledAt = scheduledRaw === undefined ? current.scheduledAt : (scheduledRaw === null ? null : Number(scheduledRaw));
@@ -1293,6 +1337,12 @@ export async function handleApi(req, res, requestUrl) {
       if (action === 'approve') {
         const result = approveQueueItem(key, confirmedFlags(payload));
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), draft: formatDraft(result.draft) });
+      }
+
+      if (action === 'complete-repost') {
+        if (payload.confirmCompleted !== true) throw new Error('Confirm that you already reposted this source on X.');
+        const result = recordManualRepost(key, { actor: 'human' });
+        return sendSuccess({ queueItem: formatQueueItem(result.queueItem), action: result.action });
       }
 
       if (action === 'schedule') {

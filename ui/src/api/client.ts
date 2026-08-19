@@ -220,7 +220,8 @@ export interface DiscoveredCandidate {
     draftQualityScore: number | null
     potentials: { reach: number; follow: number; conversation: number; relationship: number }
   } | null
-  actions: { action: string; outputUrl: string | null }[]
+  completion: { action: string; label: string; summary: string; outputUrl: string | null; occurredAt: number | null } | null
+  actions: { action: string; label: string; summary: string; outputUrl: string | null; occurredAt: number | null }[]
 }
 
 export interface DiscoverData {
@@ -319,6 +320,7 @@ export interface DraftEditorData {
   flags: {
     engagementReply: boolean
     engagementConstrained: boolean
+    readOnly: boolean
     canReview: boolean
     canApprove: boolean
     canApproveSend: boolean

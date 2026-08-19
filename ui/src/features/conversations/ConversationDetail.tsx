@@ -131,7 +131,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         </Disclosure>
       </article>
 
-      {data.health.constrained && (
+      {data.health.constrained && data.status !== 'published' && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <strong>Sending is temporarily unavailable.</strong> Supported account evidence is currently limiting reply approval/sending.
           {' '}<a href="/legacy?source=health" className="underline">Review account status</a>.
@@ -231,7 +231,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         </div>
       )}
 
-      {editor && (
+      {editor && data.status !== 'published' && (
         <Disclosure summary="More actions">
           <div className="flex flex-wrap items-end gap-2">
             {data.engagementKind === 'initial_reply' && (

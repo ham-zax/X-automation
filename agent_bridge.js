@@ -6,6 +6,7 @@ import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
+  ensureCandidateWorkflow,
   inspectWorkflow,
   requestQueueReview,
   resolveEngagementItem,
@@ -138,8 +139,9 @@ async function main() {
     const candidate = manualCandidate(payload);
     const key = candidateKey(candidate);
     upsertCandidates([candidate], { saved: false });
-    let workflow = payload.saved !== false ? saveCandidateToWorkflow(key, true) : inspectWorkflow(key);
+    let workflow = payload.saved === true ? saveCandidateToWorkflow(key, true) : inspectWorkflow(key);
     if (payload.createDraft) {
+      if (!workflow.queueItem) workflow = ensureCandidateWorkflow(key);
       const currentPipeline = workflow.queueItem?.pipeline;
       const pipeline = ['original', 'quote', 'thread', 'reply'].includes(currentPipeline) ? currentPipeline : 'original';
       routeCandidate(key, pipeline, { actor: 'agent' });
@@ -157,7 +159,7 @@ async function main() {
 
   if (command === 'create-draft') {
     const candidate = requireCandidate(payload.key);
-    let workflow = saveCandidateToWorkflow(candidate.key, true);
+    let workflow = ensureCandidateWorkflow(candidate.key);
     const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
     routeCandidate(candidate.key, pipeline, { actor: 'agent' });
     workflow = inspectWorkflow(candidate.key);
@@ -188,6 +190,9 @@ async function main() {
     const current = requireDraft(payload.id);
     const candidate = requireCandidate(current.candidateKey);
     const workflow = inspectWorkflow(candidate.key);
+    if (current.status === 'published' || current.publishedTweetId || workflow.queueItem?.status === 'published' || workflow.queueItem?.publishedAt || workflow.queueItem?.outputTweetId) {
+      throw new Error('Published text is historical record and cannot be edited.');
+    }
     const pipeline = workflow.queueItem?.pipeline;
     if (!['original', 'quote', 'thread', 'reply'].includes(pipeline)) {
       throw new Error(`apply-writer-output requires a routed text pipeline; current pipeline is ${pipeline || 'none'}.`);
@@ -226,7 +231,10 @@ async function main() {
     const current = requireDraft(payload.id);
     const candidate = requireCandidate(current.candidateKey);
     let workflow = inspectWorkflow(candidate.key);
-    if (!workflow.queueItem) workflow = saveCandidateToWorkflow(candidate.key, true);
+    if (current.status === 'published' || current.publishedTweetId || workflow.queueItem?.status === 'published' || workflow.queueItem?.publishedAt || workflow.queueItem?.outputTweetId) {
+      throw new Error('Published text is historical record and cannot be edited.');
+    }
+    if (!workflow.queueItem) workflow = ensureCandidateWorkflow(candidate.key);
     const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
     const next = {
       ...current,

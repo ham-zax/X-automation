@@ -162,9 +162,14 @@ export function inspectWorkflow(key) {
 }
 
 export function saveCandidateToWorkflow(key, saved = true) {
-  const candidate = requireCandidate(key);
+  requireCandidate(key);
   markCandidateSaved(key, saved);
   if (!saved) return inspectWorkflow(key);
+  return ensureCandidateWorkflow(key);
+}
+
+export function ensureCandidateWorkflow(key) {
+  requireCandidate(key);
   ensureQueueItem(key);
   return refreshQueueRecommendation(key);
 }
@@ -197,6 +202,31 @@ export function discardCandidateDraft(key) {
   return getQueueItemByCandidate(key);
 }
 
+export function recordManualRepost(key, { actor = 'human' } = {}) {
+  requireCandidate(key);
+  if (actor !== 'human') throw new Error('Manual repost completion requires an explicit human action.');
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'main' || queueItem.pipeline !== 'repost') {
+    throw new Error('This source is not in the repost workflow.');
+  }
+  if (queueItem.status !== 'approved') {
+    throw new Error('Approve the repost before recording it as completed.');
+  }
+  const saved = saveQueueItem({
+    ...queueItem,
+    status: 'published',
+    publishedAt: Date.now(),
+    publishStartedAt: null,
+    publishError: null,
+  });
+  const action = recordCandidateAction({
+    candidateKey: key,
+    action: 'repost',
+    commentary: 'Recorded by the operator after completing the repost manually on X.',
+  });
+  return { queueItem: saved, action };
+}
+
 export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } = {}) {
   const candidate = requireCandidate(key);
   if (!PIPELINES.includes(pipeline)) throw new Error(`Invalid pipeline: ${pipeline}`);
@@ -212,10 +242,11 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
   if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
   let draftId = null;
   if (TEXT_PIPELINES.has(pipeline)) {
-    if (draft && previousQueueItem?.pipeline && previousQueueItem.pipeline !== pipeline) {
-      draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key });
+    const draftPipeline = draft?.editor?.pipeline || (TEXT_PIPELINES.has(previousQueueItem?.pipeline) ? previousQueueItem.pipeline : '');
+    if (draft && draftPipeline && draftPipeline !== pipeline) {
+      draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key, editor: { pipeline } });
     }
-    draft ||= saveDraft(createDraftScaffold(candidate, { pipeline }));
+    draft ||= saveDraft({ ...createDraftScaffold(candidate, { pipeline }), editor: { pipeline } });
     draftId = draft.id;
   }
 

@@ -5,18 +5,30 @@ import {
   useDiscoverTriage,
   type DiscoveredCandidate,
 } from '../../api/client'
-import { Loading, Error, Empty, Badge, Disclosure, Pending, formatNumber } from '../../components/primitives'
+import { Loading, Error, Empty, Badge, Disclosure, Pending, formatDateTime, formatNumber } from '../../components/primitives'
 import { navigate } from '../../router'
 
 const FEEDS = [
-  { id: 'for-you', label: 'For you' },
+  { id: 'for-you', label: 'To review' },
   { id: 'trending', label: 'Trending' },
   { id: 'opportunities', label: 'Opportunities' },
   { id: 'github', label: 'GitHub' },
   { id: 'hn', label: 'Hacker News' },
-  { id: 'all', label: 'All sources' },
   { id: 'saved', label: 'Bookmarks' },
+  { id: 'handled', label: 'Handled' },
+  { id: 'all', label: 'All sources' },
 ]
+
+const FEED_DESCRIPTIONS: Record<string, string> = {
+  'for-you': 'New X sources that still need a decision. Drafting, paused, skipped, and completed sources are hidden here.',
+  trending: 'Trending X sources that still need a decision.',
+  opportunities: 'Conversation opportunities that still need a decision.',
+  github: 'GitHub sources that still need a decision.',
+  hn: 'Hacker News sources that still need a decision.',
+  saved: 'Sources you explicitly bookmarked for reference, whether or not you already acted on them.',
+  handled: 'Sources with recorded publication, quote, reply, or repost history.',
+  all: 'Recent source history across active, paused, skipped, and completed work.',
+}
 
 function candidateMetricLine(candidate: DiscoveredCandidate): string {
   const metrics = candidate.metrics
@@ -45,6 +57,8 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
 
   const isX = candidate.source === 'x'
   const queue = candidate.queue
+  const completion = candidate.completion
+  const skipped = queue?.status === 'ignored'
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-6">
@@ -59,7 +73,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         <div className="flex flex-wrap gap-2">
           {candidate.viral ? <Badge tone="danger">{candidate.viral.label}</Badge> : <Badge>{isX ? 'Relevant signal' : 'Research signal'}</Badge>}
           {candidate.saved && <Badge tone="success">Bookmarked</Badge>}
-          {queue && <Badge tone="info">{queue.statusLabel}</Badge>}
+          {completion ? <Badge tone="success">Handled · {completion.label}</Badge> : queue && <Badge tone="info">{queue.statusLabel}</Badge>}
         </div>
       </div>
 
@@ -83,17 +97,30 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
       <p className="mt-3 text-sm leading-6 text-slate-700 break-words">{candidate.displayText}</p>
       <div className="mt-2 text-xs text-slate-500">{candidateMetricLine(candidate)}</div>
 
-      {queue?.recommendedPipeline && (
+      {!completion && queue?.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">
           <strong>Suggested next step:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
         </div>
       )}
-      {queue?.draftId && (
+      {!completion && queue?.draftId && (
         <div className="mt-2">
           <a href={`#/draft/${queue.draftId}`} className="text-sm font-medium text-sky-700 hover:underline">
             Continue draft · quality {queue.draftQualityScore ?? 0}/50 · approval threshold 40 →
           </a>
         </div>
+      )}
+
+      {completion && (
+        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          <strong>{completion.summary}</strong>
+          {completion.occurredAt ? ` ${formatDateTime(completion.occurredAt)}.` : ''}
+          {completion.outputUrl && (
+            <> <a href={completion.outputUrl} target="_blank" rel="noopener noreferrer" className="font-medium underline">View your {completion.label.toLowerCase()} ↗</a></>
+          )}
+        </div>
+      )}
+      {!completion && skipped && (
+        <div className="mt-3 text-sm text-slate-600">You skipped this source. Choosing a draft action below reopens it.</div>
       )}
 
       {isX && candidate.niche.matches.length > 0 && (
@@ -115,41 +142,55 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
                 ? <Pending label="Skipping source…" />
               : <Pending label={pendingAction === 'unsave' ? 'Removing bookmark…' : 'Saving bookmark…'} />}
         </div>
+      ) : completion ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium ${candidate.saved ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+          >
+            {candidate.saved ? 'Remove bookmark' : 'Bookmark for reference'}
+          </button>
+          {candidate.url && (
+            <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
+              Open source ↗
+            </a>
+          )}
+        </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             onClick={() => runTriage('original')}
             className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
           >
-            Draft original
+            {skipped ? 'Reopen as original' : 'Draft original'}
           </button>
           {isX && (
             <button
               onClick={() => runTriage('quote')}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
-              Draft quote
+              {skipped ? 'Reopen as quote' : 'Draft quote'}
             </button>
           )}
           <button
             onClick={() => runTriage('thread')}
             className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
-            Draft thread
+            {skipped ? 'Reopen as thread' : 'Draft thread'}
           </button>
           {isX && (
             <button
               onClick={() => runTriage('reply')}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
-              Draft reply
+              {skipped ? 'Reopen as reply' : 'Draft reply'}
             </button>
           )}
           <button
             onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')}
             className={`rounded-md px-3 py-1.5 text-sm font-medium ${candidate.saved ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
           >
-            {candidate.saved ? 'Remove bookmark' : 'Bookmark'}
+            {candidate.saved ? 'Remove bookmark' : 'Bookmark for reference'}
           </button>
           {queue?.draftId && (
             <button
@@ -161,14 +202,15 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
               Discard draft
             </button>
           )}
-          <button
-            onClick={() => runTriage('ignore')}
-            disabled={queue?.status === 'ignored'}
-            title="Stop pursuing this source. A bookmarked source stays bookmarked until you remove the bookmark."
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
-          >
-            {queue?.status === 'ignored' ? 'Skipped' : 'Skip source'}
-          </button>
+          {!skipped && (
+            <button
+              onClick={() => runTriage('ignore')}
+              title="Stop pursuing this source. A bookmarked source stays bookmarked until you remove the bookmark."
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
+            >
+              Skip source
+            </button>
+          )}
           {candidate.url && (
             <a
               href={candidate.url}
@@ -210,7 +252,7 @@ export function Discover() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-slate-900">Discover</h2>
-          <p className="mt-1 text-sm text-slate-600">Find useful things worth talking about.</p>
+          <p className="mt-1 text-sm text-slate-600">{FEED_DESCRIPTIONS[feed] || 'Find useful things worth talking about.'}</p>
         </div>
         {data?.refreshable && (
           <button
@@ -243,7 +285,7 @@ export function Discover() {
         ))}
       </div>
 
-      {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved') && (
+      {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setTag('')}

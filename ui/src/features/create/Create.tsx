@@ -67,22 +67,22 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
   if (!schedule) return null
 
   const recommended = schedule.recommendedAt == null
-    ? 'Not ready to publish yet'
+    ? (schedule.manualOnly ? 'Not ready to repost yet' : 'Not ready to publish yet')
     : schedule.recommendedAt <= Date.now()
-      ? 'Publish when you are ready'
+      ? (schedule.manualOnly ? 'Repost when you are ready' : 'Publish when you are ready')
       : `Around ${new Date(schedule.recommendedAt).toLocaleString()}`
 
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <strong className="text-sm text-slate-900">Publishing plan</strong>
+          <strong className="text-sm text-slate-900">{schedule.manualOnly ? 'Manual repost plan' : 'Publishing plan'}</strong>
           <div className="text-xs text-slate-600">{recommended}</div>
         </div>
-        <Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? 'Ready' : 'Not ready'}</Badge>
+        <Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? (schedule.manualOnly ? 'Ready to repost' : 'Ready') : 'Not ready'}</Badge>
       </div>
       {schedule.manualOnly && (
-        <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">Reposts remain manual.</div>
+        <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">The app does not repost automatically. Repost it on X, then record completion here so this item leaves your active workflow.</div>
       )}
       <form
         className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
@@ -140,6 +140,7 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
 function QueueCard({ item, automation }: { item: QueueItemView; automation: boolean }) {
   const review = useQueueAction('review')
   const approve = useQueueAction('approve')
+  const completeRepost = useQueueAction('complete-repost')
   const discard = useQueueAction('discard')
   const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
@@ -157,11 +158,15 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
   const publicationState = item.publishStartedAt || item.publishedAt || item.publishError ? (
     <div className="mt-2 text-sm text-slate-700">
-      <strong>Publishing:</strong>{' '}
-      {item.publishStartedAt ? `started ${formatDateTime(item.publishStartedAt)}` : 'not started'}
-      {item.publishedAt ? ` · published ${formatDateTime(item.publishedAt)}` : ''}
+      <strong>{item.status === 'published' ? 'Completed:' : 'Publishing:'}</strong>{' '}
+      {item.status === 'published' && item.pipeline === 'repost'
+        ? `repost recorded ${formatDateTime(item.publishedAt)}`
+        : <>
+            {item.publishStartedAt ? `started ${formatDateTime(item.publishStartedAt)}` : 'not started'}
+            {item.publishedAt ? ` · published ${formatDateTime(item.publishedAt)}` : ''}
+          </>}
       {item.publishError ? ` · ${item.publishError}` : ''}
-      {item.outputUrl ? <> · <a href={item.outputUrl} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">view post ↗</a></> : ''}
+      {item.outputUrl ? <> · <a href={item.outputUrl} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">view on X ↗</a></> : ''}
     </div>
   ) : null
 
@@ -184,7 +189,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
       <p className="mt-3 break-words text-sm text-slate-700">{item.text}</p>
 
-      {item.recommendedPipeline && (
+      {item.status !== 'published' && item.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">
           <strong>Suggested next step:</strong> {item.recommendedPipelineLabel} <span className="text-slate-500">— {item.routingReason}</span>
         </div>
@@ -193,8 +198,11 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
       {item.draft && (
         <div className="mt-3">
-          <GatePanel gates={item.draft.gatesView} />
-          <div className="mt-1 text-xs text-slate-500">Draft quality {item.draft.qualityScore}/50 · approval threshold 40</div>
+          {item.status !== 'published' && <GatePanel gates={item.draft.gatesView} />}
+          <div className="mt-1 text-xs text-slate-500">
+            {item.status === 'published' ? 'Recorded draft quality' : 'Draft quality'} {item.draft.qualityScore}/50
+            {item.status !== 'published' ? ' · approval threshold 40' : ''}
+          </div>
         </div>
       )}
 
@@ -204,7 +212,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
         {choosingType && <RouteForm item={item} />}
         {item.draftId && !choosingType && (
           <a href={`#/draft/${item.draftId}`} className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
-            {item.status === 'drafting' ? 'Continue draft' : 'Review draft'}
+            {item.status === 'published' ? 'View published text' : item.status === 'drafting' ? 'Continue draft' : 'Review draft'}
           </a>
         )}
         {item.draftId && !['publishing', 'published'].includes(item.status) && (
@@ -249,6 +257,22 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
             Approve repost
           </button>
         )}
+        {item.pipeline === 'repost' && item.status === 'approved' && (
+          <div>
+            <button
+              onClick={() => {
+                if (window.confirm('Have you already reposted this source on X? This records that manual action as completed.')) {
+                  completeRepost.mutate({ key: item.candidateKey, confirmCompleted: true })
+                }
+              }}
+              disabled={completeRepost.isPending}
+              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {completeRepost.isPending ? 'Recording…' : 'Mark reposted'}
+            </button>
+            <div className="mt-1 text-xs text-slate-500">Use this only after you actually reposted it on X. The app records your confirmation; it does not perform the repost.</div>
+          </div>
+        )}
       </div>
 
       {canRequestReview && (
@@ -281,10 +305,11 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
         </div>
       )}
 
-      {(review.isError && review.variables?.key === item.candidateKey) || (approve.isError && approve.variables?.key === item.candidateKey) || (discard.isError && discard.variables?.key === item.candidateKey) ? (
+      {(review.isError && review.variables?.key === item.candidateKey) || (approve.isError && approve.variables?.key === item.candidateKey) || (completeRepost.isError && completeRepost.variables?.key === item.candidateKey) || (discard.isError && discard.variables?.key === item.candidateKey) ? (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {(review.isError && review.variables?.key === item.candidateKey ? review.error.message : '')}
           {(approve.isError && approve.variables?.key === item.candidateKey ? approve.error.message : '')}
+          {(completeRepost.isError && completeRepost.variables?.key === item.candidateKey ? completeRepost.error.message : '')}
           {(discard.isError && discard.variables?.key === item.candidateKey ? discard.error.message : '')}
         </div>
       ) : null}
@@ -351,7 +376,7 @@ export function Create() {
         <StatCard label="Sources to decide" value={data.counts.ideas} />
         <StatCard label="Drafts in progress" value={data.counts.drafting} />
         <StatCard label="Needs review" value={data.counts.review} />
-        <StatCard label="Approved · awaiting publish" value={data.counts.approvedWaiting} />
+        <StatCard label="Approved" value={data.counts.approvedWaiting} />
       </div>
 
       {data.sections.map((section: CreateSection) => (

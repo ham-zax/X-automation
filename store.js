@@ -502,7 +502,7 @@ export function getCandidate(key) {
   return decodeCandidate(db.prepare('SELECT * FROM candidates WHERE key = ?').get(key));
 }
 
-export function listCandidates({ source, saved, viralOnly = false, withinHours, limit = 100 } = {}) {
+export function listCandidates({ source, saved, viralOnly = false, withinHours, resolution, limit = 100 } = {}) {
   const where = [];
   const params = [];
   if (source) {
@@ -518,8 +518,34 @@ export function listCandidates({ source, saved, viralOnly = false, withinHours, 
     where.push('published_at >= ?');
     params.push(Date.now() - withinHours * 3_600_000);
   }
+  if (resolution === 'actionable') {
+    where.push(`NOT EXISTS (
+      SELECT 1 FROM candidate_actions a WHERE a.candidate_key = candidates.key
+    )`);
+    where.push(`NOT EXISTS (
+      SELECT 1 FROM queue_items q
+      WHERE q.candidate_key = candidates.key
+        AND q.status <> 'triage'
+    )`);
+  } else if (resolution === 'handled') {
+    where.push(`(
+      EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = candidates.key)
+      OR EXISTS (
+        SELECT 1 FROM queue_items q
+        WHERE q.candidate_key = candidates.key
+          AND (q.status = 'published' OR q.published_at IS NOT NULL OR q.output_tweet_id IS NOT NULL)
+      )
+    )`);
+  }
+  const orderBy = resolution === 'handled'
+    ? `COALESCE(
+        (SELECT MAX(a.created_at) FROM candidate_actions a WHERE a.candidate_key = candidates.key),
+        (SELECT MAX(q.published_at) FROM queue_items q WHERE q.candidate_key = candidates.key),
+        candidates.updated_at
+      ) DESC`
+    : (viralOnly ? 'viral_score DESC, published_at DESC' : 'saved DESC, score DESC, updated_at DESC');
   const sql = `SELECT * FROM candidates ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY ${viralOnly ? 'viral_score DESC, published_at DESC' : 'saved DESC, score DESC, updated_at DESC'} LIMIT ?`;
+    ORDER BY ${orderBy} LIMIT ?`;
   params.push(limit);
   return db.prepare(sql).all(...params).map(decodeCandidate);
 }
