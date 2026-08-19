@@ -1,7 +1,13 @@
 import 'dotenv/config';
-import { composeDraft, createDraftScaffold, scoreDraft } from './drafting.js';
+import { composeDraft, scoreDraft } from './drafting.js';
 import { syncAudience } from './audience.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
+import {
+  inspectWorkflow,
+  requestQueueReview,
+  routeCandidate,
+  saveCandidateToWorkflow,
+} from './pipeline.js';
 import {
   candidateKey,
   getAudienceSummary,
@@ -15,7 +21,7 @@ import {
   listCandidateActions,
   listCandidates,
   listDrafts,
-  markCandidateSaved,
+  listQueueItems,
   recordCandidateAction,
   saveDraft,
   upsertCandidates,
@@ -74,13 +80,16 @@ async function main() {
 
   if (command === 'ingest') {
     const candidate = manualCandidate(payload);
-    upsertCandidates([candidate], { saved: payload.saved !== false });
-    if (payload.saved !== false) markCandidateSaved(candidateKey(candidate), true);
-    let draft = null;
+    const key = candidateKey(candidate);
+    upsertCandidates([candidate], { saved: false });
+    let workflow = payload.saved !== false ? saveCandidateToWorkflow(key, true) : inspectWorkflow(key);
     if (payload.createDraft) {
-      draft = getDraftByCandidate(candidateKey(candidate)) || saveDraft(createDraftScaffold(getCandidate(candidateKey(candidate))));
+      const currentPipeline = workflow.queueItem?.pipeline;
+      const pipeline = ['original', 'quote', 'thread', 'reply'].includes(currentPipeline) ? currentPipeline : 'original';
+      routeCandidate(key, pipeline, { actor: 'agent' });
+      workflow = inspectWorkflow(key);
     }
-    result({ candidate: getCandidate(candidateKey(candidate)), draft });
+    result({ candidate: workflow.candidate, draft: workflow.draft, queueItem: workflow.queueItem, scores: workflow.scores, recommendation: workflow.recommendation });
     return;
   }
 
@@ -92,9 +101,11 @@ async function main() {
 
   if (command === 'create-draft') {
     const candidate = requireCandidate(payload.key);
-    markCandidateSaved(candidate.key, true);
-    const draft = getDraftByCandidate(candidate.key) || saveDraft(createDraftScaffold(candidate));
-    result({ draft, analysis: scoreDraft(draft, candidate) });
+    let workflow = saveCandidateToWorkflow(candidate.key, true);
+    const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
+    routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+    workflow = inspectWorkflow(candidate.key);
+    result({ draft: workflow.draft, analysis: scoreDraft(workflow.draft, candidate), queueItem: workflow.queueItem });
     return;
   }
 
@@ -116,14 +127,47 @@ async function main() {
     const requestedStatus = payload.status ?? current.status;
     if (!['draft', 'ready', 'published'].includes(requestedStatus)) throw new Error(`Invalid draft status: ${requestedStatus}`);
     if (requestedStatus === 'published' && !next.publishedTweetId) throw new Error('published status requires publishedTweetId.');
-    next.status = requestedStatus === 'ready' && !analysis.publishable ? 'draft' : requestedStatus;
-    const draft = saveDraft(next);
-    result({ draft, analysis, readyRejected: requestedStatus === 'ready' && draft.status !== 'ready' });
+
+    if (requestedStatus === 'published') {
+      const draft = saveDraft({ ...next, status: 'published' });
+      result({ draft, analysis, queueItem: inspectWorkflow(candidate.key).queueItem });
+      return;
+    }
+
+    const draft = saveDraft({ ...next, status: 'draft' });
+    let workflow = inspectWorkflow(candidate.key);
+    if (!workflow.queueItem) workflow = saveCandidateToWorkflow(candidate.key, true);
+    const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
+    routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+
+    if (requestedStatus === 'ready') {
+      const review = requestQueueReview(candidate.key);
+      result({ draft: review.draft, analysis: review.analysis, approvalRequired: true, queueItem: review.queueItem });
+      return;
+    }
+
+    result({ draft, analysis, queueItem: inspectWorkflow(candidate.key).queueItem });
     return;
   }
 
   if (command === 'queue') {
-    result({ next: getNextReadyDraft(Date.now(), Number(payload.minScore || 40)), drafts: listDrafts({ status: payload.status, limit: Number(payload.limit || 20) }) });
+    result({
+      next: getNextReadyDraft(Date.now(), Number(payload.minScore || 40)),
+      drafts: listDrafts({ status: payload.draftStatus, limit: Number(payload.limit || 20) }),
+      queueItems: listQueueItems({ status: payload.status, pipeline: payload.pipeline, lane: payload.lane, limit: Number(payload.limit || 20) }),
+    });
+    return;
+  }
+
+  if (command === 'route') {
+    requireCandidate(payload.key);
+    const queueItem = routeCandidate(payload.key, payload.pipeline, { actor: 'agent', reason: payload.reason || '' });
+    result({ queueItem, approvalRequired: queueItem.status === 'needs_review' });
+    return;
+  }
+
+  if (command === 'workflow') {
+    result(inspectWorkflow(payload.key));
     return;
   }
 
@@ -178,7 +222,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|update-draft|queue|research|performance|decide|record-action|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|update-draft|queue|route|workflow|research|performance|decide|record-action|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

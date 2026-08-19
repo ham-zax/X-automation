@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS queue_items (
   follow_potential REAL NOT NULL DEFAULT 0,
   conversation_potential REAL NOT NULL DEFAULT 0,
   relationship_potential REAL NOT NULL DEFAULT 0,
+  recommended_pipeline TEXT NOT NULL DEFAULT '',
   routing_reason TEXT NOT NULL DEFAULT '',
   draft_id INTEGER,
   human_approved_at INTEGER,
@@ -112,12 +113,12 @@ Backfill rule executed once through idempotent SQL at store initialization:
 INSERT OR IGNORE INTO queue_items (
   candidate_key, lane, pipeline, status,
   reach_potential, follow_potential, conversation_potential, relationship_potential,
-  routing_reason, draft_id, human_approved_at, created_at, updated_at
+  recommended_pipeline, routing_reason, draft_id, human_approved_at, created_at, updated_at
 )
 SELECT
   c.key, 'main', 'triage', 'triage',
   0, 0, 0, 0,
-  '', NULL, NULL, c.updated_at, c.updated_at
+  '', '', NULL, NULL, c.updated_at, c.updated_at
 FROM candidates c
 WHERE c.saved = 1
   AND NOT EXISTS (
@@ -272,6 +273,7 @@ export const QUEUE_STATUSES = [
 
 export function saveCandidateToWorkflow(key, saved = true) { ... }
 export function refreshQueueRecommendation(key, context = {}) { ... }
+export function inspectWorkflow(key) { ... }
 export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } = {}) { ... }
 export function requestQueueReview(key) { ... }
 export function approveQueueItem(key) { ... }
@@ -285,9 +287,10 @@ Behavior:
   2. ensures queue item;
   3. computes opportunity scores;
   4. runs current `recommendDistributionAction` with available context;
-  5. stores recommendation reason but leaves `pipeline = triage` until a route is explicitly chosen.
+  5. stores `recommended_pipeline` plus the recommendation reason but leaves `pipeline = triage` until a route is explicitly chosen.
 - `saveCandidateToWorkflow(key, false)` only removes the saved preference flag. It does not delete the queue row.
 - `refreshQueueRecommendation` recalculates the four scores and recommendation reason; it does not silently overwrite an already human-selected pipeline.
+- `inspectWorkflow` returns candidate, queue row, draft/actions, current score breakdown, and stored recommendation without mutating workflow state.
 - `routeCandidate` validates the pipeline. Human routing may choose any route. AI routing may recommend but must not advance a main-feed item beyond `needs_review`.
 - route status mapping:
   - `research` -> `researching`
@@ -318,7 +321,7 @@ Do not make `pipeline.js` an HTTP/UI module.
 **Steps:**
 - [ ] Add the Phase-1 `queue_items` table and two indexes to the existing startup schema block.
 - [ ] Add the idempotent saved-candidate backfill that excludes candidates already present in `candidate_actions`.
-- [ ] Add `decodeQueueItem(row)` returning camelCase fields.
+- [ ] Add `decodeQueueItem(row)` returning camelCase fields including `recommendedPipeline` separately from the human-selected `pipeline`.
 - [ ] Export `ensureQueueItem(candidateKey, defaults = {})`; insert only when missing and return the decoded row.
 - [ ] Export `getQueueItem(id)` and `getQueueItemByCandidate(candidateKey)`.
 - [ ] Export `listQueueItems({ status, pipeline, lane, limit = 100 })` ordered by `updated_at DESC`.

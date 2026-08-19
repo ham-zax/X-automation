@@ -30,9 +30,11 @@ Available commands:
 
 - `ingest` - add a manually supplied source post to research memory; classifies niche and saves it by default.
 - `inspect` - inspect one stored candidate and its draft.
-- `create-draft` - create the structured Hook/Insight/Evidence/Action scaffold for a candidate.
-- `update-draft` - update a draft, rescore it, and optionally request `ready` status.
-- `queue` - inspect ready/draft queue state.
+- `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
+- `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
+- `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
+- `route` - select/override Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore for a candidate; agents cannot approve.
+- `workflow` - inspect one candidate's queue row, draft, actions, current score breakdown, and stored recommendation.
 - `research` - query persisted research candidates.
 - `performance` - read the latest persisted account/post performance snapshot.
 - `decide` - apply the DIRECT / QUOTE / REPOST / REPLY / IGNORE distribution decision method to a stored candidate.
@@ -236,7 +238,7 @@ cat <<'JSON' | node agent_bridge.js update-draft
 JSON
 ```
 
-The bridge computes the 50-point rubric and refuses to leave the draft as `ready` when it is below the publishability gate or still contains placeholders.
+The bridge computes the 50-point rubric, saves edited text as `draft`, and interprets `status: ready` as a request to move the workflow item to `needs_review`. The response includes `approvalRequired: true`. The agent never turns the draft itself into `ready`.
 
 Current quality dimensions:
 
@@ -247,40 +249,37 @@ Current quality dimensions:
 - action: 7
 - originality vs source: 5
 
-`ready` requires at least **40/50**, no scaffold placeholders, and a single-post weighted length of at most **280 characters** (URLs count as 23 characters).
+Final human approval requires at least **40/50**, no scaffold placeholders, and a single-post weighted length of at most **280 characters** (URLs count as 23 characters). On approval, `pipeline.js` sets the queue item to `approved` and temporarily sets the associated text draft to compatibility `ready` for the existing automation consumer.
 
 ## Queue and automation interaction
 
-The automation daemon does two jobs:
+Phase 1A workflow is current:
 
-1. refreshes research memory from X niche discovery, X viral discovery, GitHub, and Hacker News;
-2. looks for a `ready` draft at or above the configured quality threshold.
+1. Save creates/ensures `queue_items(status=triage)` and stores four opportunity scores plus an AI route recommendation.
+2. `route` selects the pipeline but does not approve it.
+3. Text routes use `drafting`; `status: ready` through `update-draft` only requests `needs_review`.
+4. The dashboard's explicit human **Approve for publishing** action is the only Phase-1 workflow path that moves a main-feed item to `approved` and sets its associated text draft to compatibility `ready`.
 
-Inspect the queue:
+Inspect workflow state:
 
 ```bash
-printf '%s' '{"minScore":40}' | node agent_bridge.js queue
+printf '%s' '{"limit":20}' | node agent_bridge.js queue
+printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js workflow
 ```
 
-When `AUTO_POST=false`, the automation only previews the next ready draft. This is the normal safe development mode.
+Route an item without approving it:
 
-When `AUTO_POST=true`, the automation may publish the next eligible ready draft after the configured cooldown. The agent should not bypass that queue by calling the private posting transport directly unless the user explicitly asks for an immediate manual publication.
+```bash
+printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
+```
+
+The automation daemon is **not yet migrated to `queue_items`**. It still consumes only human-approved compatibility `ready` drafts, so Phase 1A preserves the existing publishing behavior while enforcing the new approval boundary.
+
+When `AUTO_POST=false`, automation only previews the next compatibility-ready draft. When `AUTO_POST=true`, it may publish the next eligible compatibility-ready draft after the existing cooldown.
 
 A successfully published queued draft is marked `published` and records the returned tweet ID.
 
-### Planned queue upgrade — not implemented yet
-
-`HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` specifies the next queue architecture. When implemented:
-
-- Save will create/ensure a `triage` queue item;
-- AI will recommend Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore;
-- the human will select or override the route;
-- AI-controlled progress will stop at `needs_review` for main-feed content;
-- human approval will be required before scheduling;
-- viral items may pre-empt evergreen order while main-feed publication remains serialized;
-- successful publication will remain recorded in candidate action history and performance data.
-
-Until those bridge commands and queue states actually exist, agents must continue using the current draft/`ready` workflow documented above and must not invent or simulate future commands.
+Still planned: Relationship Intelligence/Engage Next, Account Health, Phase-2 hard gates/media, the Phase-3 scheduler migration, experiments, follower conversion, and learned strategy.
 
 ## Agent behavior by user request
 
@@ -301,9 +300,10 @@ Until those bridge commands and queue states actually exist, agents must continu
 
 ### User says: "queue this"
 
+- ensure the candidate has the intended `route`;
 - ensure the draft is complete and factually checked;
-- request `status: ready` through `update-draft`;
-- confirm whether the quality gate accepted it;
+- request `status: ready` through `update-draft`; this moves it to `needs_review` and returns `approvalRequired: true`;
+- do **not** claim it is approved or compatibility-ready until the user performs the explicit dashboard approval action;
 - do not change `AUTO_POST` unless explicitly asked.
 
 ### User says: "post this now"
@@ -318,7 +318,7 @@ Use persisted candidates with tags `jobs/career`, `builders`, or `business`, the
 
 - Never manufacture evidence, metrics, benchmark results, quotes, or source context.
 - Never turn a source tweet into a near-copy. Add analysis, testing, context, evidence, or a developer action.
-- Never mark a scaffold containing placeholders as ready.
+- Never represent `needs_review` as human approval; only the explicit dashboard approval action may create compatibility `ready`.
 - Never manipulate SQLite directly from an agent when the bridge command exists.
 - Never silently enable `AUTO_POST`.
 - Never use automated likes, follow churn, or mass unsolicited replies as part of this workflow.

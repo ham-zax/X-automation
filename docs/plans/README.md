@@ -1,6 +1,6 @@
 # Implementation Plan Index
 
-These files are the authoritative execution sequence for the planned network-first growth system.
+These files are the authoritative execution sequence for the network-first growth system. Phase 1A is implemented; later phases remain the execution frontier.
 
 Do not implement later phases by inventing interfaces that earlier plans have not established yet.
 
@@ -31,11 +31,11 @@ Phase 4   Measurement + content/network experiments
 Phase 5   Learned strategy
 ```
 
-## Phase 1A
+## Phase 1A — implemented
 
 [`PHASE_1_WORKFLOW_FOUNDATION.md`](PHASE_1_WORKFLOW_FOUNDATION.md)
 
-Owns:
+Current code now owns:
 
 - `queue_items` foundation;
 - Save -> Triage;

@@ -29,17 +29,19 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
 - [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — implementation-ready plan for Save → Triage → Route → Research → Draft → Review → Schedule → Publish → Learn.
-- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index and authoritative execution sequence before runtime implementation starts.
+- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with Phase 1A current and the remaining execution sequence explicit.
 
-### Planned next architecture
+### Current foundation and planned next architecture
 
-The current app has Saved candidates, drafts, an approved-draft queue, audience data, action history, and performance snapshots. The next architecture is network-first:
+Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that sets a text draft to compatibility `ready` for the existing automation consumer.
 
-**Save/Triage + four-dimensional opportunity scoring (Reach/Follow/Conversation/Relationship) -> Relationship Intelligence -> Engage Next -> Account Health/visibility observability -> research/writing/media -> human approval -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
+The remaining network-first architecture is:
+
+**Relationship Intelligence -> Engage Next -> Account Health/visibility observability -> research/writing/media -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-This paragraph describes **planned** behavior. Do not assume the triage queue, relationship profiles, Engage Next, Account Health/Under the Hood capture, route-after-Save UI, media planner, experiment engine, or learned scheduler exist until the matching phase plan has been implemented.
+Relationship profiles, Engage Next discovery, Account Health/Under the Hood capture, the Phase-2 media/content engine, experiment engine, and learned scheduler remain planned until their matching phase is implemented.
 
 ## Setup
 

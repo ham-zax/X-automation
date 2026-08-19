@@ -12,11 +12,20 @@ import {
   rankNews,
   rankXViralPosts,
 } from './tech_news.js';
-import { composeDraft, createDraftScaffold, scoreDraft } from './drafting.js';
+import { composeDraft, scoreDraft } from './drafting.js';
 import { syncAudience } from './audience.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
 import {
+  approveQueueItem,
+  inspectWorkflow,
+  refreshQueueRecommendation,
+  requestQueueReview,
+  routeCandidate,
+  saveCandidateToWorkflow,
+} from './pipeline.js';
+import {
   candidateKey,
+  countQueueItems,
   countSavedCandidates,
   getAudienceSummary,
   getCandidate,
@@ -25,11 +34,12 @@ import {
   getNextReadyDraft,
   getPerformanceSnapshot,
   getPreferenceProfile,
+  getQueueItemByCandidate,
   listAudienceProfiles,
   listCandidateActions,
   listCandidates,
   listDrafts,
-  markCandidateSaved,
+  listQueueItems,
   recordPerformanceSnapshot,
   saveDraft,
   upsertCandidates,
@@ -136,9 +146,40 @@ function viralBadges(candidate) {
   </div>`;
 }
 
+const ROUTE_OPTIONS = [
+  ['original', 'Original'], ['quote', 'Quote'], ['thread', 'Thread'], ['reply', 'Reply'],
+  ['repost', 'Repost'], ['research', 'Research only'], ['watch', 'Watch'], ['ignore', 'Ignore'],
+];
+
+function workflowBadges(queueItem) {
+  if (!queueItem) return '';
+  return `<div class="d-flex gap-1 flex-wrap mt-2">
+    <span class="badge text-bg-light border">Reach ${Math.round(queueItem.reachPotential)}</span>
+    <span class="badge text-bg-light border">Follow ${Math.round(queueItem.followPotential)}</span>
+    <span class="badge text-bg-light border">Conversation ${Math.round(queueItem.conversationPotential)}</span>
+    <span class="badge text-bg-light border">Relationship ${Math.round(queueItem.relationshipPotential)}</span>
+    <span class="badge text-bg-secondary">${escapeHtml(queueItem.pipeline)}</span>
+    <span class="badge text-bg-light border">${escapeHtml(queueItem.status)}</span>
+  </div>`;
+}
+
+function routeForm(queueItem, key, returnTo) {
+  if (!queueItem) return '';
+  const selected = queueItem.pipeline === 'triage' ? queueItem.recommendedPipeline : queueItem.pipeline;
+  const options = ROUTE_OPTIONS.map(([value, label]) => `<option value="${value}" ${selected === value ? 'selected' : ''}>${label}</option>`).join('');
+  return `<form method="post" action="/queue/route" class="d-flex gap-2 align-items-center flex-wrap mt-3">
+    <input type="hidden" name="key" value="${escapeHtml(key)}">
+    <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
+    <select class="form-select form-select-sm" style="width:auto" name="pipeline">${options}</select>
+    <button class="btn btn-outline-dark btn-sm" type="submit">Route</button>
+  </form>`;
+}
+
 function candidateCard(candidate, index, returnTo) {
   const isX = candidate.source === 'x';
   const draft = getDraftByCandidate(candidate.key);
+  let queueItem = getQueueItemByCandidate(candidate.key);
+  if (candidate.saved && queueItem && !queueItem.recommendedPipeline) queueItem = refreshQueueRecommendation(candidate.key).queueItem;
   const actions = listCandidateActions(candidate.key);
   const actionBadges = actions.map((action) => action.output_url
     ? `<a class="badge text-bg-info text-decoration-none" href="${escapeHtml(action.output_url)}" target="_blank">${escapeHtml(action.action.toUpperCase())} ↗</a>`
@@ -150,6 +191,9 @@ function candidateCard(candidate, index, returnTo) {
     : candidate.source === 'github'
       ? `${formatNumber(metrics.stars)} stars · ~${formatNumber(metrics.starsPerDay)} stars/day`
       : `${formatNumber(metrics.points)} points · ${formatNumber(metrics.comments)} comments`;
+  const recommendation = queueItem?.recommendedPipeline
+    ? `<div class="small mt-2"><strong>Recommended:</strong> ${escapeHtml(queueItem.recommendedPipeline)} · <span class="text-secondary">${escapeHtml(queueItem.routingReason)}</span></div>`
+    : '';
 
   return `<article class="card shadow-sm border-0 mb-3">
     <div class="card-body p-4">
@@ -163,8 +207,11 @@ function candidateCard(candidate, index, returnTo) {
       ${isX ? nicheBadges(candidate) : ''}
       ${viralBadges(candidate)}
       <p class="card-text fs-6 lh-base text-break">${escapeHtml(renderedText)}</p>
-      <div class="text-secondary small mb-3">${escapeHtml(metricLine)}</div>
-      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+      <div class="text-secondary small mb-2">${escapeHtml(metricLine)}</div>
+      ${workflowBadges(queueItem)}
+      ${recommendation}
+      ${candidate.saved ? routeForm(queueItem, candidate.key, returnTo) : ''}
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mt-3">
         <div class="d-flex gap-2 flex-wrap">
           ${candidate.saved ? '<span class="badge text-bg-success">Saved</span>' : ''}
           ${actionBadges}
@@ -192,17 +239,20 @@ function draftCard(draft) {
   const candidate = getCandidate(draft.candidateKey);
   if (!candidate) return '';
   const analysis = scoreDraft(draft, candidate);
-  const statusOptions = ['draft', 'ready', 'published'].map((status) => `<option value="${status}" ${draft.status === status ? 'selected' : ''}>${status}</option>`).join('');
+  const queueItem = getQueueItemByCandidate(candidate.key);
+  const canRequestReview = queueItem && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) && queueItem.status === 'drafting';
+  const canApprove = queueItem?.status === 'needs_review' && ['original', 'quote', 'thread'].includes(queueItem.pipeline) && analysis.publishable;
   return `<article class="card shadow-sm border-0 mb-4">
     <div class="card-body p-4">
       <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
         <div>
           <div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div>
           <div class="text-secondary small">${escapeHtml((candidate.niche?.tags || []).map((tag) => NICHE_LABELS[tag] || tag).join(' · '))}</div>
+          ${workflowBadges(queueItem)}
         </div>
         <div class="d-flex gap-2 align-items-start">
           <span class="badge ${analysis.publishable ? 'text-bg-success' : analysis.score >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">${escapeHtml(analysis.quality)} ${analysis.score}/50</span>
-          <span class="badge text-bg-light border">${escapeHtml(draft.status)}</span>
+          <span class="badge text-bg-light border">Draft ${escapeHtml(draft.status)}</span>
         </div>
       </div>
       <form method="post" action="/draft/save">
@@ -212,13 +262,18 @@ function draftCard(draft) {
         <div class="mb-3"><label class="form-label fw-semibold">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div>
         <div class="mb-3"><label class="form-label fw-semibold">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div>
         <div class="row g-3 align-items-end">
-          <div class="col-md-3"><label class="form-label">Status</label><select class="form-select" name="status">${statusOptions}</select></div>
           <div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div>
-          <div class="col-md-4 d-flex gap-2"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div>
+          <div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div>
         </div>
       </form>
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-outline-primary btn-sm" type="submit">Request review</button></form>` : ''}
+        ${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
+        ${queueItem?.status === 'approved' ? '<span class="badge text-bg-success align-self-center">Approved · compatibility draft ready</span>' : ''}
+      </div>
+      ${queueItem?.status === 'needs_review' && !analysis.publishable && queueItem.pipeline !== 'reply' ? `<div class="alert alert-warning py-2 mt-3 mb-0">Needs review, but the current draft is not publishable (${analysis.score}/50).</div>` : ''}
       <hr>
-      <div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5 · ${analysis.weightedLength}/280 weighted chars. Ready requires ≥40/50, no placeholders, and ≤280 weighted chars.</div>
+      <div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5 · ${analysis.weightedLength}/280 weighted chars. Human approval requires ≥40/50, no placeholders, and ≤280 weighted chars.</div>
     </div>
   </article>`;
 }
@@ -266,6 +321,47 @@ function audienceView(error = null) {
   return stats
     + profileCards(targets, 'Relationship targets', 'Relevant accounts you already follow that do not currently follow you. Engage only when you can add concrete value.')
     + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
+}
+
+const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'watching'];
+
+function queueCard(queueItem) {
+  if (!queueItem.recommendedPipeline) queueItem = refreshQueueRecommendation(queueItem.candidateKey).queueItem;
+  const snapshot = inspectWorkflow(queueItem.candidateKey);
+  const candidate = snapshot.candidate;
+  const draft = snapshot.draft;
+  const analysis = draft ? scoreDraft(draft, candidate) : null;
+  const mainFeedReview = queueItem.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(queueItem.pipeline);
+  const canApprove = mainFeedReview && (queueItem.pipeline === 'repost' || analysis?.publishable);
+  const canRequestReview = queueItem.status === 'drafting' && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline);
+  const breakdown = snapshot.scores.breakdown;
+  const returnTo = '/?source=queue';
+  return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
+    <div class="d-flex justify-content-between gap-3 flex-wrap">
+      <div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">${escapeHtml(candidate.source.toUpperCase())} · ${escapeHtml(queueItem.pipeline)} · ${escapeHtml(queueItem.status)}</div></div>
+      <a class="btn btn-outline-secondary btn-sm align-self-start" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a>
+    </div>
+    <p class="mt-3 mb-2 text-break">${escapeHtml(candidate.text)}</p>
+    ${workflowBadges(queueItem)}
+    <div class="small mt-2"><strong>AI recommendation:</strong> ${escapeHtml(queueItem.recommendedPipeline || 'none')} · <span class="text-secondary">${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
+    <div class="small text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div>
+    ${routeForm(queueItem, candidate.key, returnTo)}
+    <div class="d-flex gap-2 flex-wrap mt-3">
+      ${draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Draft ${draft.qualityScore}/50</a>` : ''}
+      ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-outline-primary btn-sm" type="submit">Request review</button></form>` : ''}
+      ${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
+    </div>
+    ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked: ${analysis ? `draft ${analysis.score}/50 is not publishable` : 'a draft is required'}.</div>` : ''}
+  </div></article>`;
+}
+
+function queueView() {
+  const items = listQueueItems({ limit: 250 });
+  return QUEUE_GROUPS.map((status) => {
+    const group = items.filter((item) => item.status === status);
+    if (!group.length) return '';
+    return `<h2 class="h5 mt-4 text-capitalize">${escapeHtml(status.replace('_', ' '))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map(queueCard).join('')}`;
+  }).join('') || '<div class="alert alert-secondary">No active workflow items.</div>';
 }
 
 async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = false) {
@@ -321,7 +417,8 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
   else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
   else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
-  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} ready for the publishing queue.`;
+  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage' })} items need routing · ${countQueueItems({ status: 'needs_review' })} need review.`;
+  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} human-approved compatibility-ready.`;
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
   else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot and recent post outcomes.`;
   else if (activeSource === 'audience') {
@@ -336,6 +433,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['x', 'X posts'],
     ['viral', 'Viral · 24h'],
     ['interesting', `Saved (${savedCount})`],
+    ['queue', `Queue (${countQueueItems({ status: 'triage' })})`],
     ['drafts', 'Drafts'],
     ['opportunities', 'Opportunities'],
     ['audience', 'Audience'],
@@ -346,7 +444,8 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   ].map(([source, label]) => `<a class="btn btn-sm ${activeSource === source ? (source === 'viral' ? 'btn-danger' : 'btn-dark') : (source === 'viral' ? 'btn-outline-danger' : 'btn-outline-secondary')}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
 
   let content;
-  if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Create one from any research card.</div>';
+  if (activeSource === 'queue') content = queueView();
+  else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
   else if (activeSource === 'audience') content = audienceView(audienceError);
   else content = visible.slice(0, 50).map((item, index) => candidateCard(item, index, returnTo)).join('') || '<div class="alert alert-secondary">No candidates found for this view.</div>';
@@ -388,17 +487,39 @@ const server = http.createServer(async (req, res) => {
       const key = form.get('key');
       const candidate = getCandidate(key);
       if (!candidate) throw new Error('Candidate not found. Refresh research first.');
-      markCandidateSaved(key, form.get('saved') !== '0');
+      saveCandidateToWorkflow(key, form.get('saved') !== '0');
       res.writeHead(303, { location: form.get('returnTo') || '/?source=interesting' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/queue/route') {
+      const form = await readForm(req);
+      routeCandidate(form.get('key'), form.get('pipeline'), { actor: 'human' });
+      res.writeHead(303, { location: form.get('returnTo') || '/?source=queue' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/queue/review') {
+      const form = await readForm(req);
+      requestQueueReview(form.get('key'));
+      res.writeHead(303, { location: '/?source=drafts' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/queue/approve') {
+      const form = await readForm(req);
+      approveQueueItem(form.get('key'));
+      res.writeHead(303, { location: '/?source=queue' }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/draft/create') {
       const form = await readForm(req);
       const candidate = getCandidate(form.get('key'));
       if (!candidate) throw new Error('Candidate not found.');
+      saveCandidateToWorkflow(candidate.key, true);
       let draft = getDraftByCandidate(candidate.key);
-      if (!draft) draft = saveDraft(createDraftScaffold(candidate));
-      markCandidateSaved(candidate.key, true);
+      const queueItem = getQueueItemByCandidate(candidate.key);
+      if (!draft) {
+        routeCandidate(candidate.key, queueItem?.pipeline && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original', { actor: 'human' });
+        draft = getDraftByCandidate(candidate.key);
+      }
       res.writeHead(303, { location: `/?source=drafts&draft=${draft.id}` }); res.end(); return;
     }
 
@@ -422,15 +543,18 @@ const server = http.createServer(async (req, res) => {
       updated.body = composeDraft(updated);
       const analysis = scoreDraft(updated, candidate);
       updated.qualityScore = analysis.score;
-      const requestedStatus = form.get('status') || 'draft';
-      if (!['draft', 'ready', 'published'].includes(requestedStatus)) throw new Error('Invalid draft status.');
-      if (requestedStatus === 'published' && current.status !== 'published') throw new Error('Publishing state is owned by the publisher.');
-      updated.status = requestedStatus === 'ready' && !analysis.publishable ? 'draft' : requestedStatus;
+      updated.status = current.status === 'published' ? 'published' : 'draft';
       const saved = saveDraft(updated);
+      if (current.status !== 'published') {
+        let queueItem = getQueueItemByCandidate(candidate.key);
+        if (!queueItem) queueItem = saveCandidateToWorkflow(candidate.key, true).queueItem;
+        const pipeline = ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original';
+        routeCandidate(candidate.key, pipeline, { actor: 'human' });
+      }
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'drafts', 'opportunities', 'audience', 'performance', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'drafts', 'opportunities', 'audience', 'performance', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1');

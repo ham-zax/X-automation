@@ -51,15 +51,17 @@
 - ordinary posting cooldown;
 - performance snapshots;
 - agent JSON bridge;
-- Bootstrap dashboard.
+- Bootstrap dashboard;
+- Phase 1A persistent `queue_items` with Save -> Triage backfill/ownership;
+- separate Reach / Follow / Conversation / Relationship opportunity scores;
+- stored AI recommendation separate from human-selected pipeline;
+- explicit Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore routing;
+- Queue dashboard plus `route` / `workflow` bridge commands;
+- `needs_review` workflow state and explicit dashboard human approval boundary;
+- temporary compatibility bridge where human approval alone sets an associated text draft to `ready`.
 
 ### Planned by this document
 
-- Save -> triage queue creation;
-- explicit pipeline routing after Save;
-- queue workflow states independent from draft status;
-- Research / Watch / Thread pipeline types;
-- human approval boundary;
 - final writing-prompt contract;
 - hard pre-publication gate beyond the numeric rubric;
 - media planning and upload attachment metadata;
@@ -190,9 +192,9 @@ Alternative terminal states:
 
 AI-controlled transitions stop at `needs_review`. Only a human approval action can move a queued main-feed item to `approved`. The scheduler owns `approved -> scheduled`. The publisher owns `scheduled -> publishing -> published`.
 
-## Planned Data Model
+## Data Model: Phase 1A current, later fields planned
 
-Add a `queue_items` table rather than overloading `drafts` with workflow responsibility.
+Phase 1A now uses `queue_items` rather than overloading `drafts` with workflow responsibility. Later phases extend this workflow record with their owned fields.
 
 Planned fields:
 
@@ -208,6 +210,7 @@ reach_potential
 follow_potential
 conversation_potential
 relationship_potential
+recommended_pipeline
 draft_id
 routing_reason
 research_summary
@@ -885,7 +888,7 @@ The scheduler/account-health layer must not convert any of these observations in
 
 Phase-specific plans in `docs/plans/` are authoritative for implementation detail. The master tasks above remain the cross-system map.
 
-### Phase 1A — Workflow foundation + four-dimensional triage
+### Phase 1A — Workflow foundation + four-dimensional triage — IMPLEMENTED
 
 Plan: `plans/PHASE_1_WORKFLOW_FOUNDATION.md`
 

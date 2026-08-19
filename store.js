@@ -93,12 +93,49 @@ db.exec(`
     last_seen_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS queue_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_key TEXT NOT NULL UNIQUE,
+    lane TEXT NOT NULL DEFAULT 'main',
+    pipeline TEXT NOT NULL DEFAULT 'triage',
+    status TEXT NOT NULL DEFAULT 'triage',
+    reach_potential REAL NOT NULL DEFAULT 0,
+    follow_potential REAL NOT NULL DEFAULT 0,
+    conversation_potential REAL NOT NULL DEFAULT 0,
+    relationship_potential REAL NOT NULL DEFAULT 0,
+    recommended_pipeline TEXT NOT NULL DEFAULT '',
+    routing_reason TEXT NOT NULL DEFAULT '',
+    draft_id INTEGER,
+    human_approved_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key),
+    FOREIGN KEY(draft_id) REFERENCES drafts(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_candidates_source_updated ON candidates(source, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_saved ON candidates(saved, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_viral ON candidates(viral_score DESC, published_at DESC);
   CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status, scheduled_at, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidate_actions_created ON candidate_actions(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_audience_relevance ON audience_profiles(relevance_score DESC, last_seen_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
+
+  INSERT OR IGNORE INTO queue_items (
+    candidate_key, lane, pipeline, status,
+    reach_potential, follow_potential, conversation_potential, relationship_potential,
+    recommended_pipeline, routing_reason, draft_id, human_approved_at, created_at, updated_at
+  )
+  SELECT
+    c.key, 'main', 'triage', 'triage',
+    0, 0, 0, 0,
+    '', '', NULL, NULL, c.updated_at, c.updated_at
+  FROM candidates c
+  WHERE c.saved = 1
+    AND NOT EXISTS (
+      SELECT 1 FROM candidate_actions a WHERE a.candidate_key = c.key
+    );
 `);
 
 function json(value, fallback) {
@@ -238,6 +275,102 @@ export function markCandidateSaved(key, saved = true) {
 
 export function countSavedCandidates() {
   return Number(db.prepare('SELECT COUNT(*) AS count FROM candidates WHERE saved = 1').get().count || 0);
+}
+
+function decodeQueueItem(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    candidateKey: row.candidate_key,
+    lane: row.lane,
+    pipeline: row.pipeline,
+    status: row.status,
+    reachPotential: Number(row.reach_potential || 0),
+    followPotential: Number(row.follow_potential || 0),
+    conversationPotential: Number(row.conversation_potential || 0),
+    relationshipPotential: Number(row.relationship_potential || 0),
+    recommendedPipeline: row.recommended_pipeline || '',
+    routingReason: row.routing_reason || '',
+    draftId: row.draft_id == null ? null : Number(row.draft_id),
+    humanApprovedAt: row.human_approved_at == null ? null : Number(row.human_approved_at),
+    createdAt: Number(row.created_at || 0),
+    updatedAt: Number(row.updated_at || 0),
+  };
+}
+
+export function ensureQueueItem(candidateKey, defaults = {}) {
+  const now = Date.now();
+  db.prepare(`INSERT OR IGNORE INTO queue_items(
+    candidate_key, lane, pipeline, status,
+    reach_potential, follow_potential, conversation_potential, relationship_potential,
+    recommended_pipeline, routing_reason, draft_id, human_approved_at, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    candidateKey,
+    defaults.lane || 'main',
+    defaults.pipeline || 'triage',
+    defaults.status || 'triage',
+    Number(defaults.reachPotential || 0),
+    Number(defaults.followPotential || 0),
+    Number(defaults.conversationPotential || 0),
+    Number(defaults.relationshipPotential || 0),
+    defaults.recommendedPipeline || '',
+    defaults.routingReason || '',
+    defaults.draftId ?? null,
+    defaults.humanApprovedAt ?? null,
+    now,
+    now,
+  );
+  return getQueueItemByCandidate(candidateKey);
+}
+
+export function getQueueItem(id) {
+  return decodeQueueItem(db.prepare('SELECT * FROM queue_items WHERE id = ?').get(Number(id)));
+}
+
+export function getQueueItemByCandidate(candidateKey) {
+  return decodeQueueItem(db.prepare('SELECT * FROM queue_items WHERE candidate_key = ?').get(candidateKey));
+}
+
+export function listQueueItems({ status, pipeline, lane, limit = 100 } = {}) {
+  const where = [];
+  const params = [];
+  if (status) { where.push('status = ?'); params.push(status); }
+  if (pipeline) { where.push('pipeline = ?'); params.push(pipeline); }
+  if (lane) { where.push('lane = ?'); params.push(lane); }
+  params.push(Number(limit || 100));
+  return db.prepare(`SELECT * FROM queue_items ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY updated_at DESC LIMIT ?`).all(...params).map(decodeQueueItem);
+}
+
+export function saveQueueItem(item) {
+  const current = item?.id ? getQueueItem(item.id) : getQueueItemByCandidate(item?.candidateKey);
+  if (!current) throw new Error(`Queue item not found: ${item?.candidateKey || item?.id || 'unknown'}`);
+  const next = { ...current, ...item };
+  db.prepare(`UPDATE queue_items SET
+    lane = ?, pipeline = ?, status = ?,
+    reach_potential = ?, follow_potential = ?, conversation_potential = ?, relationship_potential = ?,
+    recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?, updated_at = ?
+    WHERE id = ?`).run(
+    next.lane,
+    next.pipeline,
+    next.status,
+    Number(next.reachPotential || 0),
+    Number(next.followPotential || 0),
+    Number(next.conversationPotential || 0),
+    Number(next.relationshipPotential || 0),
+    next.recommendedPipeline || '',
+    next.routingReason || '',
+    next.draftId ?? null,
+    next.humanApprovedAt ?? null,
+    Date.now(),
+    current.id,
+  );
+  return getQueueItem(current.id);
+}
+
+export function countQueueItems({ status } = {}) {
+  if (status) return Number(db.prepare('SELECT COUNT(*) AS count FROM queue_items WHERE status = ?').get(status).count || 0);
+  return Number(db.prepare('SELECT COUNT(*) AS count FROM queue_items').get().count || 0);
 }
 
 export function recordCandidateAction({ candidateKey: key, action, outputTweetId = null, outputUrl = null, commentary = '' }) {
