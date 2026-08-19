@@ -154,7 +154,19 @@ The writing agent should receive a structured packet with as much of the followi
     "engagementsPerHour": null
   },
   "recentAccountPosts": [],
+  "opportunity": {
+    "reachPotential": null,
+    "followPotential": null,
+    "conversationPotential": null,
+    "relationshipPotential": null
+  },
   "relationshipContext": null,
+  "targetContext": null,
+  "profileProof": {
+    "topic": null,
+    "coverage": null,
+    "supportingPostIds": []
+  },
   "mediaAvailable": [],
   "desiredReaderOutcome": null
 }
@@ -189,8 +201,11 @@ You receive:
 - niche tags and matched keywords;
 - viral/freshness context;
 - recent `@ham_zax` posts;
+- Reach / Follow / Conversation / Relationship potential when available;
 - target audience;
-- relationship context if replying;
+- target class / TargetScore / relationship stage when available;
+- relationship and prior-conversation context if replying;
+- profile-proof coverage for the topic when available;
 - available media/evidence;
 - desired reader outcome.
 
@@ -205,6 +220,8 @@ Before writing, answer internally:
 5. What distinct angle can `@ham_zax` add?
 6. What should the reader understand or do differently after reading?
 7. Would the final item still be useful if engagement counters were hidden?
+8. If this came from a relationship/target conversation, what would make the contribution deepen technical credibility rather than merely repeat the source?
+9. Does the account already have strong owned proof on this topic? If not, can this become a durable profile-conversion asset instead of disposable commentary?
 
 If there is no additive insight, useful amplification purpose, or substantive relationship contribution, return:
 
@@ -480,6 +497,8 @@ Preferred shape:
   },
   "discussionQuestion": null,
   "followValue": "why a target developer might follow after reading",
+  "relationshipValue": "how this helps or preserves the target conversation/relationship, or null when not applicable",
+  "profileProofValue": "how this strengthens the account's owned proof on the topic",
   "riskFlags": []
 }
 ```
@@ -530,12 +549,14 @@ Before approving a main-feed item, the human should be able to answer:
 1. What exactly will a developer learn?
 2. What part is ours rather than the source's?
 3. What evidence supports the central claim?
-4. Would the post still be useful with likes/views hidden?
-5. Does it reinforce the account promise?
-6. Is the first line accurate and scannable?
-7. Are we repeating something we posted recently?
-8. Does the media prove/explain something, or is it decoration?
-9. Is any question genuinely useful to answer?
-10. Would I defend this wording publicly tomorrow?
+4. If this came from a target conversation, does the final text strengthen technical credibility or merely echo the source?
+5. Does this improve profile proof for a topic we repeatedly enter publicly?
+6. Would the post still be useful with likes/views hidden?
+7. Does it reinforce the account promise?
+8. Is the first line accurate and scannable?
+9. Are we repeating something we posted recently?
+10. Does the media prove/explain something, or is it decoration?
+11. Is any question genuinely useful to answer?
+12. Would I defend this wording publicly tomorrow?
 
-If the answer to #1, #2, #3, or #10 is no, revise or do not publish.
+If the answer to #1, #2, #3, or #12 is no, revise or do not publish.

@@ -6,6 +6,8 @@ The objective is **real network formation and durable audience trust**, not arti
 
 This is separate from `CONTENT_OPERATING_STANDARD.md`: that document governs content quality; this one governs **how we interact with the platform and other people**.
 
+This document is a **constraint layer, not the growth strategy**. Distribution, relationship construction, conversion, experiments, and optimization live in `NETWORK_GROWTH_OPERATING_SYSTEM.md` and the phase plans. Those documents should optimize aggressively inside the boundaries defined here rather than repeating policy/moral framing throughout the strategy.
+
 ---
 
 ## 1. Core invariant

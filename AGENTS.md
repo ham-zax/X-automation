@@ -2,6 +2,8 @@
 
 This repository is the operating system for the `@ham_zax` X account.
 
+The strategic architecture is **network-first**: use research to find useful conversations, build recurring relevant relationships, convert profile visits with strong owned technical content, and learn which network/content/timing decisions recruit the target developer audience.
+
 ## Account identity
 
 Target identity: **AI-native developer + builder**.
@@ -19,6 +21,14 @@ Do not behave like a generic AI news account.
 Use `agent_bridge.js` for content/research state. Do not mutate `.x-research.sqlite` directly when the bridge supports the operation.
 
 Full protocol: `docs/AGENT_WORKFLOW.md`.
+
+Strategic sources of truth:
+
+- `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`
+- `docs/RELATIONSHIP_INTELLIGENCE.md`
+- `docs/ALGORITHM_EVIDENCE_LEDGER.md`
+- `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`
+- `docs/plans/`
 
 Key commands:
 
@@ -63,8 +73,11 @@ A ready single-post draft requires >=40/50, no scaffold placeholders, and <=280 
 - Never automate likes, follow churn, or mass unsolicited replies as growth tactics.
 - Keep explicit saved-post preferences and actual performance data separate from guessed preferences.
 - Preserve the standards in `docs/CONTENT_OPERATING_STANDARD.md`, `docs/ENGAGEMENT_INTEGRITY.md`, `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`, and `docs/POST_GENERATION_PROMPT.md`.
+- Treat `docs/ALGORITHM_EVIDENCE_LEDGER.md` as the authority for whether a growth claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
+- Optimize network recommendations around target relevance, conversation quality, relationship potential, and qualified follower conversion; do not reduce target selection to follower count.
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
 - `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` describes planned behavior. Do not pretend its future triage/route/scheduler interfaces exist until implemented.
+- `docs/RELATIONSHIP_INTELLIGENCE.md` and the Phase 1B/1C plans describe planned relationship/Engage Next behavior. Do not invent those bridge commands or SQLite tables before implementation.
 
 ## Coding changes
 

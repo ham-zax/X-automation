@@ -475,3 +475,58 @@ Research is strong when:
 The target output is not `more content`.
 
 The target is **an accumulating body of developer judgment that makes the account worth following**.
+
+## 9. Conversation-derived research loop
+
+Relationship intelligence should become a research sensor, not only a growth surface.
+
+Every substantive target conversation can generate one of:
+
+```text
+unresolved technical question
+repeated practitioner pain point
+benchmark request
+missing comparison
+contradictory field result
+new edge case
+implementation gap
+```
+
+When the same question/pain appears repeatedly across relevant conversations, feed it into the research backlog with source relationship/topic context.
+
+Suggested priority modifiers:
+
+- +2 when the question appears independently in >=3 relevant conversations;
+- +2 when an authority/maintainer target explicitly asks or disputes the point;
+- +2 when answering it would strengthen weak `ProfileProofCoverage` for a core topic;
+- +1 when customer-density targets repeatedly surface the same implementation problem.
+
+These modifiers supplement the Topic Selection Score; they do not replace testability/evidence requirements.
+
+The intended compounding loop is:
+
+```text
+relationship conversations
+-> discover unanswered developer question
+-> run deeper research/experiment
+-> publish durable owned proof
+-> future profile visitors see stronger expertise
+-> future conversations start from a higher credibility baseline
+```
+
+This is one of the system's strongest long-term advantages: the network itself tells us what technically serious people still need answered.
+
+## 10. Profile-proof coverage
+
+For each Tier-1 research area, periodically classify owned content coverage:
+
+```text
+none
+weak
+medium
+strong
+```
+
+A topic is `strong` when the recent profile contains at least one durable, evidence-backed asset a technical visitor can use to judge competence: experiment, benchmark, implementation guide, architecture teardown, or reproducible result.
+
+Do not fill profile-proof gaps with generic summaries. A gap is a research priority only when there is a testable question or useful original asset to build.

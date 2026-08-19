@@ -291,7 +291,9 @@ Run the model/tool/repo ourselves and publish the result.
 
 ## 8. Algorithm-aware principles
 
-The public X recommendation code should inform content quality, not become a recipe for metric manipulation.
+The public X recommendation code should inform content quality and network strategy without becoming fake raw-count arithmetic.
+
+`ALGORITHM_EVIDENCE_LEDGER.md` is the authority for whether a claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 
 Current public code indicates that ranking predicts multiple actions for **each viewer** and combines those predicted probabilities using weights. The weights are **not raw engagement-count multipliers**. Therefore we do not optimize for simplistic formulas such as "one share equals N likes."
 
@@ -301,6 +303,7 @@ Practical implications:
 - **Originals matter for discovery.** Out-of-network replies and reposts are filtered from the normal For You candidate path.
 - **Share-worthy utility is strategically strong.** Build things developers would genuinely send to another developer.
 - **Follow-worthy identity matters.** Every strong post should reinforce why this account deserves a follow.
+- **Relevant network topology matters.** Current public code includes in-/out-of-network mechanics and a bidirectional/mutual-follow reply-head boost for eligible original posts; repeated useful relationships are therefore strategically different from one-off borrowed reach.
 - **Do not flood.** Author-diversity logic reduces repeated-author presence in a candidate slate.
 - **Differentiate the angle.** The VMRanker diversity stage uses semantic similarity, so being the 20th near-identical summary is strategically weak.
 - **Freshness matters for For You inventory.** The current public pipeline filters posts older than 48 hours from this candidate path; evergreen ideas should be republished only as genuinely new posts with new value.
@@ -315,6 +318,8 @@ Primary references:
 - https://github.com/xai-org/x-algorithm/blob/main/home-mixer/filters/oon_retweet_reply_filter.rs
 - https://github.com/xai-org/x-algorithm/blob/main/vm-ranker/dpp.rs
 - https://github.com/xai-org/x-algorithm/blob/main/phoenix/README.md
+- https://github.com/xai-org/x-algorithm/blob/main/docs/BIDIRECTIONAL_BOOST_CHANGE.md
+- `ALGORITHM_EVIDENCE_LEDGER.md` for current evidence classification and empirical variables.
 
 ---
 

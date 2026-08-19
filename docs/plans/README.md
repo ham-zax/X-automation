@@ -1,0 +1,175 @@
+# Implementation Plan Index
+
+These files are the authoritative execution sequence for the planned network-first growth system.
+
+Do not implement later phases by inventing interfaces that earlier plans have not established yet.
+
+## Execution order
+
+```text
+Phase 1A  Workflow foundation + four-dimensional triage
+   |
+   v
+Phase 1B  Relationship Intelligence
+   |
+   v
+Phase 1C  Engage Next + conversation follow-up
+   |
+   v
+Phase 2   Content quality + profile proof + media plan
+   |
+   v
+Phase 3   Main-feed distribution scheduler
+   |
+   v
+Phase 4   Measurement + content/network experiments
+   |
+   v
+Phase 5   Learned strategy
+```
+
+## Phase 1A
+
+[`PHASE_1_WORKFLOW_FOUNDATION.md`](PHASE_1_WORKFLOW_FOUNDATION.md)
+
+Owns:
+
+- `queue_items` foundation;
+- Save -> Triage;
+- route selection;
+- human approval boundary;
+- Reach / Follow / Conversation / Relationship potential;
+- temporary compatibility with the current `draft.status=ready` automation path.
+
+Does **not** own durable relationship history or engagement discovery.
+
+## Phase 1B
+
+[`PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`](PHASE_1B_RELATIONSHIP_INTELLIGENCE.md)
+
+Owns:
+
+- `relationship_profiles`;
+- `relationship_events`;
+- target classes;
+- TargetScore;
+- relationship stage;
+- Relationships dashboard/agent reads.
+
+Depends on:
+
+- Phase 1A queue conventions;
+- existing audience sync.
+
+## Phase 1C
+
+[`PHASE_1C_ENGAGE_NEXT.md`](PHASE_1C_ENGAGE_NEXT.md)
+
+Owns:
+
+- target recent-post discovery;
+- active-conversation response discovery;
+- EngagePriority;
+- reply contribution archetypes;
+- expiry/freshness;
+- Engage Next UI;
+- explicit one-by-one reply review/send;
+- relationship-event updates after interaction.
+
+Depends on:
+
+- Phase 1A queue;
+- Phase 1B relationship intelligence.
+
+## Phase 2
+
+[`PHASE_2_CONTENT_QUALITY.md`](PHASE_2_CONTENT_QUALITY.md)
+
+Owns:
+
+- format-aware original/quote/reply/thread writing contracts;
+- canonical writer packet;
+- ProfileProofCoverage context;
+- deterministic gates;
+- 50-point score integration;
+- thread storage;
+- media plan/attachment metadata;
+- final human editorial review.
+
+Depends on:
+
+- Phase 1A workflow;
+- consumes Phase 1B/1C relationship context when available.
+
+## Phase 3
+
+[`PHASE_3_DISTRIBUTION_SCHEDULER.md`](PHASE_3_DISTRIBUTION_SCHEDULER.md)
+
+Owns:
+
+- `scheduler.js`;
+- urgency/expiry;
+- main-feed serialization;
+- semantic conflict/self-cannibalization checks;
+- queue claim/publish lock;
+- format-aware original/quote/thread publication;
+- viral pre-emption.
+
+Depends on:
+
+- Phase 1A approval state;
+- Phase 2 gates/final content.
+
+## Phase 4
+
+[`PHASE_4_MEASUREMENT_EXPERIMENTS.md`](PHASE_4_MEASUREMENT_EXPERIMENTS.md)
+
+Owns:
+
+- fixed 15m/1h/6h/24h measurements;
+- follower conversion with attribution confidence;
+- new-follower quality;
+- relationship conversion metrics;
+- content experiments;
+- network experiments;
+- evidence states for cohort findings.
+
+Depends on:
+
+- Phase 1B/1C relationship events;
+- Phase 3 published queue metadata.
+
+## Phase 5
+
+[`PHASE_5_LEARNED_STRATEGY.md`](PHASE_5_LEARNED_STRATEGY.md)
+
+Owns:
+
+- `learning.js`;
+- suggested/accepted/retired learned rules;
+- bounded target/engagement/content/timing adjustments;
+- evidence-backed strategy recommendations;
+- dashboard human acceptance/retirement of learned rules.
+
+Depends on:
+
+- Phase 4 measurements/experiments.
+
+## Cross-cutting source-of-truth docs
+
+- [`../NETWORK_GROWTH_OPERATING_SYSTEM.md`](../NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategy and operating model.
+- [`../RELATIONSHIP_INTELLIGENCE.md`](../RELATIONSHIP_INTELLIGENCE.md) — target/relationship domain contract.
+- [`../ALGORITHM_EVIDENCE_LEDGER.md`](../ALGORITHM_EVIDENCE_LEDGER.md) — evidence classification.
+- [`../HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](../HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — cross-system master architecture.
+- [`../POST_GENERATION_PROMPT.md`](../POST_GENERATION_PROMPT.md) — canonical writing/editor prompt.
+- [`../CONTENT_OPERATING_STANDARD.md`](../CONTENT_OPERATING_STANDARD.md) — outbound content standard.
+
+## Implementation discipline
+
+Before starting a phase:
+
+1. confirm its dependencies are implemented, not merely documented;
+2. use the exact owners/interfaces in the phase plan unless repository evidence forces a revision;
+3. update the plan first if an implementation decision materially changes persistence/domain ownership;
+4. keep current vs planned behavior explicit in user/agent docs;
+5. do not pull later-phase machinery into an earlier phase merely because the future schema is known.

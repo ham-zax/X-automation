@@ -305,3 +305,108 @@ Canonical design:
 - `RESEARCH_AGENDA.md` — topics deep enough to create original account-level intellectual property.
 
 Until the plan is implemented, the existing Saved/draft/ready workflow remains authoritative.
+
+## 13. Network-first growth upgrade
+
+When this section conflicts with older account-size or posting-first heuristics in this document, this section governs.
+
+The growth system should be understood as:
+
+> **conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion**
+
+Publishing remains the primary owned-authority asset, but network construction is upstream of it.
+
+The system should maintain two distinct operating lanes:
+
+### Main-feed lane
+
+- original;
+- quote;
+- thread;
+- rare repost.
+
+Purpose: discovery, profile proof, follower conversion, and durable technical authority.
+
+### Engagement lane
+
+- substantive initial reply;
+- follow-up response;
+- response under our own post;
+- relationship-maintenance conversation.
+
+Purpose: conversation insertion, recognition, recurring relationships, and relevant audience exposure.
+
+## 14. Target-account classes
+
+Do not define target accounts primarily by follower count.
+
+Use one or more classes:
+
+- **Distribution target** — strong audience overlap plus useful conversation reach.
+- **Relationship target** — repeated useful interaction is realistically possible.
+- **Authority target** — technically respected person/team whose engagement or information matters.
+- **Customer-density target** — conversations contain developers/builders likely to care about future technical products/services.
+- **Source target** — produces valuable primary or early technical information.
+
+Follower count is an analytical/secondary reach variable, not a target-class definition.
+
+The planned `TargetScore` uses:
+
+`TopicFit x AudienceOverlap x ConversationQuality x ReplyVisibility x RelationshipPotential`
+
+implemented as a weighted geometric mean with a small bounded reach modifier. Full contract: `RELATIONSHIP_INTELLIGENCE.md`.
+
+## 15. Four-dimensional opportunity scoring
+
+Every saved/triaged signal should eventually expose independent 0-100 values for:
+
+- **Reach Potential** — broad distribution opportunity.
+- **Follow Potential** — whether the finished contribution reinforces why the target developer should follow.
+- **Conversation Potential** — likelihood of useful technical exchange.
+- **Relationship Potential** — value of the specific source/author/conversation for recurring network construction.
+
+Do not collapse these into a fake Phoenix score. They answer different editorial questions.
+
+```text
+Reach 94 / Follow 38 / Conversation 55 / Relationship 12
+=> big source, weak account-building value; likely repost/research/ignore.
+
+Reach 58 / Follow 91 / Conversation 88 / Relationship 93
+=> smaller thread, excellent reply/original research opportunity.
+```
+
+## 16. Conversation follow-up outranks endless cold insertion
+
+The valuable event is not simply `we replied`.
+
+It is:
+
+`we replied -> target responded -> conversation continued -> relationship changed`.
+
+When somebody responds to us, that active conversation should generally outrank finding another cold target if we still have a useful contribution.
+
+Track:
+
+- author response rate;
+- conversation continuation rate;
+- recurring relationship conversion;
+- target follow/connection outcomes;
+- mutual relationship count;
+- reply archetype and target class.
+
+## 17. Algorithm evidence discipline
+
+Use `ALGORITHM_EVIDENCE_LEDGER.md` before turning a growth belief into a product invariant.
+
+Evidence classes:
+
+- `CODE_BACKED` — current public implementation mechanism;
+- `OFFICIAL_PRODUCT_OR_POLICY` — documented product/policy behavior;
+- `EMPIRICAL_VARIABLE` — our experiment/tactic hypothesis;
+- `RETIRED` — superseded/contradicted claim.
+
+Current strategy treats mutual-follow original-post reply boosting, multi-action predicted scoring, author diversity, in-/out-of-network mechanics, and Phoenix/Thunder retrieval as code-backed mechanisms. Exact reply timing, posting gaps, hashtag counts, media frequency, link placement, reply quotas, and target-size ranges remain empirical variables until account evidence supports a stronger rule.
+
+## 18. Performance-first documentation boundary
+
+Growth documentation should concentrate on distribution, conversion, relationship compounding, research, and measurement. Platform/safety constraints are centralized in `ENGAGEMENT_INTEGRITY.md`, `AGENTS.md`, and the human-approval boundaries in implementation plans rather than repeated as moral commentary throughout the strategy.

@@ -1,8 +1,8 @@
-# Human + AI Publishing System Implementation Plan
+# Human + AI Network Growth & Publishing System Implementation Plan
 
-**Goal:** Turn the existing X research dashboard into a human-supervised growth and publishing operating system where every saved signal enters triage, is scored for reach/follow/conversation potential, is deliberately routed into the right distribution or engagement format, passes research/writing/media/quality gates, receives a coverage-aware publishing slot when appropriate, and feeds follower-conversion and experiment outcomes back into future decisions.
+**Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where every saved signal enters triage, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
 
-**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; add one workflow owner for queue state, one scheduler owner for publication timing, one opportunity-scoring owner, one engagement-opportunity owner, and one experiment owner. AI may discover, classify, research, recommend, draft, score, propose experiments, surface engagement opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
+**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; add one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. AI may discover, classify, research, recommend, draft, score, surface target/conversation opportunities, propose experiments, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
 
 **Tech Stack:** Node.js 24, built-in `node:sqlite`, Bootstrap dashboard, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`.
 
@@ -21,7 +21,10 @@
 - Use current public X recommendation code as directional evidence, not a raw-points formula. Public action weights multiply predicted viewer probabilities rather than observed engagement counts.
 - Timing defaults are editorial heuristics until enough `@ham_zax` outcome data exists to learn better slots.
 - Optimize for **qualified follower conversion**, not raw reach alone. A post that attracts the wrong audience or produces no durable follow value can be strategically weaker than a smaller post that recruits relevant developers/builders.
-- Opportunity scoring must keep **Reach Potential**, **Follow Potential**, and **Conversation Potential** separate. These are transparent internal heuristics, not simulations of X's Phoenix score.
+- Opportunity scoring must keep **Reach Potential**, **Follow Potential**, **Conversation Potential**, and **Relationship Potential** separate. These are transparent internal heuristics, not simulations of X's Phoenix score.
+- Target selection must use relationship intelligence (TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, RelationshipPotential) with follower count only as a bounded secondary reach modifier.
+- Conversation follow-ups should generally outrank endless cold insertion when a substantive response is warranted.
+- Algorithm/tactic assumptions must be classified through `ALGORITHM_EVIDENCE_LEDGER.md` as CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Experiments must compare independent future posts/cohorts; do not publish duplicate or near-duplicate A/B variants of the same content to manufacture a clean test.
 - Engagement opportunities may be discovered and drafted automatically, but replies remain human-approved and must add concrete value.
 - Per-post follower conversion is an attribution estimate unless X exposes direct post-level follow attribution. When multiple posts overlap a measurement window, store attribution confidence rather than claiming causality.
@@ -62,10 +65,12 @@
 - format-aware publishing for originals, quotes, and threads;
 - post-publication measurement windows;
 - learned timing and format recommendations from account outcomes;
-- a dedicated Engagement Queue for relevant, time-sensitive reply opportunities;
-- an Experiment Engine for controlled style/hook/media/timing hypotheses without duplicate posting;
-- three-dimensional candidate scoring: Reach Potential, Follow Potential, and Conversation Potential;
-- follower-conversion analytics that prioritize recruiting the target AI/developer/builder audience over vanity reach.
+- relationship profiles/events, target classes, TargetScore, and relationship-stage derivation;
+- a dedicated Engagement Queue for relevant, time-sensitive reply and follow-up opportunities;
+- an Experiment Engine for controlled content/network/timing hypotheses without duplicate posting;
+- four-dimensional candidate scoring: Reach Potential, Follow Potential, Conversation Potential, and Relationship Potential;
+- follower-conversion plus relationship-conversion analytics that prioritize recruiting and connecting with the target AI/developer/builder network over vanity reach;
+- a learned-strategy layer that can propose bounded account-specific adjustments after enough evidence accumulates.
 
 ## Target Operating Loop
 
@@ -79,7 +84,7 @@ DISCOVER / MANUAL INPUT
 TRIAGE QUEUE
         |
         v
-REACH / FOLLOW / CONVERSATION SCORING
+REACH / FOLLOW / CONVERSATION / RELATIONSHIP SCORING
         |
         v
 AI ROUTING RECOMMENDATION
@@ -198,12 +203,14 @@ urgency
 reach_potential
 follow_potential
 conversation_potential
+relationship_potential
 draft_id
 routing_reason
 research_summary
 target_username
 target_tweet_id
-relationship_score
+target_score
+relationship_stage
 experiment_variant_id
 media_plan_json
 expires_at
@@ -220,9 +227,13 @@ Responsibilities remain separate:
 - `candidates`: discovered/manual source material and preference state;
 - `drafts`: text composition and quality score;
 - `queue_items`: workflow, lane, approval, opportunity scores, urgency, experiment assignment, scheduling;
-- `candidate_actions`: historical actions actually performed;
-- `audience_profiles`: relationship/relevance observations;
-- `post_metrics` / `account_metrics`: outcomes.
+- `candidate_actions`: historical candidate-based actions actually performed;
+- `audience_profiles`: raw follower/following observations and current niche relevance;
+- `relationship_profiles`: strategic target classes, TargetScore components, relationship stage, and materialized interaction counters;
+- `relationship_events`: append-only network/conversation history;
+- `post_metrics` / `account_metrics`: raw outcomes;
+- `publication_measurements`: fixed-window publication/follower-normalized outcomes;
+- `learned_rules`: human-accepted bounded strategy adjustments after enough evidence.
 
 Add experiment ownership without duplicating published content:
 
@@ -246,7 +257,9 @@ label
 config_json
 ```
 
-`queue_items.experiment_variant_id` assigns at most one active variant to a queued publication. The experiment engine compares cohorts of naturally different posts; it must not schedule duplicate or near-duplicate copies merely to create an A/B pair.
+`queue_items.experiment_variant_id` assigns at most one active variant to a queued publication or engagement item. The experiment engine compares cohorts of naturally different future items; it must not schedule duplicate or near-duplicate copies merely to create an A/B pair.
+
+Relationship ownership is specified in `RELATIONSHIP_INTELLIGENCE.md`: raw audience snapshots remain separate from strategic target profiles, and every meaningful interaction is preserved as an append-only relationship event before materialized stage/counters are recomputed.
 
 Extend the existing outcome persistence so fixed measurement windows can be associated with follower state. At minimum each measured published item needs:
 
@@ -262,7 +275,7 @@ attribution_confidence
 
 ## Opportunity Scoring Model
 
-Every triaged candidate should expose three independent 0-100 scores before route selection.
+Every triaged candidate should expose four independent 0-100 scores before route selection.
 
 ### Reach Potential
 
@@ -293,11 +306,22 @@ Estimate whether the signal can create useful technical interaction:
 
 - unresolved practitioner question;
 - meaningful trade-off or disagreement;
-- relationship value of the source author;
 - specificity sufficient for an informed reply;
 - likelihood that a response would improve our research rather than merely increase comment count.
 
-The route recommender consumes all three scores. A high-Reach/low-Follow item may become `repost`, `reply`, or `ignore`; a medium-Reach/high-Follow item may be a stronger `original` than a generic viral source.
+### Relationship Potential
+
+Estimate whether the specific source author/conversation can compound into recurring relevant network value:
+
+- target class and TargetScore;
+- prior target responses;
+- prior continued conversations;
+- current relationship stage;
+- shared recurring topics;
+- follow/mutual state;
+- realistic opportunity for repeated useful interaction.
+
+The route recommender consumes all four scores. A high-Reach/low-Follow/low-Relationship item may become `repost`, `research`, or `ignore`; a medium-Reach/high-Follow/high-Relationship item may be a stronger `reply` or owned `original` opportunity than a generic viral source.
 
 ## Engagement Queue Design
 
@@ -422,18 +446,20 @@ The scheduler must not convert any of these observations into fake raw engagemen
 
 - `pipeline.js` — pipeline definitions, route requirements, queue-state transition rules, and hard-gate requirements by format.
 - `scheduler.js` — priority, urgency, expiry, serialization, timing recommendation, and next-slot selection.
-- `opportunity.js` — Reach/Follow/Conversation scoring and score explanations used by triage, routing, and dashboard views.
-- `engagement.js` — discovery/ranking of reply opportunities from audience targets, own-post conversations, and reply-suitable research candidates.
-- `experiments.js` — experiment definitions, variant assignment, active-experiment rules, and cohort summaries.
+- `opportunity.js` — Reach/Follow/Conversation/Relationship scoring and score explanations used by triage, routing, and dashboard views.
+- `relationship.js` — target classes, TargetScore, relationship-stage derivation, and event-to-profile aggregation.
+- `engagement.js` — discovery/ranking of initial/follow-up reply opportunities from relationship targets, own-post conversations, and reply-suitable research candidates.
+- `experiments.js` — content/network/timing experiment definitions, variant assignment, active-experiment rules, and cohort summaries.
+- `learning.js` — evidence-backed bounded learned recommendations after enough account-specific outcomes accumulate.
 - `docs/POST_GENERATION_PROMPT.md` — canonical writer/editor prompt and structured output contract.
 - `docs/RESEARCH_AGENDA.md` — deep research areas that produce original account IP.
 
 ### Existing files planned for modification
 
-- `store.js` — `queue_items`, experiment persistence, fixed-window follower/outcome fields, and queue queries.
-- `dashboard.js` — Save-to-triage behavior, route controls, Queue/Engage/Experiments views, approval UI, timing/media visibility, opportunity scores, and follower-conversion summaries.
-- `strategy.js` — extend recommendation from five-way distribution action into pipeline recommendation inputs and urgency/expiry signals; consume opportunity scores rather than owning their formulas.
-- `audience.js` — expose relationship context and newly observed follower alignment for engagement/follower-quality analysis.
+- `store.js` — `queue_items`, relationship profiles/events, experiment persistence, learned-rule persistence, fixed-window follower/outcome fields, and queue queries.
+- `dashboard.js` — Save-to-triage behavior, route controls, Relationships/Engage/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
+- `strategy.js` — extend recommendation from five-way distribution action into pipeline recommendation inputs and urgency/expiry signals; consume opportunity/relationship scores rather than owning their formulas.
+- `audience.js` — preserve raw follower/following observations and feed strategic relationship/follower-quality layers without owning target scoring.
 - `drafting.js` — format-aware drafting and hard gates.
 - `agent_bridge.js` — queue/routing/review, opportunity, engagement, and experiment commands without exposing raw SQLite writes.
 - `automation.js` — scheduler-driven queue consumption, read-only engagement-opportunity refresh, fixed-window outcome capture, and experiment/follower-conversion measurement.
@@ -667,27 +693,35 @@ The scheduler must not convert any of these observations into fake raw engagemen
 **Acceptance criteria:**
 - The dashboard can answer which formats/topics/times produced the strongest outcomes for this account rather than only showing per-post counters.
 
-### Task 12: Learn timing and format from account outcomes
+### Task 12: Learn targeting, engagement, content, and timing from account outcomes
 
 **Files:**
+- Create: `learning.js`
+- Modify: `store.js`
+- Modify: `relationship.js`
+- Modify: `engagement.js`
+- Modify: `opportunity.js`
 - Modify: `scheduler.js`
-- Modify: `strategy.js`
 - Modify: `dashboard.js`
+- Modify: `agent_bridge.js`
 
 **Interfaces:**
-- Consumes: accumulated post/account metrics and queue metadata.
-- Produces: learned timing recommendation and evidence shown to the human.
+- Consumes: completed post/follower measurements, relationship events, experiment summaries, queue metadata, and accepted algorithm-evidence classifications.
+- Produces: suggested/accepted/retired bounded learned rules for targeting, engagement, content, and timing with visible evidence/sample size.
 
 **Steps:**
-- [ ] After enough meaningful observations, calculate historical outcome summaries by weekday, hour, pipeline, niche, and media type.
-- [ ] Use learned values as a ranking adjustment for scheduling recommendations, not as an autonomous guarantee of reach.
-- [ ] Show the evidence behind timing recommendations in the dashboard.
-- [ ] Keep editorial urgency capable of overriding learned evergreen timing when the user approves a genuinely time-sensitive signal.
+- [ ] Generate evidence-backed suggestions for target classes/score buckets, reply archetypes/age buckets, content formats/topics, and timing cohorts.
+- [ ] Store learned rules as `suggested` until explicit human acceptance; do not let one outcome rewrite strategy automatically.
+- [ ] Require evidence state/sample size in every recommendation and keep `insufficient/preliminary/directional/repeated` distinctions visible.
+- [ ] Apply only accepted learned rules as bounded adjustments after transparent base scoring; show base score and learned adjustment separately.
+- [ ] Let viral urgency and explicit human override supersede learned evergreen timing preferences.
+- [ ] Re-evaluate/retire rules when newer account evidence reverses them or `ALGORITHM_EVIDENCE_LEDGER.md` marks a linked mechanism stale.
 
 **Acceptance criteria:**
-- The scheduler can explain why it recommends a slot using `@ham_zax` history, while the human can override it.
+- The system can explain an account-specific target/reply/content/timing recommendation from observed history, but no learned rule affects production behavior until human acceptance.
+- Detailed execution contract: `plans/PHASE_5_LEARNED_STRATEGY.md`.
 
-### Task 13: Add three-dimensional opportunity scoring
+### Task 13: Add four-dimensional opportunity scoring
 
 **Files:**
 - Create: `opportunity.js`
@@ -698,48 +732,56 @@ The scheduler must not convert any of these observations into fake raw engagemen
 
 **Interfaces:**
 - Consumes: candidate niche data, freshness, viral velocity, source context, saved-preference data, and audience/relationship context when available.
-- Produces: `{ reachPotential, followPotential, conversationPotential, breakdown }` plus persisted queue-item score fields.
+- Produces: `{ reachPotential, followPotential, conversationPotential, relationshipPotential, breakdown }` plus persisted queue-item score fields.
 
 **Steps:**
 - [ ] Implement one transparent 0-100 scorer per dimension rather than one opaque viral score.
 - [ ] Start Reach Potential from observable freshness/shelf-life, velocity, source reach/authority, breadth of developer relevance, and multi-source acceleration signals.
 - [ ] Start Follow Potential from niche fit, useful/original angle headroom, evidence/implementation potential, account-identity reinforcement, and fit with saved preferences/target audience.
-- [ ] Start Conversation Potential from relationship value, unresolved technical question/trade-off, technical specificity, freshness, and whether an answer would improve research.
+- [ ] Start Conversation Potential from unresolved technical question/trade-off, technical specificity, freshness, and whether an answer would improve research.
+- [ ] Start Relationship Potential from target class/TargetScore, prior responses, continued conversations, relationship stage, shared topics, and follow/mutual state when available.
 - [ ] Return a component breakdown for every score so the dashboard/agent can explain the result.
-- [ ] Persist the three scores on `queue_items` when an item enters or is refreshed in triage.
-- [ ] Change route recommendation to consume the three dimensions without collapsing them into Phoenix-like raw-point arithmetic.
+- [ ] Persist the four scores on `queue_items` when an item enters or is refreshed in triage.
+- [ ] Change route recommendation to consume the four dimensions without collapsing them into Phoenix-like raw-point arithmetic.
 - [ ] Expose the scores and short explanations on research/triage cards and through an agent bridge command.
 
 **Acceptance criteria:**
-- A candidate can visibly be high-Reach/low-Follow, low-Reach/high-Follow, or high-Conversation without those differences being hidden by one total score, and the route recommendation explains how that affected Original/Quote/Reply/Repost/Ignore.
+- A candidate can visibly be high-Reach/low-Follow, low-Reach/high-Follow, high-Conversation, or high-Relationship without those differences being hidden by one total score, and the route recommendation explains how that affected Original/Quote/Reply/Repost/Research/Ignore.
 
-### Task 14: Add the Engagement Queue and Engage Next workflow
+### Task 14: Add Relationship Intelligence and the Engage Next workflow
 
 **Files:**
+- Create: `relationship.js`
 - Create: `engagement.js`
 - Modify: `store.js`
 - Modify: `audience.js`
+- Modify: authenticated X read owner for target posts/responses
 - Modify: `dashboard.js`
 - Modify: `agent_bridge.js`
 - Modify: `automation.js`
 
 **Interfaces:**
-- Consumes: `audience_profiles`, recent niche/viral candidates, recent posts from priority relationship targets, replies/comments under our own posts when available, and Conversation Potential from `opportunity.js`.
-- Produces: `queue_items` with `lane = engagement`, `pipeline = reply`, target context, expiry, suggested contribution, reviewable reply draft, and human decision state.
+- Consumes: `audience_profiles`, relationship event history, recent niche/viral candidates, recent posts from priority relationship targets, replies/comments under our own posts when available, and Conversation/Relationship Potential from `opportunity.js`.
+- Produces: strategic `relationship_profiles`, append-only `relationship_events`, target classes/TargetScore/stage, and `queue_items` with `lane = engagement`, `pipeline = reply`, target context, expiry, suggested contribution, reviewable reply draft, and human decision state.
 
 **Steps:**
+- [ ] Add strategic relationship profiles separate from raw audience observations.
+- [ ] Classify targets as distribution / relationship / authority / customer_density / source using explainable evidence.
+- [ ] Score targets from TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, and RelationshipPotential using the `RELATIONSHIP_INTELLIGENCE.md` contract; keep follower count a bounded reach modifier.
+- [ ] Persist append-only relationship events and derive stages `observed -> interacted -> responsive -> recurring -> connected -> mutual` from history/follow state.
 - [ ] Reuse `queue_items` rather than creating a second queue table; engagement is a lane with different scheduling/sending rules.
-- [ ] Discover recent posts from high-relevance audience targets and reply-suitable research candidates using the authenticated read path already used by the project.
+- [ ] Discover responses to our existing conversations before cold opportunities, then recent posts from high-value relationship/distribution/authority targets and reply-suitable research candidates.
 - [ ] Create an engagement item only when the system can state a concrete contribution such as a result, implementation detail, caveat, comparison, correction, or informed question.
-- [ ] Store `target_username`, `target_tweet_id`, relationship score, Conversation Potential, freshness, `expires_at`, and the reason the reply would be useful.
-- [ ] Add an **Engage Next** dashboard view sorted primarily by freshness, Conversation Potential, and relationship value rather than follower count alone.
+- [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, contribution archetype, and the reason the reply would be useful.
+- [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and contribution strength rather than follower count alone.
 - [ ] Let AI draft a reply and move it to `needs_review`; require one human approval/send action for each outbound reply.
 - [ ] Do not let the daemon batch-send or automatically send unsolicited replies.
 - [ ] Expire opportunities whose source conversation is no longer timely instead of sending stale replies.
-- [ ] Record successful replies in `candidate_actions` and feed resulting conversation/follower observations back into analytics.
+- [ ] Record successful replies in `candidate_actions` plus `relationship_events`, then feed target responses, conversation continuation, follower/connection changes, and recurring relationships into analytics.
 
 **Acceptance criteria:**
-- The dashboard can surface a current target-account post, explain why engaging is worthwhile, prepare one substantive reply, and wait for a human decision; no reply is sent merely because it entered the queue.
+- The dashboard can explain who is worth engaging, why this particular conversation matters now, what prior relationship exists, and what useful contribution we can make; target responses can re-enter Engage Next as higher-priority follow-ups; no reply is sent merely because it entered the queue.
+- The detailed execution contracts are `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md` and `plans/PHASE_1C_ENGAGE_NEXT.md`.
 
 ### Task 15: Add the Experiment Engine
 
@@ -752,12 +794,12 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - Modify: `agent_bridge.js`
 
 **Interfaces:**
-- Consumes: approved experiment definitions, queue items before final drafting, writing/media/timing metadata, and completed fixed-window outcomes.
-- Produces: experiment/variant assignments, cohort summaries, and evidence for future writing/format/timing recommendations.
+- Consumes: approved experiment definitions, main-feed or engagement queue items before execution, writing/media/timing/target metadata, relationship context, and completed content/network outcomes.
+- Produces: experiment/variant assignments, cohort summaries, and evidence for future targeting/reply/content/format/timing recommendations.
 
 **Steps:**
 - [ ] Add `experiments` and `experiment_variants` persistence plus one nullable `experiment_variant_id` assignment on `queue_items`.
-- [ ] Support initial dimensions `style`, `hook_type`, `media_type`, `format`, and later `timing_bucket` once enough timing history exists.
+- [ ] Support content dimensions `style`, `hook_type`, `media_type`, `format`; network dimensions `target_class`, `target_score_bucket`, `target_size_bucket`, `reply_age_bucket`, `conversation_saturation_bucket`, `reply_archetype`, `relationship_stage`; and later `timing_bucket` once enough timing history exists.
 - [ ] Record a plain-language hypothesis before assigning variants, for example: `result-led hooks convert more AI/dev followers than question-led hooks for coding-agent originals`.
 - [ ] Assign at most one primary experiment dimension to a publication when practical so the result remains interpretable.
 - [ ] Never create duplicate or near-duplicate posts solely to form an A/B pair; compare naturally different future posts that satisfy the same experiment definition.
@@ -768,9 +810,9 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - [ ] Never automatically change the account identity or permanent writing rules from one experiment; promote a finding only after repeated evidence and human acceptance.
 
 **Acceptance criteria:**
-- The system can run a declared non-duplicate content experiment, attach variants before publication, collect comparable outcomes, and show a cautious evidence summary without self-authorizing a permanent strategy change.
+- The system can run declared non-duplicate content or network experiments, attach variants before execution, collect comparable normalized outcomes, and show a cautious evidence summary without self-authorizing a permanent strategy change.
 
-### Task 16: Add follower-conversion and follower-quality analytics
+### Task 16: Add follower-conversion, follower-quality, and relationship-conversion analytics
 
 **Files:**
 - Modify: `store.js`
@@ -781,8 +823,8 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - Modify: `scheduler.js`
 
 **Interfaces:**
-- Consumes: publication baseline, fixed-window post metrics, account follower counts, audience snapshots, queue metadata, and experiment assignments.
-- Produces: associated follower delta, follows/1k views, attribution confidence, newly observed follower quality, and grouped conversion summaries.
+- Consumes: publication baseline, fixed-window post metrics, account follower counts, audience snapshots, relationship events/stages, queue metadata, and experiment assignments.
+- Produces: associated follower delta, follows/1k views, attribution confidence, newly observed follower quality, author-response/conversation-continuation/recurring-relationship outcomes, and grouped content/network conversion summaries.
 
 **Steps:**
 - [ ] Capture follower count at publication baseline and at the 15m/1h/6h/24h measurement windows alongside post metrics.
@@ -791,74 +833,108 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - [ ] Add/preserve `first_seen_at` for audience profiles so newly observed followers can be distinguished from the legacy follower set.
 - [ ] When a new follower is observed, run the existing niche/audience classifier and record whether the follower appears aligned with the AI/developer/builder target audience.
 - [ ] Show reach metrics and conversion metrics side-by-side so a large low-conversion post cannot automatically outrank a smaller high-quality recruiting post.
-- [ ] Group conversion by niche, format, style, hook, media, semantic anchors, timing bucket, and experiment variant.
-- [ ] Feed conversion summaries into experiment evaluation and learned scheduling as evidence, while keeping the human able to override recommendations.
+- [ ] Compute network metrics from relationship events: author response rate, conversation continuation rate, recurring relationship conversion, connected-target conversion, and mutual relationship count.
+- [ ] Group content conversion by niche, format, style, hook, media, semantic anchors, timing bucket, and experiment variant.
+- [ ] Group network conversion by target class, target-score bucket, target-size bucket, reply-age bucket, reply archetype, topic, and relationship stage before interaction.
+- [ ] Feed content/network conversion summaries into experiment evaluation and learned strategy as evidence, while keeping the human able to override recommendations.
 
 **Acceptance criteria:**
-- The dashboard can identify posts that produced strong reach but weak follower recruitment, posts associated with stronger follower conversion, and whether newly observed followers are increasingly aligned with the target niche, with attribution confidence visible.
+- The dashboard can identify posts that produced strong reach but weak follower recruitment, interactions that produced views but no relationship progression, interactions associated with target responses/recurring relationships, and whether newly observed followers are increasingly aligned with the target niche, with attribution confidence visible.
+- Detailed execution contract: `plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`.
 
 ## Rollout Order
 
-### Phase 1 — Workflow foundation + triage intelligence
+Phase-specific plans in `docs/plans/` are authoritative for implementation detail. The master tasks above remain the cross-system map.
 
-Tasks 1-4, then Task 13:
+### Phase 1A — Workflow foundation + four-dimensional triage
+
+Plan: `plans/PHASE_1_WORKFLOW_FOUNDATION.md`
 
 - Save -> triage;
 - pipeline routing;
 - Queue UI;
 - human approval;
-- Reach / Follow / Conversation scoring with explanations.
+- Reach / Follow / Conversation / Relationship scoring with explanations.
 
-This is the first implementation milestone because it gives every later feature one workflow owner and gives the human a better decision surface before content is drafted.
+This creates the workflow boundary every later subsystem consumes.
 
-### Phase 2 — Content quality
+### Phase 1B — Relationship Intelligence
 
-Tasks 5-7:
+Plan: `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`
+
+- strategic relationship profiles separate from raw audience observations;
+- target classes: distribution / relationship / authority / customer_density / source;
+- TargetScore from TopicFit / AudienceOverlap / ConversationQuality / ReplyVisibility / RelationshipPotential;
+- append-only relationship events;
+- stages observed -> interacted -> responsive -> recurring -> connected -> mutual;
+- Relationships dashboard/agent reads.
+
+This phase is upstream of Engage Next because the system must know **who** matters before it can rank **which conversation** matters.
+
+### Phase 1C — Engage Next
+
+Plan: `plans/PHASE_1C_ENGAGE_NEXT.md`
+
+- active-conversation responses first;
+- current posts from high-value targets;
+- per-post EngagePriority using conversation/relationship/freshness/visibility/contribution evidence;
+- reviewable initial/follow-up replies;
+- one-by-one human send/ignore decisions;
+- relationship-event updates after interactions.
+
+### Phase 2 — Content quality + profile proof
+
+Plan: `plans/PHASE_2_CONTENT_QUALITY.md`
 
 - format-aware writing;
 - hard gates;
-- media plan.
+- media plan;
+- recent-content/profile-proof context so owned posts reinforce conversations the account is entering.
 
-### Phase 3 — Engagement + distribution
+### Phase 3 — Main-feed distribution
 
-Task 14, then Tasks 8-10:
+Plan: `plans/PHASE_3_DISTRIBUTION_SCHEDULER.md`
 
-- Engage Next lane for time-sensitive relationship opportunities;
 - urgency and expiry;
 - coverage-aware scheduler;
-- format-aware main-feed publication.
+- semantic conflict/self-cannibalization checks;
+- format-aware original/quote/thread publication;
+- queue claim/publish locking;
+- viral pre-emption without burst dumping.
 
-The Engagement Queue may be refreshed by automation, but outbound replies remain one-by-one human decisions and do not become scheduler-driven unsolicited automation.
+### Phase 4 — Measurement + content/network experiments
 
-### Phase 4 — Experiment instrumentation + measurement
+Plan: `plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`
 
-Task 15, then Tasks 11 and 16:
-
-- declare experiments and attach variants before publication;
-- capture fixed 15m/1h/6h/24h outcomes;
-- capture associated follower conversion and follower quality;
-- compare cohorts only after their measurement windows complete.
+- fixed 15m/1h/6h/24h publication outcomes;
+- associated follower conversion with attribution confidence;
+- new-follower quality;
+- author-response/conversation-continuation/relationship-conversion metrics;
+- content experiments and network experiments under one experiment owner.
 
 ### Phase 5 — Learned strategy
 
-Task 12:
+Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 
-- timing/format recommendations from actual account outcomes;
-- incorporate follower conversion and experiment evidence;
-- preserve human override and viral urgency.
+- evidence-backed suggestions for targets, reply archetypes, reply-age buckets, content formats, topics, and timing;
+- bounded adjustments applied only after human acceptance;
+- base vs learned contribution remains visible;
+- evidence-ledger changes can trigger review/retirement of stale learned rules.
 
 ## Risks and Boundaries
 
 - X private web endpoints are not a stable public API contract. Publication transport may break independently of queue correctness.
 - Current X automation rules restrict several forms of automated engagement; this architecture intentionally keeps likes, follow churn, mass replies, and unsolicited engagement outside the autonomous loop.
 - The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait.
-- Reach/Follow/Conversation scores are internal prioritization heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.
+- Reach/Follow/Conversation/Relationship scores, TargetScore, and EngagePriority are internal prioritization heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.
 - No scheduler can guarantee virality. The system optimizes prerequisites: topic fit, distinctiveness, evidence, usefulness, freshness, readability, media value, timing, and follower-conversion value.
 - `associated_follower_delta` is not direct causal attribution. Overlapping publications, profile changes, external mentions, or prior posts can contribute; attribution confidence must remain visible.
 - Content experiments are observational cohort comparisons, not laboratory-isolated tests. Topic/source differences remain confounders, so the system must not overstate small-sample results.
 - Do not publish duplicate/near-duplicate posts just to obtain an A/B pair; the experiment system learns across naturally different future posts.
-- Do not infer that a short-term spike proves a new permanent content identity. Preference and performance changes should accumulate over multiple posts.
+- Do not infer that a short-term spike proves a new permanent content identity. Preference, relationship, and performance changes should accumulate over multiple observations.
 - Do not optimize timing as a way to mimic a human. Optimize timing because simultaneous or semantically redundant posts compete for limited attention.
+- Current public algorithm mechanisms and empirical tactics must remain separated through `ALGORITHM_EVIDENCE_LEDGER.md`; an empirical timing/target-size/reply-volume hypothesis must not silently become a hard product invariant.
+- Relationship intelligence must preserve raw event/follow state so a learned stage/score never destroys the underlying evidence.
 
 ## Definition of Done for the Full Program
 
@@ -866,20 +942,26 @@ The program is complete when a user can:
 
 1. Save any research candidate.
 2. See it automatically enter Triage.
-3. See Reach Potential, Follow Potential, and Conversation Potential with understandable component explanations.
-4. See an AI routing recommendation and reason.
-5. Choose/override Original, Quote, Thread, Reply, Repost, Research, Watch, or Ignore.
-6. See relevant reply opportunities separately in **Engage Next**, including relationship context, expiry, and the concrete contribution the system thinks we can make.
-7. Review and explicitly send/ignore each outbound reply rather than having a daemon spray replies.
-8. See research/evidence and a format-aware main-feed draft.
-9. Optionally attach the item to a declared experiment and see the assigned variant before final drafting/approval.
-10. See deterministic hard gates plus quality score.
-11. Review media recommendation.
-12. Approve the exact final main-feed content.
-13. See the scheduler choose and explain a coverage slot.
-14. See viral approved items pre-empt normal items without burst-posting.
-15. See the correct X action published and persisted once.
-16. See 15m/1h/6h/24h outcomes with reach and associated follower-conversion metrics side-by-side.
-17. See attribution confidence and, when observable, whether newly observed followers are increasingly niche-aligned.
-18. See experiment cohort summaries that refuse to declare a winner before the minimum evidence threshold.
-19. See post outcomes feed back into future discovery, routing, writing, engagement targeting, format, experiment, and timing recommendations.
+3. See Reach Potential, Follow Potential, Conversation Potential, and Relationship Potential with understandable component explanations.
+4. See strategic target classes and TargetScore for relevant accounts without follower count dominating the decision.
+5. Inspect relationship stage/event history and distinguish observed, responsive, recurring, connected, and mutual relationships.
+6. See an AI routing recommendation and reason.
+7. Choose/override Original, Quote, Thread, Reply, Repost, Research, Watch, or Ignore.
+8. See relevant reply opportunities separately in **Engage Next**, with active conversation follow-ups ranked above comparable cold opportunities.
+9. Review target context, freshness/expiry, contribution archetype, and the concrete technical contribution the system thinks we can make.
+10. Review and explicitly send/ignore each outbound reply rather than having a daemon spray replies.
+11. See successful replies/responses become relationship events and influence future relationship/target scoring.
+12. See research/evidence and a format-aware main-feed draft that reinforces profile proof for the topics the account is entering publicly.
+13. Optionally attach main-feed or engagement items to declared content/network experiments and see the assigned variant before execution.
+14. See deterministic hard gates plus quality score.
+15. Review media recommendation.
+16. Approve the exact final main-feed content.
+17. See the scheduler choose and explain a coverage slot.
+18. See viral approved items pre-empt normal items without burst-posting.
+19. See the correct X action published and persisted once.
+20. See 15m/1h/6h/24h outcomes with reach and associated follower-conversion metrics side-by-side.
+21. See author-response, conversation-continuation, recurring-relationship, connected-target, and mutual-network outcomes.
+22. See attribution confidence and, when observable, whether newly observed followers are increasingly niche-aligned.
+23. See experiment cohort summaries that refuse to declare a winner before the minimum evidence threshold.
+24. See evidence-backed learned strategy suggestions remain inert until human acceptance, then apply only bounded transparent adjustments.
+25. See algorithm/tactic claims remain traceable to CODE_BACKED / OFFICIAL_PRODUCT_OR_POLICY / EMPIRICAL_VARIABLE / RETIRED evidence classes.

@@ -1,6 +1,6 @@
-# X Research & Publishing Automation
+# X Network Growth & Publishing System
 
-Local Node.js research and publishing system for `@ham_zax`. It discovers AI/developer signals, learns from saved posts, stores research in SQLite, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The planned architecture expands this into a **network-construction system**: relationship intelligence -> Engage Next -> owned-content conversion -> measurement -> learned targeting/content/timing.
 
 ## Components
 
@@ -22,15 +22,23 @@ Local Node.js research and publishing system for `@ham_zax`. It discovers AI/dev
 - [`docs/NICHE_AND_KEYWORDS.md`](docs/NICHE_AND_KEYWORDS.md) — target audience, content pillars, keyword clusters, source themes, and exclusion terms.
 - [`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md) — exact agent contract for manually supplied posts, research, drafting, scoring, distribution decisions, audience sync, and queue interaction.
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
+- [`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`](docs/NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategic source of truth for conversation insertion, relationship conversion, owned-content conversion, target classes, network metrics, and the two-lane operating model.
+- [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — planned target scoring, relationship profiles/events, stages, Engage Next inputs, and network analytics.
+- [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — separates current code-backed X mechanisms, official product/policy claims, empirical variables, and retired folklore.
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
 - [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — implementation-ready plan for Save → Triage → Route → Research → Draft → Review → Schedule → Publish → Learn.
+- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index and authoritative execution sequence before runtime implementation starts.
 
 ### Planned next architecture
 
-The current app has Saved candidates, drafts, an approved-draft queue, audience data, action history, and performance snapshots. The next implementation milestone is the human+AI workflow specified in `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`: saving creates a triage item, AI recommends a pipeline, the human chooses/overrides it, content passes research/writing/media gates, the human approves the exact final item, and a scheduler serializes main-feed publication with an urgency lane for fresh viral signals.
+The current app has Saved candidates, drafts, an approved-draft queue, audience data, action history, and performance snapshots. The next architecture is network-first:
 
-This paragraph describes the **planned** workflow; do not assume the triage queue, route-after-Save UI, media planner, or learned scheduler exist until their plan tasks are implemented.
+**Save/Triage -> Relationship Intelligence -> Engage Next -> four-dimensional opportunity scoring (Reach/Follow/Conversation/Relationship) -> research/writing/media -> human approval -> serialized main-feed scheduler -> follower/relationship experiments -> learned strategy.**
+
+`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
+
+This paragraph describes **planned** behavior. Do not assume the triage queue, relationship profiles, Engage Next, route-after-Save UI, media planner, experiment engine, or learned scheduler exist until the matching phase plan has been implemented.
 
 ## Setup
 
