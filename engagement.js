@@ -1,3 +1,5 @@
+import { applyAcceptedLearnedRules } from './learning.js';
+
 export const ENGAGEMENT_KINDS = ['initial_reply', 'follow_up', 'own_post_response'];
 
 export const CONTRIBUTION_ARCHETYPES = [
@@ -222,7 +224,9 @@ export function getEngagementExpiry(opportunity = {}, { now } = {}) {
 function softPressureModifier(opportunity = {}) {
   const saturation = scoreValue(opportunity.saturation);
   const repetition = scoreValue(opportunity.repetition);
-  const healthWatch = opportunity.healthState === 'watch' ? 5 : 0;
+  const healthWatch = finite(opportunity.healthWatchPenalty)
+    ? Math.max(0, Number(opportunity.healthWatchPenalty))
+    : opportunity.healthState === 'watch' ? 5 : 0;
   const rawModifier = -Math.min(25, round((saturation ?? 0) / 10 + (repetition ?? 0) / 10 + healthWatch));
   const overrideReasons = [];
   if (opportunity.directQuestion) overrideReasons.push('direct_question');
@@ -242,7 +246,7 @@ function softPressureModifier(opportunity = {}) {
   };
 }
 
-export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
+export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules = [], learningContext = {}, learningReviewContext = {} } = {}) {
   const itemIdentity = identity(opportunity);
   const relationship = opportunity.relationship || {};
   const timestamp = sourceTimestamp(opportunity);
@@ -283,7 +287,33 @@ export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
     softPressure: pressure.appliedModifier,
   };
   const modifierTotal = round(Object.values(modifiers).reduce((sum, value) => sum + value, 0));
-  const engagePriority = basePriority == null ? 0 : round(clamp(basePriority + modifierTotal));
+  const preLearnedPriority = basePriority == null ? 0 : round(clamp(basePriority + modifierTotal));
+  const ruleContext = {
+    targetUsername: itemIdentity.targetUsername,
+    targetClass: relationship.classes || [],
+    relationshipStage: relationship.relationshipStage || 'observed',
+    engagementKind: itemIdentity.engagementKind,
+    replyAgeBucket: freshness.bucket,
+    replyArchetype: contribution.archetype,
+    healthState: opportunity.healthState || 'healthy',
+    conversationSaturationBucket: opportunity.conversationSaturationBucket,
+    interactionVolumeBucket: opportunity.interactionVolumeBucket,
+    targetConcentrationBucket: opportunity.targetConcentrationBucket,
+    archetypeRepetitionBucket: opportunity.archetypeRepetitionBucket,
+    topicTags: opportunity.candidate?.niche?.tags || [],
+    ...learningContext,
+  };
+  const learnedPriority = applyAcceptedLearnedRules(preLearnedPriority, learnedRules, {
+    ...ruleContext,
+    expired: expiry.effectiveExpired,
+    humanApprovalRequired: false,
+  }, {
+    adjustmentTarget: 'engage_priority',
+    finalMin: 0,
+    finalMax: 100,
+    reviewContext: learningReviewContext,
+  });
+  const engagePriority = round(clamp(learnedPriority.finalValue));
 
   const rejectionReasons = [...contribution.rejectionReasons];
   if (!ENGAGEMENT_KINDS.includes(itemIdentity.engagementKind)) {
@@ -328,6 +358,8 @@ export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
     actionable,
     engagePriority,
     basePriority,
+    preLearnedPriority,
+    learnedAdjustment: learnedPriority,
     components,
     modifiers,
     modifierTotal,
@@ -347,17 +379,18 @@ export function scoreEngagementOpportunity(opportunity = {}, { now } = {}) {
       saturationSummary: opportunity.saturationSummary || null,
       repetitionSummary: opportunity.repetitionSummary || null,
       observedConstraint: opportunity.observedConstraint || null,
+      learning: learnedPriority,
       empiricalVariables: ['freshness', 'replyVisibility', 'expiry', 'softPressure'],
       note: 'EngagePriority is an internal prioritization heuristic, not an X ranking score.',
     },
   };
 }
 
-export function rankEngagementOpportunities(opportunities = [], { now } = {}) {
+export function rankEngagementOpportunities(opportunities = [], { now, learnedRules = [], learningContext = {}, learningReviewContext = {} } = {}) {
   return opportunities
     .map((opportunity, index) => ({
       index,
-      result: scoreEngagementOpportunity(opportunity, { now }),
+      result: scoreEngagementOpportunity(opportunity, { now, learnedRules, learningContext, learningReviewContext }),
     }))
     .filter(({ result }) => result.actionable)
     .sort((left, right) => (
@@ -471,6 +504,7 @@ export async function refreshEngagementOpportunities({
   const rejected = [];
   const errors = [];
   const accountHealth = store.getAccountHealthSummary({ now });
+  const learnedRules = store.listAcceptedLearnedRules({ limit: 500 });
   const observedConstraint = accountHealth.health.state === 'constrained'
     ? accountHealth.health.reasons.find((reason) => reason.level === 'constrained') || null
     : null;
@@ -519,6 +553,13 @@ export async function refreshEngagementOpportunities({
     const opportunityScores = opportunity.scoreOpportunity(candidate, {
       now,
       relationship: profile ? { ...profile, nicheTags: profile.primaryTopics || [] } : null,
+      learnedRules,
+      learningContext: {
+        targetUsername: profile?.username || '',
+        targetClass: profile?.classes || [],
+        relationshipStage: profile?.relationshipStage || 'observed',
+        topicTags: candidate.niche?.tags || [],
+      },
     });
     const targetUsername = context.targetUsername || profile?.username || sourceUsername(candidate);
     const targetEvents = targetUsername ? store.listRelationshipEvents(targetUsername, { limit: 1000 }) : [];
@@ -534,8 +575,22 @@ export async function refreshEngagementOpportunities({
       : [];
     const repetitionSummary = health.analyzeReplyRepetition(recentReplies, { targetUsername });
     const repetitionPressure = Math.max(Number(repetitionSummary.archetypeConcentration || 0), Number(repetitionSummary.phraseSimilarity || 0));
+    const healthLearningContext = {
+      targetUsername,
+      targetClass: profile?.classes || [],
+      relationshipStage: profile?.relationshipStage || 'observed',
+      healthState: accountHealth.health.state,
+      topicTags: candidate.niche?.tags || [],
+    };
+    const learnedSaturation = applyAcceptedLearnedRules(saturationSummary.pressure, learnedRules, healthLearningContext, {
+      adjustmentTarget: 'saturation_pressure', finalMin: 0, finalMax: 100,
+    });
+    const learnedWatchPenalty = accountHealth.health.state === 'watch'
+      ? applyAcceptedLearnedRules(5, learnedRules, healthLearningContext, {
+        adjustmentTarget: 'health_watch_modifier', finalMin: 0, finalMax: 13,
+      })
+      : null;
     const scored = scoreEngagementOpportunity({
-
       candidate,
       targetUsername,
       targetTweetId,
@@ -547,9 +602,10 @@ export async function refreshEngagementOpportunities({
       profileReplyVisibility: profile?.replyVisibility ?? undefined,
       expiryClass: context.response === true ? undefined : engagementExpiryClass(candidate),
       contribution,
-      saturation: saturationSummary.pressure,
+      saturation: learnedSaturation.finalValue,
       repetition: repetitionPressure,
       healthState: accountHealth.health.state,
+      healthWatchPenalty: learnedWatchPenalty?.finalValue ?? 0,
       healthReasons: accountHealth.health.reasons,
       saturationSummary,
       repetitionSummary,
@@ -564,7 +620,11 @@ export async function refreshEngagementOpportunities({
       replyCount: candidate.metrics?.replies,
       sameSourceExhausted: store.hasCandidateAction(candidate.key),
       newValue: context.response === true,
-    }, { now });
+    }, {
+      now,
+      learnedRules,
+      learningContext: healthLearningContext,
+    });
     if (!scored.actionable) {
       rejected.push({ candidateKey: candidate.key, rejectionReasons: scored.rejectionReasons });
       return null;

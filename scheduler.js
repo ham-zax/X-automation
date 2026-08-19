@@ -1,3 +1,5 @@
+import { applyAcceptedLearnedRules } from './learning.js';
+
 const HOUR_MS = 3_600_000;
 const MAIN_FEED_LANES = new Set(['main', 'main_feed']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
@@ -228,15 +230,41 @@ export function calculateSchedulePriority(item, context = {}) {
   const urgency = urgencyOf(item);
   const urgencyModifier = URGENCY_MODIFIERS[urgency];
   const expiry = expiryModifier(item, now);
+  const assignmentContext = item?.experimentAssignment?.context || item?.experiment_assignment?.context || {};
+  const ruleContext = {
+    format: String(item?.pipeline || ''),
+    mediaType: item?.media?.type || 'none',
+    topicTags: item?.topics || [],
+    timingBucket: assignmentContext.timingBucket ?? assignmentContext.timing_bucket,
+    style: assignmentContext.style,
+    hookType: assignmentContext.hookType ?? assignmentContext.hook_type,
+    urgency,
+    ...context.learningContext,
+    hardGatePassed: gatesPassed(item),
+    expired: expiresAtOf(item) != null && expiresAtOf(item) <= now,
+    humanApprovalRequired: true,
+    humanApproved: approvedAtOf(item) != null,
+    manualScheduleOverride: humanOverrideAtOf(item) != null,
+  };
+  const learningTargets = ['scheduler_timing_preference', 'content_preference', 'format_preference', 'topic_preference'];
+  const learning = Object.fromEntries(learningTargets.map((target) => [target, applyAcceptedLearnedRules(0, context.learnedRules || [], ruleContext, {
+    adjustmentTarget: target,
+    reviewContext: context.learningReviewContext || {},
+  })]));
+  const rawLearnedAdjustment = round2(Object.values(learning).reduce((sum, applied) => sum + Number(applied.learnedAdjustment || 0), 0));
+  const learnedAdjustment = round2(Math.max(-15, Math.min(15, rawLearnedAdjustment)));
 
   return {
-    priority: round2(basePriority + urgencyModifier + expiry.modifier),
+    priority: round2(basePriority + urgencyModifier + expiry.modifier + learnedAdjustment),
     basePriority,
     urgency,
     urgencyModifier,
     expiryModifier: expiry.modifier,
     expiryRemainingHours: expiry.remainingHours == null ? null : round2(expiry.remainingHours),
     qualityNormalized: quality,
+    rawLearnedAdjustment,
+    learnedAdjustment,
+    learning,
   };
 }
 
@@ -253,7 +281,7 @@ export function semanticOverlap(left, right) {
 export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
   const now = requireNow(context);
   const currentPriority = finiteNumber(context.currentPriority)
-    ?? calculateSchedulePriority(item, { now }).priority;
+    ?? calculateSchedulePriority(item, { ...context, now }).priority;
   const intentionalContinuation = item?.intentionalContinuation === true || item?.intentional_continuation === true;
   const matches = [];
 
@@ -323,7 +351,7 @@ export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
 export function recommendMainFeedSchedule(item, context = {}) {
   const now = requireNow(context);
   const eligibility = evaluateScheduleEligibility(item, { now });
-  const priorityBreakdown = calculateSchedulePriority(item, { now });
+  const priorityBreakdown = calculateSchedulePriority(item, { ...context, now });
   const blockers = [...eligibility.blockers];
   const warnings = [];
   const conflicts = [];
@@ -456,7 +484,10 @@ export function recommendMainFeedSchedule(item, context = {}) {
   const timing = recommendedAt <= now
     ? 'Recommend the earliest serialized slot now.'
     : `Recommend ${new Date(recommendedAt).toISOString()}.`;
-  const reason = `${urgency} priority ${priorityBreakdown.priority.toFixed(2)} (base ${priorityBreakdown.basePriority.toFixed(2)}, urgency +${priorityBreakdown.urgencyModifier}, expiry +${priorityBreakdown.expiryModifier}). ${timing}`;
+  const learnedText = priorityBreakdown.learnedAdjustment
+    ? `, learned ${priorityBreakdown.learnedAdjustment >= 0 ? '+' : ''}${priorityBreakdown.learnedAdjustment}`
+    : '';
+  const reason = `${urgency} priority ${priorityBreakdown.priority.toFixed(2)} (base ${priorityBreakdown.basePriority.toFixed(2)}, urgency +${priorityBreakdown.urgencyModifier}, expiry +${priorityBreakdown.expiryModifier}${learnedText}). ${timing}`;
 
   return {
     item,

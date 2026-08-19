@@ -1,6 +1,6 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, and can publish approved queued drafts through authenticated HTTP GraphQL.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, proposes evidence-backed learned strategy rules, and can publish approved queued drafts through authenticated HTTP GraphQL.
 
 ## Components
 
@@ -10,12 +10,13 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, authenticated Under-the-Hood visibility observations, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, and experiment/variant assignments.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, experiment/variant assignments, and suggested/accepted/retired learned rules.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
 - `experiments.js` — pure experiment definition/population validation, attribution-confidence semantics, normalized content/network cohorts, InteractionYield context, and cautious evidence states.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for workflow/health/relationship reads plus Phase-4 `measurements`, `experiments`, explicit experiment create/assign, and experiment summaries; it cannot approve or publish main-feed content.
-- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, and explicit observational Experiments.
+- `learning.js` — pure learned-strategy qualification, bounded adjustment, matching/application, lifecycle transition, and stale/reversal/mechanism-review logic.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for workflow/health/relationship/measurement/experiment/learning reads and explicit writes; learning acceptance/retirement require explicit confirmation and the bridge cannot approve or publish main-feed content.
+- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, observational Experiments, and human-controlled Learned Strategy.
 - `automation.js` — captures due publication measurement windows, refreshes research/Engage Next, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
 
 ## Operating standards
@@ -34,7 +35,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — implementation-ready plan for Save → Triage → Route → Research → Draft → Review → Schedule → Publish → Learn.
 - [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with the implemented foundation and remaining execution sequence explicit.
 
-### Current foundation and next architecture
+### Current implemented architecture
 
 Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that creates an approved main-feed queue item; the associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
 
@@ -50,13 +51,15 @@ Phase 1D Account Health is implemented: append-only observed health/visibility e
 
 Phase 4 Measurement & Experiments is implemented: published main-feed items accumulate first-available 15m/1h/6h/24h snapshots with actual capture time; follower deltas retain overlap/downgrade attribution confidence and remain associated rather than causal; audience first-seen state supports new-follower quality; declared content/timing/network experiments use explicit non-random assignments and normalized cohort summaries with sample/confounder/health-network context and `insufficient -> preliminary -> directional -> repeated` evidence states.
 
-The remaining network-first architecture is:
+Phase 5 Learned Strategy is implemented: Phase-4 experiment summaries can produce `suggested` evidence-backed rules; suggestions remain zero-effect until explicit human acceptance; accepted target/engagement/health/content/format/topic/timing adjustments are bounded and shown separately from base scoring; retirement preserves history; linked retired algorithm-evidence tags and newer/reversing evidence surface review signals. Hard gates, expiry, required human approval, explicit manual routing/timing, and provenance-backed Account Health constraints remain authoritative over learning.
 
-**media attachment readiness -> learned strategy.**
+The remaining publication capability outside the completed network-learning architecture is:
+
+**media attachment/upload readiness.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Actual media upload/attachment readiness and Phase-5 learned-strategy integration remain planned until their matching phases are implemented.
+Actual media upload/attachment readiness remains intentionally unimplemented; content that requires proof media stays blocked rather than pretending an attachment exists.
 
 ## Setup
 
@@ -138,6 +141,7 @@ Dashboard views:
 - **Audience** — raw follower/following niche map that feeds Relationship Intelligence without being replaced by it.
 - **Performance** — raw account/post snapshots plus fixed 15m/1h/6h/24h normalized publication outcomes, associated follower deltas with attribution confidence, health context, and recent new-follower quality.
 - **Experiments** — declared observational content/timing/network experiments, explicit assignment controls, per-variant samples/metrics/confounders/context, and cautious evidence states with no automatic winner.
+- **Learned Strategy** — suggested/accepted/retired bounded rules with evidence state, sample size, baseline/comparison, match context, effective adjustment, mechanism tags, review signals, and explicit Accept/Retire controls.
 - **GitHub / Hacker News / All** — secondary discovery sources.
 
 Use **Save** to train the preference profile and **Create draft** to move a source into the drafting workflow.
@@ -154,6 +158,10 @@ npm run agent -- schedule-inspect <<<'{"key":"https://x.com/example/status/123"}
 npm run agent -- measurements <<<'{"limit":20}'
 npm run agent -- experiments <<<'{}'
 npm run agent -- experiment-summary <<<'{"id":1,"windowMinutes":60}'
+npm run agent -- learning <<<'{}'
+npm run agent -- learning-refresh <<<'{"experimentId":1,"baselineLabel":"original","comparisonLabel":"thread","windowMinutes":60}'
+npm run agent -- learning-accept <<<'{"id":1,"confirmAccept":true}'
+npm run agent -- learning-retire <<<'{"id":1,"reason":"newer evidence reversed direction","confirmRetire":true}'
 npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'

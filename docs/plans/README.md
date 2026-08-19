@@ -1,6 +1,6 @@
 # Implementation Plan Index
 
-These files are the authoritative execution sequence for the network-first growth system. Phase 1A is implemented; later phases remain the execution frontier.
+These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-5 are implemented; the phase files now serve as the executable design/history for the current runtime.
 
 Do not implement later phases by inventing interfaces that earlier plans have not established yet.
 
@@ -46,7 +46,7 @@ Current code now owns:
 
 Does **not** own durable relationship history or engagement discovery.
 
-## Phase 1B
+## Phase 1B — implemented
 
 [`PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`](PHASE_1B_RELATIONSHIP_INTELLIGENCE.md)
 
@@ -64,7 +64,7 @@ Depends on:
 - Phase 1A queue conventions;
 - existing audience sync.
 
-## Phase 1C
+## Phase 1C — implemented
 
 [`PHASE_1C_ENGAGE_NEXT.md`](PHASE_1C_ENGAGE_NEXT.md)
 
@@ -84,7 +84,7 @@ Depends on:
 - Phase 1A queue;
 - Phase 1B relationship intelligence.
 
-## Phase 1D
+## Phase 1D — implemented
 
 [`PHASE_1D_ACCOUNT_HEALTH.md`](PHASE_1D_ACCOUNT_HEALTH.md)
 
@@ -107,7 +107,7 @@ Depends on:
 
 Most Phase 1D signals are advisory. Target saturation, reply volume, repeated archetype, and conversation density do not independently hard-block a human-reviewed useful interaction.
 
-## Phase 2
+## Phase 2 — implemented
 
 [`PHASE_2_CONTENT_QUALITY.md`](PHASE_2_CONTENT_QUALITY.md)
 
@@ -128,7 +128,7 @@ Depends on:
 - consumes Phase 1B/1C relationship context when available;
 - consumes Phase 1D repetition/health context when available.
 
-## Phase 3
+## Phase 3 — implemented
 
 [`PHASE_3_DISTRIBUTION_SCHEDULER.md`](PHASE_3_DISTRIBUTION_SCHEDULER.md)
 
@@ -147,7 +147,7 @@ Depends on:
 - Phase 1A approval state;
 - Phase 2 gates/final content.
 
-## Phase 4
+## Phase 4 — implemented
 
 [`PHASE_4_MEASUREMENT_EXPERIMENTS.md`](PHASE_4_MEASUREMENT_EXPERIMENTS.md)
 
@@ -167,7 +167,7 @@ Depends on:
 - Phase 1D health/network diagnostics;
 - Phase 3 published queue metadata.
 
-## Phase 5
+## Phase 5 — implemented
 
 [`PHASE_5_LEARNED_STRATEGY.md`](PHASE_5_LEARNED_STRATEGY.md)
 

@@ -11,6 +11,7 @@ import {
   hasCandidateAction,
   listAudienceProfiles,
   listCandidateActions,
+  listAcceptedLearnedRules,
   listRecentPublishedContent,
   listRelationshipEvents,
   markCandidateSaved,
@@ -71,10 +72,19 @@ function relationshipContext(candidate) {
 }
 
 function scoringContext(candidate, context = {}) {
+  const relationship = context.relationship ?? relationshipContext(candidate);
   return {
     preference: getPreferenceProfile(),
-    relationship: context.relationship ?? relationshipContext(candidate),
+    relationship,
     now: context.now || Date.now(),
+    learnedRules: context.learnedRules ?? listAcceptedLearnedRules({ limit: 500 }),
+    learningContext: {
+      targetUsername: relationship?.username || sourceUsername(candidate),
+      targetClass: relationship?.classes || [],
+      relationshipStage: relationship?.relationshipStage || 'observed',
+      topicTags: candidate?.niche?.tags || [],
+      ...context.learningContext,
+    },
   };
 }
 

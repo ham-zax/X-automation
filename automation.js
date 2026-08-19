@@ -19,6 +19,7 @@ import {
   getPreferenceProfile,
   getPublicationFollowerBaseline,
   listDueMeasurementWindows,
+  listAcceptedLearnedRules,
   listApprovedMainFeedItems,
   listRecentMainFeedPublications,
   markQueueFailed,
@@ -202,6 +203,7 @@ export async function processMainFeedQueue({
     now: currentTime,
     recentPosts,
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   });
   const decision = decisions.find((item) => item.eligible) || null;
   if (!decision) return { action: items.length ? 'blocked' : 'no-main-feed', decision: null, decisions };

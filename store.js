@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'node:url';
 import {
   RELATIONSHIP_EVENT_TYPES,
   RELATIONSHIP_STAGES,
@@ -20,6 +21,16 @@ import {
   validateExperimentDefinition,
   validateVariantAssignment,
 } from './experiments.js';
+import {
+  LEARNED_RULE_SCOPES,
+  LEARNED_RULE_STATUSES,
+  applyAcceptedLearnedRules,
+  createExperimentLearnedRuleCandidate,
+  reviewLearnedRules,
+  transitionLearnedRule,
+} from './learning.js';
+
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const DB_FILE = path.resolve('.x-research.sqlite');
 export const PUBLICATION_MEASUREMENT_WINDOWS = Object.freeze([15, 60, 360, 1440]);
@@ -275,6 +286,22 @@ db.exec(`
     FOREIGN KEY(experiment_id) REFERENCES experiments(id)
   );
 
+  CREATE TABLE IF NOT EXISTS learned_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT NOT NULL,
+    key TEXT NOT NULL,
+    recommendation_json TEXT NOT NULL DEFAULT '{}',
+    evidence_json TEXT NOT NULL DEFAULT '{}',
+    evidence_state TEXT NOT NULL DEFAULT 'insufficient',
+    adjustment REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'suggested',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    accepted_at INTEGER,
+    retired_at INTEGER,
+    UNIQUE(scope, key)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_candidates_source_updated ON candidates(source, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_saved ON candidates(saved, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_viral ON candidates(viral_score DESC, published_at DESC);
@@ -296,6 +323,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_measurements_captured ON publication_measurements(captured_at DESC);
   CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_variants_experiment ON experiment_variants(experiment_id, id);
+  CREATE INDEX IF NOT EXISTS idx_learned_rules_status ON learned_rules(status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_learned_rules_scope ON learned_rules(scope, status, updated_at DESC);
 
   INSERT OR IGNORE INTO queue_items (
     candidate_key, lane, pipeline, status,
@@ -1265,7 +1294,10 @@ export function applyRelationshipEvent(username) {
     firstSeenAt: events[0].occurredAt,
     lastSeenAt: events[0].occurredAt,
   };
-  return upsertRelationshipProfile(refreshRelationshipProfile(current, { events }));
+  return upsertRelationshipProfile(refreshRelationshipProfile(current, {
+    events,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
+  }));
 }
 
 export function refreshRelationshipFromAudience(audienceProfile) {
@@ -1286,7 +1318,10 @@ export function refreshRelationshipFromAudience(audienceProfile) {
     firstSeenAt: Number(audienceProfile.firstSeenAt || current.firstSeenAt || audienceProfile.lastSeenAt || Date.now()),
     lastSeenAt: Number(audienceProfile.lastSeenAt || current.lastSeenAt || Date.now()),
   };
-  return upsertRelationshipProfile(refreshRelationshipProfile(input, { events }));
+  return upsertRelationshipProfile(refreshRelationshipProfile(input, {
+    events,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
+  }));
 }
 
 export function recordRelationshipEvent(event) {
@@ -1491,11 +1526,30 @@ export function getAccountHealthSummary({ now = Date.now() } = {}) {
     current.push(event);
     eventsByUsername.set(event.username, current);
   }
+  const acceptedHealthRules = listAcceptedLearnedRules({ scope: 'health', limit: 500 });
   const saturationTargets = profiles
     .map((profile) => {
       const events = eventsByUsername.get(profile.username) || [];
       if (!events.length && Number(profile.meaningfulInteractions || 0) === 0) return null;
-      return { username: profile.username, ...calculateSaturationPressure(profile, events, { now: timestamp }) };
+      const base = calculateSaturationPressure(profile, events, { now: timestamp });
+      const learned = applyAcceptedLearnedRules(base.pressure, acceptedHealthRules, {
+        targetUsername: profile.username,
+        targetClass: profile.classes || [],
+        relationshipStage: profile.relationshipStage || 'observed',
+        topicTags: profile.primaryTopics || [],
+        healthState: 'advisory',
+      }, { adjustmentTarget: 'saturation_pressure', finalMin: 0, finalMax: 100 });
+      return {
+        username: profile.username,
+        ...base,
+        basePressure: base.pressure,
+        pressure: learned.finalValue,
+        band: learned.finalValue < 25 ? 'low' : learned.finalValue < 50 ? 'mild' : learned.finalValue < 75 ? 'meaningful' : 'high',
+        learnedAdjustment: learned,
+        explanation: learned.learnedAdjustment
+          ? `${base.explanation} Accepted learned saturation adjustment ${learned.learnedAdjustment >= 0 ? '+' : ''}${learned.learnedAdjustment} yields ${learned.finalValue}/100.`
+          : base.explanation,
+      };
     })
     .filter(Boolean)
     .sort((left, right) => right.pressure - left.pressure || left.username.localeCompare(right.username));
@@ -1976,6 +2030,304 @@ export function getExperimentSummary(id, { windowMinutes = null } = {}) {
   return {
     experiment, kind: 'content',
     byWindow: Object.fromEntries(PUBLICATION_MEASUREMENT_WINDOWS.map((value) => [value, summarizeWindow(value)])),
+  };
+}
+
+const LEARNED_SCOPE_SET = new Set(LEARNED_RULE_SCOPES);
+const LEARNED_STATUS_SET = new Set(LEARNED_RULE_STATUSES);
+const LEARNING_DIMENSION_DEFAULTS = Object.freeze({
+  target_class: { scope: 'targeting', adjustmentTarget: 'target_score_component', adjustmentComponent: 'relationshipPotential', matchKey: 'targetClass' },
+  target_score_bucket: { scope: 'targeting', adjustmentTarget: 'target_score_component', adjustmentComponent: 'relationshipPotential', matchKey: 'targetScoreBucket' },
+  target_size_bucket: { scope: 'targeting', adjustmentTarget: 'target_score_component', adjustmentComponent: 'relationshipPotential', matchKey: 'targetSizeBucket' },
+  relationship_stage: { scope: 'targeting', adjustmentTarget: 'target_score_component', adjustmentComponent: 'relationshipPotential', matchKey: 'relationshipStage' },
+  reply_age_bucket: { scope: 'engagement', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'replyAgeBucket' },
+  reply_archetype: { scope: 'engagement', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'replyArchetype' },
+  conversation_saturation_bucket: { scope: 'health', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'conversationSaturationBucket' },
+  interaction_volume_bucket: { scope: 'health', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'interactionVolumeBucket' },
+  target_concentration_bucket: { scope: 'health', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'targetConcentrationBucket' },
+  archetype_repetition_bucket: { scope: 'health', adjustmentTarget: 'engage_priority', adjustmentComponent: null, matchKey: 'archetypeRepetitionBucket' },
+  timing_bucket: { scope: 'timing', adjustmentTarget: 'scheduler_timing_preference', adjustmentComponent: null, matchKey: 'timingBucket' },
+  format: { scope: 'format', adjustmentTarget: 'format_preference', adjustmentComponent: null, matchKey: 'format' },
+  style: { scope: 'content', adjustmentTarget: 'content_preference', adjustmentComponent: null, matchKey: 'style' },
+  hook_type: { scope: 'content', adjustmentTarget: 'content_preference', adjustmentComponent: null, matchKey: 'hookType' },
+  media_type: { scope: 'content', adjustmentTarget: 'content_preference', adjustmentComponent: null, matchKey: 'mediaType' },
+});
+
+function decodeLearnedRule(row) {
+  if (!row) return null;
+  const recommendation = json(row.recommendation_json, {});
+  const evidence = json(row.evidence_json, {});
+  const proposed = Number(row.adjustment || 0);
+  const status = row.status || 'suggested';
+  const adjustment = {
+    ...(recommendation.adjustment || {}),
+    proposed,
+    effective: status === 'accepted' ? proposed : 0,
+    effectiveReason: status === 'accepted'
+      ? 'explicitly_accepted'
+      : status === 'retired'
+        ? 'retired_rules_have_zero_production_effect'
+        : 'suggested_rules_have_zero_production_effect',
+  };
+  return {
+    id: Number(row.id),
+    ruleId: recommendation.ruleId || `${row.scope}:${row.key}`,
+    scope: row.scope,
+    key: row.key,
+    status,
+    match: recommendation.match || {},
+    finding: recommendation.finding || '',
+    recommendation: recommendation.recommendation || '',
+    primaryMetric: recommendation.primaryMetric || '',
+    comparison: recommendation.comparison || null,
+    evidence,
+    adjustment,
+    acceptance: recommendation.acceptance || { eligible: false, reasons: [] },
+    mechanismTags: recommendation.mechanismTags || [],
+    guardrails: recommendation.guardrails || {},
+    source: recommendation.source || null,
+    retirementReason: recommendation.retirementReason || '',
+    createdAt: Number(row.created_at || 0),
+    updatedAt: Number(row.updated_at || 0),
+    acceptedAt: row.accepted_at == null ? null : Number(row.accepted_at),
+    retiredAt: row.retired_at == null ? null : Number(row.retired_at),
+  };
+}
+
+function encodeLearnedRecommendation(rule, source = rule.source || null) {
+  return {
+    ruleId: rule.ruleId || `${rule.scope}:${rule.key}`,
+    match: rule.match || {},
+    finding: rule.finding || '',
+    recommendation: rule.recommendation || '',
+    primaryMetric: rule.primaryMetric || '',
+    comparison: rule.comparison || null,
+    adjustment: rule.adjustment || {},
+    acceptance: rule.acceptance || { eligible: false, reasons: [] },
+    mechanismTags: rule.mechanismTags || [],
+    guardrails: rule.guardrails || {},
+    source,
+    retirementReason: rule.retirementReason || '',
+  };
+}
+
+export function getLearnedRule(id) {
+  return decodeLearnedRule(db.prepare('SELECT * FROM learned_rules WHERE id = ?').get(Number(id)));
+}
+
+export function getLearnedRuleByKey(scope, key) {
+  return decodeLearnedRule(db.prepare('SELECT * FROM learned_rules WHERE scope = ? AND key = ?').get(String(scope || ''), String(key || '')));
+}
+
+export function listLearnedRules({ status = null, scope = null, limit = 200 } = {}) {
+  if (status && !LEARNED_STATUS_SET.has(status)) throw new Error(`Invalid learned-rule status: ${status}`);
+  if (scope && !LEARNED_SCOPE_SET.has(scope)) throw new Error(`Invalid learned-rule scope: ${scope}`);
+  const where = [];
+  const params = [];
+  if (status) { where.push('status = ?'); params.push(status); }
+  if (scope) { where.push('scope = ?'); params.push(scope); }
+  params.push(Math.max(1, Math.min(1000, Number(limit || 200))));
+  return db.prepare(`SELECT * FROM learned_rules ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY updated_at DESC, id DESC LIMIT ?`).all(...params).map(decodeLearnedRule);
+}
+
+export function listAcceptedLearnedRules({ scope = null, limit = 500, includeSuspended = false } = {}) {
+  const rules = listLearnedRules({ status: 'accepted', scope, limit });
+  if (includeSuspended) return rules;
+  const algorithmEvidence = listAlgorithmEvidenceEntries();
+  return rules.filter((rule) => {
+    const review = reviewLearnedRules([rule], {
+      byRule: { [rule.ruleId]: currentReviewContext(rule) },
+      algorithmEvidence,
+    })[0];
+    return review?.suspendEffect !== true;
+  });
+}
+
+function persistLearnedRule(rule, { source = rule.source || null, allowAcceptedUpdate = false } = {}) {
+  if (!rule || !LEARNED_SCOPE_SET.has(rule.scope) || !String(rule.key || '').trim()) throw new Error('A valid learned rule is required.');
+  const existing = getLearnedRuleByKey(rule.scope, rule.key);
+  if (existing && existing.status !== 'suggested' && !allowAcceptedUpdate) {
+    return { rule: existing, updated: false, reason: `existing_${existing.status}_rule_preserved` };
+  }
+  const now = Date.now();
+  const recommendation = JSON.stringify(encodeLearnedRecommendation(rule, source));
+  const evidence = JSON.stringify(rule.evidence || {});
+  const evidenceState = String(rule.evidence?.state || 'insufficient');
+  const adjustment = Number(rule.adjustment?.proposed || 0);
+  if (existing) {
+    db.prepare(`UPDATE learned_rules SET recommendation_json = ?, evidence_json = ?, evidence_state = ?, adjustment = ?,
+      status = ?, updated_at = ?, accepted_at = ?, retired_at = ? WHERE id = ?`).run(
+      recommendation, evidence, evidenceState, adjustment, rule.status || existing.status, now,
+      rule.acceptedAt ?? existing.acceptedAt ?? null, rule.retiredAt ?? existing.retiredAt ?? null, existing.id,
+    );
+    return { rule: getLearnedRule(existing.id), updated: true, reason: 'updated' };
+  }
+  const inserted = db.prepare(`INSERT INTO learned_rules(
+    scope, key, recommendation_json, evidence_json, evidence_state, adjustment, status,
+    created_at, updated_at, accepted_at, retired_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    rule.scope, rule.key, recommendation, evidence, evidenceState, adjustment, rule.status || 'suggested',
+    now, now, rule.acceptedAt ?? null, rule.retiredAt ?? null,
+  );
+  return { rule: getLearnedRule(Number(inserted.lastInsertRowid)), updated: true, reason: 'created' };
+}
+
+function learningDefaultsForExperiment(experiment) {
+  const defaults = LEARNING_DIMENSION_DEFAULTS[experiment?.dimension];
+  if (!defaults) throw new Error(`No learned-strategy default exists for experiment dimension: ${experiment?.dimension || 'missing'}.`);
+  return defaults;
+}
+
+function experimentSummaryForLearning(experiment, windowMinutes) {
+  if (NETWORK_EXPERIMENT_DIMENSIONS.has(experiment.dimension)) return getExperimentSummary(experiment.id).summary;
+  const value = Number(windowMinutes);
+  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(value)) {
+    throw new Error(`Content/timing learning requires an explicit measurement window: ${PUBLICATION_MEASUREMENT_WINDOWS.join(', ')} minutes.`);
+  }
+  return getExperimentSummary(experiment.id, { windowMinutes: value }).summary;
+}
+
+function buildExperimentLearningCandidate(input = {}) {
+  const experiment = getExperiment(Number(input.experimentId));
+  if (!experiment) throw new Error(`Experiment not found: ${input.experimentId}`);
+  const baselineLabel = String(input.baselineLabel || '').trim();
+  const comparisonLabel = String(input.comparisonLabel || '').trim();
+  if (!baselineLabel || !comparisonLabel || baselineLabel === comparisonLabel) {
+    throw new Error('Learning refresh requires distinct explicit baselineLabel and comparisonLabel values.');
+  }
+  const defaults = learningDefaultsForExperiment(experiment);
+  const summary = experimentSummaryForLearning(experiment, input.windowMinutes);
+  const scope = String(input.scope || defaults.scope);
+  const adjustmentTarget = String(input.adjustmentTarget || defaults.adjustmentTarget);
+  const adjustmentComponent = input.adjustmentComponent ?? defaults.adjustmentComponent;
+  const key = String(input.key || `experiment:${experiment.id}:${experiment.dimension}:${comparisonLabel}`);
+  const match = input.match && typeof input.match === 'object' && !Array.isArray(input.match)
+    ? input.match
+    : { [defaults.matchKey]: comparisonLabel };
+  const candidate = createExperimentLearnedRuleCandidate(summary, {
+    scope,
+    key,
+    baselineLabel,
+    comparisonLabel,
+    adjustmentTarget,
+    ...(adjustmentComponent ? { adjustmentComponent } : {}),
+    match,
+    mechanismTags: Array.isArray(input.mechanismTags) ? input.mechanismTags : [],
+    outlierDominated: input.outlierDominated === true,
+    requiresBroadSupport: input.requiresBroadSupport === true,
+    support: input.support,
+    minimumSampleSize: input.minimumSampleSize,
+    higherIsBetter: input.higherIsBetter,
+    proposedAdjustment: input.proposedAdjustment,
+  });
+  const source = {
+    kind: 'experiment',
+    experimentId: experiment.id,
+    dimension: experiment.dimension,
+    windowMinutes: NETWORK_EXPERIMENT_DIMENSIONS.has(experiment.dimension) ? null : Number(input.windowMinutes),
+    request: {
+      scope,
+      key,
+      baselineLabel,
+      comparisonLabel,
+      adjustmentTarget,
+      adjustmentComponent: adjustmentComponent || null,
+      match,
+      mechanismTags: Array.isArray(input.mechanismTags) ? input.mechanismTags : [],
+      outlierDominated: input.outlierDominated === true,
+      requiresBroadSupport: input.requiresBroadSupport === true,
+      support: input.support || null,
+      minimumSampleSize: input.minimumSampleSize ?? null,
+      higherIsBetter: input.higherIsBetter,
+      proposedAdjustment: input.proposedAdjustment,
+    },
+  };
+  return { experiment, summary, candidate, source };
+}
+
+export function refreshLearnedRuleSuggestion(input = {}) {
+  const built = buildExperimentLearningCandidate(input);
+  if (!built.candidate.created) return { ...built, persisted: null };
+  const rule = { ...built.candidate.rule, source: built.source };
+  const persisted = persistLearnedRule(rule, { source: built.source });
+  return { ...built, candidate: { ...built.candidate, rule }, persisted };
+}
+
+export function acceptLearnedRule(id, { at = Date.now() } = {}) {
+  const current = getLearnedRule(id);
+  if (!current) throw new Error(`Learned rule not found: ${id}`);
+  const next = transitionLearnedRule(current, 'accepted', { at });
+  return persistLearnedRule(next, { source: current.source, allowAcceptedUpdate: true }).rule;
+}
+
+export function retireLearnedRule(id, { at = Date.now(), reason = '' } = {}) {
+  const current = getLearnedRule(id);
+  if (!current) throw new Error(`Learned rule not found: ${id}`);
+  const next = transitionLearnedRule(current, 'retired', { at, reason });
+  return persistLearnedRule(next, { source: current.source, allowAcceptedUpdate: true }).rule;
+}
+
+function ledgerTag(title) {
+  return String(title || '')
+    .replace(/^\d+(?:\.\d+)*\s*/, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+export function listAlgorithmEvidenceEntries() {
+  try {
+    const text = fs.readFileSync(path.join(MODULE_DIR, 'docs/ALGORITHM_EVIDENCE_LEDGER.md'), 'utf8');
+    const headings = [...text.matchAll(/^###\s+(.+)$/gm)];
+    return headings.map((match, index) => {
+      const start = match.index + match[0].length;
+      const end = index + 1 < headings.length ? headings[index + 1].index : text.length;
+      const section = text.slice(start, end);
+      const statusMatch = section.match(/\*\*Status:\*\*\s+`?([A-Z_]+)`?/);
+      if (!statusMatch) return null;
+      const title = match[1].trim();
+      const tag = ledgerTag(title);
+      return { id: tag, key: tag, tag, title, status: statusMatch[1], materiallyChanged: false };
+    }).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function currentReviewContext(rule) {
+  const source = rule.source;
+  if (!source || source.kind !== 'experiment') return {};
+  try {
+    const request = source.request || {};
+    const built = buildExperimentLearningCandidate({
+      experimentId: source.experimentId,
+      windowMinutes: source.windowMinutes,
+      ...request,
+    });
+    if (!built.candidate.created) return { stale: true };
+    return {
+      newerRelevantObservations: Math.max(0, Number(built.candidate.rule.evidence?.sampleSize || 0) - Number(rule.evidence?.sampleSize || 0)),
+      newerAdjustment: Number(built.candidate.rule.adjustment?.proposed || 0),
+    };
+  } catch {
+    return { stale: true };
+  }
+}
+
+export function getLearningOverview({ algorithmEvidence = null, limit = 500 } = {}) {
+  const rules = listLearnedRules({ limit });
+  const byRule = Object.fromEntries(rules.map((rule) => [rule.ruleId, currentReviewContext(rule)]));
+  const evidenceEntries = Array.isArray(algorithmEvidence) ? algorithmEvidence : listAlgorithmEvidenceEntries();
+  const reviews = reviewLearnedRules(rules, { byRule, algorithmEvidence: evidenceEntries });
+  const reviewByRule = Object.fromEntries(reviews.map((review) => [review.ruleId, review]));
+  return {
+    rules: rules.map((rule) => ({ ...rule, review: reviewByRule[rule.ruleId] || null })),
+    suggested: rules.filter((rule) => rule.status === 'suggested').length,
+    accepted: rules.filter((rule) => rule.status === 'accepted').length,
+    retired: rules.filter((rule) => rule.status === 'retired').length,
+    algorithmEvidence: evidenceEntries,
   };
 }
 

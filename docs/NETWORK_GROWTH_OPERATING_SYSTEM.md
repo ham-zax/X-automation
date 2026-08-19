@@ -734,7 +734,30 @@ Saturation, interaction-volume, target-concentration, and archetype-repetition b
 
 ---
 
-## 17. Algorithm evidence discipline
+## 17. Learned strategy
+
+The implemented learning layer converts qualified Phase-4 experiment/cohort evidence into inspectable rule candidates without silently rewriting strategy.
+
+Rule lifecycle:
+
+```text
+suggested -> accepted -> retired
+```
+
+- `suggested` rules are evidence records with **zero** production effect;
+- human acceptance requires qualified `directional` or `repeated` evidence;
+- accepted adjustments are bounded and applied after transparent base scoring;
+- retired rules remain visible/history-preserving and have zero effect;
+- suggestion refresh never overwrites an accepted or retired rule;
+- newer/reversing evidence, niche changes, or linked retired/materially changed algorithm mechanisms surface review signals rather than silently changing rule status.
+
+Accepted learning can tune TargetScore components, Reach/Follow/Conversation potential, EngagePriority, soft SaturationPressure/WATCH pressure, and scheduler content/format/topic/timing preference. The UI exposes base vs learned contribution where the rule affects a current recommendation.
+
+Learning cannot override hard content gates, expiry, required human approval, an explicit manual route/schedule, or supported observed Account Health constraints. It cannot infer `CONSTRAINED` from low reach, create a fixed reply quota, or introduce fake-human timing/jitter.
+
+---
+
+## 18. Algorithm evidence discipline
 
 All strategic claims must be categorized using `ALGORITHM_EVIDENCE_LEDGER.md`.
 
@@ -758,7 +781,7 @@ Likewise, do not ignore a code-backed mechanism merely because an older strategy
 
 ---
 
-## 18. Performance-first operating boundary
+## 19. Performance-first operating boundary
 
 Growth documents should focus on distribution, conversion, network construction, and measurement.
 
@@ -772,7 +795,7 @@ The growth strategy should not duplicate long moral/ethical commentary. It shoul
 
 ---
 
-## 19. The strategic moat
+## 20. The strategic moat
 
 The defensible advantage is not posting frequency.
 
@@ -788,6 +811,6 @@ It is the accumulation of:
 
 The long-term system is therefore:
 
-> **research engine + relationship CRM + conversation opportunity engine + technical publishing pipeline + measurement lab**
+> **research engine + relationship CRM + conversation opportunity engine + technical publishing pipeline + measurement lab + human-controlled learned strategy**
 
 That is the intended architecture for `x_action`.

@@ -372,7 +372,18 @@ When `AUTO_POST=false`, automation previews the recommendation and performs **no
 
 A successful main-feed transport marks the queue item `published`, stores its root tweet ID/output URL/publication time, updates the associated draft, and records the candidate action. A transport failure after claim becomes `failed` with its error and is not silently retried. If X succeeds but local recording is incomplete, the item remains non-approved/non-retryable with inspectable recording state. A successful Engage Next reply is recorded by the explicit engagement send path instead.
 
-Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next, and Phase-3 queue-aware main-feed scheduling/claiming plus Original/Quote/Thread HTTP publication. Still planned: Account Health, actual media upload/readiness, experiments/follower conversion, and learned strategy.
+Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next, Phase-1D Account Health, Phase-3 queue-aware main-feed scheduling/claiming plus Original/Quote/Thread HTTP publication, Phase-4 fixed-window measurement/experiments, and Phase-5 human-controlled learned strategy. Actual media upload/attachment readiness remains intentionally separate and required media stays blocked.
+
+Inspect and manage learned strategy without editing SQLite directly:
+
+```bash
+printf '%s' '{}' | node agent_bridge.js learning
+printf '%s' '{"experimentId":1,"baselineLabel":"original","comparisonLabel":"thread","windowMinutes":60}' | node agent_bridge.js learning-refresh
+printf '%s' '{"id":1,"confirmAccept":true}' | node agent_bridge.js learning-accept
+printf '%s' '{"id":1,"reason":"newer evidence reversed direction","confirmRetire":true}' | node agent_bridge.js learning-retire
+```
+
+`learning-refresh` only creates/updates `suggested` evidence. Suggested and retired rules have zero production effect. Accepted rules remain bounded additions after base TargetScore/opportunity/EngagePriority/health/scheduler logic; explicit human routing/timing, hard gates, expiry, approval requirements, and supported hard Account Health evidence override learning.
 
 ## Agent behavior by user request
 
@@ -416,7 +427,7 @@ Use persisted candidates with tags `jobs/career`, `builders`, or `business`, the
 - Never silently enable `AUTO_POST`.
 - Never use automated likes, follow churn, or mass unsolicited replies as part of this workflow.
 - Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
-- Treat target saturation/repeated archetype/concentration as advisory until Phase 1D evidence says otherwise; exact/near-duplicate replies remain a hard stop.
+- Treat target saturation, repeated archetype, concentration, and InteractionYield as advisory diagnostics; accepted learned rules may tune their bounded soft effect, while exact/near-duplicate replies remain a hard stop owned by the content gate.
 - Replies and quote-posts should add a specific technical contribution, not generic praise or engagement bait.
 - Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another path has not already done so. The Engage Next approved-send path records its own successful `reply` action and `our_reply` relationship event exactly once.
 - Preserve the content and engagement standards in `CONTENT_OPERATING_STANDARD.md`, `ENGAGEMENT_INTEGRITY.md`, and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.

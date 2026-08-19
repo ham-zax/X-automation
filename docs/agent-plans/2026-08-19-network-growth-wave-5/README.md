@@ -3,15 +3,16 @@
 **Repository:** `/home/hamza/repo/x_test`
 **Coordination base:** `86533fa` (full Phase 1D + full Phase 3 + Phase-4 pure experiment/measurement core)
 **Source of truth:** `docs/plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`, `docs/plans/PHASE_5_LEARNED_STRATEGY.md`
-**Execution shape:** parallel Phase-4 vertical integration + isolated Phase-5 pure core
-**Current wave:** 5
+**Execution shape:** completed Phase-4 integration + learned-strategy pure core, followed by orchestrator-owned Phase-5 integration on `main`
+**Current wave:** 5 — complete
 
 ## Current frontier
 
 | Mission | Type | Status | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|
-| Agent A7 — Learned Strategy Core | executable | ready after worktree setup | `/home/hamza/repo/x_test-w2-engagement` | owns only new pure `learning.js`; cannot affect production or persistence | Phase 1D complete + Phase-4 pure evidence contracts available |
-| Agent B5 — Phase 4 Measurement & Experiments Integration | executable/mixed | ready after worktree setup | `/home/hamza/repo/x_test-w2-content-integration` | owns remaining Phase-4 persistence/capture/audience/UI/bridge vertical | full Phase 1D + Phase 3 + `experiments.js` core integrated |
+| Agent A7 — Learned Strategy Core | executable | complete + integrated (`5f7db94`) | `/home/hamza/repo/x_test-w2-engagement` | verified one-file pure `learning.js` core | none |
+| Agent B5 — Phase 4 Measurement & Experiments Integration | executable/mixed | complete + integrated (`6bb9ca5`) | `/home/hamza/repo/x_test-w2-content-integration` | verified Phase-4 persistence/capture/audience/UI/bridge vertical | none |
+| Orchestrator — Phase 5 Operational Integration | executable/mixed | implemented on `main` in the post-wave integration session | `/home/hamza/repo/x_test` | owns learned-rule persistence, human controls, consumer wiring, docs | A7 + B5 integrated |
 
 ## Dependency map
 
@@ -57,7 +58,7 @@ Both worktrees derive from the same coordination base and have disjoint intended
 
 Agent A7 may establish the pure rule-generation/bounded-adjustment contract early because it accepts evidence as inputs and cannot affect production. It must not claim Phase 5 operational readiness. Agent B5 is the critical path: Phase 4 is complete only after fixed-window measurements, follower-quality state, experiment persistence/assignment, cohort UI, and bridge inspection are integrated.
 
-After both land, full Phase-5 integration becomes the remaining major architecture phase.
+Both agent missions landed. The user then requested the final integration be completed directly by the orchestrator on `main`: learned-rule persistence, refresh/accept/retire controls, bounded consumer application, dashboard/bridge visibility, and documentation are the final Wave-5 integration boundary.
 
 ## Execution lifetime policy
 
@@ -73,10 +74,12 @@ Use the smallest evidence capable of disproving the claimed behavior. Do not cre
 
 ## Future / blocked work
 
-- Phase 5 full learned-rule persistence/acceptance/consumer integration — blocked by completed Phase 4 plus Agent A7 pure core.
+- No planned network-growth phase remains after the direct Phase-5 integration. Real account evidence must accumulate before many useful rules reach directional/repeated states.
 - Media upload/attachment readiness remains a separate publication capability and is not part of Phase 4/5 evidence learning.
 
 ## Status log
 
 - `2026-08-19` — Phase 1D completed on main as `3d987d0`; Phase-4 pure experiment/measurement core integrated as `86533fa`.
 - `2026-08-19` — Wave 5 prepared as full Phase-4 integration in parallel with isolated pure Phase-5 learning core.
+- `2026-08-19` — Agent B5 Phase-4 Integration integrated as `6bb9ca5`; Agent A7 Learned Strategy Core integrated as `5f7db94`.
+- `2026-08-19` — User requested the final Phase-5 operational integration be completed directly by the orchestrator on `main` rather than delegated to another agent.

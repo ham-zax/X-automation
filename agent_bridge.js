@@ -15,6 +15,7 @@ import {
 } from './pipeline.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
+  acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
   createExperiment,
@@ -25,6 +26,7 @@ import {
   getDraftByCandidate,
   getExperiment,
   getExperimentSummary,
+  getLearningOverview,
   getNextReadyDraft,
   getMainFeedScheduleItem,
   getNewFollowerQuality,
@@ -33,6 +35,7 @@ import {
   getRelationshipProfile,
   hasCandidateAction,
   listAudienceProfiles,
+  listAcceptedLearnedRules,
   listCandidateActions,
   listCandidates,
   listDrafts,
@@ -49,6 +52,8 @@ import {
   recordAccountHealthObservation,
   recordCandidateAction,
   recordUnderTheHoodSnapshot,
+  refreshLearnedRuleSuggestion,
+  retireLearnedRule,
   saveDraft,
   upsertCandidates,
 } from './store.js';
@@ -121,6 +126,7 @@ function schedulerContext(now) {
     now,
     recentPosts,
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   };
 }
 
@@ -383,6 +389,52 @@ async function main() {
     return;
   }
 
+  if (command === 'learning') {
+    const algorithmEvidence = payload.algorithmEvidence == null ? null : payload.algorithmEvidence;
+    if (algorithmEvidence != null && !Array.isArray(algorithmEvidence)) throw new Error('learning algorithmEvidence must be an array when supplied.');
+    result({ ...getLearningOverview({ algorithmEvidence }), readOnly: true });
+    return;
+  }
+
+  if (command === 'learning-refresh') {
+    if (payload.experimentId == null) throw new Error('learning-refresh requires experimentId.');
+    const match = payload.match == null ? undefined : payload.match;
+    if (match != null && (!match || typeof match !== 'object' || Array.isArray(match))) throw new Error('learning-refresh match must be an object when supplied.');
+    result(refreshLearnedRuleSuggestion({
+      experimentId: Number(payload.experimentId),
+      baselineLabel: payload.baselineLabel,
+      comparisonLabel: payload.comparisonLabel,
+      windowMinutes: payload.windowMinutes == null ? null : Number(payload.windowMinutes),
+      key: payload.key,
+      scope: payload.scope,
+      adjustmentTarget: payload.adjustmentTarget,
+      adjustmentComponent: payload.adjustmentComponent,
+      match,
+      mechanismTags: Array.isArray(payload.mechanismTags) ? payload.mechanismTags : [],
+      outlierDominated: payload.outlierDominated === true,
+      requiresBroadSupport: payload.requiresBroadSupport === true,
+      support: payload.support,
+      minimumSampleSize: payload.minimumSampleSize,
+      higherIsBetter: payload.higherIsBetter,
+      proposedAdjustment: payload.proposedAdjustment,
+    }));
+    return;
+  }
+
+  if (command === 'learning-accept') {
+    if (payload.confirmAccept !== true) throw new Error('learning-accept requires confirmAccept=true for the explicit production-strategy change.');
+    if (payload.id == null) throw new Error('learning-accept requires id.');
+    result({ rule: acceptLearnedRule(Number(payload.id)), overview: getLearningOverview() });
+    return;
+  }
+
+  if (command === 'learning-retire') {
+    if (payload.confirmRetire !== true) throw new Error('learning-retire requires confirmRetire=true for the explicit production-strategy change.');
+    if (payload.id == null) throw new Error('learning-retire requires id.');
+    result({ rule: retireLearnedRule(Number(payload.id), { reason: payload.reason || '' }), overview: getLearningOverview() });
+    return;
+  }
+
   if (command === 'decide') {
     const candidate = requireCandidate(payload.key);
     const existingActions = listCandidateActions(candidate.key);
@@ -590,7 +642,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

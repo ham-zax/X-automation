@@ -32,6 +32,7 @@ import {
 } from './pipeline.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
+  acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
   createExperiment,
@@ -43,6 +44,7 @@ import {
   getDraft,
   getDraftByCandidate,
   getExperimentSummary,
+  getLearningOverview,
   getMainFeedScheduleItem,
   getNewFollowerQuality,
   getPerformanceSnapshot,
@@ -51,6 +53,7 @@ import {
   getRelationshipProfile,
   getRelationshipSummary,
   listAudienceProfiles,
+  listAcceptedLearnedRules,
   listCandidateActions,
   listCandidates,
   listDrafts,
@@ -65,6 +68,8 @@ import {
   recordAccountHealthObservation,
   recordPerformanceSnapshot,
   recordUnderTheHoodSnapshot,
+  refreshLearnedRuleSuggestion,
+  retireLearnedRule,
   saveDraft,
   setMainFeedSchedule,
   upsertCandidates,
@@ -290,6 +295,7 @@ function schedulerContext(now = Date.now()) {
     now,
     recentPosts,
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   };
 }
 
@@ -442,6 +448,52 @@ function experimentsView() {
   return create + (cards || '<div class="alert alert-secondary">No experiments declared yet.</div>');
 }
 
+function learnedRuleCard(rule) {
+  const adjustment = rule.adjustment || {};
+  const evidence = rule.evidence || {};
+  const review = rule.review || {};
+  const comparison = rule.comparison || {};
+  const statusClass = rule.status === 'accepted' ? 'success' : rule.status === 'retired' ? 'secondary' : 'primary';
+  const reviewReasons = (review.reasons || []).map((reason) => `<li><strong>${escapeHtml(reason.code)}</strong> — ${escapeHtml(reason.message)}</li>`).join('');
+  const mechanismTags = (rule.mechanismTags || []).length
+    ? rule.mechanismTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(tag)}</span>`).join(' ')
+    : '<span class="text-secondary">none</span>';
+  const contribution = Number(adjustment.effective || 0);
+  const action = rule.status === 'suggested'
+    ? (rule.acceptance?.eligible
+      ? `<form method="post" action="/learning/accept"><input type="hidden" name="id" value="${rule.id}"><button class="btn btn-success btn-sm" type="submit">Accept bounded rule</button></form>`
+      : '<span class="small text-secondary">Directional or repeated qualified evidence is required before acceptance.</span>')
+    : rule.status === 'accepted'
+      ? `<form method="post" action="/learning/retire" class="d-flex gap-2"><input type="hidden" name="id" value="${rule.id}"><input class="form-control form-control-sm" name="reason" placeholder="Retirement reason"><button class="btn btn-outline-danger btn-sm" type="submit">Retire</button></form>`
+      : '<span class="small text-secondary">Retired rules have zero production effect and are retained for history.</span>';
+  return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
+    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(rule.scope)} · ${escapeHtml(rule.key)}</div><div class="small text-secondary">${escapeHtml(rule.primaryMetric || 'metric unavailable')} · ${escapeHtml(evidence.state || 'insufficient')} · sample ${escapeHtml(evidence.sampleSize || 0)}</div></div><div class="d-flex gap-2 align-items-start"><span class="badge text-bg-${statusClass}">${escapeHtml(rule.status)}</span>${review.reviewRequired ? '<span class="badge text-bg-warning">review</span>' : ''}</div></div>
+    <div class="mt-3"><strong>Finding:</strong> ${escapeHtml(rule.finding || '')}</div>
+    <div class="mt-2"><strong>Recommendation:</strong> ${escapeHtml(rule.recommendation || '')}</div>
+    <div class="row g-2 mt-2 small"><div class="col-md-4"><strong>Comparison</strong><br>${escapeHtml(comparison.baselineLabel || 'baseline')} ${escapeHtml(comparison.baselineValue ?? 'n/a')} → ${escapeHtml(comparison.comparisonLabel || 'comparison')} ${escapeHtml(comparison.comparisonValue ?? 'n/a')}</div><div class="col-md-4"><strong>Adjustment</strong><br>${escapeHtml(adjustment.target || 'none')}${adjustment.component ? ` · ${escapeHtml(adjustment.component)}` : ''} · proposed ${escapeHtml(adjustment.proposed ?? 0)} · effective ${contribution >= 0 ? '+' : ''}${escapeHtml(contribution)}</div><div class="col-md-4"><strong>Match context</strong><br><code>${escapeHtml(JSON.stringify(rule.match || {}))}</code></div></div>
+    <div class="small mt-3"><strong>Mechanism tags:</strong> ${mechanismTags}</div>
+    ${reviewReasons ? `<div class="alert alert-warning py-2 mt-3 mb-0"><strong>Review signals</strong><ul class="mb-0 mt-1">${reviewReasons}</ul></div>` : ''}
+    <div class="mt-3">${action}</div>
+  </div></article>`;
+}
+
+function learningView(overview = getLearningOverview()) {
+  const experiments = listExperiments({ limit: 100 });
+  const refreshForms = experiments.map((experiment) => {
+    const variants = experiment.variants || [];
+    if (variants.length < 2) return '';
+    const options = variants.map((variant, index) => `<option value="${escapeHtml(variant.label)}" ${index === 0 ? 'selected' : ''}>${escapeHtml(variant.label)}</option>`).join('');
+    const comparisonOptions = variants.map((variant, index) => `<option value="${escapeHtml(variant.label)}" ${index === 1 ? 'selected' : ''}>${escapeHtml(variant.label)}</option>`).join('');
+    const network = ['target_class', 'target_score_bucket', 'target_size_bucket', 'reply_age_bucket', 'conversation_saturation_bucket', 'reply_archetype', 'relationship_stage', 'interaction_volume_bucket', 'target_concentration_bucket', 'archetype_repetition_bucket'].includes(experiment.dimension);
+    return `<form method="post" action="/learning/refresh" class="border rounded p-3 mb-2"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="fw-semibold">${escapeHtml(experiment.name)}</div><div class="small text-secondary mb-2">${escapeHtml(experiment.dimension)} · ${escapeHtml(experiment.primaryMetric)} · suggestions remain zero-effect until explicit acceptance.</div><div class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label small">Baseline</label><select class="form-select form-select-sm" name="baselineLabel">${options}</select></div><div class="col-md-3"><label class="form-label small">Comparison</label><select class="form-select form-select-sm" name="comparisonLabel">${comparisonOptions}</select></div>${network ? '' : `<div class="col-md-2"><label class="form-label small">Window</label><select class="form-select form-select-sm" name="windowMinutes">${[15, 60, 360, 1440].map((value) => `<option value="${value}" ${value === 60 ? 'selected' : ''}>${value}m</option>`).join('')}</select></div>`}<div class="col-md-${network ? '4' : '2'}"><label class="form-label small">Mechanism tags</label><input class="form-control form-control-sm" name="mechanismTags" placeholder="optional, comma-separated"></div><div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Refresh suggestion</button></div></div></form>`;
+  }).join('');
+  const rules = overview.rules.map(learnedRuleCard).join('');
+  return `<div class="row g-3 mb-4"><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Suggested</div><div class="fs-3 fw-semibold">${overview.suggested}</div></div></div></div><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Accepted</div><div class="fs-3 fw-semibold">${overview.accepted}</div></div></div></div><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Retired</div><div class="fs-3 fw-semibold">${overview.retired}</div></div></div></div></div>
+    <div class="alert alert-light border">Learned strategy is account-specific and observational. Refresh computes suggestions only; accepted rules are bounded additions after transparent base scoring. Hard gates, expiry, human approval, and explicit manual routing/scheduling always win.</div>
+    <h2 class="h5 mt-4">Refresh suggestions from declared experiments</h2>${refreshForms || '<div class="alert alert-secondary">No experiment with at least two variants is available.</div>'}
+    <h2 class="h5 mt-4">Learned rules</h2>${rules || '<div class="alert alert-secondary">No learned-rule suggestions yet.</div>'}`;
+}
+
 function relationshipLabel(value) {
   return String(value || '').replaceAll('_', ' ');
 }
@@ -472,6 +524,9 @@ function relationshipsView(className = '', stage = '') {
     const missing = profile.scoreExplanation?.missingComponents || [];
     const topics = (profile.primaryTopics || []).map((tag) => NICHE_LABELS[tag] || tag);
     const followState = profile.mutual ? 'mutual' : profile.followsYou ? 'follows you' : profile.youFollow ? 'you follow' : 'no follow link';
+    const learnedComponents = Object.entries(profile.scoreExplanation?.learning || {})
+      .filter(([, value]) => Number(value?.learnedAdjustment || 0) !== 0)
+      .map(([name, value]) => `${relationshipLabel(name)} ${value.baseValue}→${value.finalValue} (${Number(value.learnedAdjustment) >= 0 ? '+' : ''}${value.learnedAdjustment})`);
     return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
       <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary mt-1">${escapeHtml(profile.bio || '')}</div></div><div class="text-end"><div class="fs-4 fw-semibold">${Math.round(profile.targetScore)}</div><div class="small text-secondary">TargetScore</div></div></div>
       <div class="d-flex gap-1 flex-wrap mt-3">${profile.classes.map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('') || '<span class="badge text-bg-light border">unclassified</span>'}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">${escapeHtml(followState)}</span></div>
@@ -480,6 +535,7 @@ function relationshipsView(className = '', stage = '') {
       ${topics.length ? `<div class="d-flex gap-1 flex-wrap mt-2">${topics.map((topic) => `<span class="badge text-bg-light border">${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
       ${reasons.length ? `<div class="small mt-3"><strong>Why this target:</strong> ${escapeHtml(reasons.join(' '))}</div>` : ''}
       ${missing.length ? `<div class="small text-secondary mt-1">Missing score evidence: ${escapeHtml(missing.map(relationshipLabel).join(', '))}; available components are renormalized.</div>` : ''}
+      ${learnedComponents.length ? `<div class="small text-primary mt-2"><strong>Accepted learned contribution:</strong> ${escapeHtml(learnedComponents.join(' · '))}</div>` : '<div class="small text-secondary mt-2">TargetScore currently reflects base evidence only; no accepted learned component matched.</div>'}
       <div class="mt-3"><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div>
     </div></article>`;
   }).join('');
@@ -571,11 +627,16 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   const contribution = queueItem.contributionSummary || score.contribution?.summary || '';
   const archetype = queueItem.replyArchetype || score.contribution?.archetype || '';
   const components = score.components || {};
+  const learnedPriority = score.learnedAdjustment || score.explanation?.learning || null;
+  const learnedPriorityLine = Number(learnedPriority?.learnedAdjustment || 0) !== 0
+    ? `<div class="small text-primary mt-2"><strong>Accepted learned contribution:</strong> EngagePriority ${escapeHtml(score.preLearnedPriority ?? score.basePriority ?? 0)} → ${escapeHtml(score.engagePriority ?? queueItem.priority)} (${Number(learnedPriority.learnedAdjustment) >= 0 ? '+' : ''}${escapeHtml(learnedPriority.learnedAdjustment)}).</div>`
+    : '<div class="small text-secondary mt-2">EngagePriority currently has no accepted learned adjustment.</div>';
 
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
     <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(relationshipLabel(queueItem.engagementKind || 'initial_reply'))}</div><div class="small text-secondary">${escapeHtml(ageLabel)} · expires ${escapeHtml(expiryLabel)}${activeOverride ? ' · active conversation override' : ''} · ${escapeHtml(queueItem.status)}</div></div><div class="text-end"><div class="fs-4 fw-semibold">${Math.round(queueItem.priority)}</div><div class="small text-secondary">EngagePriority</div></div></div>
     ${relationshipBadges}
     <div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span></div>
+    ${learnedPriorityLine}
     <div class="mt-3"><strong>Contribution:</strong> <span class="badge text-bg-info">${escapeHtml(relationshipLabel(archetype))}</span> ${escapeHtml(contribution || 'No contribution stored.')}</div>
     <div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary mb-1">Exact source</div><div class="text-break">${escapeHtml(candidate.text)}</div></div></div>
     ${draft ? `<div class="mt-3">${gatePanel(draft.gates)}<div class="small text-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</div><div class="mt-2 text-break">${escapeHtml(draft.body || '')}</div></div>` : ''}
@@ -723,6 +784,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   const drafts = activeSource === 'drafts' ? listDrafts({ limit: 100 }) : [];
   const performance = activeSource === 'performance' ? getPerformanceSnapshot(30) : null;
   const accountHealth = activeSource === 'health' || activeSource === 'engage' ? getAccountHealthSummary() : null;
+  const learningOverview = activeSource === 'learning' ? getLearningOverview() : null;
 
   let decision;
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
@@ -738,6 +800,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
   else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot, fixed-window outcomes, and associated follower conversion.`;
   else if (activeSource === 'experiments') decision = `${listExperiments({ limit: 500 }).length} declared experiments · assignment remains explicit and observational.`;
+  else if (activeSource === 'learning') decision = `${learningOverview.suggested} suggested · ${learningOverview.accepted} accepted · ${learningOverview.retired} retired learned rules; only accepted bounded rules affect recommendations.`;
   else if (activeSource === 'audience') {
     const summary = getAudienceSummary();
     decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are raw audience observations.`;
@@ -767,6 +830,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['audience', 'Audience'],
     ['performance', 'Performance'],
     ['experiments', `Experiments (${listExperiments({ limit: 500 }).length})`],
+    ['learning', `Learned Strategy (${listAcceptedLearnedRules({ includeSuspended: true, limit: 500 }).length})`],
     ['github', 'GitHub'],
     ['hn', 'Hacker News'],
     ['all', 'All'],
@@ -778,6 +842,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
   else if (activeSource === 'experiments') content = experimentsView();
+  else if (activeSource === 'learning') content = learningView(learningOverview);
   else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
   else if (activeSource === 'health') content = accountHealthView();
   else if (activeSource === 'audience') content = audienceView(audienceError);
@@ -946,6 +1011,30 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: '/?source=experiments' }); res.end(); return;
     }
 
+    if (req.method === 'POST' && requestUrl.pathname === '/learning/refresh') {
+      const form = await readForm(req);
+      refreshLearnedRuleSuggestion({
+        experimentId: Number(form.get('experimentId')),
+        baselineLabel: form.get('baselineLabel'),
+        comparisonLabel: form.get('comparisonLabel'),
+        windowMinutes: form.get('windowMinutes') ? Number(form.get('windowMinutes')) : null,
+        mechanismTags: String(form.get('mechanismTags') || '').split(',').map((value) => value.trim()).filter(Boolean),
+      });
+      res.writeHead(303, { location: '/?source=learning' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/learning/accept') {
+      const form = await readForm(req);
+      acceptLearnedRule(Number(form.get('id')));
+      res.writeHead(303, { location: '/?source=learning' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/learning/retire') {
+      const form = await readForm(req);
+      retireLearnedRule(Number(form.get('id')), { reason: String(form.get('reason') || '').trim() });
+      res.writeHead(303, { location: '/?source=learning' }); res.end(); return;
+    }
+
     if (req.method === 'POST' && requestUrl.pathname === '/queue/schedule') {
       const form = await readForm(req);
       const scheduledRaw = form.get('scheduledAt');
@@ -1047,7 +1136,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'learning', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';

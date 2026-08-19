@@ -1,3 +1,5 @@
+import { applyAcceptedLearnedRules } from './learning.js';
+
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Number(value || 0)));
 }
@@ -167,14 +169,41 @@ export function scoreOpportunity(candidate, context = {}) {
   };
 
   const relationship = relationshipBreakdown(candidate, context.relationship || null);
-
-  return {
+  const base = {
     reachPotential: round(Object.values(reach).reduce((sum, value) => sum + value, 0)),
     followPotential: round(Object.values(follow).reduce((sum, value) => sum + value, 0)),
     conversationPotential: round(Object.values(conversation).reduce((sum, value) => sum + value, 0)),
     relationshipPotential: relationship.available
       ? round(relationship.relevance + relationship.followsYou + relationship.youFollow + relationship.mutual + relationship.topicOverlap)
       : 0,
+  };
+  const learningContext = {
+    source: candidate?.source || '',
+    topicTags: tags,
+    topic: tags,
+    format: context.format || context.pipeline || '',
+    mediaType: context.mediaType || 'none',
+    ...context.learningContext,
+  };
+  const learned = {
+    reachPotential: applyAcceptedLearnedRules(base.reachPotential, context.learnedRules || [], learningContext, {
+      adjustmentTarget: 'reach_potential', finalMin: 0, finalMax: 100, reviewContext: context.learningReviewContext || {},
+    }),
+    followPotential: applyAcceptedLearnedRules(base.followPotential, context.learnedRules || [], learningContext, {
+      adjustmentTarget: 'follow_potential', finalMin: 0, finalMax: 100, reviewContext: context.learningReviewContext || {},
+    }),
+    conversationPotential: applyAcceptedLearnedRules(base.conversationPotential, context.learnedRules || [], learningContext, {
+      adjustmentTarget: 'conversation_potential', finalMin: 0, finalMax: 100, reviewContext: context.learningReviewContext || {},
+    }),
+  };
+
+  return {
+    reachPotential: round(learned.reachPotential.finalValue),
+    followPotential: round(learned.followPotential.finalValue),
+    conversationPotential: round(learned.conversationPotential.finalValue),
+    relationshipPotential: base.relationshipPotential,
+    basePotentials: base,
+    learnedAdjustments: learned,
     breakdown: { reach, follow, conversation, relationship },
   };
 }

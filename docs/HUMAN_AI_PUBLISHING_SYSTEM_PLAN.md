@@ -730,12 +730,12 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: suggested/accepted/retired bounded learned rules for targeting, engagement, content, and timing with visible evidence/sample size.
 
 **Steps:**
-- [ ] Generate evidence-backed suggestions for target classes/score buckets, reply archetypes/age buckets, content formats/topics, and timing cohorts.
-- [ ] Store learned rules as `suggested` until explicit human acceptance; do not let one outcome rewrite strategy automatically.
-- [ ] Require evidence state/sample size in every recommendation and keep `insufficient/preliminary/directional/repeated` distinctions visible.
-- [ ] Apply only accepted learned rules as bounded adjustments after transparent base scoring; show base score and learned adjustment separately.
-- [ ] Let viral urgency and explicit human override supersede learned evergreen timing preferences.
-- [ ] Re-evaluate/retire rules when newer account evidence reverses them or `ALGORITHM_EVIDENCE_LEDGER.md` marks a linked mechanism stale.
+- [x] Generate evidence-backed suggestions for target classes/score buckets, reply archetypes/age buckets, content formats/topics, and timing cohorts from explicit Phase-4 comparisons.
+- [x] Store learned rules as `suggested` until explicit human acceptance; suggestion refresh cannot overwrite accepted/retired rule history.
+- [x] Require evidence state/sample size in every recommendation and keep `insufficient/preliminary/directional/repeated` distinctions visible.
+- [x] Apply only accepted learned rules as bounded adjustments after transparent base scoring; show base and learned contribution separately on affected operator surfaces.
+- [x] Let viral urgency, hard eligibility, and explicit human route/schedule override supersede learned preference.
+- [x] Surface review/retirement signals when newer account evidence reverses direction or a linked `ALGORITHM_EVIDENCE_LEDGER.md` mechanism is retired/materially changed; retirement remains explicit rather than automatic.
 
 **Acceptance criteria:**
 - The system can explain an account-specific target/reply/content/timing recommendation from observed history, but no learned rule affects production behavior until human acceptance.
@@ -981,7 +981,7 @@ Plan: `plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`
 - Performance + Experiments dashboard and `measurements` / `experiments` / explicit create/assign / summary bridge commands;
 - no automatic learned-rule application or empirical-variable promotion.
 
-### Phase 5 — Learned strategy
+### Phase 5 — Learned strategy — IMPLEMENTED
 
 Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 
@@ -989,6 +989,10 @@ Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 - bounded adjustments applied only after human acceptance;
 - base vs learned contribution remains visible;
 - evidence-ledger changes can trigger review/retirement of stale learned rules.
+- persisted `suggested` / `accepted` / `retired` lifecycle with refresh preserving accepted/retired history;
+- dashboard and bridge controls for inspect/refresh/explicit accept/explicit retire;
+- accepted rules consumed as bounded context by TargetScore components, opportunity potentials, EngagePriority/soft health pressure, and main-feed scheduler priority;
+- hard gates, expiry, required approval, explicit human route/timing, and observed hard Account Health constraints remain authoritative.
 
 ## Risks and Boundaries
 

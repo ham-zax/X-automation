@@ -1,4 +1,5 @@
 import { NICHE_GROUPS, classifyNiche } from './strategy.js';
+import { applyAcceptedLearnedRules } from './learning.js';
 
 export const TARGET_CLASSES = ['distribution', 'relationship', 'authority', 'customer_density', 'source'];
 export const RELATIONSHIP_STAGES = ['observed', 'interacted', 'responsive', 'recurring', 'connected', 'mutual'];
@@ -331,24 +332,6 @@ export function scoreRelationshipTarget(profile = {}, context = {}) {
   const reach = reachModifier(profile, context);
   const authority = authorityScore(profile, topic.value, context);
   const density = customerDensity(profile, topic.value, context);
-
-  const components = {
-    topicFit: topic.value,
-    audienceOverlap: audience.value,
-    conversationQuality: conversation.value,
-    replyVisibility: visibility.value,
-    relationshipPotential: potential.value,
-    reachModifier: reach.value,
-  };
-  const available = Object.entries(CORE_WEIGHTS).filter(([name]) => finite(components[name]));
-  const totalWeight = available.reduce((sum, [, weight]) => sum + weight, 0);
-  const logMean = available.reduce((sum, [name, weight]) => {
-    const normalizedWeight = totalWeight ? weight / totalWeight : 0;
-    return sum + normalizedWeight * Math.log(Math.max(Number(components[name]), 10) / 100);
-  }, 0);
-  const base = available.length ? 100 * Math.exp(logMean) : 0;
-  const targetScore = round(clamp(base + reach.value));
-  const missingComponents = Object.keys(CORE_WEIGHTS).filter((name) => !finite(components[name]));
   const evidence = {
     topicFit: topic,
     audienceOverlap: audience,
@@ -359,10 +342,54 @@ export function scoreRelationshipTarget(profile = {}, context = {}) {
     customerDensity: density,
   };
   const classification = classifyTarget(profile, { ...context, events }, evidence);
+  const baseComponents = {
+    topicFit: topic.value,
+    audienceOverlap: audience.value,
+    conversationQuality: conversation.value,
+    replyVisibility: visibility.value,
+    relationshipPotential: potential.value,
+    reachModifier: reach.value,
+  };
+  const learningContext = {
+    username: String(profile.username || '').replace(/^@/, '').toLowerCase(),
+    targetClass: classification.classes,
+    classes: classification.classes,
+    relationshipStage: profile.relationshipStage || 'observed',
+    topicTags: topic.niche.tags || [],
+    ...context.learningContext,
+  };
+  const learning = {};
+  const components = { ...baseComponents };
+  for (const name of Object.keys(CORE_WEIGHTS)) {
+    if (!finite(baseComponents[name])) continue;
+    const applied = applyAcceptedLearnedRules(baseComponents[name], context.learnedRules || [], learningContext, {
+      adjustmentTarget: 'target_score_component',
+      adjustmentComponent: name,
+      finalMin: 0,
+      finalMax: 100,
+      reviewContext: context.learningReviewContext || {},
+    });
+    components[name] = applied.finalValue;
+    learning[name] = applied;
+  }
+  const scoreFrom = (values) => {
+    const available = Object.entries(CORE_WEIGHTS).filter(([name]) => finite(values[name]));
+    const totalWeight = available.reduce((sum, [, weight]) => sum + weight, 0);
+    const logMean = available.reduce((sum, [name, weight]) => {
+      const normalizedWeight = totalWeight ? weight / totalWeight : 0;
+      return sum + normalizedWeight * Math.log(Math.max(Number(values[name]), 10) / 100);
+    }, 0);
+    return round(clamp((available.length ? 100 * Math.exp(logMean) : 0) + reach.value));
+  };
+  const targetScore = scoreFrom(components);
+  const baseTargetScore = scoreFrom(baseComponents);
+  const missingComponents = Object.keys(CORE_WEIGHTS).filter((name) => !finite(components[name]));
 
   return {
     targetScore,
+    baseTargetScore,
     components,
+    baseComponents,
     classes: classification.classes,
     explanation: {
       model: 'phase1b-target-score',
@@ -378,7 +405,8 @@ export function scoreRelationshipTarget(profile = {}, context = {}) {
       audienceOverlapMissingSignals: audience.missingSignals,
       relationshipPotential: potential.details,
       classReasons: classification.reasons,
-      reach: reach,
+      reach,
+      learning,
     },
     signals: {
       relevanceScore: topic.niche.relevanceScore,
