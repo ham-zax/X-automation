@@ -80,31 +80,31 @@ export async function unfollowAudienceUser(username) {
   if (!profile?.youFollow) throw new Error(`@${normalized} is not marked as currently followed.`);
   if (!process.env.AUTH_TOKEN) throw new Error('Missing AUTH_TOKEN.');
 
-  let browser;
   try {
-    browser = await createBrowser({ headless: true });
-    const page = await createPage(browser);
-    const browserCookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true }];
-    if (process.env.CT0) browserCookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
-    await page.setCookie(...browserCookies);
-    await page.goto(`https://x.com/${encodeURIComponent(normalized)}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
-
-    const button = await page.waitForSelector('[data-testid$="-unfollow"]', { timeout: 12_000 });
-    const testId = await page.evaluate((element) => element.getAttribute('data-testid') || '', button);
-    const userId = testId.match(/^(\d+)-unfollow$/)?.[1];
-    if (!userId) throw new Error('Could not resolve the current X user ID from the profile.');
+    const scraper = new Scraper();
+    const scraperCookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+    if (process.env.CT0) scraperCookies.push({ name: 'ct0', value: process.env.CT0 });
+    await scraper.setCookies(scraperCookies);
+    let xProfile;
+    try {
+      xProfile = await scraper.getProfile(normalized);
+    } catch (error) {
+      if (/not found|unavailable|suspended/i.test(String(error?.message || ''))) throw error;
+      const retryDelayMs = 1_000 + Math.floor(Math.random() * 2_001);
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      xProfile = await scraper.getProfile(normalized);
+    }
+    if (!xProfile?.id) throw new Error('Could not resolve the current X user ID from the profile API.');
 
     const cookieString = [
       `auth_token=${process.env.AUTH_TOKEN}`,
       process.env.CT0 ? `ct0=${process.env.CT0}` : '',
     ].filter(Boolean).join('; ');
     const client = new TwitterHttpClient({ cookies: cookieString, maxRetries: 0 });
-    const result = await unfollowUserHttp(client, userId);
+    const result = await unfollowUserHttp(client, xProfile.id);
     if (result?.success !== true) throw new Error('X did not return a successful unfollow response.');
   } catch (error) {
     throw new Error(`X did not complete the unfollow for @${normalized}: ${error.message}`);
-  } finally {
-    if (browser) await browser.close().catch(() => {});
   }
 
   const updated = setAudienceFollowState(normalized, { youFollow: false });

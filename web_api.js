@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { randomUUID } from 'node:crypto';
 import {
   fetchAccountPerformance,
   fetchGitHubTrending,
@@ -75,6 +76,50 @@ const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
 const DISCOVER_FEEDS = new Set(['for-you', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved']);
 const REFRESHABLE_FEEDS = new Set(['x', 'viral', 'github', 'hn', 'all']);
+const AUDIENCE_UNFOLLOW_JOBS = new Map();
+const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
+
+function findPendingAudienceUnfollowJob(username) {
+  for (const job of AUDIENCE_UNFOLLOW_JOBS.values()) {
+    if (job.username === username && job.status === 'pending') return job;
+  }
+  return null;
+}
+
+function startAudienceUnfollowJob(username) {
+  const normalized = String(username || '').replace(/^@/, '').trim().toLowerCase();
+  const existing = findPendingAudienceUnfollowJob(normalized);
+  if (existing) return existing;
+
+  const job = {
+    id: randomUUID(),
+    username: normalized,
+    status: 'pending',
+    startedAt: Date.now(),
+    completedAt: null,
+    profile: null,
+    error: null,
+  };
+  AUDIENCE_UNFOLLOW_JOBS.set(job.id, job);
+
+  void unfollowAudienceUser(normalized)
+    .then((updated) => {
+      job.status = 'success';
+      job.completedAt = Date.now();
+      job.profile = formatAudienceProfile(updated);
+    })
+    .catch((error) => {
+      job.status = 'failed';
+      job.completedAt = Date.now();
+      job.error = String(error?.message || error || 'Unfollow failed.');
+    })
+    .finally(() => {
+      const timer = setTimeout(() => AUDIENCE_UNFOLLOW_JOBS.delete(job.id), AUDIENCE_UNFOLLOW_JOB_TTL_MS);
+      timer.unref?.();
+    });
+
+  return job;
+}
 
 export const STATUS_LABELS = Object.freeze({
   triage: 'Needs a decision',
@@ -1352,9 +1397,24 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 2 && segments[0] === 'audience' && segments[1] === 'unfollow') {
       const payload = await readBody();
       if (payload.confirmUnfollow !== true) throw new Error('Explicit unfollow confirmation is required.');
-      const username = String(payload.username || '');
-      const updated = await unfollowAudienceUser(username);
-      return sendSuccess({ username: updated.username, profile: formatAudienceProfile(updated) });
+      const username = String(payload.username || '').replace(/^@/, '').trim().toLowerCase();
+      if (!username) throw new Error('Username is required.');
+      const job = startAudienceUnfollowJob(username);
+      return sendJson(202, { state: 'success', data: { jobId: job.id, username: job.username, status: job.status } });
+    }
+
+    if (method === 'GET' && segments.length === 3 && segments[0] === 'audience' && segments[1] === 'unfollow') {
+      const job = AUDIENCE_UNFOLLOW_JOBS.get(segments[2]);
+      if (!job) return sendNotFound('Unfollow job not found.');
+      return sendSuccess({
+        jobId: job.id,
+        username: job.username,
+        status: job.status,
+        profile: job.profile,
+        error: job.error,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+      });
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'improve') {

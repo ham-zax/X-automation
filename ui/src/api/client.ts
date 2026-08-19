@@ -547,6 +547,16 @@ export interface AudienceData {
   relevantFollowers: AudienceProfile[]
 }
 
+interface AudienceUnfollowJob {
+  jobId: string
+  username: string
+  status: 'pending' | 'success' | 'failed'
+  profile?: AudienceProfile | null
+  error?: string | null
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 export function useAudience() {
   return useQuery({
     queryKey: ['audience'],
@@ -557,8 +567,18 @@ export function useAudience() {
 
 export function useAudienceUnfollow() {
   const queryClient = useQueryClient()
-  return useMutation<unknown, Error, string>({
-    mutationFn: (username: string) => postApi('/audience/unfollow', { username, confirmUnfollow: true }),
+  return useMutation<AudienceUnfollowJob, Error, string>({
+    mutationFn: async (username: string) => {
+      const started = await postApi<AudienceUnfollowJob>('/audience/unfollow', { username, confirmUnfollow: true })
+      const deadline = Date.now() + 60_000
+      while (Date.now() < deadline) {
+        const job = await fetchApi<AudienceUnfollowJob>(`/audience/unfollow/${encodeURIComponent(started.jobId)}`)
+        if (job.status === 'success') return job
+        if (job.status === 'failed') throw new ApiError(job.error || `X did not complete the unfollow for @${username}.`)
+        await wait(750)
+      }
+      throw new ApiError(`Unfollow for @${username} is still running in the background. Refresh Audience shortly to see the final state.`)
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['audience'] })
     },

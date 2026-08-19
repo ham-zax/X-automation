@@ -131,8 +131,8 @@ export function Audience() {
 
       {data.counts.outsideFollowing > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
-          <strong>Cleanup review: 10 at a time.</strong> Each Unfollow button performs one explicit unfollow immediately.
-          {' '}Accounts that follow you back are flagged for extra review. Nothing is removed until X and local state confirm the unfollow.
+          <strong>Cleanup review: 10 at a time.</strong> Each Unfollow button queues one explicit unfollow in the background and shows a pending state immediately.
+          {' '}Accounts that follow you back are flagged for extra review. Nothing is removed locally until X confirms the unfollow.
         </div>
       )}
 
