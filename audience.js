@@ -9,6 +9,7 @@ import {
   refreshRelationshipFromAudience,
   replaceAudienceSnapshot,
   setAppState,
+  setAudienceFollowState,
 } from './store.js';
 
 function containsProfileTerm(text, term) {
@@ -84,6 +85,24 @@ async function scrapeRelationship(page, url, target, relationshipText) {
   }
 
   return [...seen.values()].map(normalizeCell);
+}
+
+export async function unfollowAudienceUser(username) {
+  const normalized = String(username || '').replace(/^@/, '').trim().toLowerCase();
+  if (!normalized) throw new Error('Username is required.');
+  const profile = getAudienceProfile(normalized);
+  if (!profile?.youFollow) throw new Error(`@${normalized} is not marked as currently followed.`);
+  if (!process.env.AUTH_TOKEN) throw new Error('Missing AUTH_TOKEN.');
+
+  const scraper = new Scraper();
+  const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+  if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
+  await scraper.setCookies(cookies);
+  await scraper.unfollowUser(normalized);
+
+  const updated = setAudienceFollowState(normalized, { youFollow: false });
+  if (getRelationshipProfile(normalized)) refreshRelationshipFromAudience(updated);
+  return updated;
 }
 
 export async function syncAudience(username = 'ham_zax') {

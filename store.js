@@ -1046,6 +1046,16 @@ export function getAudienceProfile(username) {
   return decodeAudience(db.prepare('SELECT * FROM audience_profiles WHERE username = ? COLLATE NOCASE').get(String(username || '').replace(/^@/, '').toLowerCase()));
 }
 
+export function setAudienceFollowState(username, { youFollow } = {}) {
+  const normalized = String(username || '').replace(/^@/, '').trim().toLowerCase();
+  if (!normalized) throw new Error('Audience username is required.');
+  if (typeof youFollow !== 'boolean') throw new Error('Audience youFollow state must be boolean.');
+  const result = db.prepare('UPDATE audience_profiles SET you_follow = ?, last_seen_at = ? WHERE username = ? COLLATE NOCASE')
+    .run(youFollow ? 1 : 0, Date.now(), normalized);
+  if (!result.changes) throw new Error(`Audience profile not found: @${normalized}`);
+  return getAudienceProfile(normalized);
+}
+
 export function listAudienceProfiles({ followsYou, youFollow, minScore = 0, limit = 100 } = {}) {
   const where = ['relevance_score >= ?'];
   const params = [Number(minScore || 0)];

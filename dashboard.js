@@ -17,7 +17,7 @@ import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft, weighte
 import { generateWriterOutput } from './writer_runtime.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
-import { syncAudience } from './audience.js';
+import { syncAudience, unfollowAudienceUser } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
@@ -707,14 +707,14 @@ function audienceView(error = null) {
       <td>${relationship}</td>
       <td class="small text-secondary">${escapeHtml(signals)}</td>
       <td class="small text-secondary">${profile.lastSeenAt ? escapeHtml(new Date(profile.lastSeenAt).toLocaleDateString()) : 'unknown'}</td>
-      <td><a class="btn btn-outline-danger btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank" rel="noopener">Unfollow on X ↗</a></td>
+      <td><div class="d-flex gap-2 flex-wrap"><form method="post" action="/audience/unfollow" class="m-0"><input type="hidden" name="username" value="${escapeHtml(profile.username)}"><input type="hidden" name="confirmUnfollow" value="1"><button class="btn btn-danger btn-sm" type="submit" onclick="return confirm('Unfollow @${escapeHtml(profile.username)}? This changes your X account immediately.')">Unfollow</button></form><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank" rel="noopener">View profile ↗</a></div></td>
     </tr>`;
   };
   const cleanupBatch = outsideFollowing.slice(0, 10);
   const cleanupRows = cleanupBatch.map(outsideRow).join('');
   const remainingRows = outsideFollowing.slice(10).map(outsideRow).join('');
-  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">Review the lowest-fit accounts manually. This dashboard intentionally does not automate unfollowing. Start with the 10 shown below, make each decision on X, then refresh Audience before continuing.</p></div></div>
-    ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> X does not publish a numeric safe unfollow quota; avoid bulk/aggressive follow churn. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${cleanupRows}</tbody></table></div>${remainingRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - cleanupBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow are currently below the niche threshold.</div>'}
+  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">Review the lowest-fit accounts one at a time. Unfollow uses your authenticated XActions session immediately after browser confirmation; there is no bulk unfollow action.</p></div></div>
+    ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> Each Unfollow button performs one explicit XActions unfollow after confirmation. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${cleanupRows}</tbody></table></div>${remainingRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - cleanupBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow are currently below the niche threshold.</div>'}
   </section>`;
   return stats
     + outsideSection
@@ -1505,6 +1505,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
       res.end(await fs.readFile(path.resolve('dashboard-client.js')));
       return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/audience/unfollow') {
+      const form = await readForm(req);
+      if (form.get('confirmUnfollow') !== '1') throw new Error('Explicit unfollow confirmation is required.');
+      await unfollowAudienceUser(form.get('username'));
+      res.writeHead(303, { location: '/?source=audience' }); res.end(); return;
     }
 
     if (req.method === 'POST' && ['/candidate/save', '/interesting'].includes(requestUrl.pathname)) {
