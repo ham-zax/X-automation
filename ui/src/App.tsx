@@ -1,7 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Today } from './features/today/Today'
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 const NAV_ITEMS = [
   { id: 'today', label: 'Today' },
@@ -41,10 +49,14 @@ function Shell() {
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-          <h2 className="text-2xl font-semibold mb-4 capitalize">{active}</h2>
-          <p className="text-slate-600">This workspace is being migrated from the legacy dashboard.</p>
-        </div>
+        {active === 'today' ? (
+          <Today />
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
+            <h2 className="text-2xl font-semibold mb-4 capitalize">{active}</h2>
+            <p className="text-slate-600">This workspace is being migrated from the legacy dashboard.</p>
+          </div>
+        )}
       </main>
     </div>
   )
