@@ -1312,8 +1312,16 @@ export function applyRelationshipEvent(username) {
     firstSeenAt: events[0].occurredAt,
     lastSeenAt: events[0].occurredAt,
   };
-  return upsertRelationshipProfile(refreshRelationshipProfile(current, {
+  const audience = getAudienceProfile(normalized);
+  const input = audience ? {
+    ...current,
+    followsYou: audience.followsYou,
+    youFollow: audience.youFollow,
+    lastSeenAt: Math.max(Number(current.lastSeenAt || 0), Number(audience.lastSeenAt || 0)),
+  } : current;
+  return upsertRelationshipProfile(refreshRelationshipProfile(input, {
     events,
+    authoritativeFollowState: Boolean(audience),
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   }));
 }
@@ -1338,6 +1346,7 @@ export function refreshRelationshipFromAudience(audienceProfile) {
   };
   return upsertRelationshipProfile(refreshRelationshipProfile(input, {
     events,
+    authoritativeFollowState: true,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   }));
 }
@@ -1428,6 +1437,12 @@ export function getLatestHealthObservation(type = null) {
     ? db.prepare('SELECT * FROM account_health_observations WHERE type = ? ORDER BY observed_at DESC, id DESC LIMIT 1').get(type)
     : db.prepare('SELECT * FROM account_health_observations ORDER BY observed_at DESC, id DESC LIMIT 1').get();
   return decodeAccountHealthObservation(row);
+}
+
+function listHardAccountHealthObservations() {
+  return db.prepare(`SELECT * FROM account_health_observations
+    WHERE type IN ('visibility_label_observed', 'visibility_label_cleared', 'platform_challenge_observed', 'platform_restriction_observed')
+    ORDER BY observed_at ASC, id ASC`).all().map(decodeAccountHealthObservation);
 }
 
 export function recordUnderTheHoodSnapshot(report) {
@@ -1531,9 +1546,10 @@ export function getAccountHealthSummary({ now = Date.now() } = {}) {
   const sevenDaysAgo = timestamp - 7 * 24 * 3_600_000;
   const thirtyDaysAgo = timestamp - 30 * 24 * 3_600_000;
   const observations = listAccountHealthObservations({ limit: 200 });
+  const latestUnderTheHood = getLatestHealthObservation('under_the_hood_snapshot');
   const effectiveObservations = [
-    ...observations.filter((observation) => observation.type !== 'under_the_hood_snapshot'),
-    ...currentUnderTheHoodEvidence(observations),
+    ...listHardAccountHealthObservations(),
+    ...currentUnderTheHoodEvidence(latestUnderTheHood ? [latestUnderTheHood] : []),
   ];
   const profiles = listRelationshipProfiles({ minTargetScore: 0, limit: 1000 });
   const events30d = recentRelationshipEvents(thirtyDaysAgo);
@@ -1603,7 +1619,7 @@ export function getAccountHealthSummary({ now = Date.now() } = {}) {
     health,
     observations,
     latestObservation: observations[0] || null,
-    latestUnderTheHood: observations.find((observation) => observation.type === 'under_the_hood_snapshot') || null,
+    latestUnderTheHood,
     networkQuality,
     interactionYield,
     repetition,
@@ -1879,7 +1895,12 @@ export function createExperiment(definition = {}) {
 export function setExperimentStatus(id, status) {
   const normalized = String(status || '');
   if (!EXPERIMENT_STATUSES.has(normalized)) throw new Error(`Invalid experiment status: ${normalized || 'missing'}`);
-  if (!getExperiment(id)) throw new Error(`Experiment not found: ${id}`);
+  const current = getExperiment(id);
+  if (!current) throw new Error(`Experiment not found: ${id}`);
+  if (current.status === normalized) return current;
+  const allowed = (current.status === 'draft' && normalized === 'active')
+    || (current.status === 'active' && normalized === 'completed');
+  if (!allowed) throw new Error(`Invalid experiment status transition: ${current.status} -> ${normalized}`);
   const now = Date.now();
   db.prepare(`UPDATE experiments SET status = ?, started_at = CASE WHEN ? = 'active' THEN COALESCE(started_at, ?) ELSE started_at END,
     ended_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END WHERE id = ?`)
@@ -1937,10 +1958,17 @@ function assignmentItem(queueItem, context = {}) {
 export function assignExperimentVariant(candidateKey, experimentId, variantLabel, { context = {}, timingHistorySufficient = false, assignedAt = Date.now() } = {}) {
   const queueItem = getQueueItemByCandidate(candidateKey);
   if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
-  if (['publishing', 'published', 'failed', 'ignored', 'expired'].includes(queueItem.status)) throw new Error('Experiment assignment requires a future/non-terminal queue item.');
   const experiment = getExperiment(experimentId);
   if (!experiment) throw new Error(`Experiment not found: ${experimentId}`);
-  if (experiment.status === 'completed') throw new Error('Completed experiments cannot receive new assignments.');
+  if (experiment.status !== 'active') throw new Error('Experiment assignment requires an active experiment.');
+  if (queueItem.experimentVariantId != null) {
+    const assigned = db.prepare('SELECT experiment_id, label FROM experiment_variants WHERE id = ?').get(Number(queueItem.experimentVariantId));
+    if (assigned && Number(assigned.experiment_id) === experiment.id && String(assigned.label) === String(variantLabel)) return queueItem;
+    throw new Error('Queue item already has an experiment assignment; each item supports one declared experiment assignment.');
+  }
+  if (!['triage', 'researching', 'watching', 'drafting'].includes(queueItem.status)) {
+    throw new Error('Experiment assignment must happen before review, approval, or publication finalizes the treatment.');
+  }
   const timestamp = Number(assignedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Experiment assignedAt must be a positive timestamp.');
   const profile = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;

@@ -6,6 +6,7 @@ import {
   getAudienceProfile,
   getNewFollowerQuality,
   getRelationshipProfile,
+  listAudienceProfiles,
   refreshRelationshipFromAudience,
   replaceAudienceSnapshot,
   setAppState,
@@ -124,14 +125,21 @@ export async function syncAudience(username = 'ham_zax') {
     const following = await scrapeRelationship(page, `https://x.com/${username}/following`, Math.max(profile.followingCount, 1), 'Following');
     const capturedAt = Date.now();
     const previousSyncAt = Number(getAppState('audience_last_sync_at', 0) || 0);
+    const followersComplete = followers.length >= Number(profile.followersCount || 0);
+    const followingComplete = following.length >= Number(profile.followingCount || 0);
+    const previouslyActive = [
+      ...(followersComplete ? listAudienceProfiles({ followsYou: true, minScore: 0, limit: 5000 }) : []),
+      ...(followingComplete ? listAudienceProfiles({ youFollow: true, minScore: 0, limit: 5000 }) : []),
+    ];
     const summary = replaceAudienceSnapshot({
       followers,
       following,
       observedAt: capturedAt,
-      followersComplete: followers.length >= Number(profile.followersCount || 0),
-      followingComplete: following.length >= Number(profile.followingCount || 0),
+      followersComplete,
+      followingComplete,
     });
     const relationshipRefresh = refreshAudienceRelationships([
+      ...previouslyActive.map((profile) => profile.username),
       ...followers.map((profile) => profile.username),
       ...following.map((profile) => profile.username),
     ]);

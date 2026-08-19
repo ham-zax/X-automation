@@ -176,6 +176,9 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
 
   ensureQueueItem(key);
   const previousQueueItem = getQueueItemByCandidate(key);
+  if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
+    throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
+  }
   const state = routeState(pipeline);
   let draft = getDraftByCandidate(key);
   if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
@@ -295,6 +298,9 @@ export function resolveEngagementItem(key, resolution, reason = '') {
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement') throw new Error(`Engagement item not found: ${key}`);
   if (!['ignore', 'expire'].includes(resolution)) throw new Error(`Invalid engagement resolution: ${resolution}`);
+  if (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt) {
+    throw new Error('Published or publishing engagement items cannot be resolved backward.');
+  }
   const status = resolution === 'ignore' ? 'ignored' : 'expired';
   return saveQueueItem({
     ...queueItem,

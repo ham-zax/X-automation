@@ -166,9 +166,12 @@ export function summarizeRelationshipEvents(events = []) {
   };
 }
 
-function effectiveFollowState(profile, events = []) {
+function effectiveFollowState(profile, events = [], context = {}) {
   let followsYou = Boolean(profile?.followsYou);
   let youFollow = Boolean(profile?.youFollow);
+  if (context.authoritativeFollowState === true) {
+    return { followsYou, youFollow, mutual: followsYou && youFollow };
+  }
   for (const event of events) {
     const type = eventType(event);
     if (type === 'target_follow' || type === 'mutual_reached') followsYou = true;
@@ -204,8 +207,8 @@ function recurringExchange(events = []) {
   return exchanges.at(-1).at - exchanges[0].at >= DAY_MS;
 }
 
-export function deriveRelationshipStage(profile = {}, events = []) {
-  const follow = effectiveFollowState(profile, events);
+export function deriveRelationshipStage(profile = {}, events = [], context = {}) {
+  const follow = effectiveFollowState(profile, events, context);
   if (follow.mutual) return 'mutual';
   if (follow.followsYou) return 'connected';
   if (recurringExchange(events)) return 'recurring';
@@ -241,9 +244,9 @@ function replyVisibility(profile, events, context = {}) {
   };
 }
 
-function relationshipPotential(profile, events) {
+function relationshipPotential(profile, events, context = {}) {
   const summary = summarizeRelationshipEvents(events);
-  const follow = effectiveFollowState(profile, events);
+  const follow = effectiveFollowState(profile, events, context);
   const sharedTopicSignal = Math.min(15, profileNiche(profile).tags.length * 5);
   const responseSignal = summary.targetResponses
     ? 35 + Math.min(10, Math.max(0, summary.targetResponses - 1) * 5)
@@ -287,7 +290,7 @@ function reachModifier(profile, context = {}) {
 function classifyTarget(profile, context, evidence) {
   const classes = [];
   const reasons = {};
-  const follow = effectiveFollowState(profile, context.events || []);
+  const follow = effectiveFollowState(profile, context.events || [], context);
   const hasInteraction = evidence.relationshipPotential.details.meaningfulOutbound > 0
     || evidence.relationshipPotential.details.targetResponses > 0;
   const hasAudienceEvidence = finite(context.sharedClusterScore) || finite(context.audienceEvidenceScore);
@@ -327,8 +330,8 @@ export function scoreRelationshipTarget(profile = {}, context = {}) {
   const visibility = replyVisibility(profile, events, context);
   const potentialObserved = observedComponent(profile, context, 'relationshipPotential');
   const potential = potentialObserved == null
-    ? relationshipPotential(profile, events)
-    : { value: round(potentialObserved), details: relationshipPotential(profile, events).details };
+    ? relationshipPotential(profile, events, context)
+    : { value: round(potentialObserved), details: relationshipPotential(profile, events, context).details };
   const reach = reachModifier(profile, context);
   const authority = authorityScore(profile, topic.value, context);
   const density = customerDensity(profile, topic.value, context);
@@ -422,8 +425,8 @@ export function refreshRelationshipProfile(profile = {}, context = {}) {
   const events = Array.isArray(context.events) ? context.events : [];
   const now = Number(context.now || Date.now());
   const summary = summarizeRelationshipEvents(events);
-  const follow = effectiveFollowState(profile, events);
-  const stage = deriveRelationshipStage({ ...profile, ...follow }, events);
+  const follow = effectiveFollowState(profile, events, context);
+  const stage = deriveRelationshipStage({ ...profile, ...follow }, events, context);
   const score = scoreRelationshipTarget({ ...profile, ...follow, ...summary }, { ...context, events });
   const eventTimes = events.map(eventTime).filter(Boolean);
   const firstSeenAt = Number(profile.firstSeenAt || profile.lastSeenAt || (eventTimes.length ? Math.min(...eventTimes) : now));

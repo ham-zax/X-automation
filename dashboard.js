@@ -45,6 +45,7 @@ import {
   getCandidate,
   getDraft,
   getDraftByCandidate,
+  getExperiment,
   getExperimentSummary,
   getLearningOverview,
   getMainFeedScheduleItem,
@@ -74,6 +75,7 @@ import {
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
   saveDraft,
+  setExperimentStatus,
   setMainFeedSchedule,
   upsertCandidates,
 } from './store.js';
@@ -793,20 +795,27 @@ function experimentsView() {
     const summaries = network ? [['Conversation outcomes', result.summary]] : Object.entries(result.byWindow || {}).map(([window, summary]) => [`${window}m window`, summary]);
     const evidence = summaries.map(([label, summary]) => summary ? `<span class="badge text-bg-light border">${escapeHtml(label)} · ${escapeHtml(evidenceLabel(summary.evidence?.state || 'insufficient'))}</span>` : '').join(' ');
     const assignedItems = listExperimentAssignments(experiment.id);
-    const candidates = queueItems.filter((item) => {
-      if (['published', 'publishing', 'ignored', 'expired'].includes(item.status)) return false;
+    const candidates = experiment.status === 'active' ? queueItems.filter((item) => {
+      if (item.experimentVariantId != null || !['triage', 'researching', 'watching', 'drafting'].includes(item.status)) return false;
       return network ? item.lane === 'engagement' : ['main', 'main_feed'].includes(item.lane);
-    });
+    }) : [];
     const candidateOptions = candidates.map((item) => {
       const candidate = getCandidate(item.candidateKey);
       const label = network && item.targetUsername ? `@${item.targetUsername}` : (candidate?.title || item.candidateKey);
       return `<option value="${escapeHtml(item.candidateKey)}">${escapeHtml(label)} · ${escapeHtml(statusLabel(item.status))}</option>`;
     }).join('');
-    const assignment = candidates.length
-      ? `<form method="post" action="/experiment/assign" class="row g-2 align-items-end mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="col-md-6"><label class="form-label small">Use this test on</label><select class="form-select form-select-sm" name="key">${candidateOptions}</select></div><div class="col-md-4"><label class="form-label small">Use option</label><select class="form-select form-select-sm" name="variant">${experiment.variants.map((variant) => `<option value="${escapeHtml(variant.label)}">${escapeHtml(variant.label)}</option>`).join('')}</select></div><div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Assign option</button></div>${experiment.dimension === 'timing_bucket' ? '<div class="col-12"><label class="small"><input class="form-check-input me-1" type="checkbox" name="timingHistorySufficient" value="1"> I have enough prior timing history to use this timing test.</label></div>' : ''}<details class="col-12"><summary class="small">Advanced assignment context</summary><input class="form-control form-control-sm mt-2" name="contextJson" value="{}"></details></form>`
-      : '<div class="small text-secondary mt-3">No eligible current items are available for explicit assignment.</div>';
+    const assignment = experiment.status === 'draft'
+      ? `<form method="post" action="/experiment/status" class="mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><input type="hidden" name="status" value="active"><button class="btn btn-outline-primary btn-sm" type="submit">Activate test</button><span class="small text-secondary ms-2">Draft tests cannot be assigned until activated.</span></form>`
+      : experiment.status === 'completed'
+        ? '<div class="small text-secondary mt-3">This test is complete and cannot receive new assignments.</div>'
+        : candidates.length
+          ? `<form method="post" action="/experiment/assign" class="row g-2 align-items-end mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="col-md-6"><label class="form-label small">Use this test on</label><select class="form-select form-select-sm" name="key">${candidateOptions}</select></div><div class="col-md-4"><label class="form-label small">Use option</label><select class="form-select form-select-sm" name="variant">${experiment.variants.map((variant) => `<option value="${escapeHtml(variant.label)}">${escapeHtml(variant.label)}</option>`).join('')}</select></div><div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Assign option</button></div>${experiment.dimension === 'timing_bucket' ? '<div class="col-12"><label class="small"><input class="form-check-input me-1" type="checkbox" name="timingHistorySufficient" value="1"> I have enough prior timing history to use this timing test.</label></div>' : ''}<details class="col-12"><summary class="small">Advanced assignment context</summary><input class="form-control form-control-sm mt-2" name="contextJson" value="{}"></details></form>`
+          : '<div class="small text-secondary mt-3">No unassigned pre-review items are available for this test.</div>';
+    const lifecycleAction = experiment.status === 'active'
+      ? `<form method="post" action="/experiment/status" class="mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><input type="hidden" name="status" value="completed"><button class="btn btn-outline-secondary btn-sm" type="submit" onclick="return confirm('Complete this test? It will stop accepting new assignments.')">Complete test</button></form>`
+      : '';
     const technicalSummaries = summaries.map(([label, summary]) => experimentSummaryCard({ summary }, label)).join('');
-    return `<article class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><div class="d-flex justify-content-between gap-3 flex-wrap"><div><h2 class="h5 mb-1">${escapeHtml(experiment.name)}</h2><div class="small text-secondary">Testing ${escapeHtml(experimentDimensionLabel(experiment.dimension))} · success measured by ${escapeHtml(experimentMetricLabel(experiment.primaryMetric))}</div></div><span class="badge text-bg-light border">${escapeHtml(experiment.status)}</span></div><p class="mt-3 mb-2">${escapeHtml(experiment.hypothesis)}</p><div class="d-flex gap-2 flex-wrap">${evidence || '<span class="badge text-bg-light border">Not enough evidence yet</span>'}</div><div class="small text-secondary mt-2">${assignedItems.length} item${assignedItems.length === 1 ? '' : 's'} assigned. No automatic winner or causal claim is produced.</div>${assignment}<details class="mt-3"><summary>Technical evidence and exact configuration</summary><div class="small mt-3">Dimension <code>${escapeHtml(experiment.dimension)}</code> · metric <code>${escapeHtml(experiment.primaryMetric)}</code> · population <code>${escapeHtml(JSON.stringify(experiment.population))}</code> · minimum ${experiment.minimumCompletedPerVariant}/option</div><div class="mt-3">${technicalSummaries || '<div class="text-secondary small">No completed cohort summary yet.</div>'}</div></details></div></article>`;
+    return `<article class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><div class="d-flex justify-content-between gap-3 flex-wrap"><div><h2 class="h5 mb-1">${escapeHtml(experiment.name)}</h2><div class="small text-secondary">Testing ${escapeHtml(experimentDimensionLabel(experiment.dimension))} · success measured by ${escapeHtml(experimentMetricLabel(experiment.primaryMetric))}</div></div><span class="badge text-bg-light border">${escapeHtml(experiment.status)}</span></div><p class="mt-3 mb-2">${escapeHtml(experiment.hypothesis)}</p><div class="d-flex gap-2 flex-wrap">${evidence || '<span class="badge text-bg-light border">Not enough evidence yet</span>'}</div><div class="small text-secondary mt-2">${assignedItems.length} item${assignedItems.length === 1 ? '' : 's'} assigned. No automatic winner or causal claim is produced.</div>${assignment}${lifecycleAction}<details class="mt-3"><summary>Technical evidence and exact configuration</summary><div class="small mt-3">Dimension <code>${escapeHtml(experiment.dimension)}</code> · metric <code>${escapeHtml(experiment.primaryMetric)}</code> · population <code>${escapeHtml(JSON.stringify(experiment.population))}</code> · minimum ${experiment.minimumCompletedPerVariant}/option</div><div class="mt-3">${technicalSummaries || '<div class="text-secondary small">No completed cohort summary yet.</div>'}</div></details></div></article>`;
   }).join('');
   return create + (cards || '<div class="alert alert-secondary">No tests yet. Create one when you have a specific question worth comparing.</div>') + `<details class="mt-5"><summary class="text-secondary">Legacy advanced experiment controls</summary><div class="mt-3">${technicalExperimentsView()}</div></details><script>(()=>{const d=document.getElementById('test-dimension');const m=document.getElementById('test-primary-metric');if(!d||!m)return;const sync=()=>{const selected=d.options[d.selectedIndex];const kind=selected?.dataset?.kind||'content';let first=null;for(const option of m.options){const show=option.dataset.kind===kind;option.hidden=!show;option.disabled=!show;if(show&&first==null)first=option;}if(m.selectedOptions[0]?.disabled&&first)first.selected=true;};d.addEventListener('change',sync);sync();})();</script>`;
 }
@@ -972,7 +981,15 @@ function accountHealthView() {
   const observations = summary.observations.slice(0, 20);
   const manualTypes = ACCOUNT_HEALTH_OBSERVATION_TYPES.filter((type) => type !== 'under_the_hood_snapshot');
   const reasonHtml = reasons.length
-    ? reasons.map((reason) => `<li><strong>${escapeHtml(relationshipLabel(reason.code))}</strong> — ${escapeHtml(reason.message)} <span class="text-secondary">(${escapeHtml(reason.evidence || '')})</span></li>`).join('')
+    ? reasons.map((reason) => {
+      const provenance = reason.provenance || {};
+      const canResolve = ['platform_challenge_observed', 'platform_restriction_observed'].includes(reason.code)
+        && provenance.source && provenance.sourceRef;
+      const resolveAction = canResolve
+        ? `<form method="post" action="/health/observe" class="d-inline ms-2"><input type="hidden" name="type" value="${escapeHtml(reason.code)}"><input type="hidden" name="severity" value="info"><input type="hidden" name="source" value="${escapeHtml(provenance.source)}"><input type="hidden" name="sourceRef" value="${escapeHtml(provenance.sourceRef)}"><input type="hidden" name="label" value="${escapeHtml(provenance.metadata?.label || '')}"><input type="hidden" name="resolved" value="1"><button class="btn btn-outline-success btn-sm" type="submit">Mark resolved</button></form>`
+        : '';
+      return `<li><strong>${escapeHtml(relationshipLabel(reason.code))}</strong> — ${escapeHtml(reason.message)} <span class="text-secondary">(${escapeHtml(reason.evidence || '')})</span>${resolveAction}</li>`;
+    }).join('')
     : '<li>No current health reasons.</li>';
   const observationHtml = observations.length
     ? observations.map((observation) => `<tr><td>${escapeHtml(new Date(observation.observedAt).toLocaleString())}</td><td>${escapeHtml(relationshipLabel(observation.type))}</td><td>${escapeHtml(observation.severity)}</td><td>${escapeHtml(observation.source)}</td><td>${escapeHtml(observation.sourceRef || '')}</td></tr>`).join('')
@@ -1623,13 +1640,18 @@ const server = http.createServer(async (req, res) => {
       if (!source || !sourceRef) throw new Error('Health observations require source and sourceRef provenance.');
       const label = String(form.get('label') || '').trim();
       if (['visibility_label_observed', 'visibility_label_cleared'].includes(type) && !label) throw new Error(`${type} requires the observed label name.`);
+      const resolved = form.get('resolved') === '1';
       recordAccountHealthObservation({
         type,
         severity: String(form.get('severity') || 'info'),
         source,
         sourceRef,
         observedAt: Date.now(),
-        metadata: { label: label || undefined, note: String(form.get('note') || '').trim() },
+        metadata: {
+          label: label || undefined,
+          note: String(form.get('note') || '').trim(),
+          ...(resolved ? { resolved: true, active: false } : {}),
+        },
       });
       res.writeHead(303, { location: '/?source=health' }); res.end(); return;
     }
@@ -1668,6 +1690,16 @@ const server = http.createServer(async (req, res) => {
         minimumCompletedPerVariant: Number(form.get('minimumCompletedPerVariant')),
         status: form.get('status') || 'draft',
       });
+      res.writeHead(303, { location: '/?source=experiments' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/experiment/status') {
+      const form = await readForm(req);
+      const experimentId = Number(form.get('experimentId'));
+      const status = String(form.get('status') || '');
+      const experiment = getExperiment(experimentId);
+      if (!experiment) throw new Error(`Experiment not found: ${experimentId}`);
+      setExperimentStatus(experiment.id, status);
       res.writeHead(303, { location: '/?source=experiments' }); res.end(); return;
     }
 

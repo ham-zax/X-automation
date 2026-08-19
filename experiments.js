@@ -315,10 +315,13 @@ export function validateVariantAssignment(definition, variantLabel, item = {}, c
     ? evaluateExperimentPopulation(definition, item, context)
     : { eligible: false, criteria: [], blockers: validation.errors, definitionValid: false };
   const errors = [...validation.errors];
+  if (validation.experiment.status !== 'active') {
+    errors.push({ code: 'EXPERIMENT_NOT_ACTIVE', message: 'Experiment variant assignment requires an active experiment.' });
+  }
   if (!variant) errors.push({ code: 'UNKNOWN_VARIANT', message: `Unknown experiment variant: ${label || 'missing'}.` });
   errors.push(...population.blockers);
   return {
-    valid: validation.valid && Boolean(variant) && population.eligible,
+    valid: errors.length === 0,
     errors,
     variant,
     population,
