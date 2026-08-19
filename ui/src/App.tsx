@@ -1,10 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useHashRoute } from './router'
 import { Today } from './features/today/Today'
-import { Conversations } from './features/conversations/Conversations'
-import { Create } from './features/create/Create'
 import { Discover } from './features/discover/Discover'
-import { Audience } from './features/discover/Audience'
+import { Conversations } from './features/conversations/Conversations'
+import { ConversationDetail } from './features/conversations/ConversationDetail'
+import { Create } from './features/create/Create'
+import { DraftPage } from './features/create/DraftPage'
+import { Results } from './features/results/Results'
+import { Audience } from './features/results/Audience'
+import { Improve } from './features/improve/Improve'
+import { Advanced } from './features/advanced/Advanced'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,30 +21,48 @@ const queryClient = new QueryClient({
 })
 
 const NAV_ITEMS = [
-  { id: 'today', label: 'Today' },
-  { id: 'discover', label: 'Discover' },
-  { id: 'conversations', label: 'Conversations' },
-  { id: 'create', label: 'Create' },
-  { id: 'results', label: 'Results' },
-  { id: 'improve', label: 'Improve' },
-  { id: 'advanced', label: 'Advanced' },
+  { id: 'today', label: 'Today', href: '#/today' },
+  { id: 'discover', label: 'Discover', href: '#/discover' },
+  { id: 'conversations', label: 'Conversations', href: '#/conversations' },
+  { id: 'create', label: 'Create', href: '#/create' },
+  { id: 'results', label: 'Results', href: '#/results' },
+  { id: 'improve', label: 'Improve', href: '#/improve' },
+  { id: 'advanced', label: 'Advanced', href: '#/advanced' },
 ]
 
+function RouteContent() {
+  const route = useHashRoute()
+  const [first, second] = route.segments
+
+  if (!first || first === 'today') return <Today />
+  if (first === 'discover') return <Discover />
+  if (first === 'conversations' && second) return <ConversationDetail candidateKey={second} />
+  if (first === 'conversations') return <Conversations />
+  if (first === 'create') return <Create />
+  if (first === 'draft' && second) return <DraftPage draftId={Number(second)} />
+  if (first === 'results' && second === 'audience') return <Audience />
+  if (first === 'results') return <Results />
+  if (first === 'improve') return <Improve />
+  if (first === 'advanced') return <Advanced />
+  return <Today />
+}
+
 function Shell() {
-  const [active, setActive] = useState('today')
+  const route = useHashRoute()
+  const active = route.segments[0] || 'today'
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight">X Network Growth OS</h1>
+            <a href="#/today" className="text-xl font-semibold tracking-tight">X Network Growth OS</a>
           </div>
-          <nav className="flex gap-6 -mb-px overflow-x-auto">
+          <nav className="flex gap-6 -mb-px overflow-x-auto" aria-label="Primary">
             {NAV_ITEMS.map((item) => (
-              <button
+              <a
                 key={item.id}
-                onClick={() => setActive(item.id)}
+                href={item.href}
                 className={`whitespace-nowrap border-b-2 py-3 text-sm font-medium transition-colors ${
                   active === item.id
                     ? 'border-slate-900 text-slate-900'
@@ -47,28 +70,13 @@ function Shell() {
                 }`}
               >
                 {item.label}
-              </button>
+              </a>
             ))}
           </nav>
         </div>
       </header>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {active === 'today' ? (
-          <Today />
-        ) : active === 'conversations' ? (
-          <Conversations />
-        ) : active === 'create' ? (
-          <Create />
-        ) : active === 'discover' ? (
-          <Discover />
-        ) : active === 'advanced' ? (
-          <Audience />
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
-            <h2 className="text-2xl font-semibold mb-4 capitalize">{active}</h2>
-            <p className="text-slate-600">This workspace is being migrated from the legacy dashboard.</p>
-          </div>
-        )}
+        <RouteContent />
       </main>
     </div>
   )

@@ -1,58 +1,38 @@
-import { useConversations, type Conversation, type Opportunity } from '../../api/client'
-import { Loading, Error, Empty } from '../../components/primitives'
+import { useConversations, type ConversationListItem } from '../../api/client'
+import { Loading, Error, Empty, Badge, formatDateTime } from '../../components/primitives'
 
-function ConversationCard({ conversation }: { conversation: Conversation }) {
+function ConversationCard({ conversation }: { conversation: ConversationListItem }) {
+  const isActive = conversation.engagementKind !== 'initial_reply'
   return (
     <a
-      href={conversation.href}
-      className="block rounded-lg border border-slate-200 bg-white p-6 hover:border-slate-300 transition-all"
+      href={`#/conversations/${encodeURIComponent(conversation.key)}`}
+      className={`block rounded-lg border p-6 transition-all ${
+        isActive
+          ? 'border-slate-200 bg-white hover:border-slate-400'
+          : 'border-sky-200 bg-sky-50 hover:border-sky-400'
+      }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-slate-900">@{conversation.targetUsername}</span>
-            {conversation.relationshipStage && conversation.relationshipStage !== 'unknown' && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                {conversation.relationshipStage}
+            <Badge tone={isActive ? 'neutral' : 'info'}>{conversation.engagementKindLabel}</Badge>
+            <Badge tone={conversation.status === 'needs_review' ? 'warning' : 'neutral'}>{conversation.statusLabel}</Badge>
+            {conversation.priorityLabel && <Badge tone={conversation.priority >= 60 ? 'success' : 'neutral'}>{conversation.priorityLabel}</Badge>}
+          </div>
+          <h3 className="mt-2 text-base font-semibold text-slate-900">{conversation.contribution}</h3>
+          <p className="mt-2 line-clamp-2 text-sm text-slate-600">{conversation.sourceText}</p>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+            {conversation.relationship && (
+              <span>
+                Relationship fit {conversation.relationship.targetScore} · {conversation.relationship.stage.replaceAll('_', ' ')}
               </span>
             )}
+            {conversation.draftQualityScore != null && <span>Draft {conversation.draftQualityScore}/50</span>}
+            {conversation.expiresAt && <span>Useful until {formatDateTime(conversation.expiresAt)}</span>}
           </div>
-          <h3 className="text-base font-semibold text-slate-900 mb-2">
-            {conversation.contribution}
-          </h3>
-          <p className="text-sm text-slate-600 line-clamp-2">{conversation.sourceText}</p>
-          {conversation.lastActivity && (
-            <p className="mt-3 text-xs text-slate-500">
-              Last activity: {new Date(conversation.lastActivity).toLocaleDateString()}
-            </p>
-          )}
         </div>
-        <span className="shrink-0 text-sm font-medium text-blue-600">Review →</span>
-      </div>
-    </a>
-  )
-}
-
-function OpportunityCard({ opportunity }: { opportunity: Opportunity }) {
-  return (
-    <a
-      href={opportunity.href}
-      className="block rounded-lg border border-blue-200 bg-blue-50 p-6 hover:border-blue-300 transition-all"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-medium text-slate-900">@{opportunity.targetUsername}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-              New opportunity
-            </span>
-          </div>
-          <h3 className="text-base font-semibold text-slate-900 mb-2">
-            {opportunity.contribution}
-          </h3>
-          <p className="text-sm text-slate-600 line-clamp-2">{opportunity.sourceText}</p>
-        </div>
-        <span className="shrink-0 text-sm font-medium text-blue-600">Answer →</span>
+        <span className="shrink-0 text-sm font-medium text-sky-700">{conversation.draftId ? 'Review reply →' : 'Open →'}</span>
       </div>
     </a>
   )
@@ -72,38 +52,63 @@ export function Conversations() {
   if (!data || (data.activeConversations.length === 0 && data.newOpportunities.length === 0)) {
     return (
       <Empty
-        title="No active conversations"
+        title="No conversations or opportunities right now"
         message="Check Discover for new opportunities worth answering."
       />
     )
   }
 
   return (
-    <div className="space-y-8">
-      {data.activeConversations.length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">
-            Active conversations ({data.activeConversations.length})
-          </h2>
-          <div className="space-y-4">
-            {data.activeConversations.map((conversation) => (
-              <ConversationCard key={conversation.id} conversation={conversation} />
-            ))}
-          </div>
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-semibold text-slate-900">Conversations</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Continue existing conversations first, then consider new ones where you have something concrete to add.
+        </p>
+      </div>
+
+      {data.health.state === 'constrained' && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+          <strong>Some actions are temporarily limited.</strong> Supported account evidence is blocking reply approval/sending until it is resolved.
+        </div>
+      )}
+      {data.health.state === 'watch' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <strong>Something deserves attention.</strong> You can keep working normally; the warning is advisory.
         </div>
       )}
 
-      {data.newOpportunities.length > 0 && (
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">
-            New opportunities ({data.newOpportunities.length})
-          </h2>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Active conversations</div>
+          <div className="mt-1 text-3xl font-semibold text-slate-900">{data.activeConversations.length}</div>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">New opportunities</div>
+          <div className="mt-1 text-3xl font-semibold text-slate-900">{data.newOpportunities.length}</div>
+        </div>
+      </div>
+
+      {data.activeConversations.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-lg font-semibold text-slate-900">Active conversations ({data.activeConversations.length})</h3>
           <div className="space-y-4">
-            {data.newOpportunities.map((opportunity) => (
-              <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+            {data.activeConversations.map((conversation) => (
+              <ConversationCard key={conversation.key} conversation={conversation} />
             ))}
           </div>
-        </div>
+        </section>
+      )}
+
+      {data.newOpportunities.length > 0 && (
+        <section>
+          <h3 className="mb-3 text-lg font-semibold text-slate-900">New opportunities ({data.newOpportunities.length})</h3>
+          <div className="space-y-4">
+            {data.newOpportunities.map((conversation) => (
+              <ConversationCard key={conversation.key} conversation={conversation} />
+            ))}
+          </div>
+        </section>
       )}
     </div>
   )
