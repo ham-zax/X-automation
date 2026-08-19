@@ -61,3 +61,61 @@ export async function postThreadHttp(tweets, credentials, options = {}) {
   const normalized = tweets.map((tweet) => (typeof tweet === 'string' ? { text: tweet } : tweet));
   return postThread(client, normalized, options);
 }
+
+function sourceTweetId(item) {
+  const explicit = String(item?.sourceTweetId || item?.source_tweet_id || '').trim();
+  if (explicit) return explicit;
+  for (const value of [item?.candidate?.url, item?.candidate?.key, item?.sourceUrl]) {
+    const match = String(value || '').match(/\/status\/(\d+)/);
+    if (match) return match[1];
+  }
+  return '';
+}
+
+function outputIdentity(result, account) {
+  const root = Array.isArray(result) ? result[0] : result;
+  const tweetId = String(root?.rest_id || root?.id || root?.legacy?.id_str || root?.tweet?.rest_id || '');
+  const url = root?.permanentUrl || root?.url || (tweetId ? `https://x.com/${account}/status/${tweetId}` : '');
+  return { tweetId, url };
+}
+
+export async function publishMainFeedHttp(item, credentials, {
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  tweetTransport = postTweetHttp,
+  threadTransport = postThreadHttp,
+} = {}) {
+  const pipeline = String(item?.pipeline || '');
+  if (item?.media?.required === true) {
+    throw new Error('Required media is not publishable until a real attachment readiness path exists.');
+  }
+
+  let result;
+  if (pipeline === 'original') {
+    const body = String(item?.body || item?.text || '').trim();
+    if (!body) throw new Error('Original publication requires final body text.');
+    result = await tweetTransport(body, credentials);
+  } else if (pipeline === 'quote') {
+    const body = String(item?.body || item?.text || '').trim();
+    const quoteTweetId = sourceTweetId(item);
+    if (!body) throw new Error('Quote publication requires final body text.');
+    if (!quoteTweetId) throw new Error('Quote publication requires a source tweet ID.');
+    result = await tweetTransport(body, credentials, { quoteTweetId });
+  } else if (pipeline === 'thread') {
+    const parts = Array.isArray(item?.threadParts) ? item.threadParts.map((part) => String(part).trim()).filter(Boolean) : [];
+    if (!parts.length) throw new Error('Thread publication requires approved thread parts.');
+    result = await threadTransport(parts, credentials);
+  } else if (pipeline === 'repost') {
+    throw new Error('Automated repost transport is not enabled; repost remains a manual main-feed action.');
+  } else {
+    throw new Error(`Unsupported main-feed pipeline: ${pipeline || 'missing'}.`);
+  }
+
+  const { tweetId, url } = outputIdentity(result, account);
+  if (!tweetId) {
+    const error = new Error(`${pipeline} transport returned no root tweet ID.`);
+    error.code = 'TRANSPORT_RESULT_NO_TWEET_ID';
+    error.transportResult = result;
+    throw error;
+  }
+  return { pipeline, tweetId, url, result };
+}

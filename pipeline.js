@@ -239,6 +239,8 @@ export function approveQueueItem(key, confirmations = {}) {
       status: 'approved',
       draftId: draft?.id ?? null,
       humanApprovedAt: Date.now(),
+      publishStartedAt: null,
+      publishError: null,
     }),
     draft,
     analysis,

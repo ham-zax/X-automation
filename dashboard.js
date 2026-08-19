@@ -16,6 +16,7 @@ import { composeDraft, scoreDraft, weightedPostLength } from './drafting.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { syncAudience } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
+import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
 import {
   approveEngagementQueueItem,
@@ -36,7 +37,7 @@ import {
   getCandidate,
   getDraft,
   getDraftByCandidate,
-  getNextReadyDraft,
+  getMainFeedScheduleItem,
   getPerformanceSnapshot,
   getPreferenceProfile,
   getQueueItemByCandidate,
@@ -47,10 +48,13 @@ import {
   listCandidates,
   listDrafts,
   listEngagementItems,
+  listApprovedMainFeedItems,
   listQueueItems,
+  listRecentMainFeedPublications,
   listRelationshipProfiles,
   recordPerformanceSnapshot,
   saveDraft,
+  setMainFeedSchedule,
   upsertCandidates,
 } from './store.js';
 
@@ -60,6 +64,7 @@ const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'tr
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
 
 function escapeHtml(value) {
@@ -262,9 +267,49 @@ function gatePanel(gates = {}) {
 }
 
 function mediaLabel(media = {}) {
-  if (media.required) return 'Media required · not ready until Phase 3 attachment support';
+  if (media.required) return 'Media required · blocked until a real attachment readiness path exists';
   if (media.type && media.type !== 'none') return `Media recommended · ${media.type}`;
   return 'Media: none';
+}
+
+function schedulerContext(now = Date.now()) {
+  const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  return {
+    now,
+    recentPosts,
+    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+  };
+}
+
+function scheduleIssueList(items = []) {
+  if (!items.length) return '';
+  return `<ul class="small mb-2">${items.map((item) => `<li><strong>${escapeHtml(item.code || 'SCHEDULE')}</strong> — ${escapeHtml(item.message || '')}</li>`).join('')}</ul>`;
+}
+
+function schedulePanel(queueItem, context) {
+  if (queueItem.status !== 'approved' || !['main', 'main_feed'].includes(queueItem.lane) || !SCHEDULABLE_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) return '';
+  const item = getMainFeedScheduleItem(queueItem.candidateKey);
+  if (!item) return '';
+  const decision = recommendMainFeedSchedule(item, context);
+  const recommended = decision.recommendedAt == null ? 'blocked' : new Date(decision.recommendedAt).toLocaleString();
+  const manualOnly = queueItem.pipeline === 'repost'
+    ? '<div class="alert alert-secondary py-2 mb-2">Repost is scheduler-visible but remains manual; daemon transport is not enabled for repost.</div>'
+    : '';
+  return `<div class="card bg-light border-0 mt-3"><div class="card-body">
+    <div class="d-flex justify-content-between gap-2 flex-wrap mb-2"><div><strong>Scheduler</strong> · ${escapeHtml(recommended)}</div><span class="badge ${decision.eligible ? 'text-bg-primary' : 'text-bg-warning'}">priority ${escapeHtml(decision.priority)}</span></div>
+    <div class="small mb-2">${escapeHtml(decision.reason)}</div>
+    ${scheduleIssueList(decision.blockers)}${scheduleIssueList(decision.warnings)}${scheduleIssueList(decision.conflicts)}
+    <div class="small text-secondary mb-2">Timing assumptions are <strong>EMPIRICAL_VARIABLE</strong> coverage heuristics, not X platform enforcement rules.</div>
+    ${manualOnly}
+    <form method="post" action="/queue/schedule" class="row g-2 align-items-end">
+      <input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">
+      <div class="col-md-3"><label class="form-label small">Urgency</label><select class="form-select" name="scheduleUrgency">${['evergreen', 'timely', 'viral'].map((value) => `<option value="${value}" ${queueItem.scheduleUrgency === value ? 'selected' : ''}>${value}</option>`).join('')}</select></div>
+      <div class="col-md-3"><label class="form-label small">Expiry</label><input class="form-control" type="datetime-local" name="expiresAt" value="${escapeHtml(formatDateTime(queueItem.expiresAt))}"></div>
+      <div class="col-md-4"><label class="form-label small">Human schedule override</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(queueItem.scheduledAt))}"></div>
+      <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">Save timing</button></div>
+      <div class="col-12 small text-secondary">${queueItem.scheduleSource === 'human' ? 'Explicit human override stored. Clear the time to return timing to the scheduler.' : 'No human time override; scheduler recommendation is advisory.'}</div>
+    </form>
+  </div></div>`;
 }
 
 function draftCard(draft) {
@@ -295,7 +340,7 @@ function draftCard(draft) {
         <details class="mb-3"><summary class="fw-semibold">Research/editor fields</summary><div class="mt-3"><div class="mb-3"><label class="form-label">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div><div class="mb-3"><label class="form-label">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div><div class="mb-3"><label class="form-label">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div><div class="mb-3"><label class="form-label">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div></div></details>
         <div class="card bg-light border-0 mb-3"><div class="card-body"><div class="fw-semibold mb-2">${escapeHtml(mediaLabel(media))}</div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="mediaRequired" value="1" id="media-required-${draft.id}" ${media.required ? 'checked' : ''}><label class="form-check-label" for="media-required-${draft.id}">Required for the claim</label></div><div class="row g-2"><div class="col-md-3"><label class="form-label small">Type</label><select class="form-select" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div><div class="col-md-9"><label class="form-label small">Reason</label><input class="form-control" name="mediaReason" value="${escapeHtml(media.reason || '')}"></div><div class="col-md-6"><label class="form-label small">Source / local evidence ref</label><input class="form-control" name="mediaSource" value="${escapeHtml(media.source || '')}"></div><div class="col-md-6"><label class="form-label small">Alt text</label><input class="form-control" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></div></div></div></div>
         <div class="small text-secondary mb-3"><strong>Semantic anchors:</strong> ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · <strong>Evidence used:</strong> ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')} · <strong>Discussion:</strong> ${escapeHtml(editor.discussionQuestion || '—')} · <strong>Follow reason:</strong> ${escapeHtml(editor.followReason || '—')} · <strong>Risk flags:</strong> ${escapeHtml((editor.riskFlags || []).join(', ') || '—')}</div>
-        <div class="row g-3 align-items-end">${engagementReply ? '<div class="col-md-5"><div class="small text-secondary">Engagement replies send immediately only after explicit approval; they are never scheduled.</div></div>' : `<div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div>`}<div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
+        <div class="row g-3 align-items-end"><div class="col-md-5"><div class="small text-secondary">${engagementReply ? 'Engagement replies send immediately only after explicit approval; they are never scheduled.' : 'Main-feed timing is queue-owned after approval. Use Queue → Scheduler to set an explicit human override.'}</div></div><div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
       </form>
       ${pipeline === 'thread' ? `<div class="d-flex gap-2 mt-3"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}
       <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}${canApproveSend ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>` : ''}${canSendApproved ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>` : ''}${queueItem?.status === 'approved' ? `<span class="badge text-bg-success align-self-center">${engagementReply ? 'Exact reply approved' : 'Approved · compatibility draft ready'}</span>` : ''}</div>
@@ -454,9 +499,9 @@ function engageView(error = null) {
     + group('New opportunities', 'Fresh target posts and reply-suitable research candidates with a concrete proposed contribution.', cold);
 }
 
-const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'watching'];
+const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'publishing', 'failed', 'published', 'watching'];
 
-function queueCard(queueItem) {
+function queueCard(queueItem, scheduleContextValue) {
   if (!queueItem.recommendedPipeline) queueItem = refreshQueueRecommendation(queueItem.candidateKey).queueItem;
   const snapshot = inspectWorkflow(queueItem.candidateKey);
   const candidate = snapshot.candidate;
@@ -467,6 +512,9 @@ function queueCard(queueItem) {
   const canRequestReview = CONTENT_PIPELINES.has(queueItem.pipeline) && ['drafting', 'needs_review'].includes(queueItem.status);
   const breakdown = snapshot.scores.breakdown;
   const returnTo = '/?source=queue';
+  const publicationState = queueItem.publishStartedAt || queueItem.publishedAt || queueItem.publishError
+    ? `<div class="small mt-2"><strong>Publication:</strong> ${queueItem.publishStartedAt ? `started ${escapeHtml(new Date(queueItem.publishStartedAt).toLocaleString())}` : 'not started'}${queueItem.publishedAt ? ` · published ${escapeHtml(new Date(queueItem.publishedAt).toLocaleString())}` : ''}${queueItem.outputTweetId ? ` · tweet ${escapeHtml(queueItem.outputTweetId)}` : ''}${queueItem.publishError ? ` · <span class="text-danger">${escapeHtml(queueItem.publishError)}</span>` : ''}${queueItem.outputUrl ? ` · <a href="${escapeHtml(queueItem.outputUrl)}" target="_blank">output ↗</a>` : ''}</div>`
+    : '';
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
     <div class="d-flex justify-content-between gap-3 flex-wrap">
       <div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">${escapeHtml(candidate.source.toUpperCase())} · ${escapeHtml(queueItem.pipeline)} · ${escapeHtml(queueItem.status)}</div></div>
@@ -476,8 +524,10 @@ function queueCard(queueItem) {
     ${workflowBadges(queueItem)}
     <div class="small mt-2"><strong>AI recommendation:</strong> ${escapeHtml(queueItem.recommendedPipeline || 'none')} · <span class="text-secondary">${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
     <div class="small text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div>
+    ${publicationState}
     ${routeForm(queueItem, candidate.key, returnTo)}
     ${draft ? gatePanel(draft.gates) : ''}
+    ${schedulePanel(queueItem, scheduleContextValue)}
     <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">
       ${draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Draft ${draft.qualityScore}/50</a>` : ''}
       ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}
@@ -490,10 +540,11 @@ function queueCard(queueItem) {
 
 function queueView() {
   const items = listQueueItems({ lane: 'main', limit: 250 });
+  const context = schedulerContext();
   return QUEUE_GROUPS.map((status) => {
     const group = items.filter((item) => item.status === status);
     if (!group.length) return '';
-    return `<h2 class="h5 mt-4 text-capitalize">${escapeHtml(status.replace('_', ' '))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map(queueCard).join('')}`;
+    return `<h2 class="h5 mt-4 text-capitalize">${escapeHtml(status.replace('_', ' '))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map((item) => queueCard(item, context)).join('')}`;
   }).join('') || '<div class="alert alert-secondary">No active workflow items.</div>';
 }
 
@@ -540,7 +591,10 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   }
 
   const savedCount = countSavedCandidates();
-  const nextReady = getNextReadyDraft();
+  const scheduleNow = Date.now();
+  const scheduleContextValue = schedulerContext(scheduleNow);
+  const scheduleDecisions = rankMainFeedItems(listApprovedMainFeedItems({ automatedOnly: true, limit: 100 }), scheduleContextValue);
+  const nextScheduled = scheduleDecisions.find((item) => item.eligible) || null;
   let visible = [];
   if (activeSource === 'x') visible = listCandidates({ source: 'x', withinHours: 72, limit: 120 });
   else if (activeSource === 'viral') visible = listCandidates({ source: 'x', viralOnly: true, withinHours: 24, limit: 100 });
@@ -559,7 +613,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
   else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
   else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
-  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} items need routing · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review.`;
+  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} items need routing · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review · ${countQueueItems({ status: 'approved', lane: 'main' })} approved for scheduler inspection.`;
   else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} human-approved compatibility-ready.`;
   else if (activeSource === 'engage') {
     const engagementItems = listEngagementItems({ limit: 200 });
@@ -615,7 +669,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     <div class="sticky-top bg-body-tertiary border-bottom shadow-sm"><div class="container py-3">
       <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-2">
         <div><h1 class="h4 mb-1">X research & publishing system</h1><div class="text-secondary small">${escapeHtml(decision)}</div></div>
-        <div class="d-flex gap-2 align-items-center flex-wrap"><a class="btn btn-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a><span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">AUTO_POST ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextReady ? `<span class="badge text-bg-success">queue ready ${nextReady.qualityScore}/50</span>` : ''}</div>
+        <div class="d-flex gap-2 align-items-center flex-wrap"><a class="btn btn-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a><span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">AUTO_POST ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextScheduled ? `<span class="badge text-bg-success">main feed ${nextScheduled.recommendedAt <= scheduleNow ? 'due now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
       </div>
       <div class="d-flex gap-2 flex-wrap mb-2">${nav}</div>
       ${filtersEnabled ? `<div class="d-flex gap-2 flex-wrap"><a class="badge rounded-pill ${!activeTag ? 'text-bg-dark' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}">All niches</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="badge rounded-pill ${activeTag === tag ? 'text-bg-primary' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
@@ -714,6 +768,22 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: '/?source=queue' }); res.end(); return;
     }
 
+    if (req.method === 'POST' && requestUrl.pathname === '/queue/schedule') {
+      const form = await readForm(req);
+      const scheduledRaw = form.get('scheduledAt');
+      const expiresRaw = form.get('expiresAt');
+      const scheduledAt = scheduledRaw ? Date.parse(scheduledRaw) : null;
+      const expiresAt = expiresRaw ? Date.parse(expiresRaw) : null;
+      if (scheduledRaw && !Number.isFinite(scheduledAt)) throw new Error('Invalid main-feed schedule override.');
+      if (expiresRaw && !Number.isFinite(expiresAt)) throw new Error('Invalid main-feed expiry.');
+      setMainFeedSchedule(form.get('key'), {
+        scheduledAt,
+        expiresAt,
+        scheduleUrgency: form.get('scheduleUrgency') || 'evergreen',
+      }, { actor: 'human' });
+      res.writeHead(303, { location: '/?source=queue' }); res.end(); return;
+    }
+
     if (req.method === 'POST' && requestUrl.pathname === '/draft/create') {
       const form = await readForm(req);
       const candidate = getCandidate(form.get('key'));
@@ -738,7 +808,7 @@ const server = http.createServer(async (req, res) => {
       if (!queueItem) queueItem = saveCandidateToWorkflow(candidate.key, true).queueItem;
       const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
       const scheduledRaw = form.get('scheduledAt');
-      const scheduledAt = scheduledRaw ? Date.parse(scheduledRaw) : null;
+      const scheduledAt = scheduledRaw == null ? current.scheduledAt : (scheduledRaw ? Date.parse(scheduledRaw) : null);
       if (scheduledRaw && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
       const mediaType = form.get('mediaType') || 'none';
       if (!MEDIA_TYPES.includes(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);

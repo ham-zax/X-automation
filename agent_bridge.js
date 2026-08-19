@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { syncAudience } from './audience.js';
+import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
   inspectWorkflow,
@@ -18,6 +19,7 @@ import {
   getDraft,
   getDraftByCandidate,
   getNextReadyDraft,
+  getMainFeedScheduleItem,
   getPerformanceSnapshot,
   getRelationshipProfile,
   hasCandidateAction,
@@ -26,7 +28,9 @@ import {
   listCandidates,
   listDrafts,
   listEngagementItems,
+  listApprovedMainFeedItems,
   listQueueItems,
+  listRecentMainFeedPublications,
   listRecentPublishedContent,
   listRelationshipEvents,
   listRelationshipProfiles,
@@ -95,6 +99,15 @@ function engagementPacket(queueItem) {
   const draft = getDraftByCandidate(queueItem.candidateKey);
   const relationship = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
   return { queueItem, candidate, draft, relationship };
+}
+
+function schedulerContext(now) {
+  const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  return {
+    now,
+    recentPosts,
+    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+  };
 }
 
 async function main() {
@@ -244,6 +257,37 @@ async function main() {
       next: getNextReadyDraft(Date.now(), Number(payload.minScore || 40)),
       drafts: listDrafts({ status: payload.draftStatus, limit: Number(payload.limit || 20) }),
       queueItems: listQueueItems({ status: payload.status, pipeline: payload.pipeline, lane: payload.lane, limit: Number(payload.limit || 20) }),
+    });
+    return;
+  }
+
+  if (command === 'schedule-next') {
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    if (!Number.isFinite(now)) throw new Error('schedule-next now must be numeric when supplied.');
+    const items = listApprovedMainFeedItems({ automatedOnly: true, limit: Math.max(1, Math.min(200, Number(payload.limit || 100))) });
+    const context = schedulerContext(now);
+    const decisions = rankMainFeedItems(items, context);
+    result({
+      now,
+      next: decisions.find((decision) => decision.eligible) || null,
+      decisions,
+      publicationAuthority: 'approved main-feed queue + scheduler',
+    });
+    return;
+  }
+
+  if (command === 'schedule-inspect') {
+    const key = String(payload.key || '');
+    if (!key) throw new Error('schedule-inspect requires key.');
+    const item = getMainFeedScheduleItem(key);
+    if (!item) throw new Error(`Main-feed schedule item not found: ${key}`);
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    if (!Number.isFinite(now)) throw new Error('schedule-inspect now must be numeric when supplied.');
+    result({
+      now,
+      item,
+      decision: recommendMainFeedSchedule(item, schedulerContext(now)),
+      readOnly: true,
     });
     return;
   }
@@ -428,7 +472,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

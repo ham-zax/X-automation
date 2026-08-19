@@ -10,11 +10,12 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, format-aware drafts/editor/gate metadata, main/engagement queue state, and performance snapshots.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, format-aware drafts/editor/gate metadata, main/engagement queue state, Phase-3 schedule/claim/publication metadata, and performance snapshots.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, Engage Next inspection/drafting/resolution, `writer-packet`, and `apply-writer-output`; it cannot self-approve a reply.
-- `dashboard.js` — Bootstrap research/workflow workbench with Engage Next/Active Conversations, format-aware draft editing, thread parts, editor/media metadata, hard-gate review, Relationships, Audience, and Performance.
-- `automation.js` — research plus engagement-opportunity refresh, followed by the separate approved main-feed draft publishing queue; it never sends Engage Next replies.
+- `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, Engage Next inspection/drafting/resolution, `writer-packet`, `apply-writer-output`, and read-only `schedule-next` / `schedule-inspect`; it cannot approve or publish main-feed content.
+- `dashboard.js` — Bootstrap research/workflow workbench with Engage Next/Active Conversations, format-aware draft editing, hard-gate review, scheduler reasoning/override controls, publication state, Relationships, Audience, and Performance.
+- `automation.js` — research plus engagement-opportunity refresh, followed by scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
 
 ## Operating standards
 
@@ -34,21 +35,23 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 
 ### Current foundation and next architecture
 
-Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that sets a text draft to compatibility `ready` for the existing automation consumer.
+Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that creates an approved main-feed queue item; the associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
 Phase 1C Engage Next is implemented: bounded relationship-target reads and observed responses feed an engagement lane; active conversations rank ahead of comparable cold opportunities; reply drafting/review uses the Phase-2 writer/gate engine; the dashboard provides one-item Draft/Quote/Ignore/Expire/Approve & Send actions; successful replies record candidate action plus relationship history. Automation refreshes opportunities but never sends them.
 
-Phase 2 Content Quality is implemented through the human-review boundary: routed formats persist single text or explicit thread parts plus editor/gate metadata; agents can retrieve `writer-packet` and persist allow-listed structured output; review/approval recomputes deterministic hard gates with explicit human factuality/evidence confirmation; required media remains blocked because actual attachment readiness belongs to Phase 3.
+Phase 2 Content Quality is implemented through the human-review boundary: routed formats persist single text or explicit thread parts plus editor/gate metadata; agents can retrieve `writer-packet` and persist allow-listed structured output; review/approval recomputes deterministic hard gates with explicit human factuality/evidence confirmation. Required media remains blocked because no real attachment/upload readiness path is implemented yet.
+
+Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; the pure scheduler explains urgency/expiry/coverage/semantic timing; optional human schedule overrides are stored separately from approval; enabled automation atomically claims one Original/Quote/Thread row before transport; success/failure remains inspectable in queue state. Reposts remain manual and engagement replies remain outside this scheduler.
 
 The remaining network-first architecture is:
 
-**Account Health/visibility observability -> research/writing/media -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
+**Account Health/visibility observability -> media attachment readiness -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Account Health/Under the Hood capture, Phase-3 media upload and format-aware distribution, the experiment engine, and learned scheduler remain planned until their matching phase is implemented.
+Account Health/Under the Hood capture, actual media upload/attachment readiness, the experiment engine, and learned strategy remain planned until their matching phase is implemented.
 
 ## Setup
 
@@ -93,7 +96,7 @@ HTTP mode fails closed if the session or live operation discovery cannot be vali
 ## Automation
 
 ```bash
-# One research + queue cycle. AUTO_POST=false previews a ready draft only.
+# One research + queue cycle. AUTO_POST=false previews the scheduler recommendation only.
 npm run automation:once
 
 # Keep polling while this process/PC environment is running.
@@ -104,12 +107,10 @@ Key settings:
 
 ```dotenv
 POLL_MINUTES=30
-POST_INTERVAL_HOURS=4
-MIN_DRAFT_SCORE=40
 AUTO_POST=false
 ```
 
-The automation refreshes X niche discovery, X viral discovery, GitHub, Hacker News, and Engage Next opportunities. Engage refresh checks observed responses before cold target posts and persists/refreshes queue state only; it never calls the reply-send path. The publishing half then checks SQLite for the next human-approved **main-lane** draft explicitly marked `ready`. A ready main-feed draft must score at least `MIN_DRAFT_SCORE` (default 40/50), contain no scaffold placeholders, and fit a 280-character weighted single-post limit. `AUTO_POST=false` only previews that main-feed queue item. `AUTO_POST=true` may publish it after the configured cooldown and records the resulting tweet ID on the draft.
+The automation refreshes X niche discovery, X viral discovery, GitHub, Hacker News, and Engage Next opportunities. Engage refresh checks observed responses before cold target posts and persists/refreshes queue state only; it never calls the reply-send path. Main-feed publication then ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before claim or transport and only previews/explains the next recommendation. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item per cycle, but only after an atomic `approved -> publishing` claim; success becomes `published`, while transport failure becomes inspectable `failed` and is not silently retried in that cycle. Scheduler spacing is a coverage heuristic, not an anti-detection cooldown. Repost remains manual. Required media remains blocked until real attachment readiness exists.
 
 ## Web preview
 
@@ -125,6 +126,7 @@ Dashboard views:
 - **Viral · 24h** — rolling last-24-hour developer/AI signals with viral tier and velocity.
 - **Saved** — your explicit taste/preference library.
 - **Engage Next** — Active Conversations before New Opportunities, with target/stage/TargetScore context, EngagePriority components, freshness/expiry, concrete contribution, exact source, soft warnings, reply drafting, Quote instead, Ignore/Expire, and explicit one-reply approval/send controls.
+- **Queue** — triage/review plus approved main-feed scheduler time/reason/priority, blockers/warnings/conflicts, explicit human urgency/expiry/time override, and inspectable publishing/failed/published state.
 - **Drafts** — format-aware Original/Quote/Reply/Thread editing, explicit thread parts and weighted counts, editor/media metadata, the 50-point rubric, deterministic hard-gate failures/warnings, and human factuality/evidence approval controls.
 - **Opportunities** — technical jobs/career, builders/SaaS, and productization signals.
 - **Relationships** — read-only strategic target classes, TargetScore/component evidence, follow state, stages, interaction counts, and class/stage filters.
@@ -141,6 +143,8 @@ Another agent should use the bridge rather than editing SQLite or scraping dashb
 ```bash
 npm run agent -- research <<<'{"source":"x","limit":10}'
 npm run agent -- queue <<<'{"minScore":40}'
+npm run agent -- schedule-next <<<'{}'
+npm run agent -- schedule-inspect <<<'{"key":"https://x.com/example/status/123"}'
 npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'

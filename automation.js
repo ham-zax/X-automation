@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { pathToFileURL } from 'node:url';
 import {
   fetchGitHubTrending,
   fetchHackerNews,
@@ -7,22 +8,24 @@ import {
   rankNews,
   rankXViralPosts,
 } from './tech_news.js';
-import { postTweetHttp } from './x_http.js';
+import { publishMainFeedHttp } from './x_http.js';
 import { refreshEngagementOpportunities } from './engagement.js';
+import { rankMainFeedItems } from './scheduler.js';
 import { personalizeCandidates } from './strategy.js';
 import {
-  getAppState,
-  getCandidate,
-  getNextReadyDraft,
+  claimQueueItem,
   getPreferenceProfile,
+  listApprovedMainFeedItems,
+  listRecentMainFeedPublications,
+  markQueueFailed,
+  markQueuePublished,
+  recordCandidateAction,
   saveDraft,
-  setAppState,
+  saveQueueItem,
   upsertCandidates,
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
-const POST_INTERVAL_HOURS = Number(process.env.POST_INTERVAL_HOURS || 4);
-const MIN_DRAFT_SCORE = Number(process.env.MIN_DRAFT_SCORE || 40);
 const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 
@@ -55,6 +58,113 @@ async function refreshResearch() {
   };
 }
 
+function publicationAction(pipeline) {
+  return pipeline === 'quote' ? 'quote' : 'direct';
+}
+
+function publicationCommentary(item) {
+  return item.pipeline === 'thread' ? (item.threadParts || []).join('\n\n') : String(item.body || item.text || '');
+}
+
+export async function processMainFeedQueue({
+  now = Date.now(),
+  autoPost = AUTO_POST,
+  authToken = process.env.AUTH_TOKEN,
+  csrfToken = process.env.CT0,
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  transport = publishMainFeedHttp,
+} = {}) {
+  const currentTime = Number(now);
+  if (!Number.isFinite(currentTime)) throw new Error('processMainFeedQueue requires a numeric now timestamp.');
+  const items = listApprovedMainFeedItems({ automatedOnly: true, limit: 100 });
+  const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  const decisions = rankMainFeedItems(items, {
+    now: currentTime,
+    recentPosts,
+    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+  });
+  const decision = decisions.find((item) => item.eligible) || null;
+  if (!decision) return { action: items.length ? 'blocked' : 'no-main-feed', decision: null, decisions };
+  if (decision.recommendedAt > currentTime) {
+    return { action: 'scheduled-wait', decision, decisions };
+  }
+  if (!autoPost) return { action: 'preview', decision, decisions };
+  if (!authToken || !csrfToken) throw new Error('AUTO_POST=true requires AUTH_TOKEN and CT0.');
+
+  const claimed = claimQueueItem(decision.item.id, {
+    expectedUpdatedAt: decision.item.updatedAt,
+    now: currentTime,
+  });
+  if (!claimed) return { action: 'claim-lost', decision, decisions };
+
+  let output;
+  try {
+    output = await transport(decision.item, { authToken, csrfToken }, { account });
+  } catch (error) {
+    if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
+      const queueItem = saveQueueItem({
+        ...claimed,
+        status: 'publishing',
+        publishError: `Transport completed without a root tweet ID; manual reconciliation required: ${error.message}`,
+      });
+      return { action: 'posted-recording-incomplete', decision, decisions, queueItem, tweetId: null, url: null, error: queueItem.publishError };
+    }
+    const queueItem = markQueueFailed(claimed.id, error, { failedAt: Date.now() });
+    return { action: 'failed', decision, decisions, queueItem, error: error.message };
+  }
+
+  let queueItem;
+  try {
+    queueItem = markQueuePublished(claimed.id, output.tweetId, output.url || null, { publishedAt: Date.now() });
+  } catch (error) {
+    const current = saveQueueItem({
+      ...claimed,
+      status: 'publishing',
+      outputTweetId: output.tweetId,
+      outputUrl: output.url || null,
+      publishError: `Transport succeeded, but publication transition is incomplete: ${error.message}`,
+    });
+    return {
+      action: 'posted-recording-incomplete',
+      decision,
+      decisions,
+      queueItem: current,
+      tweetId: output.tweetId,
+      url: output.url || null,
+      error: current.publishError,
+    };
+  }
+
+  try {
+    if (decision.item.draft) {
+      saveDraft({ ...decision.item.draft, status: 'published', publishedTweetId: output.tweetId });
+    }
+    recordCandidateAction({
+      candidateKey: decision.item.candidateKey,
+      action: publicationAction(decision.item.pipeline),
+      outputTweetId: output.tweetId,
+      outputUrl: output.url || null,
+      commentary: publicationCommentary(decision.item),
+    });
+  } catch (error) {
+    queueItem = saveQueueItem({
+      ...queueItem,
+      publishError: `Published, but local draft/action recording is incomplete: ${error.message}`,
+    });
+    return {
+      action: 'posted-recording-incomplete',
+      decision,
+      decisions,
+      queueItem,
+      tweetId: output.tweetId,
+      url: output.url || null,
+      error: queueItem.publishError,
+    };
+  }
+
+  return { action: 'posted', decision, decisions, queueItem, tweetId: output.tweetId, url: output.url || null };
+}
+
 export async function runCycle() {
   const research = await refreshResearch();
   const top = [...research.viral, ...research.ranked].sort((a, b) => b.score - a.score)[0] || null;
@@ -80,39 +190,26 @@ export async function runCycle() {
     console.log(`[automation] Engagement refresh failed: ${error.message}`);
   }
 
-  const draft = getNextReadyDraft(Date.now(), MIN_DRAFT_SCORE);
-  if (!draft) {
-    console.log(`[automation] No ready draft at or above ${MIN_DRAFT_SCORE}/50.`);
-    return { action: 'research-only', top, engagement, errors: [...research.errors, ...engagement.errors] };
+  const mainFeed = await processMainFeedQueue();
+  if (mainFeed.action === 'preview') {
+    console.log(`[automation] Main-feed preview: ${mainFeed.decision.reason}`);
+    console.log('[automation] AUTO_POST=false; no claim or publication write performed.');
+  } else if (mainFeed.action === 'scheduled-wait') {
+    console.log(`[automation] Main-feed recommendation waits until ${new Date(mainFeed.decision.recommendedAt).toLocaleString()}: ${mainFeed.decision.reason}`);
+  } else if (mainFeed.action === 'posted') {
+    console.log(`[automation] Published ${mainFeed.decision.item.pipeline} queue item ${mainFeed.decision.item.id} as ${mainFeed.tweetId}.`);
+  } else if (mainFeed.action === 'failed') {
+    console.log(`[automation] Publication failed after claim: ${mainFeed.error}`);
+  } else if (mainFeed.action === 'posted-recording-incomplete') {
+    console.log(`[automation] Publication reached X as ${mainFeed.tweetId}, but local recording is incomplete: ${mainFeed.error}`);
+  } else if (mainFeed.action === 'claim-lost') {
+    console.log('[automation] Main-feed recommendation changed before claim; no transport call was made.');
+  } else if (mainFeed.action === 'blocked') {
+    console.log('[automation] Approved main-feed items exist, but none currently pass scheduler eligibility.');
+  } else {
+    console.log('[automation] No approved automated main-feed items this cycle.');
   }
-
-  const candidate = getCandidate(draft.candidateKey);
-  if (!candidate) throw new Error(`Ready draft ${draft.id} has no source candidate.`);
-
-  const lastPostedAt = Number(getAppState('last_posted_at', 0) || 0);
-  const nextAllowedAt = lastPostedAt + POST_INTERVAL_HOURS * 3_600_000;
-  if (Date.now() < nextAllowedAt) {
-    console.log(`[automation] Ready draft ${draft.id} waiting for cooldown until ${new Date(nextAllowedAt).toLocaleString()}.`);
-    return { action: 'cooldown', draft, candidate, engagement, nextAllowedAt };
-  }
-
-  console.log(`[automation] Ready draft ${draft.id} (${draft.qualityScore}/50):\n${draft.body}`);
-  if (!AUTO_POST) {
-    console.log('[automation] AUTO_POST=false; queue preview only.');
-    return { action: 'preview', draft, candidate, engagement };
-  }
-
-  const authToken = process.env.AUTH_TOKEN;
-  const csrfToken = process.env.CT0;
-  if (!authToken || !csrfToken) throw new Error('AUTO_POST=true requires AUTH_TOKEN and CT0.');
-
-  const result = await postTweetHttp(draft.body, { authToken, csrfToken });
-  const tweetId = result?.rest_id || result?.legacy?.id_str || null;
-  saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
-  setAppState('last_posted_at', Date.now());
-
-  console.log(`[automation] Published draft ${draft.id}${tweetId ? ` as ${tweetId}` : ''}.`);
-  return { action: 'posted', draft, candidate, engagement, tweetId };
+  return { ...mainFeed, top, engagement, errors: [...research.errors, ...engagement.errors] };
 }
 
 async function main() {
@@ -122,7 +219,7 @@ async function main() {
     return;
   }
 
-  console.log(`[automation] Started. Poll=${POLL_MINUTES}m, cooldown=${POST_INTERVAL_HOURS}h, min draft=${MIN_DRAFT_SCORE}/50, auto-post=${AUTO_POST}.`);
+  console.log(`[automation] Started. Poll=${POLL_MINUTES}m, scheduler=queue-aware, auto-post=${AUTO_POST}.`);
   while (true) {
     try {
       await runCycle();
@@ -133,7 +230,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(`[automation] Fatal error: ${error.message}`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(`[automation] Fatal error: ${error.message}`);
+    process.exit(1);
+  });
+}

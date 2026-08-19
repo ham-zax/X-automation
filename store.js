@@ -176,6 +176,12 @@ db.exec(`
     approved_text TEXT,
     output_tweet_id TEXT,
     output_url TEXT,
+    schedule_urgency TEXT NOT NULL DEFAULT 'evergreen',
+    scheduled_at INTEGER,
+    schedule_source TEXT NOT NULL DEFAULT '',
+    publish_started_at INTEGER,
+    publish_error TEXT,
+    published_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key),
@@ -238,12 +244,19 @@ for (const [name, sql] of [
   ['approved_text', 'ALTER TABLE queue_items ADD COLUMN approved_text TEXT'],
   ['output_tweet_id', 'ALTER TABLE queue_items ADD COLUMN output_tweet_id TEXT'],
   ['output_url', 'ALTER TABLE queue_items ADD COLUMN output_url TEXT'],
+  ['schedule_urgency', "ALTER TABLE queue_items ADD COLUMN schedule_urgency TEXT NOT NULL DEFAULT 'evergreen'"],
+  ['scheduled_at', 'ALTER TABLE queue_items ADD COLUMN scheduled_at INTEGER'],
+  ['schedule_source', "ALTER TABLE queue_items ADD COLUMN schedule_source TEXT NOT NULL DEFAULT ''"],
+  ['publish_started_at', 'ALTER TABLE queue_items ADD COLUMN publish_started_at INTEGER'],
+  ['publish_error', 'ALTER TABLE queue_items ADD COLUMN publish_error TEXT'],
+  ['published_at', 'ALTER TABLE queue_items ADD COLUMN published_at INTEGER'],
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_priority ON queue_items(lane, status, priority DESC, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_source ON queue_items(target_tweet_id, engagement_kind, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_main_schedule ON queue_items(lane, status, scheduled_at, updated_at DESC);
 `);
 
 function json(value, fallback) {
@@ -414,6 +427,12 @@ function decodeQueueItem(row) {
     approvedText: row.approved_text,
     outputTweetId: row.output_tweet_id,
     outputUrl: row.output_url,
+    scheduleUrgency: row.schedule_urgency || 'evergreen',
+    scheduledAt: row.scheduled_at == null ? null : Number(row.scheduled_at),
+    scheduleSource: row.schedule_source || '',
+    publishStartedAt: row.publish_started_at == null ? null : Number(row.publish_started_at),
+    publishError: row.publish_error || '',
+    publishedAt: row.published_at == null ? null : Number(row.published_at),
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0),
   };
@@ -473,7 +492,9 @@ export function saveQueueItem(item) {
     recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?,
     target_username = ?, target_tweet_id = ?, engagement_kind = ?, parent_our_tweet_id = ?,
     priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
-    engagement_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?, updated_at = ?
+    engagement_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
+    schedule_urgency = ?, scheduled_at = ?, schedule_source = ?, publish_started_at = ?,
+    publish_error = ?, published_at = ?, updated_at = ?
     WHERE id = ?`).run(
     next.lane,
     next.pipeline,
@@ -499,10 +520,173 @@ export function saveQueueItem(item) {
     next.approvedText ?? null,
     next.outputTweetId ?? null,
     next.outputUrl ?? null,
+    next.scheduleUrgency || 'evergreen',
+    next.scheduledAt ?? null,
+    next.scheduleSource || '',
+    next.publishStartedAt ?? null,
+    next.publishError || null,
+    next.publishedAt ?? null,
     Date.now(),
     current.id,
   );
   return getQueueItem(current.id);
+}
+
+const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const SCHEDULE_URGENCIES = new Set(['evergreen', 'timely', 'viral']);
+
+function buildMainFeedScheduleItem(queueItem) {
+  if (!queueItem) return null;
+  const candidate = getCandidate(queueItem.candidateKey);
+  const draft = queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey);
+  const media = draft?.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
+  const isRepost = queueItem.pipeline === 'repost';
+  const gatesPassed = isRepost
+    ? Boolean(queueItem.humanApprovedAt)
+    : Boolean(draft && draft.status === 'ready' && draft.gates?.passed === true && media.required !== true);
+  const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
+  const body = String(draft?.body || '');
+  const text = queueItem.pipeline === 'thread' ? String(threadParts[0] || '') : body;
+  return {
+    ...queueItem,
+    priority: null,
+    urgency: queueItem.scheduleUrgency || 'evergreen',
+    humanScheduleOverrideAt: queueItem.scheduleSource === 'human' ? queueItem.scheduledAt : null,
+    qualityScore: Number(draft?.qualityScore || 0),
+    gatesPassed,
+    published: queueItem.publishedAt != null || Boolean(queueItem.outputTweetId),
+    body,
+    text,
+    threadParts,
+    semanticAnchors: Array.isArray(draft?.editor?.semanticAnchors) ? draft.editor.semanticAnchors : [],
+    topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
+    media,
+    candidate,
+    draft,
+  };
+}
+
+export function getMainFeedScheduleItem(candidateKey) {
+  const queueItem = getQueueItemByCandidate(candidateKey);
+  if (!queueItem || !['main', 'main_feed'].includes(queueItem.lane) || !MAIN_FEED_PIPELINES.has(queueItem.pipeline)) return null;
+  return buildMainFeedScheduleItem(queueItem);
+}
+
+export function listApprovedMainFeedItems({ automatedOnly = false, limit = 100 } = {}) {
+  const pipelines = automatedOnly ? AUTOMATED_MAIN_FEED_PIPELINES : MAIN_FEED_PIPELINES;
+  const bounded = Math.max(1, Math.min(500, Number(limit || 100)));
+  return db.prepare(`SELECT * FROM queue_items
+    WHERE lane IN ('main', 'main_feed') AND status = 'approved'
+    ORDER BY updated_at ASC LIMIT ?`).all(bounded)
+    .map(decodeQueueItem)
+    .filter((item) => pipelines.has(item.pipeline))
+    .map(buildMainFeedScheduleItem);
+}
+
+export function listRecentMainFeedPublications({ limit = 20 } = {}) {
+  const bounded = Math.max(1, Math.min(100, Number(limit || 20)));
+  const published = db.prepare(`SELECT * FROM queue_items
+    WHERE lane IN ('main', 'main_feed') AND status = 'published' AND published_at IS NOT NULL
+      AND pipeline IN ('original', 'quote', 'thread', 'repost')
+    ORDER BY published_at DESC LIMIT ?`).all(bounded).map(decodeQueueItem).map(buildMainFeedScheduleItem);
+  const seen = new Set(published.map((item) => item.candidateKey));
+  const legacy = db.prepare(`SELECT candidate_key, updated_at FROM drafts
+    WHERE status = 'published' ORDER BY updated_at DESC LIMIT ?`).all(bounded);
+  for (const row of legacy) {
+    if (seen.has(row.candidate_key)) continue;
+    const queueItem = getQueueItemByCandidate(row.candidate_key);
+    if (queueItem && (!['main', 'main_feed'].includes(queueItem.lane) || !MAIN_FEED_PIPELINES.has(queueItem.pipeline))) continue;
+    const draft = getDraftByCandidate(row.candidate_key);
+    const candidate = getCandidate(row.candidate_key);
+    const pipeline = queueItem?.pipeline && MAIN_FEED_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
+    const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
+    published.push({
+      ...(queueItem || {}),
+      candidateKey: row.candidate_key,
+      pipeline,
+      priority: null,
+      urgency: queueItem?.scheduleUrgency || 'evergreen',
+      published: true,
+      publishedAt: Number(row.updated_at || 0),
+      qualityScore: Number(draft?.qualityScore || 0),
+      body: String(draft?.body || ''),
+      text: pipeline === 'thread' ? String(threadParts[0] || '') : String(draft?.body || ''),
+      threadParts,
+      semanticAnchors: Array.isArray(draft?.editor?.semanticAnchors) ? draft.editor.semanticAnchors : [],
+      topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
+    });
+    seen.add(row.candidate_key);
+  }
+  return published.sort((a, b) => Number(b.publishedAt || 0) - Number(a.publishedAt || 0)).slice(0, bounded);
+}
+
+export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('Main-feed schedule overrides require an explicit human action.');
+  const current = getQueueItemByCandidate(candidateKey);
+  if (!current || !['main', 'main_feed'].includes(current.lane) || !MAIN_FEED_PIPELINES.has(current.pipeline)) {
+    throw new Error(`Main-feed queue item not found: ${candidateKey}`);
+  }
+  if (current.status !== 'approved') throw new Error('Main-feed scheduling controls are available only after human approval.');
+  const urgency = changes.scheduleUrgency == null ? current.scheduleUrgency : String(changes.scheduleUrgency);
+  if (!SCHEDULE_URGENCIES.has(urgency)) throw new Error(`Invalid schedule urgency: ${urgency}`);
+  const scheduledAt = changes.scheduledAt === undefined || changes.scheduledAt === current.scheduledAt
+    ? current.scheduledAt
+    : (changes.scheduledAt == null ? null : Number(changes.scheduledAt));
+  const expiresAt = changes.expiresAt === undefined || changes.expiresAt === current.expiresAt
+    ? current.expiresAt
+    : (changes.expiresAt == null ? null : Number(changes.expiresAt));
+  if (scheduledAt != null && !Number.isFinite(scheduledAt)) throw new Error('Invalid main-feed schedule override time.');
+  if (expiresAt != null && !Number.isFinite(expiresAt)) throw new Error('Invalid main-feed expiry time.');
+  if (scheduledAt != null && expiresAt != null && scheduledAt >= expiresAt) {
+    throw new Error('Main-feed schedule override must be before expiry.');
+  }
+  return saveQueueItem({
+    ...current,
+    scheduleUrgency: urgency,
+    scheduledAt,
+    scheduleSource: scheduledAt == null ? '' : 'human',
+    expiresAt,
+  });
+}
+
+export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('claimQueueItem requires a numeric now timestamp.');
+  const params = [timestamp, timestamp, Number(id), timestamp];
+  let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
+    WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
+      AND pipeline IN ('original', 'quote', 'thread') AND human_approved_at IS NOT NULL
+      AND (expires_at IS NULL OR expires_at > ?)
+      AND published_at IS NULL AND output_tweet_id IS NULL`;
+  if (expectedUpdatedAt != null) {
+    sql += ' AND updated_at = ?';
+    params.push(Number(expectedUpdatedAt));
+  }
+  const result = db.prepare(sql).run(...params);
+  return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+}
+
+export function markQueuePublished(id, tweetId, outputUrl = null, { publishedAt = Date.now() } = {}) {
+  const normalizedTweetId = String(tweetId || '').trim();
+  if (!normalizedTweetId) throw new Error('markQueuePublished requires tweetId.');
+  const timestamp = Number(publishedAt);
+  if (!Number.isFinite(timestamp)) throw new Error('markQueuePublished requires a numeric publishedAt timestamp.');
+  const result = db.prepare(`UPDATE queue_items SET status = 'published', output_tweet_id = ?, output_url = ?,
+      published_at = ?, publish_error = NULL, updated_at = ? WHERE id = ? AND status = 'publishing'`)
+    .run(normalizedTweetId, outputUrl || null, timestamp, timestamp, Number(id));
+  if (Number(result.changes || 0) !== 1) throw new Error(`Queue item ${id} is not in publishing state.`);
+  return getQueueItem(Number(id));
+}
+
+export function markQueueFailed(id, error, { failedAt = Date.now() } = {}) {
+  const timestamp = Number(failedAt);
+  if (!Number.isFinite(timestamp)) throw new Error('markQueueFailed requires a numeric failedAt timestamp.');
+  const message = String(error?.message || error || 'Publication failed.');
+  const result = db.prepare(`UPDATE queue_items SET status = 'failed', publish_error = ?, updated_at = ?
+    WHERE id = ? AND status = 'publishing'`).run(message, timestamp, Number(id));
+  if (Number(result.changes || 0) !== 1) throw new Error(`Queue item ${id} is not in publishing state.`);
+  return getQueueItem(Number(id));
 }
 
 const ENGAGEMENT_TERMINAL_STATUSES = new Set(['ignored', 'expired', 'published', 'failed']);

@@ -329,13 +329,17 @@ Phase 1A workflow is current:
 3. `writer-packet` prepares inspectable writing context and `apply-writer-output` persists allow-listed editor output without workflow authorization.
 4. `status: ready` through `update-draft` only requests `needs_review`; review computes and persists current hard gates even when they fail so the human can inspect them.
 5. The dashboard's explicit human **Approve for publishing** action recomputes the latest gates and is the only workflow path that moves a main-feed item to `approved` and sets its associated text draft to compatibility `ready`.
-6. Engage Next uses the same drafting/review gates but a distinct explicit **Approve & send exact reply** boundary; approved engagement drafts are excluded from the daemon's main-feed ready selector.
+6. Engage Next uses the same drafting/review gates but a distinct explicit **Approve & send exact reply** boundary; approved engagement drafts are excluded from main-feed scheduling/publication.
+7. Phase 3 uses the approved **main-feed queue row** as publication authority. The scheduler computes priority/time without changing approval; an optional concrete human time override is stored separately from approval.
+8. With `AUTO_POST=true`, automation atomically claims one due Original/Quote/Thread row from `approved` to `publishing` before transport. Success becomes `published`; a transport failure becomes inspectable `failed`. Repost remains manual.
 
 Inspect workflow state:
 
 ```bash
 printf '%s' '{"limit":20}' | node agent_bridge.js queue
 printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js workflow
+printf '%s' '{}' | node agent_bridge.js schedule-next
+printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js schedule-inspect
 ```
 
 Route an item without approving it:
@@ -344,13 +348,13 @@ Route an item without approving it:
 printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
 ```
 
-The automation daemon now refreshes Engage Next after research, with observed responses checked before cold opportunities, but it does **not** send replies. Its publication consumer still selects only human-approved compatibility `ready` drafts from the main lane, preserving the existing main-feed publishing behavior while keeping engagement execution one-by-one and explicit.
+The automation daemon refreshes Engage Next after research, with observed responses checked before cold opportunities, but it does **not** send replies. Main-feed selection no longer uses compatibility-ready draft FIFO: it reads approved main-feed queue items, supplies current/recent publication context to `scheduler.js`, and considers only scheduler-eligible Original/Quote/Thread items for daemon publication.
 
-When `AUTO_POST=false`, automation only previews the next compatibility-ready main-feed draft. When `AUTO_POST=true`, it may publish the next eligible main-feed draft after the existing cooldown. Engagement approval never makes a reply eligible for this daemon path.
+When `AUTO_POST=false`, automation previews the recommendation and performs **no claim and no transport call**. When `AUTO_POST=true`, it atomically claims the exact approved queue snapshot before transport. Scheduler spacing/urgency/expiry are editorial coverage heuristics labeled `EMPIRICAL_VARIABLE`; there is no fake-human minimum interval or jitter. Original uses ordinary tweet creation, Quote uses the stored source tweet ID, and Thread uses the approved explicit thread parts as one main-feed unit. Engagement approval never makes a reply eligible for this daemon path, and Repost remains manual.
 
-A successfully published main-feed draft is marked `published` and records the returned tweet ID. A successful Engage Next reply is recorded by the explicit engagement send path instead.
+A successful main-feed transport marks the queue item `published`, stores its root tweet ID/output URL/publication time, updates the associated draft, and records the candidate action. A transport failure after claim becomes `failed` with its error and is not silently retried. If X succeeds but local recording is incomplete, the item remains non-approved/non-retryable with inspectable recording state. A successful Engage Next reply is recorded by the explicit engagement send path instead.
 
-Implemented here: Phase-2 format-aware writing/gates plus Phase-1C Engage Next persistence, discovery/follow-up, dashboard/bridge, human-approved exact-reply send, and refresh-only automation. Still planned: Account Health, actual media upload/readiness, the Phase-3 scheduler/format-aware publishing migration, experiments, follower conversion, and learned strategy.
+Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next, and Phase-3 queue-aware main-feed scheduling/claiming plus Original/Quote/Thread HTTP publication. Still planned: Account Health, actual media upload/readiness, experiments/follower conversion, and learned strategy.
 
 ## Agent behavior by user request
 

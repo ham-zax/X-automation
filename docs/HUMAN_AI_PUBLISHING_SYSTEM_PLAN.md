@@ -46,9 +46,10 @@
 - candidate action history for direct/quote/repost/reply actions;
 - audience follower/following snapshot and relevance scoring;
 - Direct / Quote / Repost / Reply / Ignore recommendation logic;
-- structured drafts and 50-point scoring;
-- `ready` draft queue;
-- ordinary posting cooldown;
+- format-aware structured drafts, deterministic hard gates, and separate 50-point scoring;
+- human-approved main-feed queue state plus compatibility `ready` draft integrity marker;
+- coverage-aware main-feed scheduler with explicit empirical timing assumptions;
+- atomic publication claim plus Original/Quote/Thread HTTP transport and inspectable outcomes;
 - performance snapshots;
 - agent JSON bridge;
 - Bootstrap dashboard;
@@ -60,23 +61,13 @@
 - `needs_review` workflow state and explicit dashboard human approval boundary;
 - temporary compatibility bridge where human approval alone sets an associated text draft to `ready`.
 
-### Planned by this document
+### Remaining work from this document
 
-- final writing-prompt contract;
-- hard pre-publication gate beyond the numeric rubric;
-- media planning and upload attachment metadata;
-- urgency/expiry model for viral content;
-- coverage-aware scheduler with viral pre-emption;
-- format-aware publishing for originals, quotes, and threads;
-- post-publication measurement windows;
-- learned timing and format recommendations from account outcomes;
-- relationship profiles/events, target classes, TargetScore, and relationship-stage derivation;
-- a dedicated Engagement Queue for relevant, time-sensitive reply and follow-up opportunities;
+- actual media upload/attachment-ID readiness while preserving the existing media-plan hard block;
 - Account Health / visibility observability with HEALTHY/WATCH/CONSTRAINED state, Under the Hood snapshots when observable, soft saturation/repetition diagnostics, Network Quality, and InteractionYield;
+- post-publication measurement windows and follower/relationship conversion analytics;
 - an Experiment Engine for controlled content/network/timing hypotheses without duplicate posting;
-- four-dimensional candidate scoring: Reach Potential, Follow Potential, Conversation Potential, and Relationship Potential;
-- follower-conversion plus relationship-conversion analytics that prioritize recruiting and connecting with the target AI/developer/builder network over vanity reach;
-- a learned-strategy layer that can propose bounded account-specific adjustments after enough evidence accumulates.
+- learned timing/format/targeting recommendations and bounded account-specific strategy adjustments after enough evidence accumulates.
 
 ## Target Operating Loop
 
@@ -133,13 +124,10 @@ HARD GATES + QUALITY SCORE
 HUMAN APPROVAL
         |
         v
-TIMING ENGINE
+TIMING ENGINE / OPTIONAL HUMAN OVERRIDE
         |
         v
-SCHEDULED
-        |
-        v
-PUBLISH
+ATOMIC CLAIM + PUBLISH
         |
         v
 15m / 1h / 6h / 24h OUTCOMES
@@ -157,7 +145,7 @@ The viral lane shortens the middle of the loop but does not remove factual verif
 VIRAL SIGNAL -> URGENT TRIAGE -> VERIFY -> DIRECT/QUOTE -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST COVERAGE SLOT
 ```
 
-## Planned Pipeline Types
+## Pipeline Types
 
 | Pipeline | Purpose | Main-feed slot? | Draft required? | Human approval? |
 | --- | --- | --- | --- | --- |
@@ -170,7 +158,7 @@ VIRAL SIGNAL -> URGENT TRIAGE -> VERIFY -> DIRECT/QUOTE -> FAST DRAFT -> GATE ->
 | `watch` | Re-evaluate a developing signal later | No | No | No |
 | `ignore` | Remove weak/used/off-niche signal from active queue | No | No | No |
 
-## Planned Queue States
+## Queue States
 
 ```text
 triage
@@ -178,7 +166,6 @@ triage
   -> drafting
   -> needs_review
   -> approved
-  -> scheduled
   -> publishing
   -> published
 ```
@@ -190,13 +177,13 @@ Alternative terminal states:
 - `ignored`
 - `failed`
 
-AI-controlled transitions stop at `needs_review`. Only a human approval action can move a queued main-feed item to `approved`. The scheduler owns `approved -> scheduled`. The publisher owns `scheduled -> publishing -> published`.
+AI-controlled transitions stop at `needs_review`. Only a human approval action can move a queued main-feed item to `approved`. Phase 3 keeps scheduler timing advisory while the row remains `approved`; `scheduled_at` is an optional explicit human override, not a separate authorization state. When automatic publication is enabled, the publisher atomically claims the exact approved item as `publishing`; transport success becomes `published`, while a transport failure becomes `failed` and is not silently retried in the same cycle.
 
-## Data Model: Phase 1A current, later fields planned
+## Data Model: current workflow plus later measurement fields
 
-Phase 1A now uses `queue_items` rather than overloading `drafts` with workflow responsibility. Later phases extend this workflow record with their owned fields.
+`queue_items` owns workflow/approval and now also carries Phase-3 main-feed scheduling/publication metadata. `drafts` remains the content owner. Phase-1C engagement's numeric `priority`/`urgency` fields remain lane-specific; Phase 3 deliberately uses a separate textual `schedule_urgency` so main-feed timing does not reinterpret EngagePriority freshness.
 
-Planned fields:
+Current/forward fields:
 
 ```text
 id
@@ -204,8 +191,8 @@ candidate_key
 lane
 pipeline
 status
-priority
-urgency
+priority (engagement lane)
+urgency (engagement lane)
 reach_potential
 follow_potential
 conversation_potential
@@ -223,8 +210,13 @@ media_plan_json
 expires_at
 human_approved_at
 scheduled_at
-schedule_reason
-published_tweet_id
+schedule_urgency
+schedule_source
+publish_started_at
+publish_error
+published_at
+output_tweet_id
+output_url
 created_at
 updated_at
 ```
@@ -233,7 +225,7 @@ Responsibilities remain separate:
 
 - `candidates`: discovered/manual source material and preference state;
 - `drafts`: text composition and quality score;
-- `queue_items`: workflow, lane, approval, opportunity scores, urgency, experiment assignment, scheduling;
+- `queue_items`: workflow, lane, approval, opportunity scores, engagement priority/freshness, main-feed schedule override/urgency, publication claim/outcome, and later experiment assignment;
 - `candidate_actions`: historical candidate-based actions actually performed;
 - `audience_profiles`: raw follower/following observations and current niche relevance;
 - `relationship_profiles`: strategic target classes, TargetScore components, relationship stage, and materialized interaction counters;
@@ -617,7 +609,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - [x] Store the Phase-2 media plan inside draft editor metadata: required flag, type, reason, source/local evidence reference, and alt text.
 - [x] Normalize the persisted/editor media enum to `none`, `screenshot`, `chart`, `code`, `diagram`.
 - [x] Default to no media unless it proves or explains something the text cannot; required media blocks approval while readiness is unavailable.
-- [ ] Add actual attachment/media-ID persistence and reuse available upload transport in Phase 3; Phase 2 does not fake readiness or upload media.
+- [ ] Add actual attachment/media-ID persistence in a dedicated media-upload integration using the available transport; current Phase-3 distribution does not fake readiness or upload media.
 
 **Acceptance criteria:**
 - An approved item can clearly explain why it needs media, and the publisher can attach an already prepared media ID without changing text workflow responsibility.
@@ -630,17 +622,17 @@ The scheduler/account-health layer must not convert any of these observations in
 - Modify: `store.js`
 
 **Interfaces:**
-- Consumes: queue items, viral velocity, source age, approval time, existing scheduled/published items.
-- Produces: `scheduled_at`, schedule reason, expiry decisions.
+- Consumes: approved queue items, caller/operator urgency/expiry evidence, approval time, optional human override, and recent published items.
+- Produces: a deterministic recommendation/reason plus optional human `scheduled_at` metadata; it does not self-approve or invent expiry evidence.
 
 **Steps:**
-- [ ] Define urgency classes `evergreen`, `timely`, `viral`.
-- [ ] Estimate `expires_at` for time-sensitive items.
-- [ ] Serialize main-feed items so only one publication occupies a given slot.
-- [ ] Use an ordinary ~3-hour separation target / 4-6-hour evergreen preference as advisory editorial defaults for non-urgent main-feed items, not hard eligibility floors.
-- [ ] Allow viral items to pre-empt evergreen order and recommend immediate serialized publication after approval when shelf-life outweighs overlap risk.
-- [ ] Expire or reroute viral commentary that will be stale before its next viable slot.
-- [ ] Keep timing parameters explicitly framed as coverage heuristics that can later be learned from account data.
+- [x] Define persisted main-feed urgency classes `evergreen`, `timely`, `viral` without reusing Phase-1C's numeric engagement urgency.
+- [x] Persist/use explicit `expires_at` supplied by the current workflow/operator; automatic expiry estimation is not invented without an owning evidence rule.
+- [x] Serialize enabled main-feed publication through a one-winner atomic queue claim.
+- [x] Use an ordinary ~3-hour separation target / 4-6-hour evergreen preference as advisory editorial defaults for non-urgent main-feed items, not hard eligibility floors.
+- [x] Allow viral items to pre-empt evergreen order and recommend immediate serialized publication after approval when shelf-life outweighs overlap risk.
+- [x] Refuse stale/expired scheduler recommendations instead of silently treating them as evergreen content.
+- [x] Keep timing parameters explicitly framed as coverage heuristics that can later be learned from account data.
 
 **Acceptance criteria:**
 - Viral items can jump ahead without causing simultaneous main-feed publication, while stale viral content does not remain queued as evergreen content.
@@ -657,11 +649,11 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: one publication action or research-only cycle per scheduler decision.
 
 **Steps:**
-- [ ] Replace draft-only FIFO selection with scheduler selection from approved queue items.
-- [ ] Keep research refresh independent from publication selection.
-- [ ] Publish at most one eligible main-feed queue item per cycle.
-- [ ] Preserve `AUTO_POST=false` as preview mode.
-- [ ] Record publish outcome back into queue state and `candidate_actions`.
+- [x] Replace draft-only FIFO selection with scheduler selection from approved queue items.
+- [x] Keep research/Engage Next refresh independent from publication selection.
+- [x] Publish at most one eligible main-feed queue item per cycle and atomically claim it before transport.
+- [x] Preserve `AUTO_POST=false` as preview mode with zero claim/transport writes.
+- [x] Record publish outcome back into queue state, associated draft, and `candidate_actions`.
 
 **Acceptance criteria:**
 - A research cycle never publishes an unapproved item and never drains several main-feed items in one burst.
@@ -677,11 +669,11 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: published X IDs and URLs.
 
 **Steps:**
-- [ ] Route `original` to ordinary post creation.
-- [ ] Route `quote` to CreateTweet with the quoted tweet ID.
-- [ ] Route `thread` to the existing thread transport with the approved thread parts.
-- [ ] Keep `reply` as a separately approved interaction path rather than ordinary autonomous queue publication.
-- [ ] Keep `repost` rare and explicit rather than treating it as a default publishing format.
+- [x] Route `original` to ordinary post creation through the existing HTTP owner.
+- [x] Route `quote` to CreateTweet with the stored source tweet ID.
+- [x] Route `thread` to the existing thread transport with the approved thread parts.
+- [x] Keep `reply` as a separately approved interaction path rather than ordinary autonomous queue publication.
+- [x] Keep `repost` rare, scheduler-visible, and manual because no stable automated repost transport is enabled in the current owner.
 
 **Acceptance criteria:**
 - The queue pipeline type determines the correct publication operation and the resulting action is recorded against the source candidate.
@@ -945,19 +937,22 @@ Implemented through the human-review boundary:
 - format-aware Original/Quote/Thread/Reply writing and structured writer packets;
 - deterministic hard gates plus the separate 50-point score;
 - persisted thread/editor/gate metadata and human factuality/evidence confirmation;
-- media-plan state with required media blocked until Phase 3 attachment readiness;
+- media-plan state with required media blocked until a real attachment/upload readiness path is implemented;
 - recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
 ### Phase 3 — Main-feed distribution
 
 Plan: `plans/PHASE_3_DISTRIBUTION_SCHEDULER.md`
 
-- urgency and expiry;
-- coverage-aware scheduler;
-- semantic conflict/self-cannibalization checks;
-- format-aware original/quote/thread publication;
-- queue claim/publish locking;
-- viral pre-emption without burst dumping.
+Implemented:
+
+- explicit main-feed urgency/expiry metadata and optional human time override separate from approval;
+- coverage-aware deterministic scheduler with semantic conflict/self-cannibalization checks and `EMPIRICAL_VARIABLE` timing labels;
+- approved queue state as publication authority instead of compatibility-ready draft FIFO;
+- one-winner atomic claim before enabled transport plus inspectable `published` / `failed` outcomes;
+- format-aware Original/Quote/Thread publication through the existing HTTP transport owner;
+- viral pre-emption without burst dumping, while Repost and engagement replies remain outside autonomous main-feed transport;
+- required media remains blocked because actual attachment/upload readiness is not implemented.
 
 ### Phase 4 — Measurement + content/network experiments
 
