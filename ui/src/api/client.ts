@@ -89,3 +89,42 @@ export function useConversations() {
     staleTime: 30_000,
   })
 }
+
+
+// Create types
+export interface Draft {
+  id: number
+  candidateKey: string
+  title: string
+  body: string
+  hook: string
+  insight: string
+  evidence: string
+  action: string
+  qualityScore: number
+  pipeline: string
+  status: string
+  scheduledAt: number | null
+  publishedTweetId: string | null
+  publishedAt: number | null
+  gates: Record<string, unknown>
+  href: string
+}
+
+export interface CreateData {
+  ideas: Draft[]
+  drafting: Draft[]
+  needsReview: Draft[]
+  approved: Draft[]
+  publishing: Draft[]
+  published: Draft[]
+  total: number
+}
+
+export function useCreate() {
+  return useQuery({
+    queryKey: ['create'],
+    queryFn: () => fetchApi<CreateData>('/create'),
+    staleTime: 30_000,
+  })
+}

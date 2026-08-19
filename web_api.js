@@ -173,6 +173,55 @@ export async function handleApi(req, res, requestUrl) {
       });
     }
 
+
+    if (req.method === 'GET' && path === '/create') {
+      const drafts = listQueueItems({ limit: 100 });
+      
+      // Group by lifecycle stage
+      const ideas = drafts.filter((d) => d.status === 'draft' && !d.approved);
+      const drafting = drafts.filter((d) => d.status === 'draft' && d.approved);
+      const needsReview = drafts.filter((d) => d.status === 'needs_review');
+      const approved = drafts.filter((d) => d.status === 'approved');
+      const publishing = drafts.filter((d) => d.status === 'publishing');
+      const published = drafts.filter((d) => d.status === 'published');
+      
+      const formatDraft = (item) => {
+        const draft = item.draft || {};
+        const candidate = item.candidateKey ? getCandidate(item.candidateKey) : null;
+        return {
+          id: item.id,
+          candidateKey: item.candidateKey,
+          title: candidate?.title || draft.title || 'Untitled draft',
+          body: draft.body || draft.editor?.finalText || '',
+          hook: draft.hook || '',
+          insight: draft.insight || '',
+          evidence: draft.evidence || '',
+          action: draft.action || '',
+          qualityScore: draft.qualityScore || 0,
+          pipeline: item.pipeline || 'original',
+          status: item.status,
+          scheduledAt: item.scheduledAt,
+          publishedTweetId: item.publishedTweetId,
+          publishedAt: item.publishedAt,
+          gates: draft.gates || {},
+          href: `/?source=drafts&draft=${item.id}`,
+        };
+      };
+      
+      return sendJson(200, {
+        state: 'success',
+        data: {
+          ideas: ideas.map(formatDraft),
+          drafting: drafting.map(formatDraft),
+          needsReview: needsReview.map(formatDraft),
+          approved: approved.map(formatDraft),
+          publishing: publishing.map(formatDraft),
+          published: published.map(formatDraft),
+          total: drafts.length,
+        }
+      });
+    }
+
     // Fallback
     return sendJson(404, {
       state: 'error',
