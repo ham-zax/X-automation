@@ -17,7 +17,12 @@ import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft, weighte
 import { generateWriterOutput } from './writer_runtime.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
-import { syncAudience, unfollowAudienceUser } from './audience.js';
+import {
+  AUDIENCE_NICHE_LABELS,
+  classifyAudienceProfile,
+  syncAudience,
+  unfollowAudienceUser,
+} from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
@@ -706,46 +711,104 @@ function audienceView(error = null) {
   const summary = getAudienceSummary();
   const nicheThreshold = 12;
   const allFollowing = listAudienceProfiles({ youFollow: true, minScore: 0, limit: Math.max(100, summary.following + 20) });
-  const outsideFollowing = allFollowing
-    .filter((profile) => profile.relevanceScore < nicheThreshold)
-    .sort((left, right) => Number(left.followsYou) - Number(right.followsYou) || left.relevanceScore - right.relevanceScore || left.username.localeCompare(right.username));
-  const targets = listAudienceProfiles({ youFollow: true, followsYou: false, minScore: 12, limit: 40 });
+
+  const classifiedFollowing = allFollowing.map((profile) => {
+    const classification = classifyAudienceProfile(profile);
+    const fitBucket = profile.relevanceScore >= nicheThreshold
+      ? 'in_niche'
+      : classification.fitBucket;
+    return {
+      ...profile,
+      relevanceScore: Math.max(profile.relevanceScore, classification.relevanceScore),
+      nicheTags: profile.nicheTags.length ? profile.nicheTags : classification.nicheTags,
+      matchedKeywords: profile.matchedKeywords.length ? profile.matchedKeywords : classification.matchedKeywords,
+      negativeMatches: classification.negativeMatches || [],
+      fitBucket,
+    };
+  });
+
+  const outsideFollowing = classifiedFollowing
+    .filter((profile) => profile.fitBucket === 'outside_niche')
+    .sort((left, right) => Number(left.followsYou) - Number(right.followsYou) || left.username.localeCompare(right.username));
+
+  const uncertainFollowing = classifiedFollowing
+    .filter((profile) => profile.fitBucket === 'uncertain')
+    .sort((left, right) => Number(left.followsYou) - Number(right.followsYou) || left.username.localeCompare(right.username));
+
+  const inNicheFollowing = classifiedFollowing.filter((profile) => profile.fitBucket === 'in_niche');
+
+  const targets = classifiedFollowing
+    .filter((profile) => !profile.followsYou && profile.fitBucket === 'in_niche')
+    .slice(0, 40);
   const relevantFollowers = listAudienceProfiles({ followsYou: true, minScore: 12, limit: 20 });
+
   const stats = `<div class="row g-3 mb-4">
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Observed followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.followers)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_followers)}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_following)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(inNicheFollowing.length)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Outside-niche following</div><div class="fs-3 fw-semibold">${formatNumber(outsideFollowing.length)}</div></div></div></div>
   </div>`;
+
   const profileCards = (profiles, title, note) => `<h2 class="h5 mt-4">${escapeHtml(title)}</h2><p class="text-secondary small">${escapeHtml(note)}</p>${profiles.map((profile) => `<div class="card border-0 shadow-sm mb-2"><div class="card-body py-3">
     <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary">${escapeHtml(profile.bio)}</div></div><div class="d-flex gap-2 align-items-start flex-wrap"><span class="badge text-bg-primary">fit ${profile.relevanceScore}/50</span><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div></div>
-    <div class="d-flex gap-1 flex-wrap mt-2">${profile.nicheTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(NICHE_LABELS[tag] || tag)}</span>`).join('')}</div>
+    <div class="d-flex gap-1 flex-wrap mt-2">${profile.nicheTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(AUDIENCE_NICHE_LABELS[tag] || NICHE_LABELS[tag] || tag)}</span>`).join('')}</div>
   </div></div>`).join('') || '<div class="alert alert-secondary">No matching profiles in the current snapshot.</div>'}`;
-  const outsideRow = (profile) => {
+
+  const renderCandidateRow = (profile, bucket) => {
     const relationship = profile.followsYou ? '<span class="badge text-bg-warning">follows you too</span>' : '<span class="text-secondary">one-way follow</span>';
-    const signals = profile.nicheTags.length
-      ? profile.nicheTags.map((tag) => NICHE_LABELS[tag] || tag).join(', ')
-      : profile.matchedKeywords.length
-        ? profile.matchedKeywords.slice(0, 4).join(', ')
-        : 'No current AI/dev/builder signal';
-    const fitLabel = profile.relevanceScore <= 3 ? 'Very low fit' : profile.relevanceScore < nicheThreshold ? 'Outside current niche' : 'In niche';
+    let fitBadgeClass = 'text-bg-light border';
+    let fitLabel = 'In niche';
+    let signals = '';
+
+    if (bucket === 'outside_niche') {
+      fitBadgeClass = 'text-bg-danger';
+      fitLabel = 'Outside current niche';
+      signals = profile.negativeMatches?.length
+        ? `Outside-niche: ${profile.negativeMatches.slice(0, 4).join(', ')}`
+        : 'Non-technical signal';
+    } else if (bucket === 'uncertain') {
+      fitBadgeClass = 'text-bg-secondary';
+      fitLabel = 'Not enough profile evidence';
+      signals = 'No recognizable profile signals';
+    } else {
+      fitBadgeClass = 'text-bg-primary';
+      fitLabel = 'In niche';
+      signals = profile.nicheTags.length
+        ? profile.nicheTags.map((tag) => AUDIENCE_NICHE_LABELS[tag] || NICHE_LABELS[tag] || tag).join(', ')
+        : profile.matchedKeywords.length
+          ? profile.matchedKeywords.slice(0, 4).join(', ')
+          : 'Developer/technical signal';
+    }
+
     return `<tr>
       <td><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)}</div><div class="small text-secondary">@${escapeHtml(profile.username)}</div><div class="small text-secondary text-break">${escapeHtml(profile.bio || 'No bio observed.')}</div></td>
-      <td><span class="badge ${profile.relevanceScore <= 3 ? 'text-bg-secondary' : 'text-bg-light border'}">${escapeHtml(fitLabel)} · ${profile.relevanceScore}/50</span></td>
+      <td><span class="badge ${fitBadgeClass}">${escapeHtml(fitLabel)} · ${profile.relevanceScore}/50</span></td>
       <td>${relationship}</td>
       <td class="small text-secondary">${escapeHtml(signals)}</td>
       <td class="small text-secondary">${profile.lastSeenAt ? escapeHtml(new Date(profile.lastSeenAt).toLocaleDateString()) : 'unknown'}</td>
       <td><div class="d-flex gap-2 flex-wrap"><form method="post" action="/audience/unfollow" class="m-0"><input type="hidden" name="username" value="${escapeHtml(profile.username)}"><input type="hidden" name="confirmUnfollow" value="1"><button class="btn btn-danger btn-sm" type="submit">Unfollow</button></form><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank" rel="noopener">View profile ↗</a></div></td>
     </tr>`;
   };
-  const cleanupBatch = outsideFollowing.slice(0, 10);
-  const cleanupRows = cleanupBatch.map(outsideRow).join('');
-  const remainingRows = outsideFollowing.slice(10).map(outsideRow).join('');
-  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">Review the lowest-fit accounts one at a time. Unfollow acts immediately for that one account; there is no bulk unfollow action.</p></div></div>
-    ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> Each Unfollow button performs one explicit XActions unfollow immediately. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${cleanupRows}</tbody></table></div>${remainingRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - cleanupBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow are currently below the niche threshold.</div>'}
+
+  const outsideBatch = outsideFollowing.slice(0, 10);
+  const outsideRows = outsideBatch.map((p) => renderCandidateRow(p, 'outside_niche')).join('');
+  const remainingOutsideRows = outsideFollowing.slice(10).map((p) => renderCandidateRow(p, 'outside_niche')).join('');
+
+  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">High-confidence removal candidates with positive evidence of non-technical focus (e.g., crypto trading, spam, adult content). Unfollow acts immediately for that one account; there is no bulk unfollow action.</p></div></div>
+    ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> Each Unfollow button performs one explicit XActions unfollow immediately. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${outsideRows}</tbody></table></div>${remainingOutsideRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - outsideBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingOutsideRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow have confirmed outside-niche signals.</div>'}
   </section>`;
+
+  const uncertainBatch = uncertainFollowing.slice(0, 10);
+  const uncertainRows = uncertainBatch.map((p) => renderCandidateRow(p, 'uncertain')).join('');
+  const remainingUncertainRows = uncertainFollowing.slice(10).map((p) => renderCandidateRow(p, 'uncertain')).join('');
+
+  const uncertainSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts with uncertain fit / not enough profile evidence <span class="badge text-bg-light border">${uncertainFollowing.length}</span></h2><p class="text-secondary small mb-0">These accounts do not contain recognizable developer or non-niche keywords in their profile bio. They are uncertain rather than confirmed low fit. Review individually before deciding to unfollow.</p></div></div>
+    ${uncertainFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Uncertain accounts:</strong> Missing keywords is lack of evidence, not negative evidence. Accounts that follow you back are flagged.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${uncertainRows}</tbody></table></div>${remainingUncertainRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${uncertainFollowing.length - uncertainBatch.length} uncertain accounts</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingUncertainRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-secondary mt-3">No accounts with uncertain profile evidence.</div>'}
+  </section>`;
+
   return stats
     + outsideSection
+    + uncertainSection
     + profileCards(targets, 'In-niche accounts you follow', 'Relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships.')
     + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
 }
