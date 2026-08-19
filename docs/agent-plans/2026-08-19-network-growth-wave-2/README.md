@@ -1,7 +1,7 @@
 # Network Growth System — Wave 2 Agent Coordination
 
 **Repository:** `/home/hamza/repo/x_test`
-**Current integration base:** `aa08ddc` (Phase 1A + Relationship Intelligence + full Phase 2 + Engage Next Core + target timeline reader)
+**Current integration base:** `e116410` (Phase 1A + Relationship Intelligence + full Phase 2 + Engage Next Core/target discovery + Scheduler Core)
 **Source of truth:** `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`, `docs/plans/PHASE_1C_ENGAGE_NEXT.md`, `docs/plans/PHASE_2_CONTENT_QUALITY.md`, `docs/plans/PHASE_3_DISTRIBUTION_SCHEDULER.md`
 **Execution shape:** parallel isolated slices with central integration
 **Current wave:** 2
@@ -12,9 +12,9 @@
 |---|---|---|---|---|---|---|
 | Agent A — Engage Next Core | executable | complete + integrated (`1d480e3`) | complete | `/home/hamza/repo/x_test-w2-engagement` | isolated writer; verified one-file engagement core | none |
 | Agent A2 — Engage Target Discovery | executable | complete + integrated (`aa08ddc`) | complete | `/home/hamza/repo/x_test-w2-engagement` | verified one-file `tech_news.js` target reader | none |
-| Agent A3 — Engage Next Full Integration | executable/mixed | ready after branch reset to current coordination base | now | `/home/hamza/repo/x_test-w2-engagement` | owns remaining shared Phase-1C vertical while Agent B2 owns only `scheduler.js` | target discovery + Phase 2 integrated |
+| Agent A3 — Engage Next Full Integration | executable/mixed | active | now | `/home/hamza/repo/x_test-w2-engagement` | owns remaining shared Phase-1C vertical; currently writing shared persistence/UI/bridge/automation surfaces | target discovery + Phase 2 integrated |
 | Agent B — Phase 2 Content Integration | executable/mixed | complete + integrated (`0f75e9b`) | complete | `/home/hamza/repo/x_test-w2-content-integration` | verified 10-file Phase-2 integration slice | none |
-| Agent B2 — Distribution Scheduler Core | executable | ready after branch reset to current coordination base | now | `/home/hamza/repo/x_test-w2-content-integration` | sequential reuse of Agent B worktree; owns only new `scheduler.js` while Agent A2 owns `tech_news.js` | Phase 2 complete |
+| Agent B2 — Distribution Scheduler Core | executable | complete + integrated (`e116410`) | complete | `/home/hamza/repo/x_test-w2-content-integration` | verified one-file pure scheduler core | none |
 
 ## Dependency map
 
@@ -25,7 +25,7 @@
         |                              |
         v                              v
 Agent A3: Phase 1C Integration Agent B2: Scheduler Core
-store/read/UI/bridge/send      scheduler.js only
+store/read/UI/bridge/send      complete + integrated
         |                              |
         +---------------+--------------+
                         |
@@ -55,7 +55,7 @@ store/read/UI/bridge/send      scheduler.js only
 - Phase 2 persistence/workflow/UI/bridge integration is complete on main as `0f75e9b`.
 - Engage Next Core is integrated as `1d480e3`; target timeline discovery is integrated as `aa08ddc`.
 - **Agent A3 owns the remaining Phase-1C vertical:** engagement queue persistence, response discovery, relationship-event recording, Engage Next/Active Conversations UI and bridge commands, reviewable reply drafting, automation refresh, and one-at-a-time explicit approved-send behavior. It may modify shared Phase-1C files but must not modify `scheduler.js`.
-- **Agent B2 owns only new `scheduler.js`**. It must not modify store/pipeline/automation/transport/UI/bridge/content/engagement/read-path files.
+- Scheduler Core is integrated as `e116410`; `scheduler.js` is now a stable input to later Phase-3 integration.
 - No autonomous reply sending, queue claiming, scheduler transport migration, media upload, experiments, or learning in the current parallel slice.
 - No tests are authorized by current plans; use focused non-test evidence only.
 
@@ -63,9 +63,9 @@ store/read/UI/bridge/send      scheduler.js only
 
 The main checkout remains the single integration writer. Agents commit only to their assigned branches. The orchestrator verifies each branch against its mission, integrates centrally, resolves interface drift, and then materializes only the next ready frontier.
 
-Agent A2 and Agent B Phase-2 integration are landed. Agent A3 may now consume `engagement.js`, `fetchXTargetRecentPosts(...)`, relationship history, and the Phase-2 content/review workflow as stable dependencies. Agent B2 supplies only the pure `scheduler.js` decision layer, so the two active missions remain collision-free.
+Agent A2, Phase-2 integration, and Scheduler Core are landed. Agent A3 may consume `engagement.js`, `fetchXTargetRecentPosts(...)`, relationship history, and the Phase-2 content/review workflow as stable dependencies.
 
-After Agent A3 lands, Phase 1D becomes ready. After Agent B2 lands, Phase-3 store/claim/automation/transport/UI integration can be scheduled, but shared files should still be sequenced centrally against Agent A3 to avoid collisions.
+Do not start Phase-3 store/claim/automation/transport/UI integration while Agent A3 is active: it would collide on `store.js`, `automation.js`, `dashboard.js`, `agent_bridge.js`, and potentially transport integration. After Agent A3 lands, Phase 1D becomes ready and the next safe parallel fan-out is Phase-1D pure `health.js` core alongside Phase-3 integration.
 
 ## Execution lifetime policy
 
@@ -83,10 +83,10 @@ Use the narrowest direct evidence capable of disproving the claimed behavior. No
 
 ## Future / blocked work
 
-- Phase 1C full integration — Agent A3 ready now.
+- Phase 1C full integration — Agent A3 active now.
 - Phase 1D Account Health — blocked by completed Phase 1C relationship-event/engagement history.
-- Phase 3 scheduler core — Agent B2 ready now because Phase 1A + Phase 2 dependencies are satisfied.
-- Phase 3 persistence/claim/automation/format-aware transport integration — blocked by Agent B2 scheduler-core contract.
+- Phase 3 scheduler core — complete + integrated as `e116410`.
+- Phase 3 persistence/claim/automation/format-aware transport integration — scheduler core is ready, but execution is intentionally sequenced after Agent A3 because the integration surfaces overlap.
 - Phase 4 Measurement/Experiments — blocked by Phase 1B/1C relationship events, Phase 1D health diagnostics, and Phase 3 published queue metadata.
 - Phase 5 Learned Strategy — blocked by Phase 4 evidence and Phase 1D health contract.
 
@@ -98,3 +98,5 @@ Use the narrowest direct evidence capable of disproving the claimed behavior. No
 - `2026-08-19` — Agent B Phase-2 Content Integration `0dedaa2` verified and integrated on main as `0f75e9b`; Phase 2 is complete except intentionally deferred Phase-3 publication/media execution.
 - `2026-08-19` — Agent B2 scheduler-core mission materialized as the next independent Phase-3 slice while Agent A2 continues target discovery.
 - `2026-08-19` — Agent A2 Target Discovery `4e9083f` verified as one-file `tech_news.js` and integrated on main as `aa08ddc`; full Phase-1C integration is now ready.
+
+- `2026-08-19` — Agent B2 Scheduler Core `cce731b` verified as one-file `scheduler.js` and integrated on main as `e116410`; Agent B pauses until Agent A3 completes to avoid shared-file merge debt.
