@@ -1,7 +1,13 @@
 import 'dotenv/config';
 import { Scraper, createBrowser, createPage } from 'xactions';
 import { classifyNiche } from './strategy.js';
-import { replaceAudienceSnapshot, setAppState } from './store.js';
+import {
+  getAudienceProfile,
+  getRelationshipProfile,
+  refreshRelationshipFromAudience,
+  replaceAudienceSnapshot,
+  setAppState,
+} from './store.js';
 
 function normalizeCell(row) {
   const lines = String(row.text || '').split('\n').map((line) => line.trim()).filter(Boolean);
@@ -21,6 +27,23 @@ function normalizeCell(row) {
     nicheTags: niche.tags,
     matchedKeywords: niche.matches,
   };
+}
+
+export function refreshAudienceRelationships(usernames = []) {
+  const observed = [...new Set(usernames.map((username) => String(username || '').replace(/^@/, '').toLowerCase()).filter(Boolean))];
+  let refreshed = 0;
+  let skipped = 0;
+  for (const username of observed) {
+    const audienceProfile = getAudienceProfile(username);
+    if (!audienceProfile) continue;
+    if (!getRelationshipProfile(username) && audienceProfile.relevanceScore < 12) {
+      skipped++;
+      continue;
+    }
+    refreshRelationshipFromAudience(audienceProfile);
+    refreshed++;
+  }
+  return { observed: observed.length, refreshed, skipped };
 }
 
 async function scrapeRelationship(page, url, target, relationshipText) {
@@ -67,6 +90,10 @@ export async function syncAudience(username = 'ham_zax') {
     const followers = await scrapeRelationship(page, `https://x.com/${username}/followers`, Math.max(profile.followersCount, 1), 'Follows you');
     const following = await scrapeRelationship(page, `https://x.com/${username}/following`, Math.max(profile.followingCount, 1), 'Following');
     const summary = replaceAudienceSnapshot({ followers, following });
+    const relationshipRefresh = refreshAudienceRelationships([
+      ...followers.map((profile) => profile.username),
+      ...following.map((profile) => profile.username),
+    ]);
     const account = {
       username: profile.username,
       name: profile.name,
@@ -78,7 +105,7 @@ export async function syncAudience(username = 'ham_zax') {
       capturedAt: Date.now(),
     };
     setAppState('account_profile', JSON.stringify(account));
-    return { account, summary, followers: followers.length, following: following.length };
+    return { account, summary, followers: followers.length, following: following.length, relationshipRefresh };
   } finally {
     await browser.close();
   }

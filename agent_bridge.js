@@ -16,12 +16,15 @@ import {
   getDraftByCandidate,
   getNextReadyDraft,
   getPerformanceSnapshot,
+  getRelationshipProfile,
   hasCandidateAction,
   listAudienceProfiles,
   listCandidateActions,
   listCandidates,
   listDrafts,
   listQueueItems,
+  listRelationshipEvents,
+  listRelationshipProfiles,
   recordCandidateAction,
   saveDraft,
   upsertCandidates,
@@ -207,6 +210,34 @@ async function main() {
     return;
   }
 
+  if (command === 'relationship-targets') {
+    result({
+      targets: listRelationshipProfiles({
+        className: payload.className || payload.class || undefined,
+        stage: payload.stage || undefined,
+        minTargetScore: Number(payload.minTargetScore ?? payload.minScore ?? 0),
+        limit: Math.max(1, Math.min(200, Number(payload.limit || 30))),
+      }),
+    });
+    return;
+  }
+
+  if (command === 'relationship-inspect') {
+    const username = String(payload.username || '').replace(/^@/, '');
+    if (!username) throw new Error('relationship-inspect requires username.');
+    const profile = getRelationshipProfile(username);
+    if (!profile) throw new Error(`Relationship profile not found: ${username}`);
+    result({ profile, events: listRelationshipEvents(username, { limit: Math.max(1, Math.min(200, Number(payload.limit || 30))) }) });
+    return;
+  }
+
+  if (command === 'relationship-events') {
+    const username = String(payload.username || '').replace(/^@/, '');
+    if (!username) throw new Error('relationship-events requires username.');
+    result({ username, events: listRelationshipEvents(username, { limit: Math.max(1, Math.min(200, Number(payload.limit || 50))) }) });
+    return;
+  }
+
   if (command === 'audience-sync') {
     result(await syncAudience(payload.username || process.env.X_ACCOUNT || 'ham_zax'));
     return;
@@ -222,7 +253,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|update-draft|queue|route|workflow|research|performance|decide|record-action|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|update-draft|queue|route|workflow|research|performance|decide|record-action|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

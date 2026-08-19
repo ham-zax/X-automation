@@ -1,6 +1,12 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import path from 'path';
+import {
+  RELATIONSHIP_EVENT_TYPES,
+  RELATIONSHIP_STAGES,
+  TARGET_CLASSES,
+  refreshRelationshipProfile,
+} from './relationship.js';
 
 export const DB_FILE = path.resolve('.x-research.sqlite');
 
@@ -93,6 +99,53 @@ db.exec(`
     last_seen_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS relationship_profiles (
+    username TEXT PRIMARY KEY,
+    display_name TEXT,
+    bio TEXT,
+    classes_json TEXT NOT NULL DEFAULT '[]',
+    primary_topics_json TEXT NOT NULL DEFAULT '[]',
+    matched_keywords_json TEXT NOT NULL DEFAULT '[]',
+    topic_fit REAL NOT NULL DEFAULT 0,
+    audience_overlap REAL NOT NULL DEFAULT 0,
+    conversation_quality REAL NOT NULL DEFAULT 0,
+    reply_visibility REAL NOT NULL DEFAULT 0,
+    relationship_potential REAL NOT NULL DEFAULT 0,
+    reach_modifier REAL NOT NULL DEFAULT 0,
+    target_score REAL NOT NULL DEFAULT 0,
+    relevance_score REAL NOT NULL DEFAULT 0,
+    customer_density REAL NOT NULL DEFAULT 0,
+    authority_score REAL NOT NULL DEFAULT 0,
+    follows_you INTEGER NOT NULL DEFAULT 0,
+    you_follow INTEGER NOT NULL DEFAULT 0,
+    mutual INTEGER NOT NULL DEFAULT 0,
+    relationship_stage TEXT NOT NULL DEFAULT 'observed',
+    meaningful_interactions INTEGER NOT NULL DEFAULT 0,
+    their_replies_to_us INTEGER NOT NULL DEFAULT 0,
+    our_replies_to_them INTEGER NOT NULL DEFAULT 0,
+    our_quotes_of_them INTEGER NOT NULL DEFAULT 0,
+    their_quotes_of_us INTEGER NOT NULL DEFAULT 0,
+    their_reposts_of_us INTEGER NOT NULL DEFAULT 0,
+    first_seen_at INTEGER NOT NULL,
+    last_seen_at INTEGER NOT NULL,
+    last_interaction_at INTEGER,
+    last_response_at INTEGER,
+    last_scored_at INTEGER NOT NULL,
+    score_explanation_json TEXT NOT NULL DEFAULT '{}'
+  );
+
+  CREATE TABLE IF NOT EXISTS relationship_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    candidate_key TEXT,
+    source_tweet_id TEXT,
+    our_tweet_id TEXT,
+    topic TEXT,
+    occurred_at INTEGER NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}'
+  );
+
   CREATE TABLE IF NOT EXISTS queue_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     candidate_key TEXT NOT NULL UNIQUE,
@@ -119,6 +172,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_drafts_status ON drafts(status, scheduled_at, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidate_actions_created ON candidate_actions(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_audience_relevance ON audience_profiles(relevance_score DESC, last_seen_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_target_score ON relationship_profiles(target_score DESC, last_scored_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_stage ON relationship_profiles(relationship_stage, target_score DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_response ON relationship_profiles(last_response_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_events_user_time ON relationship_events(username, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_events_type_time ON relationship_events(event_type, occurred_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_relationship_events_source ON relationship_events(source_tweet_id);
+  CREATE INDEX IF NOT EXISTS idx_relationship_events_ours ON relationship_events(our_tweet_id);
   CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
 
@@ -467,6 +527,10 @@ function decodeAudience(row) {
   };
 }
 
+export function getAudienceProfile(username) {
+  return decodeAudience(db.prepare('SELECT * FROM audience_profiles WHERE username = ? COLLATE NOCASE').get(String(username || '').replace(/^@/, '').toLowerCase()));
+}
+
 export function listAudienceProfiles({ followsYou, youFollow, minScore = 0, limit = 100 } = {}) {
   const where = ['relevance_score >= ?'];
   const params = [Number(minScore || 0)];
@@ -487,6 +551,262 @@ export function getAudienceSummary() {
     SUM(CASE WHEN you_follow = 1 AND follows_you = 0 AND relevance_score >= 12 THEN 1 ELSE 0 END) AS target_accounts
     FROM audience_profiles`).get();
   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key, Number(value || 0)]));
+}
+
+function decodeRelationshipProfile(row) {
+  if (!row) return null;
+  return {
+    username: row.username,
+    displayName: row.display_name,
+    bio: row.bio,
+    classes: json(row.classes_json, []),
+    primaryTopics: json(row.primary_topics_json, []),
+    matchedKeywords: json(row.matched_keywords_json, []),
+    topicFit: Number(row.topic_fit || 0),
+    audienceOverlap: Number(row.audience_overlap || 0),
+    conversationQuality: Number(row.conversation_quality || 0),
+    replyVisibility: Number(row.reply_visibility || 0),
+    relationshipPotential: Number(row.relationship_potential || 0),
+    reachModifier: Number(row.reach_modifier || 0),
+    targetScore: Number(row.target_score || 0),
+    relevanceScore: Number(row.relevance_score || 0),
+    customerDensity: Number(row.customer_density || 0),
+    authorityScore: Number(row.authority_score || 0),
+    followsYou: Boolean(row.follows_you),
+    youFollow: Boolean(row.you_follow),
+    mutual: Boolean(row.mutual),
+    relationshipStage: row.relationship_stage,
+    meaningfulInteractions: Number(row.meaningful_interactions || 0),
+    theirRepliesToUs: Number(row.their_replies_to_us || 0),
+    ourRepliesToThem: Number(row.our_replies_to_them || 0),
+    ourQuotesOfThem: Number(row.our_quotes_of_them || 0),
+    theirQuotesOfUs: Number(row.their_quotes_of_us || 0),
+    theirRepostsOfUs: Number(row.their_reposts_of_us || 0),
+    firstSeenAt: Number(row.first_seen_at || 0),
+    lastSeenAt: Number(row.last_seen_at || 0),
+    lastInteractionAt: row.last_interaction_at == null ? null : Number(row.last_interaction_at),
+    lastResponseAt: row.last_response_at == null ? null : Number(row.last_response_at),
+    lastScoredAt: Number(row.last_scored_at || 0),
+    scoreExplanation: json(row.score_explanation_json, {}),
+  };
+}
+
+function normalizeRelationshipUsername(username) {
+  return String(username || '').replace(/^@/, '').trim().toLowerCase();
+}
+
+const upsertRelationshipProfileStatement = db.prepare(`INSERT INTO relationship_profiles(
+  username, display_name, bio, classes_json, primary_topics_json, matched_keywords_json,
+  topic_fit, audience_overlap, conversation_quality, reply_visibility, relationship_potential,
+  reach_modifier, target_score, relevance_score, customer_density, authority_score,
+  follows_you, you_follow, mutual, relationship_stage,
+  meaningful_interactions, their_replies_to_us, our_replies_to_them, our_quotes_of_them,
+  their_quotes_of_us, their_reposts_of_us, first_seen_at, last_seen_at, last_interaction_at,
+  last_response_at, last_scored_at, score_explanation_json
+) VALUES (
+  @username, @displayName, @bio, @classes, @primaryTopics, @matchedKeywords,
+  @topicFit, @audienceOverlap, @conversationQuality, @replyVisibility, @relationshipPotential,
+  @reachModifier, @targetScore, @relevanceScore, @customerDensity, @authorityScore,
+  @followsYou, @youFollow, @mutual, @relationshipStage,
+  @meaningfulInteractions, @theirRepliesToUs, @ourRepliesToThem, @ourQuotesOfThem,
+  @theirQuotesOfUs, @theirRepostsOfUs, @firstSeenAt, @lastSeenAt, @lastInteractionAt,
+  @lastResponseAt, @lastScoredAt, @scoreExplanation
+)
+ON CONFLICT(username) DO UPDATE SET
+  display_name = excluded.display_name,
+  bio = excluded.bio,
+  classes_json = excluded.classes_json,
+  primary_topics_json = excluded.primary_topics_json,
+  matched_keywords_json = excluded.matched_keywords_json,
+  topic_fit = excluded.topic_fit,
+  audience_overlap = excluded.audience_overlap,
+  conversation_quality = excluded.conversation_quality,
+  reply_visibility = excluded.reply_visibility,
+  relationship_potential = excluded.relationship_potential,
+  reach_modifier = excluded.reach_modifier,
+  target_score = excluded.target_score,
+  relevance_score = excluded.relevance_score,
+  customer_density = excluded.customer_density,
+  authority_score = excluded.authority_score,
+  follows_you = excluded.follows_you,
+  you_follow = excluded.you_follow,
+  mutual = excluded.mutual,
+  relationship_stage = excluded.relationship_stage,
+  meaningful_interactions = excluded.meaningful_interactions,
+  their_replies_to_us = excluded.their_replies_to_us,
+  our_replies_to_them = excluded.our_replies_to_them,
+  our_quotes_of_them = excluded.our_quotes_of_them,
+  their_quotes_of_us = excluded.their_quotes_of_us,
+  their_reposts_of_us = excluded.their_reposts_of_us,
+  last_seen_at = MAX(relationship_profiles.last_seen_at, excluded.last_seen_at),
+  last_interaction_at = COALESCE(excluded.last_interaction_at, relationship_profiles.last_interaction_at),
+  last_response_at = COALESCE(excluded.last_response_at, relationship_profiles.last_response_at),
+  last_scored_at = excluded.last_scored_at,
+  score_explanation_json = excluded.score_explanation_json`);
+
+export function getRelationshipProfile(username) {
+  return decodeRelationshipProfile(db.prepare('SELECT * FROM relationship_profiles WHERE username = ?').get(normalizeRelationshipUsername(username)));
+}
+
+export function listRelationshipProfiles({ className, stage, minTargetScore = 0, limit = 100 } = {}) {
+  if (className && !TARGET_CLASSES.includes(className)) throw new Error(`Invalid relationship class: ${className}`);
+  if (stage && !RELATIONSHIP_STAGES.includes(stage)) throw new Error(`Invalid relationship stage: ${stage}`);
+  const where = ['target_score >= ?'];
+  const params = [Number(minTargetScore || 0)];
+  if (className) { where.push('classes_json LIKE ?'); params.push(`%\"${className}\"%`); }
+  if (stage) { where.push('relationship_stage = ?'); params.push(stage); }
+  params.push(Math.max(1, Math.min(1000, Number(limit || 100))));
+  return db.prepare(`SELECT * FROM relationship_profiles WHERE ${where.join(' AND ')}
+    ORDER BY target_score DESC, last_scored_at DESC LIMIT ?`).all(...params).map(decodeRelationshipProfile);
+}
+
+export function getRelationshipSummary() {
+  const stageRows = db.prepare('SELECT relationship_stage AS stage, COUNT(*) AS count FROM relationship_profiles GROUP BY relationship_stage').all();
+  const stages = Object.fromEntries(RELATIONSHIP_STAGES.map((stage) => [stage, 0]));
+  for (const row of stageRows) stages[row.stage] = Number(row.count || 0);
+  const classes = Object.fromEntries(TARGET_CLASSES.map((className) => [
+    className,
+    Number(db.prepare('SELECT COUNT(*) AS count FROM relationship_profiles WHERE classes_json LIKE ?').get(`%\"${className}\"%`).count || 0),
+  ]));
+  return {
+    total: Number(db.prepare('SELECT COUNT(*) AS count FROM relationship_profiles').get().count || 0),
+    stages,
+    classes,
+  };
+}
+
+export function upsertRelationshipProfile(profile) {
+  const username = normalizeRelationshipUsername(profile?.username);
+  if (!username) throw new Error('relationship profile username is required.');
+  const now = Date.now();
+  const classes = [...new Set((profile.classes || []).filter((value) => TARGET_CLASSES.includes(value)))];
+  const stage = RELATIONSHIP_STAGES.includes(profile.relationshipStage) ? profile.relationshipStage : 'observed';
+  const firstSeenAt = Number(profile.firstSeenAt || profile.lastSeenAt || now);
+  upsertRelationshipProfileStatement.run({
+    username,
+    displayName: profile.displayName || username,
+    bio: profile.bio || '',
+    classes: JSON.stringify(classes),
+    primaryTopics: JSON.stringify(profile.primaryTopics || []),
+    matchedKeywords: JSON.stringify(profile.matchedKeywords || []),
+    topicFit: Number(profile.topicFit ?? 0),
+    audienceOverlap: Number(profile.audienceOverlap ?? 0),
+    conversationQuality: Number(profile.conversationQuality ?? 0),
+    replyVisibility: Number(profile.replyVisibility ?? 0),
+    relationshipPotential: Number(profile.relationshipPotential ?? 0),
+    reachModifier: Number(profile.reachModifier ?? 0),
+    targetScore: Number(profile.targetScore ?? 0),
+    relevanceScore: Number(profile.relevanceScore ?? 0),
+    customerDensity: Number(profile.customerDensity ?? 0),
+    authorityScore: Number(profile.authorityScore ?? 0),
+    followsYou: profile.followsYou ? 1 : 0,
+    youFollow: profile.youFollow ? 1 : 0,
+    mutual: profile.mutual ? 1 : 0,
+    relationshipStage: stage,
+    meaningfulInteractions: Number(profile.meaningfulInteractions || 0),
+    theirRepliesToUs: Number(profile.theirRepliesToUs || 0),
+    ourRepliesToThem: Number(profile.ourRepliesToThem || 0),
+    ourQuotesOfThem: Number(profile.ourQuotesOfThem || 0),
+    theirQuotesOfUs: Number(profile.theirQuotesOfUs || 0),
+    theirRepostsOfUs: Number(profile.theirRepostsOfUs || 0),
+    firstSeenAt,
+    lastSeenAt: Number(profile.lastSeenAt || firstSeenAt),
+    lastInteractionAt: profile.lastInteractionAt ?? null,
+    lastResponseAt: profile.lastResponseAt ?? null,
+    lastScoredAt: Number(profile.lastScoredAt || now),
+    scoreExplanation: JSON.stringify(profile.scoreExplanation || {}),
+  });
+  return getRelationshipProfile(username);
+}
+
+function decodeRelationshipEvent(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    username: row.username,
+    eventType: row.event_type,
+    candidateKey: row.candidate_key,
+    sourceTweetId: row.source_tweet_id,
+    ourTweetId: row.our_tweet_id,
+    topic: row.topic,
+    occurredAt: Number(row.occurred_at || 0),
+    metadata: json(row.metadata_json, {}),
+  };
+}
+
+function allRelationshipEvents(username) {
+  return db.prepare('SELECT * FROM relationship_events WHERE username = ? ORDER BY occurred_at ASC, id ASC')
+    .all(normalizeRelationshipUsername(username)).map(decodeRelationshipEvent);
+}
+
+export function listRelationshipEvents(username, { limit = 100 } = {}) {
+  const normalized = normalizeRelationshipUsername(username);
+  if (!normalized) throw new Error('relationship event username is required.');
+  return db.prepare('SELECT * FROM relationship_events WHERE username = ? ORDER BY occurred_at DESC, id DESC LIMIT ?')
+    .all(normalized, Math.max(1, Math.min(1000, Number(limit || 100)))).map(decodeRelationshipEvent);
+}
+
+export function applyRelationshipEvent(username) {
+  const normalized = normalizeRelationshipUsername(username);
+  if (!normalized) throw new Error('relationship event username is required.');
+  const events = allRelationshipEvents(normalized);
+  if (!events.length) return getRelationshipProfile(normalized);
+  const current = getRelationshipProfile(normalized) || {
+    username: normalized,
+    displayName: normalized,
+    firstSeenAt: events[0].occurredAt,
+    lastSeenAt: events[0].occurredAt,
+  };
+  return upsertRelationshipProfile(refreshRelationshipProfile(current, { events }));
+}
+
+export function refreshRelationshipFromAudience(audienceProfile) {
+  const username = normalizeRelationshipUsername(audienceProfile?.username);
+  if (!username) throw new Error('audience relationship username is required.');
+  const current = getRelationshipProfile(username) || {};
+  const events = allRelationshipEvents(username);
+  const input = {
+    ...current,
+    username,
+    displayName: audienceProfile.displayName || current.displayName || username,
+    bio: audienceProfile.bio ?? current.bio ?? '',
+    primaryTopics: audienceProfile.nicheTags || [],
+    matchedKeywords: audienceProfile.matchedKeywords || [],
+    relevanceScore: Number(audienceProfile.relevanceScore || 0),
+    followsYou: Boolean(audienceProfile.followsYou),
+    youFollow: Boolean(audienceProfile.youFollow),
+    lastSeenAt: Number(audienceProfile.lastSeenAt || current.lastSeenAt || Date.now()),
+  };
+  return upsertRelationshipProfile(refreshRelationshipProfile(input, { events }));
+}
+
+export function recordRelationshipEvent(event) {
+  const username = normalizeRelationshipUsername(event?.username);
+  const type = String(event?.eventType || event?.event_type || '');
+  if (!username) throw new Error('relationship event username is required.');
+  if (!RELATIONSHIP_EVENT_TYPES.includes(type)) throw new Error(`Invalid relationship event type: ${type}`);
+  const occurredAt = Number(event?.occurredAt || event?.occurred_at || Date.now());
+  db.exec('BEGIN');
+  try {
+    const inserted = db.prepare(`INSERT INTO relationship_events(
+      username, event_type, candidate_key, source_tweet_id, our_tweet_id, topic, occurred_at, metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      username,
+      type,
+      event?.candidateKey ?? event?.candidate_key ?? null,
+      event?.sourceTweetId ?? event?.source_tweet_id ?? null,
+      event?.ourTweetId ?? event?.our_tweet_id ?? null,
+      event?.topic || null,
+      occurredAt,
+      JSON.stringify(event?.metadata || {}),
+    );
+    applyRelationshipEvent(username);
+    db.exec('COMMIT');
+    return decodeRelationshipEvent(db.prepare('SELECT * FROM relationship_events WHERE id = ?').get(Number(inserted.lastInsertRowid)));
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function decodeDraft(row) {

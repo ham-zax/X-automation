@@ -1,6 +1,6 @@
 # Relationship Intelligence
 
-This document defines the planned relationship-memory and target-selection layer for `@ham_zax`.
+This document defines the current Phase-1B relationship-memory and target-selection layer for `@ham_zax`, plus the planned Engage Next behavior that consumes it.
 
 The system should stop treating every X post as an isolated content opportunity. It should remember **who** the account interacts with, **why** they matter, **what topics overlap**, **how prior conversations went**, and **whether the relationship is compounding**.
 
@@ -23,15 +23,15 @@ The system should optimize repeated useful interaction with the right network ra
 
 ## 2. Relationship profile owner
 
-Planned authoritative record:
+Authoritative strategic record:
 
 ```text
 relationship_profiles
 ```
 
-One row per X username.
+One row per X username. `store.js` persists this separately from raw audience observations.
 
-Suggested fields:
+Current fields:
 
 ```text
 username TEXT PRIMARY KEY
@@ -74,7 +74,7 @@ last_scored_at INTEGER
 score_explanation_json TEXT
 ```
 
-`audience_profiles` remains the raw follower/following observation owner during migration. `relationship_profiles` becomes the strategic layer derived from audience observations + interaction history.
+`audience_profiles` remains the raw follower/following observation owner. `relationship_profiles` is the strategic layer derived from currently observed audience state + durable interaction history; partial audience refreshes do not delete omitted strategic profiles or relationship events.
 
 ---
 
@@ -289,7 +289,7 @@ If follow state arrives before recurring conversation, the stage may move direct
 
 ## 7. Relationship events
 
-Planned table:
+Current append-only table:
 
 ```text
 relationship_events
@@ -577,22 +577,27 @@ Use these for learning, not filtering by default.
 
 ---
 
-## 17. Agent contract — planned
+## 17. Agent contract
 
-Future agent commands should expose relationship intelligence without raw SQLite writes.
-
-Planned commands:
+Phase 1B exposes relationship intelligence without raw SQLite reads through these current read-only commands:
 
 ```text
 relationship-targets
 relationship-inspect
 relationship-events
+```
+
+`relationship-targets` supports target-class, relationship-stage, minimum-TargetScore, and bounded-limit filters. `relationship-inspect` returns one strategic profile plus recent event history. `relationship-events` returns bounded append-only history for one username.
+
+Phase 1C commands remain planned:
+
+```text
 engage-next
 engage-draft
 engage-resolve
 ```
 
-Example conceptual request:
+Example conceptual future request:
 
 ```json
 {
@@ -614,38 +619,28 @@ Expected response includes:
 - proposed contribution;
 - whether a prior action already exists.
 
-These commands are **planned** until implementation changes are completed. Agents must not invent them beforehand.
+Do not invent the Phase-1C commands before that phase is implemented.
 
 ---
 
-## 18. Dashboard contract — planned
+## 18. Dashboard contract
 
-### Relationship Intelligence view
+### Relationship Intelligence view — current
 
-Sections:
+The read-only **Relationships** view provides:
 
-```text
-Active conversations
-High-value relationship targets
-Distribution targets
-Authority targets
-Customer-density targets
-Recent relationship changes
-```
+- summary counts by relationship stage and target class;
+- class/stage query-parameter filters;
+- profiles ordered by TargetScore;
+- class and relationship-stage badges;
+- TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, RelationshipPotential, and ReachModifier evidence;
+- missing-component disclosure when evidence is unavailable;
+- follow/mutual state, last target response, meaningful outbound count, and shared topics;
+- class-assignment reasons and a direct profile link.
 
-Each profile card shows:
+It does not expose reply/send/approval actions.
 
-- classes;
-- TargetScore;
-- component breakdown;
-- follow/mutual state;
-- relationship stage;
-- last interaction;
-- target response count;
-- recurring interaction count;
-- top shared topics.
-
-### Engage Next view
+### Engage Next view — planned
 
 Each conversation card shows:
 
@@ -676,15 +671,14 @@ TargetScore and EngagePriority are **our models**. Phase 1D `SaturationPressure`
 
 ## 20. Completion condition
 
-Relationship intelligence is complete when the system can:
+Phase 1B Relationship Intelligence is implemented when the system can:
 
-1. maintain one durable strategic profile per relevant account;
-2. classify target roles;
-3. explain a transparent TargetScore;
-4. record meaningful relationship events;
-5. derive relationship stage;
-6. surface recent posts from high-value targets;
-7. distinguish cold insertion from active conversation follow-up;
-8. rank Engage Next opportunities using relationship + conversation context;
-9. connect interaction outcomes to follow/recurring/mutual relationship metrics;
-10. feed those results into future target selection and experiments.
+1. maintain one durable strategic profile per observed relevant account;
+2. classify target roles from current observable evidence;
+3. explain a transparent TargetScore and disclose missing components;
+4. persist meaningful relationship events append-only;
+5. derive relationship stage and materialized counters from event/follow history;
+6. refresh strategic relationship state from raw audience observations without erasing omitted profiles or prior history;
+7. inspect relationship profiles/events through the dashboard and bridge without an engagement-send or approval bypass.
+
+The next items remain Phase 1C+ work: surface recent high-value target posts, distinguish cold insertion from active follow-up, rank Engage Next opportunities, and connect those interaction outcomes into later measurement/learning.

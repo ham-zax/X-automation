@@ -10,11 +10,11 @@ The account is an **AI-native developer + builder** account. The agent should tu
 
 The agent is not a generic news summarizer. It should prefer AI coding agents, models/inference, developer tools, infrastructure/architecture, developer jobs/career, builders/SaaS, and technical productization/business.
 
-The planned architecture is also **network-first**. Publishing is one instrument inside a broader loop:
+The architecture is also **network-first**. Publishing is one instrument inside a broader loop:
 
 **conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion.**
 
-Use `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for planned target/relationship ownership, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification.
+Use `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership plus planned Engage Next inputs, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification.
 
 ## Stable interface
 
@@ -39,8 +39,11 @@ Available commands:
 - `performance` - read the latest persisted account/post performance snapshot.
 - `decide` - apply the DIRECT / QUOTE / REPOST / REPLY / IGNORE distribution decision method to a stored candidate.
 - `record-action` - persist a successful direct/quote/repost/reply result, including output tweet ID/URL and commentary.
-- `audience-sync` - refresh the authenticated follower/following audience snapshot.
-- `audience` - inspect niche-aligned followers and relationship targets.
+- `relationship-targets` - list strategic relationship profiles with optional class/stage/min-TargetScore filters.
+- `relationship-inspect` - inspect one relationship profile plus recent append-only event history.
+- `relationship-events` - read bounded recent relationship events for one username.
+- `audience-sync` - refresh the authenticated follower/following audience snapshot and strategic state for currently observed relevant profiles.
+- `audience` - inspect the raw niche-aligned follower/following observation layer.
 
 ## Distribution decision before drafting or engaging
 
@@ -96,25 +99,33 @@ npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 
 The audience classifier is only a prioritization aid. It should not be treated as proof about a person's identity or intent. Prioritize peer builders, maintainers, researchers, model/devtool practitioners, and technical founders. Avoid optimizing growth around legacy crypto/general followers merely because they already follow the account.
 
-### Planned relationship-intelligence upgrade — not implemented yet
+### Relationship Intelligence — implemented
 
-Phase 1B replaces simple relevance/follower-count thinking with persistent relationship intelligence.
+Phase 1B keeps `audience_profiles` as raw follower/following observation and materializes separate strategic `relationship_profiles` plus append-only `relationship_events`. Audience refresh recomputes currently observed relevant relationship profiles without deleting omitted profiles or prior interaction history.
 
-Planned target classes:
+Current target classes:
 
-- `distribution` — overlapping audience/reach;
-- `relationship` — recurring interaction is realistically valuable;
-- `authority` — technically credible account whose engagement/information matters;
-- `customer_density` — conversations contain commercially relevant developer audiences;
-- `source` — consistently useful primary/early technical information.
+- `distribution` — observed audience/cluster overlap plus useful technical conversation quality;
+- `relationship` — recurring interaction is realistically valuable based on topic plus follow/interaction evidence;
+- `authority` — conservative technical-role evidence plus strong topic fit;
+- `customer_density` — observed audience evidence indicates commercially relevant developer density;
+- `source` — explicit source evidence or strong technical authority/topic specificity.
 
-Planned target scoring uses **TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, and RelationshipPotential**, with follower count only as a bounded reach modifier.
+TargetScore exposes **TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, and RelationshipPotential**. Missing observable components are omitted and remaining weights are renormalized; follower count is confined to the bounded `-5..+5` ReachModifier.
 
-Planned relationship stages:
+Relationship stages derive from event/follow evidence:
 
 `observed -> interacted -> responsive -> recurring -> connected -> mutual`
 
-Future commands are specified in `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`. Until implemented, do not invent `relationship-targets`, `relationship-inspect`, or `relationship-events` bridge behavior.
+Read through the bridge rather than querying SQLite directly:
+
+```bash
+npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","minTargetScore":40,"limit":20}'
+npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
+npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
+```
+
+These Phase-1B commands are read-only. Recording new relationship events is an internal persistence path for current/future system integrations; Phase 1C owns engagement discovery and execution.
 
 ### Planned Engage Next upgrade — not implemented yet
 
@@ -279,7 +290,7 @@ When `AUTO_POST=false`, automation only previews the next compatibility-ready dr
 
 A successfully published queued draft is marked `published` and records the returned tweet ID.
 
-Still planned: Relationship Intelligence/Engage Next, Account Health, Phase-2 hard gates/media, the Phase-3 scheduler migration, experiments, follower conversion, and learned strategy.
+Still planned: Engage Next, Account Health, Phase-2 hard gates/media, the Phase-3 scheduler migration, experiments, follower conversion, and learned strategy.
 
 ## Agent behavior by user request
 

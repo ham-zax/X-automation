@@ -1,18 +1,19 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The planned architecture expands this into a **network-construction system**: relationship intelligence -> Engage Next -> owned-content conversion -> measurement -> learned targeting/content/timing.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The network-first architecture continues from implemented Relationship Intelligence into Engage Next -> owned-content conversion -> measurement -> learned targeting/content/timing.
 
 ## Components
 
 - `x_http.js` — validates the cookie session, discovers the live `CreateTweet` operation ID from X's current web bundle, and performs HTTP GraphQL writes.
 - `post_thread.js` — dry-run, HTTP session check, HTTP thread publishing, or explicit `--browser` publishing.
 - `strategy.js` — executable niche taxonomy, keyword lanes, classification, saved-preference ranking boost, and Direct/Quote/Repost/Reply/Ignore decision method.
-- `audience.js` — authenticated follower/following sync with niche relevance scoring and legacy-crypto downranking.
+- `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
+- `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, audience profiles, drafts, current draft-queue state, and performance snapshots.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, drafts, current draft-queue state, and performance snapshots.
 - `drafting.js` — Hook → Insight → Evidence → Action scaffolds and the 50-point quality gate.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for another agent to ingest manual posts, draft, score, and inspect the queue.
-- `dashboard.js` — Bootstrap research, Saved, Viral, Drafts, Opportunities, Audience, and Performance workbench.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for another agent to ingest manual posts, draft, score, inspect workflow, and read relationship intelligence.
+- `dashboard.js` — Bootstrap research, Saved, Viral, Drafts, Opportunities, Relationships, Audience, and Performance workbench.
 - `automation.js` — research polling plus the approved-draft publishing queue.
 
 ## Operating standards
@@ -23,25 +24,27 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md) — exact agent contract for manually supplied posts, research, drafting, scoring, distribution decisions, audience sync, and queue interaction.
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
 - [`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`](docs/NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategic source of truth for conversation insertion, relationship conversion, owned-content conversion, target classes, network metrics, and the two-lane operating model.
-- [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — planned target scoring, relationship profiles/events, stages, Engage Next inputs, and network analytics.
+- [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — implemented Phase-1B target scoring, relationship profiles/events and stages, plus planned Engage Next inputs and network analytics.
 - [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — planned HEALTHY/WATCH/CONSTRAINED observability, Under the Hood snapshots, soft saturation/repetition diagnostics, network quality, and InteractionYield.
 - [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — separates current code-backed X mechanisms, official product/policy claims, empirical variables, and retired folklore.
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
 - [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — implementation-ready plan for Save → Triage → Route → Research → Draft → Review → Schedule → Publish → Learn.
-- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with Phase 1A current and the remaining execution sequence explicit.
+- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with the implemented foundation and remaining execution sequence explicit.
 
 ### Current foundation and planned next architecture
 
 Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that sets a text draft to compatibility `ready` for the existing automation consumer.
 
+Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
+
 The remaining network-first architecture is:
 
-**Relationship Intelligence -> Engage Next -> Account Health/visibility observability -> research/writing/media -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
+**Engage Next -> Account Health/visibility observability -> research/writing/media -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Relationship profiles, Engage Next discovery, Account Health/Under the Hood capture, the Phase-2 media/content engine, experiment engine, and learned scheduler remain planned until their matching phase is implemented.
+Engage Next discovery, Account Health/Under the Hood capture, the Phase-2 media/content engine, experiment engine, and learned scheduler remain planned until their matching phase is implemented.
 
 ## Setup
 
@@ -119,7 +122,8 @@ Dashboard views:
 - **Saved** — your explicit taste/preference library.
 - **Drafts** — editable Hook/Insight/Evidence/Action drafts with a live 50-point rubric and ready gate.
 - **Opportunities** — technical jobs/career, builders/SaaS, and productization signals.
-- **Audience** — follower/following niche map and relevant accounts to build relationships with.
+- **Relationships** — read-only strategic target classes, TargetScore/component evidence, follow state, stages, interaction counts, and class/stage filters.
+- **Audience** — raw follower/following niche map that feeds Relationship Intelligence without being replaced by it.
 - **Performance** — snapshots of `@ham_zax` followers and recent original-post metrics.
 - **GitHub / Hacker News / All** — secondary discovery sources.
 
@@ -133,6 +137,9 @@ Another agent should use the bridge rather than editing SQLite or scraping dashb
 npm run agent -- research <<<'{"source":"x","limit":10}'
 npm run agent -- queue <<<'{"minScore":40}'
 npm run agent -- audience <<<'{"minScore":12,"limit":30}'
+npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
+npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
+npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
 npm run audience:sync
 ```
 

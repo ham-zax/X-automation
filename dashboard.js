@@ -14,6 +14,7 @@ import {
 } from './tech_news.js';
 import { composeDraft, scoreDraft } from './drafting.js';
 import { syncAudience } from './audience.js';
+import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
 import {
   approveQueueItem,
@@ -35,11 +36,13 @@ import {
   getPerformanceSnapshot,
   getPreferenceProfile,
   getQueueItemByCandidate,
+  getRelationshipSummary,
   listAudienceProfiles,
   listCandidateActions,
   listCandidates,
   listDrafts,
   listQueueItems,
+  listRelationshipProfiles,
   recordPerformanceSnapshot,
   saveDraft,
   upsertCandidates,
@@ -312,15 +315,59 @@ function audienceView(error = null) {
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Observed followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.followers)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_followers)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_following)}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Relationship targets</div><div class="fs-3 fw-semibold">${formatNumber(summary.target_accounts)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Relevant followed accounts</div><div class="fs-3 fw-semibold">${formatNumber(summary.target_accounts)}</div></div></div></div>
   </div>`;
   const profileCards = (profiles, title, note) => `<h2 class="h5 mt-4">${escapeHtml(title)}</h2><p class="text-secondary small">${escapeHtml(note)}</p>${profiles.map((profile) => `<div class="card border-0 shadow-sm mb-2"><div class="card-body py-3">
     <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary">${escapeHtml(profile.bio)}</div></div><div class="d-flex gap-2 align-items-start flex-wrap"><span class="badge text-bg-primary">fit ${profile.relevanceScore}/50</span><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div></div>
     <div class="d-flex gap-1 flex-wrap mt-2">${profile.nicheTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(NICHE_LABELS[tag] || tag)}</span>`).join('')}</div>
   </div></div>`).join('') || '<div class="alert alert-secondary">No matching profiles in the current snapshot.</div>'}`;
   return stats
-    + profileCards(targets, 'Relationship targets', 'Relevant accounts you already follow that do not currently follow you. Engage only when you can add concrete value.')
+    + profileCards(targets, 'Observed followed accounts', 'Raw audience observations for relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships.')
     + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
+}
+
+function relationshipLabel(value) {
+  return String(value || '').replaceAll('_', ' ');
+}
+
+function relationshipComponentBadge(profile, key, label) {
+  const missing = new Set(profile.scoreExplanation?.missingComponents || []);
+  const value = missing.has(key) ? 'n/a' : Math.round(Number(profile[key] || 0));
+  return `<span class="badge text-bg-light border">${escapeHtml(label)} ${escapeHtml(value)}</span>`;
+}
+
+function relationshipsView(className = '', stage = '') {
+  const summaryCounts = getRelationshipSummary();
+  const profiles = listRelationshipProfiles({ className: className || undefined, stage: stage || undefined, limit: 100 });
+  const stageCounts = summaryCounts.stages;
+  const classCounts = summaryCounts.classes;
+  const summary = `<div class="card border-0 shadow-sm mb-4"><div class="card-body">
+    <div class="d-flex gap-2 flex-wrap align-items-center mb-2"><span class="fw-semibold">Stages</span>${RELATIONSHIP_STAGES.map((value) => `<span class="badge text-bg-light border text-capitalize">${escapeHtml(relationshipLabel(value))} ${stageCounts[value]}</span>`).join('')}</div>
+    <div class="d-flex gap-2 flex-wrap align-items-center"><span class="fw-semibold">Target classes</span>${TARGET_CLASSES.map((value) => `<span class="badge text-bg-light border text-capitalize">${escapeHtml(relationshipLabel(value))} ${classCounts[value]}</span>`).join('')}</div>
+  </div></div>`;
+  const filters = `<form method="get" class="card border-0 shadow-sm mb-4"><div class="card-body d-flex gap-2 flex-wrap align-items-end">
+    <input type="hidden" name="source" value="relationships">
+    <div><label class="form-label small mb-1" for="relationship-class">Target class</label><select class="form-select form-select-sm" id="relationship-class" name="class"><option value="">All classes</option>${TARGET_CLASSES.map((value) => `<option value="${escapeHtml(value)}" ${className === value ? 'selected' : ''}>${escapeHtml(relationshipLabel(value))}</option>`).join('')}</select></div>
+    <div><label class="form-label small mb-1" for="relationship-stage">Stage</label><select class="form-select form-select-sm" id="relationship-stage" name="stage"><option value="">All stages</option>${RELATIONSHIP_STAGES.map((value) => `<option value="${escapeHtml(value)}" ${stage === value ? 'selected' : ''}>${escapeHtml(relationshipLabel(value))}</option>`).join('')}</select></div>
+    <button class="btn btn-dark btn-sm" type="submit">Apply filters</button><a class="btn btn-outline-secondary btn-sm" href="/?source=relationships">Reset</a>
+  </div></form>`;
+  const cards = profiles.map((profile) => {
+    const reasons = Object.values(profile.scoreExplanation?.classReasons || {}).filter(Boolean);
+    const missing = profile.scoreExplanation?.missingComponents || [];
+    const topics = (profile.primaryTopics || []).map((tag) => NICHE_LABELS[tag] || tag);
+    const followState = profile.mutual ? 'mutual' : profile.followsYou ? 'follows you' : profile.youFollow ? 'you follow' : 'no follow link';
+    return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
+      <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary mt-1">${escapeHtml(profile.bio || '')}</div></div><div class="text-end"><div class="fs-4 fw-semibold">${Math.round(profile.targetScore)}</div><div class="small text-secondary">TargetScore</div></div></div>
+      <div class="d-flex gap-1 flex-wrap mt-3">${profile.classes.map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('') || '<span class="badge text-bg-light border">unclassified</span>'}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">${escapeHtml(followState)}</span></div>
+      <div class="d-flex gap-1 flex-wrap mt-2">${relationshipComponentBadge(profile, 'topicFit', 'Topic')}${relationshipComponentBadge(profile, 'audienceOverlap', 'Audience')}${relationshipComponentBadge(profile, 'conversationQuality', 'Conversation')}${relationshipComponentBadge(profile, 'replyVisibility', 'Visibility')}${relationshipComponentBadge(profile, 'relationshipPotential', 'Relationship')}<span class="badge text-bg-light border">Reach ${profile.reachModifier >= 0 ? '+' : ''}${escapeHtml(profile.reachModifier)}</span></div>
+      <div class="small text-secondary mt-2">${profile.meaningfulInteractions} meaningful outbound · ${profile.theirRepliesToUs} target replies · last response ${profile.lastResponseAt ? escapeHtml(formatDateTime(profile.lastResponseAt)) : 'none yet'}</div>
+      ${topics.length ? `<div class="d-flex gap-1 flex-wrap mt-2">${topics.map((topic) => `<span class="badge text-bg-light border">${escapeHtml(topic)}</span>`).join('')}</div>` : ''}
+      ${reasons.length ? `<div class="small mt-3"><strong>Why this target:</strong> ${escapeHtml(reasons.join(' '))}</div>` : ''}
+      ${missing.length ? `<div class="small text-secondary mt-1">Missing score evidence: ${escapeHtml(missing.map(relationshipLabel).join(', '))}; available components are renormalized.</div>` : ''}
+      <div class="mt-3"><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div>
+    </div></article>`;
+  }).join('');
+  return summary + filters + (cards || '<div class="alert alert-secondary">No relationship profiles match these filters.</div>');
 }
 
 const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'watching'];
@@ -364,7 +411,7 @@ function queueView() {
   }).join('') || '<div class="alert alert-secondary">No active workflow items.</div>';
 }
 
-async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = false) {
+async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = false, relationshipClass = '', relationshipStage = '') {
   let refreshError = null;
   const researchEmpty = activeSource === 'x'
     ? listCandidates({ source: 'x', withinHours: 72, limit: 1 }).length === 0
@@ -423,11 +470,18 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot and recent post outcomes.`;
   else if (activeSource === 'audience') {
     const summary = getAudienceSummary();
-    decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are relationship targets.`;
+    decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are raw audience observations.`;
+  }
+  else if (activeSource === 'relationships') {
+    const shownCount = listRelationshipProfiles({ className: relationshipClass || undefined, stage: relationshipStage || undefined, limit: 100 }).length;
+    decision = `Showing ${shownCount} top strategic relationship profiles for the current filters; Relationship Intelligence remains read-only in Phase 1B.`;
   }
   else decision = `${visible.length} persisted candidates for this research view.`;
 
-  const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}`;
+  const relationshipQuery = activeSource === 'relationships'
+    ? `${relationshipClass ? `&class=${encodeURIComponent(relationshipClass)}` : ''}${relationshipStage ? `&stage=${encodeURIComponent(relationshipStage)}` : ''}`
+    : '';
+  const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}${relationshipQuery}`;
   const filtersEnabled = ['x', 'viral', 'interesting', 'opportunities'].includes(activeSource);
   const nav = [
     ['x', 'X posts'],
@@ -436,6 +490,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['queue', `Queue (${countQueueItems({ status: 'triage' })})`],
     ['drafts', 'Drafts'],
     ['opportunities', 'Opportunities'],
+    ['relationships', 'Relationships'],
     ['audience', 'Audience'],
     ['performance', 'Performance'],
     ['github', 'GitHub'],
@@ -447,6 +502,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   if (activeSource === 'queue') content = queueView();
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
+  else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
   else if (activeSource === 'audience') content = audienceView(audienceError);
   else content = visible.slice(0, 50).map((item, index) => candidateCard(item, index, returnTo)).join('') || '<div class="alert alert-secondary">No candidates found for this view.</div>';
 
@@ -554,10 +610,12 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'drafts', 'opportunities', 'audience', 'performance', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'drafts', 'opportunities', 'relationships', 'audience', 'performance', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
-    const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1');
+    const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';
+    const relationshipStage = RELATIONSHIP_STAGES.includes(requestUrl.searchParams.get('stage')) ? requestUrl.searchParams.get('stage') : '';
+    const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1', relationshipClass, relationshipStage);
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html);
   } catch (error) {
     res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });

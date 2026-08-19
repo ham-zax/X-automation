@@ -158,6 +158,12 @@ EXPERIMENT / LEARNING LAYER
 BETTER TARGETS + BETTER CONTENT + BETTER TIMING
 ```
 
+### Current implementation boundary
+
+Phase 1A currently owns persistent Save -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
+
+Engage Next discovery, reply drafting/sending, Account Health/Under the Hood, later scheduler changes, experiments, and learned strategy remain planned. The implemented relationship layer does not add an outbound engagement or approval bypass.
+
 ---
 
 ## 4. Two operating lanes

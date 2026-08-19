@@ -45,6 +45,9 @@ npm run agent -- research
 npm run agent -- performance
 npm run agent -- decide
 npm run agent -- record-action
+npm run agent -- relationship-targets
+npm run agent -- relationship-inspect
+npm run agent -- relationship-events
 npm run agent -- audience
 npm run agent -- audience-sync
 ```
@@ -81,8 +84,9 @@ A human-approved compatibility-ready single-post draft requires >=40/50, no scaf
 - Treat `docs/ALGORITHM_EVIDENCE_LEDGER.md` as the authority for whether a growth claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Optimize network recommendations around target relevance, conversation quality, relationship potential, and qualified follower conversion; do not reduce target selection to follower count.
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
-- Phase 1A triage/routing/review interfaces are current: use `queue`, `route`, and `workflow`; do not invent later scheduler/relationship/engagement interfaces from `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`.
-- `docs/RELATIONSHIP_INTELLIGENCE.md` and the Phase 1B/1C plans describe planned relationship/Engage Next behavior. Do not invent those bridge commands or SQLite tables before implementation.
+- Phase 1A triage/routing/review interfaces are current: use `queue`, `route`, and `workflow`; do not invent later scheduler/engagement interfaces from `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`.
+- Phase 1B Relationship Intelligence is current: use `relationship-targets`, `relationship-inspect`, and `relationship-events` for strategic relationship reads. `audience_profiles` remains raw observation; `relationship_profiles` and append-only `relationship_events` own strategic state/history.
+- Phase 1C Engage Next remains planned. Do not invent `engage-next`, reply-drafting/sending, or other engagement-execution behavior before that phase lands.
 - `docs/ACCOUNT_HEALTH_AND_VISIBILITY.md` and Phase 1D describe planned account-health/visibility behavior. Do not invent `account-health`, `health-observe`, or `health-under-the-hood` before implementation.
 - Do not impose arbitrary reply quotas, human-looking delay/jitter rules, or a hard target-saturation ban. Until Phase 1D exists, treat those as editorial/empirical judgments rather than platform laws.
 
