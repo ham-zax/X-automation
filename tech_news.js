@@ -1,7 +1,8 @@
 import 'dotenv/config';
-import { Scraper } from 'xactions';
+import { Scraper, createBrowser, createPage } from 'xactions';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { X_DISCOVERY_QUERIES, X_VIRAL_QUERIES, classifyNiche } from './strategy.js';
 
 // ============================================================================
 // ANSI Color Formatting
@@ -133,6 +134,156 @@ export async function fetchXTechNews(accounts = ['github', 'OpenAI', 'ycombinato
   return tweets;
 }
 
+export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) {
+  try {
+    const scraper = new Scraper();
+    if (process.env.AUTH_TOKEN) {
+      const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+      if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
+      await scraper.setCookies(cookies);
+    }
+
+    const profile = await scraper.getProfile(username);
+    const posts = [];
+    for await (const tweet of scraper.getTweets(username, Math.max(limit * 2, limit))) {
+      if (tweet.isRetweet || tweet.isReply) continue;
+      posts.push({
+        id: tweet.id,
+        text: (tweet.text || tweet.fullText || '').replace(/\s+/g, ' ').trim(),
+        likes: Number(tweet.likes || 0),
+        retweets: Number(tweet.retweets || 0),
+        replies: Number(tweet.replies || 0),
+        views: Number(tweet.views || 0),
+        timestamp: tweet.timestamp || (tweet.timeParsed ? Date.parse(tweet.timeParsed) : 0),
+        url: tweet.permanentUrl || (tweet.id ? `https://x.com/${username}/status/${tweet.id}` : ''),
+      });
+      if (posts.length >= limit) break;
+    }
+    return { profile, posts, error: null };
+  } catch (error) {
+    return { profile: null, posts: [], error: error.message };
+  }
+}
+
+async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4) {
+  if (!process.env.AUTH_TOKEN) return { posts: [], error: 'Missing AUTH_TOKEN.' };
+
+  const browser = await createBrowser({ headless: true });
+  try {
+    const page = await createPage(browser);
+    const cookies = [{
+      name: 'auth_token',
+      value: process.env.AUTH_TOKEN,
+      domain: '.x.com',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+    }];
+    if (process.env.CT0) {
+      cookies.push({
+        name: 'ct0',
+        value: process.env.CT0,
+        domain: '.x.com',
+        path: '/',
+        secure: true,
+      });
+    }
+    await page.setCookie(...cookies);
+    const queries = Array.isArray(query) ? query : [query];
+    const allCollected = new Map();
+    const perQueryLimit = Math.max(10, Math.ceil(limit / queries.length));
+
+    for (const searchQuery of queries) {
+      await page.goto(`https://x.com/search?q=${encodeURIComponent(searchQuery)}&src=typed_query&f=${filter}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 45_000,
+      });
+      await page.waitForSelector('article[data-testid="tweet"]', { timeout: 10_000 }).catch(() => {});
+
+      const collected = new Map();
+      for (let pass = 0; pass < passes && collected.size < perQueryLimit; pass++) {
+        const posts = await page.evaluate(() => {
+          const parseCount = (value) => {
+            const text = String(value || '').replace(/,/g, '').trim();
+            const match = text.match(/^([\d.]+)([KMB])?$/i);
+            if (!match) return 0;
+            const multiplier = { K: 1e3, M: 1e6, B: 1e9 }[(match[2] || '').toUpperCase()] || 1;
+            return Math.round(Number(match[1]) * multiplier);
+          };
+          const metric = (label, name) => {
+            const match = String(label || '').match(new RegExp(`([\\d.,]+[KMB]?)\\s+${name}`, 'i'));
+            return parseCount(match?.[1]);
+          };
+
+          return [...document.querySelectorAll('article[data-testid="tweet"]')].map((article) => {
+            const timeEl = article.querySelector('time');
+            const statusLink = timeEl?.closest('a[href*="/status/"]') || article.querySelector('a[href*="/status/"]');
+            const authorLink = article.querySelector('[data-testid="User-Name"] a[href^="/"]');
+            const textEl = article.querySelector('[data-testid="tweetText"]');
+            const groupLabel = article.querySelector('div[role="group"][aria-label]')?.getAttribute('aria-label') || '';
+            const url = statusLink?.href || '';
+            const id = url.match(/status\/(\d+)/)?.[1];
+            const username = authorLink?.getAttribute('href')?.split('/').filter(Boolean)[0];
+            return {
+              id,
+              username,
+              text: textEl?.textContent?.trim() || '',
+              timestamp: timeEl?.getAttribute('datetime') || '',
+              likes: metric(groupLabel, 'likes?'),
+              retweets: metric(groupLabel, 'reposts?'),
+              replies: metric(groupLabel, 'repl(?:y|ies)'),
+              views: metric(groupLabel, 'views?'),
+              url,
+            };
+          }).filter((post) => post.id && post.username && post.text);
+        });
+
+        for (const post of posts) collected.set(post.id, post);
+        if (collected.size >= perQueryLimit) break;
+        await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
+
+      for (const post of collected.values()) allCollected.set(post.id, post);
+    }
+
+    const posts = [...allCollected.values()].slice(0, limit).map((post) => ({
+      source: 'x',
+      author: `@${post.username}`,
+      text: post.text.replace(/\s+/g, ' ').trim(),
+      likes: post.likes,
+      retweets: post.retweets,
+      replies: post.replies,
+      views: post.views,
+      timestamp: post.timestamp ? Date.parse(post.timestamp) : 0,
+      url: post.url,
+    }));
+    return { posts, error: null };
+  } catch (error) {
+    console.warn(`[x] niche search failed: ${error.message}`);
+    return { posts: [], error: error.message };
+  } finally {
+    await browser.close();
+  }
+}
+
+export function fetchXNichePosts(limit = 30) {
+  const queries = X_DISCOVERY_QUERIES.map((query) => `(${query}) lang:en -filter:replies -filter:retweets`);
+  return fetchXSearchPosts(queries, limit, 'live', 3);
+}
+
+export async function fetchXViralPosts(limit = 60) {
+  const cutoff = Date.now() - 24 * 3_600_000;
+  const since = new Date(cutoff).toISOString().slice(0, 10);
+  const queries = X_VIRAL_QUERIES.map((query) => `(${query}) since:${since} lang:en -filter:replies -filter:retweets`);
+  const result = await fetchXSearchPosts(queries, limit, 'top', 4);
+  if (result.error) return result;
+  return {
+    posts: result.posts.filter((post) => post.timestamp >= cutoff && post.timestamp <= Date.now() + 300_000),
+    error: null,
+  };
+}
+
 // ============================================================================
 // 4. Thread Generator (Converts News into an X Thread)
 // ============================================================================
@@ -187,6 +338,69 @@ function freshnessScore(timestamp) {
   return Math.max(0, 20 - hoursOld / 6);
 }
 
+export function rankXViralPosts(xPosts = []) {
+  const now = Date.now();
+  const cutoff = now - 24 * 3_600_000;
+
+  return xPosts
+    .map((post) => {
+      if (!post.timestamp || post.timestamp < cutoff || post.timestamp > now + 300_000) return null;
+      const niche = classifyNiche(post.text);
+      if (niche.score === 0) return null;
+
+      const ageHours = Math.max((now - post.timestamp) / 3_600_000, 0.25);
+      const views = Number(post.views || 0);
+      const likes = Number(post.likes || 0);
+      const retweets = Number(post.retweets || 0);
+      const replies = Number(post.replies || 0);
+      const engagements = likes + retweets * 2 + replies * 1.5;
+      const viewsPerHour = views / ageHours;
+      const engagementsPerHour = engagements / ageHours;
+      const qualifies = views >= 5_000
+        || likes >= 75
+        || retweets >= 15
+        || replies >= 20
+        || viewsPerHour >= 500
+        || engagementsPerHour >= 8;
+      if (!qualifies) return null;
+
+      const totalSignal = views + likes * 40 + retweets * 120 + replies * 80;
+      const velocitySignal = viewsPerHour + engagementsPerHour * 100;
+      const score = Math.round(Math.min(
+        100,
+        Math.log10(totalSignal + 1) * 7
+          + Math.log10(velocitySignal + 1) * 7
+          + niche.score * 0.25
+      ));
+      const tier = views >= 100_000 || likes >= 1_000 || retweets >= 200
+        ? 'breakout'
+        : views >= 25_000 || likes >= 250 || retweets >= 50 || replies >= 50
+          ? 'viral'
+          : 'rising';
+
+      return {
+        key: post.url,
+        source: 'x',
+        title: post.author,
+        text: post.text,
+        url: post.url,
+        score,
+        timestamp: post.timestamp,
+        niche,
+        metrics: { likes, retweets, replies, views },
+        viral: {
+          score,
+          tier,
+          ageHours,
+          viewsPerHour,
+          engagementsPerHour,
+        },
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+}
+
 export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics = configuredTopics()) {
   const candidates = [];
 
@@ -199,6 +413,7 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         title: story.title,
         text: story.title,
         url: story.url,
+        timestamp: story.timestamp,
         score: Math.round(Math.min(100, momentum + relevanceScore(story.title, topics) + freshnessScore(story.timestamp))),
         metrics: { points: story.score, comments: story.comments },
       });
@@ -215,6 +430,7 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         title: repo.name,
         text: repo.description,
         url: repo.url,
+        timestamp: repo.createdAt,
         score: Math.round(Math.min(100, momentum + relevanceScore(text, topics) + freshnessScore(repo.createdAt))),
         metrics: { stars: repo.stars, starsPerDay: Math.round(repo.starsPerDay) },
       });
@@ -223,15 +439,19 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
 
   if (Array.isArray(xPosts)) {
     for (const post of xPosts) {
+      const niche = classifyNiche(post.text);
+      if (niche.score === 0) continue;
       const engagement = post.views + post.likes * 20 + post.retweets * 50 + post.replies * 20;
-      const momentum = Math.min(50, Math.log10(engagement + 1) * 10);
+      const momentum = Math.min(35, Math.log10(engagement + 1) * 7);
       candidates.push({
         key: post.url,
         source: 'x',
         title: post.author,
         text: post.text,
         url: post.url,
-        score: Math.round(Math.min(100, momentum + relevanceScore(post.text, topics) + freshnessScore(post.timestamp))),
+        timestamp: post.timestamp,
+        score: Math.round(Math.min(100, momentum + niche.score + freshnessScore(post.timestamp))),
+        niche,
         metrics: { likes: post.likes, retweets: post.retweets, replies: post.replies, views: post.views },
       });
     }

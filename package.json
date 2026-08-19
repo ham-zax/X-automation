@@ -8,12 +8,15 @@
     "post": "node post_thread.js",
     "http:check": "node post_thread.js --http-check",
     "web": "node dashboard.js",
+    "agent": "node agent_bridge.js",
+    "audience:sync": "node audience.js",
     "automation": "node automation.js",
     "automation:once": "node automation.js --once"
   },
   "keywords": [],
   "type": "module",
   "dependencies": {
+    "bootstrap": "^5.3.8",
     "dotenv": "^17.4.2",
     "xactions": "^3.5.0"
   }

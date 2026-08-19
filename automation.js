@@ -1,109 +1,112 @@
 import 'dotenv/config';
-import fs from 'fs/promises';
-import path from 'path';
 import {
   fetchGitHubTrending,
   fetchHackerNews,
-  fetchXTechNews,
-  generateMomentumPost,
+  fetchXNichePosts,
+  fetchXViralPosts,
   rankNews,
+  rankXViralPosts,
 } from './tech_news.js';
 import { postTweetHttp } from './x_http.js';
+import { personalizeCandidates } from './strategy.js';
+import {
+  getAppState,
+  getCandidate,
+  getNextReadyDraft,
+  getPreferenceProfile,
+  saveDraft,
+  setAppState,
+  upsertCandidates,
+} from './store.js';
 
-const STATE_FILE = path.resolve('.automation-state.json');
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
 const POST_INTERVAL_HOURS = Number(process.env.POST_INTERVAL_HOURS || 4);
-const MIN_MOMENTUM_SCORE = Number(process.env.MIN_MOMENTUM_SCORE || 70);
+const MIN_DRAFT_SCORE = Number(process.env.MIN_DRAFT_SCORE || 40);
 const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
-const X_ACCOUNTS = (process.env.X_NEWS_ACCOUNTS || 'github,OpenAI,ycombinator,TechCrunch')
-  .split(',')
-  .map((account) => account.trim().replace(/^@/, ''))
-  .filter(Boolean);
 
-async function loadState() {
-  try {
-    return JSON.parse(await fs.readFile(STATE_FILE, 'utf8'));
-  } catch {
-    return { lastPostedAt: 0, postedKeys: [] };
-  }
-}
-
-async function saveState(state) {
-  await fs.writeFile(STATE_FILE, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
-}
-
-function candidateId(candidate) {
-  return candidate?.key || candidate?.url || `${candidate?.source}:${candidate?.title}`;
-}
-
-async function collectCandidates() {
-  const [hnStories, ghRepos, xPosts] = await Promise.all([
+async function refreshResearch() {
+  const [hnStories, ghRepos] = await Promise.all([
     fetchHackerNews(NEWS_LIMIT),
     fetchGitHubTrending(NEWS_LIMIT),
-    fetchXTechNews(X_ACCOUNTS, 2),
   ]);
-  return rankNews({ hnStories, ghRepos, xPosts });
+  const xResult = await fetchXNichePosts(Math.max(NEWS_LIMIT * 4, 32));
+  const viralResult = await fetchXViralPosts(Math.max(NEWS_LIMIT * 8, 64));
+
+  const preference = getPreferenceProfile();
+  const ranked = personalizeCandidates(rankNews({
+    hnStories: Array.isArray(hnStories) ? hnStories : [],
+    ghRepos: Array.isArray(ghRepos) ? ghRepos : [],
+    xPosts: xResult.posts,
+  }), preference);
+  const viral = personalizeCandidates(rankXViralPosts(viralResult.posts), preference);
+  upsertCandidates([...ranked, ...viral]);
+
+  return {
+    ranked,
+    viral,
+    errors: [
+      !Array.isArray(hnStories) ? hnStories?.error : null,
+      !Array.isArray(ghRepos) ? ghRepos?.error : null,
+      xResult.error,
+      viralResult.error,
+    ].filter(Boolean),
+  };
 }
 
 export async function runCycle() {
-  const state = await loadState();
-  const ranked = await collectCandidates();
-  const posted = new Set(state.postedKeys || []);
-  const candidate = ranked.find((item) => item.source !== 'x' && !posted.has(candidateId(item)));
+  const research = await refreshResearch();
+  const top = [...research.viral, ...research.ranked].sort((a, b) => b.score - a.score)[0] || null;
+  if (top) {
+    console.log(`[automation] Research leader: ${top.score}/100 ${top.source} ${top.title}`);
+  } else {
+    console.log('[automation] No research candidates this cycle.');
+  }
+  if (research.errors.length) console.log(`[automation] Partial research errors: ${research.errors.join(' | ')}`);
 
-  if (!candidate) {
-    console.log('[automation] No unseen candidates.');
-    return { action: 'none', reason: 'no-candidate' };
+  const draft = getNextReadyDraft(Date.now(), MIN_DRAFT_SCORE);
+  if (!draft) {
+    console.log(`[automation] No ready draft at or above ${MIN_DRAFT_SCORE}/50.`);
+    return { action: 'research-only', top, errors: research.errors };
   }
 
-  console.log(`[automation] Top unseen candidate: ${candidate.score}/100 ${candidate.source} ${candidate.title}`);
+  const candidate = getCandidate(draft.candidateKey);
+  if (!candidate) throw new Error(`Ready draft ${draft.id} has no source candidate.`);
 
-  if (candidate.score < MIN_MOMENTUM_SCORE) {
-    console.log(`[automation] Below momentum threshold ${MIN_MOMENTUM_SCORE}; not posting.`);
-    return { action: 'none', reason: 'below-threshold', candidate };
-  }
-
-  const cooldownMs = POST_INTERVAL_HOURS * 3_600_000;
-  const nextAllowedAt = Number(state.lastPostedAt || 0) + cooldownMs;
+  const lastPostedAt = Number(getAppState('last_posted_at', 0) || 0);
+  const nextAllowedAt = lastPostedAt + POST_INTERVAL_HOURS * 3_600_000;
   if (Date.now() < nextAllowedAt) {
-    console.log(`[automation] Cooldown active until ${new Date(nextAllowedAt).toLocaleString()}.`);
-    return { action: 'none', reason: 'cooldown', candidate };
+    console.log(`[automation] Ready draft ${draft.id} waiting for cooldown until ${new Date(nextAllowedAt).toLocaleString()}.`);
+    return { action: 'cooldown', draft, candidate, nextAllowedAt };
   }
 
-  const text = generateMomentumPost(candidate);
-  console.log(`[automation] Candidate post (${text.length}/280):\n${text}`);
-
+  console.log(`[automation] Ready draft ${draft.id} (${draft.qualityScore}/50):\n${draft.body}`);
   if (!AUTO_POST) {
-    console.log('[automation] AUTO_POST=false; preview only.');
-    return { action: 'preview', candidate, text };
+    console.log('[automation] AUTO_POST=false; queue preview only.');
+    return { action: 'preview', draft, candidate };
   }
 
   const authToken = process.env.AUTH_TOKEN;
   const csrfToken = process.env.CT0;
-  if (!authToken || !csrfToken) {
-    throw new Error('AUTO_POST=true requires AUTH_TOKEN and CT0.');
-  }
+  if (!authToken || !csrfToken) throw new Error('AUTO_POST=true requires AUTH_TOKEN and CT0.');
 
-  const result = await postTweetHttp(text, { authToken, csrfToken });
-  state.lastPostedAt = Date.now();
-  state.postedKeys = [...posted, candidateId(candidate)].slice(-200);
-  await saveState(state);
-
+  const result = await postTweetHttp(draft.body, { authToken, csrfToken });
   const tweetId = result?.rest_id || result?.legacy?.id_str || null;
-  console.log(`[automation] Posted successfully${tweetId ? `: ${tweetId}` : '.'}`);
-  return { action: 'posted', candidate, text, tweetId };
+  saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
+  setAppState('last_posted_at', Date.now());
+
+  console.log(`[automation] Published draft ${draft.id}${tweetId ? ` as ${tweetId}` : ''}.`);
+  return { action: 'posted', draft, candidate, tweetId };
 }
 
 async function main() {
   const once = process.argv.includes('--once');
-
   if (once) {
     await runCycle();
     return;
   }
 
-  console.log(`[automation] Started. Poll=${POLL_MINUTES}m, post cooldown=${POST_INTERVAL_HOURS}h, threshold=${MIN_MOMENTUM_SCORE}, auto-post=${AUTO_POST}.`);
+  console.log(`[automation] Started. Poll=${POLL_MINUTES}m, cooldown=${POST_INTERVAL_HOURS}h, min draft=${MIN_DRAFT_SCORE}/50, auto-post=${AUTO_POST}.`);
   while (true) {
     try {
       await runCycle();

@@ -1,0 +1,97 @@
+import 'dotenv/config';
+import { Scraper, createBrowser, createPage } from 'xactions';
+import { classifyNiche } from './strategy.js';
+import { replaceAudienceSnapshot, setAppState } from './store.js';
+
+function normalizeCell(row) {
+  const lines = String(row.text || '').split('\n').map((line) => line.trim()).filter(Boolean);
+  const username = String(row.username || '').replace(/^@/, '');
+  const displayName = lines[0] || username;
+  const bio = lines.filter((line) => line !== displayName && line !== `@${username}` && !['Following', 'Follow', 'Follow back', 'Follows you'].includes(line)).join(' ');
+  const profileText = `${displayName} ${bio}`.toLowerCase();
+  const niche = classifyNiche(profileText);
+  const legacyCrypto = ['crypto', 'blockchain', 'defi', 'nft', 'memecoin', 'solana', 'bitcoin', 'on-chain', 'trader'].some((term) => profileText.includes(term));
+  const strongDevSignal = ['developer', 'software', 'engineer', 'coding', 'code ', 'llm', 'model', 'open source', 'mcp', 'api', 'sdk', 'cli', 'github', 'devtool'].some((term) => profileText.includes(term));
+  const relevanceScore = legacyCrypto && !strongDevSignal ? Math.max(0, niche.score - 18) : niche.score;
+  return {
+    username,
+    displayName,
+    bio,
+    relevanceScore,
+    nicheTags: niche.tags,
+    matchedKeywords: niche.matches,
+  };
+}
+
+async function scrapeRelationship(page, url, target, relationshipText) {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 }).catch(() => {});
+  await page.waitForSelector('[data-testid="UserCell"]', { timeout: 10_000 }).catch(() => {});
+  const seen = new Map();
+  let stagnantPasses = 0;
+
+  for (let pass = 0; pass < 90 && seen.size < target && stagnantPasses < 6; pass++) {
+    const before = seen.size;
+    const rows = await page.evaluate((requiredText) => [...document.querySelectorAll('[data-testid="UserCell"]')]
+      .map((cell) => {
+        const text = (cell.innerText || '').trim();
+        if (!text.includes(requiredText)) return null;
+        const link = [...cell.querySelectorAll('a[href^="/"]')].find((a) => /^\/[A-Za-z0-9_]+$/.test(a.getAttribute('href') || ''));
+        return link ? { username: link.getAttribute('href').slice(1), text } : null;
+      })
+      .filter(Boolean), relationshipText);
+    for (const row of rows) seen.set(row.username, row);
+    stagnantPasses = seen.size === before ? stagnantPasses + 1 : 0;
+    if (seen.size >= target) break;
+    await page.evaluate(() => window.scrollBy(0, Math.max(window.innerHeight * 2, 1400)));
+    await new Promise((resolve) => setTimeout(resolve, 650));
+  }
+
+  return [...seen.values()].map(normalizeCell);
+}
+
+export async function syncAudience(username = 'ham_zax') {
+  if (!process.env.AUTH_TOKEN) throw new Error('Missing AUTH_TOKEN.');
+  const scraper = new Scraper();
+  const scraperCookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+  if (process.env.CT0) scraperCookies.push({ name: 'ct0', value: process.env.CT0 });
+  await scraper.setCookies(scraperCookies);
+  const profile = await scraper.getProfile(username);
+
+  const browser = await createBrowser({ headless: true });
+  try {
+    const page = await createPage(browser);
+    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true }];
+    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
+    await page.setCookie(...cookies);
+
+    const followers = await scrapeRelationship(page, `https://x.com/${username}/followers`, Math.max(profile.followersCount, 1), 'Follows you');
+    const following = await scrapeRelationship(page, `https://x.com/${username}/following`, Math.max(profile.followingCount, 1), 'Following');
+    const summary = replaceAudienceSnapshot({ followers, following });
+    const account = {
+      username: profile.username,
+      name: profile.name,
+      bio: profile.bio,
+      followersCount: profile.followersCount,
+      followingCount: profile.followingCount,
+      tweetCount: profile.tweetCount,
+      likesCount: profile.likesCount,
+      capturedAt: Date.now(),
+    };
+    setAppState('account_profile', JSON.stringify(account));
+    return { account, summary, followers: followers.length, following: following.length };
+  } finally {
+    await browser.close();
+  }
+}
+
+async function main() {
+  const result = await syncAudience(process.env.X_ACCOUNT || 'ham_zax');
+  console.log(JSON.stringify(result, null, 2));
+}
+
+if (process.argv[1]?.endsWith('audience.js')) {
+  main().catch((error) => {
+    console.error(JSON.stringify({ error: error.message }));
+    process.exit(1);
+  });
+}

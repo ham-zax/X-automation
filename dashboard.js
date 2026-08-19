@@ -3,23 +3,42 @@ import http from 'http';
 import fs from 'fs/promises';
 import path from 'path';
 import {
+  fetchAccountPerformance,
   fetchGitHubTrending,
   fetchHackerNews,
-  fetchXTechNews,
+  fetchXNichePosts,
+  fetchXViralPosts,
   generateMomentumPost,
   rankNews,
+  rankXViralPosts,
 } from './tech_news.js';
+import { composeDraft, createDraftScaffold, scoreDraft } from './drafting.js';
+import { syncAudience } from './audience.js';
+import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
+import {
+  candidateKey,
+  countSavedCandidates,
+  getAudienceSummary,
+  getCandidate,
+  getDraft,
+  getDraftByCandidate,
+  getNextReadyDraft,
+  getPerformanceSnapshot,
+  getPreferenceProfile,
+  listAudienceProfiles,
+  listCandidateActions,
+  listCandidates,
+  listDrafts,
+  markCandidateSaved,
+  recordPerformanceSnapshot,
+  saveDraft,
+  upsertCandidates,
+} from './store.js';
 
 const PORT = Number(process.env.WEB_PORT || 3030);
 const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
-const MIN_MOMENTUM_SCORE = Number(process.env.MIN_MOMENTUM_SCORE || 70);
-const POST_INTERVAL_HOURS = Number(process.env.POST_INTERVAL_HOURS || 4);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
-const STATE_FILE = path.resolve('.automation-state.json');
-const X_ACCOUNTS = (process.env.X_NEWS_ACCOUNTS || 'github,OpenAI,ycombinator,TechCrunch')
-  .split(',')
-  .map((account) => account.trim().replace(/^@/, ''))
-  .filter(Boolean);
+const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -30,136 +49,396 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-async function loadState() {
-  try {
-    return JSON.parse(await fs.readFile(STATE_FILE, 'utf8'));
-  } catch {
-    return { lastPostedAt: 0, postedKeys: [] };
+function formatNumber(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function formatDateTime(value) {
+  if (!value) return '';
+  const date = new Date(Number(value));
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+async function readForm(req) {
+  let body = '';
+  for await (const chunk of req) {
+    body += chunk;
+    if (body.length > 128_000) throw new Error('Request too large.');
   }
+  return new URLSearchParams(body);
 }
 
-async function collectRanked() {
-  const [hnStories, ghRepos, xPosts] = await Promise.all([
-    fetchHackerNews(NEWS_LIMIT),
-    fetchGitHubTrending(NEWS_LIMIT),
-    fetchXTechNews(X_ACCOUNTS, 2),
-  ]);
-  return rankNews({ hnStories, ghRepos, xPosts });
+async function collectResearch(source) {
+  if (source === 'x') {
+    const result = await fetchXNichePosts(Math.max(NEWS_LIMIT * 6, 48));
+    const ranked = personalizeCandidates(rankNews({ xPosts: result.posts }), getPreferenceProfile());
+    upsertCandidates(ranked);
+    return result.error;
+  }
+
+  if (source === 'viral') {
+    const result = await fetchXViralPosts(Math.max(NEWS_LIMIT * 10, 80));
+    const ranked = personalizeCandidates(rankXViralPosts(result.posts), getPreferenceProfile());
+    upsertCandidates(ranked);
+    return result.error;
+  }
+
+  if (source === 'github') {
+    const repos = await fetchGitHubTrending(Math.max(NEWS_LIMIT * 2, 16));
+    if (!Array.isArray(repos)) return repos?.error || 'GitHub research failed.';
+    upsertCandidates(personalizeCandidates(rankNews({ ghRepos: repos }), getPreferenceProfile()));
+    return null;
+  }
+
+  if (source === 'hn') {
+    const stories = await fetchHackerNews(Math.max(NEWS_LIMIT * 2, 16));
+    if (!Array.isArray(stories)) return stories?.error || 'Hacker News research failed.';
+    upsertCandidates(personalizeCandidates(rankNews({ hnStories: stories }), getPreferenceProfile()));
+    return null;
+  }
+
+  if (source === 'all') {
+    const [xResult, repos, stories] = await Promise.all([
+      fetchXNichePosts(Math.max(NEWS_LIMIT * 4, 32)),
+      fetchGitHubTrending(NEWS_LIMIT),
+      fetchHackerNews(NEWS_LIMIT),
+    ]);
+    upsertCandidates(personalizeCandidates(rankNews({
+      xPosts: xResult.posts,
+      ghRepos: Array.isArray(repos) ? repos : [],
+      hnStories: Array.isArray(stories) ? stories : [],
+    }), getPreferenceProfile()));
+    return xResult.error || (!Array.isArray(repos) ? repos?.error : null) || (!Array.isArray(stories) ? stories?.error : null);
+  }
+
+  return null;
 }
 
-function candidateKey(candidate) {
-  return candidate?.key || candidate?.url || `${candidate?.source}:${candidate?.title}`;
+function nicheBadges(candidate) {
+  const tags = (candidate.niche?.tags || [])
+    .map((tag) => `<span class="badge text-bg-primary">${escapeHtml(NICHE_LABELS[tag] || tag)}</span>`)
+    .join(' ');
+  const matches = (candidate.niche?.matches || [])
+    .map((term) => `<span class="badge rounded-pill text-bg-light border">${escapeHtml(term)}</span>`)
+    .join(' ');
+  return `${tags ? `<div class="d-flex flex-wrap gap-2 mb-2">${tags}<span class="badge text-bg-success">fit ${candidate.niche.score}/50</span></div>` : ''}${matches ? `<div class="d-flex flex-wrap gap-1 mb-3">${matches}</div>` : ''}`;
 }
 
-function candidateCard(candidate, index, selected) {
-  const post = generateMomentumPost(candidate);
+function viralBadges(candidate) {
+  if (!candidate.viral) return '';
+  const tierClass = candidate.viral.tier === 'breakout' ? 'text-bg-danger' : candidate.viral.tier === 'viral' ? 'text-bg-warning' : 'text-bg-info';
+  return `<div class="d-flex flex-wrap gap-2 mb-3">
+    <span class="badge ${tierClass}">${escapeHtml(candidate.viral.tier.toUpperCase())}</span>
+    <span class="badge text-bg-light border">${candidate.viral.ageHours.toFixed(1)}h old</span>
+    <span class="badge text-bg-light border">${formatNumber(Math.round(candidate.viral.viewsPerHour))} views/h</span>
+    <span class="badge text-bg-light border">${candidate.viral.engagementsPerHour.toFixed(1)} engagement/h</span>
+  </div>`;
+}
+
+function candidateCard(candidate, index, returnTo) {
   const isX = candidate.source === 'x';
-  const xMetrics = isX
-    ? `${Number(candidate.metrics?.views || 0).toLocaleString()} views · ${Number(candidate.metrics?.likes || 0).toLocaleString()} likes · ${Number(candidate.metrics?.retweets || 0).toLocaleString()} reposts · ${Number(candidate.metrics?.replies || 0).toLocaleString()} replies`
-    : '';
-  return `
-    <article class="card ${selected ? 'selected' : ''}">
-      <div class="row">
-        <strong>#${index + 1} ${escapeHtml(candidate.title)}</strong>
-        <span class="score">${candidate.score}/100</span>
+  const draft = getDraftByCandidate(candidate.key);
+  const actions = listCandidateActions(candidate.key);
+  const actionBadges = actions.map((action) => action.output_url
+    ? `<a class="badge text-bg-info text-decoration-none" href="${escapeHtml(action.output_url)}" target="_blank">${escapeHtml(action.action.toUpperCase())} ↗</a>`
+    : `<span class="badge text-bg-info">${escapeHtml(action.action.toUpperCase())}</span>`).join(' ');
+  const renderedText = isX ? candidate.text : generateMomentumPost(candidate);
+  const metrics = candidate.metrics || {};
+  const metricLine = isX
+    ? `${formatNumber(metrics.views)} views · ${formatNumber(metrics.likes)} likes · ${formatNumber(metrics.retweets)} reposts · ${formatNumber(metrics.replies)} replies`
+    : candidate.source === 'github'
+      ? `${formatNumber(metrics.stars)} stars · ~${formatNumber(metrics.starsPerDay)} stars/day`
+      : `${formatNumber(metrics.points)} points · ${formatNumber(metrics.comments)} comments`;
+
+  return `<article class="card shadow-sm border-0 mb-3">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+        <div>
+          <div class="fw-semibold fs-5">#${index + 1} ${escapeHtml(candidate.title)}</div>
+          <div class="text-secondary small">${escapeHtml(candidate.source.toUpperCase())}${candidate.timestamp ? ` · ${escapeHtml(new Date(candidate.timestamp).toLocaleString())}` : ''}</div>
+        </div>
+        <span class="badge text-bg-dark fs-6">${candidate.viral ? 'viral ' : ''}${Math.round(candidate.viral?.score ?? candidate.score)}/100</span>
       </div>
-      <div class="meta">${escapeHtml(candidate.source.toUpperCase())}${selected ? ' · automation pick' : ''}</div>
-      ${isX ? `<pre>${escapeHtml(candidate.text)}</pre><div class="meta">${escapeHtml(xMetrics)}</div>` : `<pre>${escapeHtml(post)}</pre>`}
-      <div class="row bottom">
-        <span>${isX ? 'source post' : `${post.length}/280 chars`}</span>
-        <a href="${escapeHtml(candidate.url)}" target="_blank" rel="noreferrer">Open source ↗</a>
+      ${isX ? nicheBadges(candidate) : ''}
+      ${viralBadges(candidate)}
+      <p class="card-text fs-6 lh-base text-break">${escapeHtml(renderedText)}</p>
+      <div class="text-secondary small mb-3">${escapeHtml(metricLine)}</div>
+      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div class="d-flex gap-2 flex-wrap">
+          ${candidate.saved ? '<span class="badge text-bg-success">Saved</span>' : ''}
+          ${actionBadges}
+          ${draft ? `<span class="badge text-bg-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</span>` : ''}
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <form method="post" action="/candidate/save" class="m-0">
+            <input type="hidden" name="key" value="${escapeHtml(candidate.key)}">
+            <input type="hidden" name="saved" value="${candidate.saved ? '0' : '1'}">
+            <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
+            <button class="btn ${candidate.saved ? 'btn-outline-success' : 'btn-dark'} btn-sm" type="submit">${candidate.saved ? 'Unsave' : 'Save'}</button>
+          </form>
+          <form method="post" action="/draft/create" class="m-0">
+            <input type="hidden" name="key" value="${escapeHtml(candidate.key)}">
+            <button class="btn btn-outline-primary btn-sm" type="submit">${draft ? 'Open draft' : 'Create draft'}</button>
+          </form>
+          <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(candidate.url)}" target="_blank" rel="noreferrer">Open source ↗</a>
+        </div>
       </div>
-    </article>`;
+    </div>
+  </article>`;
 }
 
-async function renderPage(activeSource = 'x') {
-  const [ranked, state] = await Promise.all([collectRanked(), loadState()]);
-  const posted = new Set(state.postedKeys || []);
-  const selected = ranked.find((item) => item.source !== 'x' && !posted.has(candidateKey(item))) || null;
-  const visible = activeSource === 'all' ? ranked : ranked.filter((item) => item.source === activeSource);
-  const nextAllowedAt = Number(state.lastPostedAt || 0) + POST_INTERVAL_HOURS * 3_600_000;
-  const cooldownActive = Date.now() < nextAllowedAt;
+function draftCard(draft) {
+  const candidate = getCandidate(draft.candidateKey);
+  if (!candidate) return '';
+  const analysis = scoreDraft(draft, candidate);
+  const statusOptions = ['draft', 'ready', 'published'].map((status) => `<option value="${status}" ${draft.status === status ? 'selected' : ''}>${status}</option>`).join('');
+  return `<article class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
+        <div>
+          <div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div>
+          <div class="text-secondary small">${escapeHtml((candidate.niche?.tags || []).map((tag) => NICHE_LABELS[tag] || tag).join(' · '))}</div>
+        </div>
+        <div class="d-flex gap-2 align-items-start">
+          <span class="badge ${analysis.publishable ? 'text-bg-success' : analysis.score >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">${escapeHtml(analysis.quality)} ${analysis.score}/50</span>
+          <span class="badge text-bg-light border">${escapeHtml(draft.status)}</span>
+        </div>
+      </div>
+      <form method="post" action="/draft/save">
+        <input type="hidden" name="id" value="${draft.id}">
+        <div class="mb-3"><label class="form-label fw-semibold">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div>
+        <div class="mb-3"><label class="form-label fw-semibold">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div>
+        <div class="mb-3"><label class="form-label fw-semibold">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div>
+        <div class="mb-3"><label class="form-label fw-semibold">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div>
+        <div class="row g-3 align-items-end">
+          <div class="col-md-3"><label class="form-label">Status</label><select class="form-select" name="status">${statusOptions}</select></div>
+          <div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div>
+          <div class="col-md-4 d-flex gap-2"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div>
+        </div>
+      </form>
+      <hr>
+      <div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5 · ${analysis.weightedLength}/280 weighted chars. Ready requires ≥40/50, no placeholders, and ≤280 weighted chars.</div>
+    </div>
+  </article>`;
+}
 
-  let decision = 'No unseen GitHub/Hacker News candidate.';
-  if (selected) {
-    if (selected.score < MIN_MOMENTUM_SCORE) decision = `Waiting: ${selected.score}/100 is below threshold ${MIN_MOMENTUM_SCORE}.`;
-    else if (cooldownActive) decision = `Waiting for cooldown until ${new Date(nextAllowedAt).toLocaleString()}.`;
-    else decision = AUTO_POST ? 'Ready for the automation loop to post.' : 'Preview only — AUTO_POST=false.';
+function performanceView(snapshot, error) {
+  if (error) return `<div class="alert alert-warning">Performance refresh failed: ${escapeHtml(error)}</div>`;
+  if (!snapshot.account) return '<div class="alert alert-secondary">No performance snapshot yet.</div>';
+  const account = snapshot.account;
+  const previous = snapshot.previousAccount;
+  const followerDelta = previous ? Number(account.followers) - Number(previous.followers) : null;
+  const summary = `<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Followers</div><div class="fs-3 fw-semibold">${formatNumber(account.followers)}</div><div class="small ${followerDelta > 0 ? 'text-success' : 'text-secondary'}">${followerDelta == null ? 'first snapshot' : `${followerDelta >= 0 ? '+' : ''}${followerDelta} since prior snapshot`}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Following</div><div class="fs-3 fw-semibold">${formatNumber(account.following)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Posts</div><div class="fs-3 fw-semibold">${formatNumber(account.posts)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Likes given</div><div class="fs-3 fw-semibold">${formatNumber(account.likes)}</div></div></div></div>
+  </div>`;
+  const posts = snapshot.posts.map((post) => {
+    const engagement = Number(post.likes) + Number(post.reposts) + Number(post.replies);
+    const rate = Number(post.views) > 0 ? (engagement / Number(post.views)) * 100 : 0;
+    return `<div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <p class="mb-2">${escapeHtml(post.text)}</p>
+      <div class="d-flex gap-2 flex-wrap small text-secondary">
+        <span>${formatNumber(post.views)} views</span><span>${formatNumber(post.likes)} likes</span><span>${formatNumber(post.reposts)} reposts</span><span>${formatNumber(post.replies)} replies</span><span>${rate.toFixed(2)}% visible engagement</span>
+      </div>
+    </div></div>`;
+  }).join('');
+  return summary + (posts || '<div class="alert alert-secondary">No recent post metrics.</div>');
+}
+
+function audienceView(error = null) {
+  if (error) return `<div class="alert alert-warning">Audience refresh failed: ${escapeHtml(error)}</div>`;
+  const summary = getAudienceSummary();
+  const targets = listAudienceProfiles({ youFollow: true, followsYou: false, minScore: 12, limit: 40 });
+  const relevantFollowers = listAudienceProfiles({ followsYou: true, minScore: 12, limit: 20 });
+  const stats = `<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Observed followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.followers)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_followers)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_following)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Relationship targets</div><div class="fs-3 fw-semibold">${formatNumber(summary.target_accounts)}</div></div></div></div>
+  </div>`;
+  const profileCards = (profiles, title, note) => `<h2 class="h5 mt-4">${escapeHtml(title)}</h2><p class="text-secondary small">${escapeHtml(note)}</p>${profiles.map((profile) => `<div class="card border-0 shadow-sm mb-2"><div class="card-body py-3">
+    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary">${escapeHtml(profile.bio)}</div></div><div class="d-flex gap-2 align-items-start flex-wrap"><span class="badge text-bg-primary">fit ${profile.relevanceScore}/50</span><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div></div>
+    <div class="d-flex gap-1 flex-wrap mt-2">${profile.nicheTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(NICHE_LABELS[tag] || tag)}</span>`).join('')}</div>
+  </div></div>`).join('') || '<div class="alert alert-secondary">No matching profiles in the current snapshot.</div>'}`;
+  return stats
+    + profileCards(targets, 'Relationship targets', 'Relevant accounts you already follow that do not currently follow you. Engage only when you can add concrete value.')
+    + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
+}
+
+async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = false) {
+  let refreshError = null;
+  const researchEmpty = activeSource === 'x'
+    ? listCandidates({ source: 'x', withinHours: 72, limit: 1 }).length === 0
+    : activeSource === 'viral'
+      ? listCandidates({ source: 'x', viralOnly: true, withinHours: 24, limit: 1 }).length === 0
+      : activeSource === 'github'
+        ? listCandidates({ source: 'github', withinHours: 168, limit: 1 }).length === 0
+        : activeSource === 'hn'
+          ? listCandidates({ source: 'hn', withinHours: 168, limit: 1 }).length === 0
+          : activeSource === 'all'
+            ? listCandidates({ withinHours: 168, limit: 1 }).length === 0
+            : false;
+  if (['x', 'viral', 'github', 'hn', 'all'].includes(activeSource) && (forceRefresh || researchEmpty)) {
+    refreshError = await collectResearch(activeSource);
   }
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>X Automation Dashboard</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { margin: 0; font-family: system-ui, sans-serif; background: #f5f5f5; color: #151515; }
-    main { max-width: 900px; margin: 0 auto; padding: 32px 18px 60px; }
-    header, .card { background: white; border: 1px solid #ddd; border-radius: 12px; }
-    header { padding: 20px; margin-bottom: 18px; }
-    h1 { margin: 0 0 8px; font-size: 24px; }
-    p { margin: 6px 0; color: #555; }
-    .toolbar { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
-    .button { display: inline-block; background: #111; color: white; text-decoration: none; padding: 9px 14px; border-radius: 8px; }
-    .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
-    .tab { display: inline-block; padding: 8px 12px; border: 1px solid #ccc; border-radius: 999px; text-decoration: none; background: white; }
-    .tab.active { background: #111; color: white; border-color: #111; }
-    .card { padding: 18px; margin: 12px 0; }
-    .selected { border: 2px solid #111; }
-    .row { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
-    .score { font-weight: 700; white-space: nowrap; }
-    .meta { margin-top: 5px; color: #777; font-size: 13px; }
-    pre { white-space: pre-wrap; word-break: break-word; font: 15px/1.45 system-ui, sans-serif; background: #f7f7f7; padding: 14px; border-radius: 8px; margin: 14px 0; }
-    .bottom { color: #666; font-size: 13px; }
-    a { color: #111; }
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <h1>X automation dashboard</h1>
-      <p>${escapeHtml(decision)}</p>
-      <p>Threshold ${MIN_MOMENTUM_SCORE}/100 · cooldown ${POST_INTERVAL_HOURS}h · auto-post ${AUTO_POST ? 'ON' : 'OFF'}</p>
-      <div class="toolbar">
-        <a class="button" href="/">Refresh research</a>
-        <span>Updated ${escapeHtml(new Date().toLocaleString())}</span>
+  let performanceError = null;
+  if (activeSource === 'performance' && (forceRefresh || !getPerformanceSnapshot(1).account)) {
+    const result = await fetchAccountPerformance(ACCOUNT, 20);
+    performanceError = result.error;
+    if (!result.error) recordPerformanceSnapshot(result);
+  }
+
+  let audienceError = null;
+  if (activeSource === 'audience' && (forceRefresh || getAudienceSummary().following === 0)) {
+    try {
+      await syncAudience(ACCOUNT);
+    } catch (error) {
+      audienceError = error.message;
+    }
+  }
+
+  const savedCount = countSavedCandidates();
+  const nextReady = getNextReadyDraft();
+  let visible = [];
+  if (activeSource === 'x') visible = listCandidates({ source: 'x', withinHours: 72, limit: 120 });
+  else if (activeSource === 'viral') visible = listCandidates({ source: 'x', viralOnly: true, withinHours: 24, limit: 100 });
+  else if (activeSource === 'interesting') visible = listCandidates({ saved: true, limit: 150 });
+  else if (activeSource === 'github') visible = listCandidates({ source: 'github', withinHours: 168, limit: 100 });
+  else if (activeSource === 'hn') visible = listCandidates({ source: 'hn', withinHours: 168, limit: 100 });
+  else if (activeSource === 'all') visible = listCandidates({ withinHours: 168, limit: 150 });
+  else if (activeSource === 'opportunities') visible = listCandidates({ source: 'x', withinHours: 168, limit: 250 }).filter(isOpportunityCandidate);
+
+  if (activeTag) visible = visible.filter((item) => item.niche?.tags?.includes(activeTag));
+
+  const drafts = activeSource === 'drafts' ? listDrafts({ limit: 100 }) : [];
+  const performance = activeSource === 'performance' ? getPerformanceSnapshot(30) : null;
+
+  let decision;
+  if (refreshError) decision = `Research refresh failed: ${refreshError}`;
+  else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
+  else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
+  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} ready for the publishing queue.`;
+  else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
+  else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot and recent post outcomes.`;
+  else if (activeSource === 'audience') {
+    const summary = getAudienceSummary();
+    decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are relationship targets.`;
+  }
+  else decision = `${visible.length} persisted candidates for this research view.`;
+
+  const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}`;
+  const filtersEnabled = ['x', 'viral', 'interesting', 'opportunities'].includes(activeSource);
+  const nav = [
+    ['x', 'X posts'],
+    ['viral', 'Viral · 24h'],
+    ['interesting', `Saved (${savedCount})`],
+    ['drafts', 'Drafts'],
+    ['opportunities', 'Opportunities'],
+    ['audience', 'Audience'],
+    ['performance', 'Performance'],
+    ['github', 'GitHub'],
+    ['hn', 'Hacker News'],
+    ['all', 'All'],
+  ].map(([source, label]) => `<a class="btn btn-sm ${activeSource === source ? (source === 'viral' ? 'btn-danger' : 'btn-dark') : (source === 'viral' ? 'btn-outline-danger' : 'btn-outline-secondary')}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
+
+  let content;
+  if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Create one from any research card.</div>';
+  else if (activeSource === 'performance') content = performanceView(performance, performanceError);
+  else if (activeSource === 'audience') content = audienceView(audienceError);
+  else content = visible.slice(0, 50).map((item, index) => candidateCard(item, index, returnTo)).join('') || '<div class="alert alert-secondary">No candidates found for this view.</div>';
+
+  return `<!doctype html><html lang="en"><head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>X Research System</title><link rel="stylesheet" href="/assets/bootstrap.min.css">
+  </head><body class="bg-body-tertiary">
+    <div class="sticky-top bg-body-tertiary border-bottom shadow-sm"><div class="container py-3">
+      <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-2">
+        <div><h1 class="h4 mb-1">X research & publishing system</h1><div class="text-secondary small">${escapeHtml(decision)}</div></div>
+        <div class="d-flex gap-2 align-items-center flex-wrap"><a class="btn btn-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a><span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">AUTO_POST ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextReady ? `<span class="badge text-bg-success">queue ready ${nextReady.qualityScore}/50</span>` : ''}</div>
       </div>
-    </header>
-    <nav class="tabs">
-      <a class="tab ${activeSource === 'x' ? 'active' : ''}" href="/?source=x">X posts</a>
-      <a class="tab ${activeSource === 'github' ? 'active' : ''}" href="/?source=github">GitHub</a>
-      <a class="tab ${activeSource === 'hn' ? 'active' : ''}" href="/?source=hn">Hacker News</a>
-      <a class="tab ${activeSource === 'all' ? 'active' : ''}" href="/?source=all">All</a>
-    </nav>
-    ${visible.slice(0, 20).map((item, index) => candidateCard(item, index, item === selected)).join('') || '<p>No candidates found for this source.</p>'}
-  </main>
-</body>
-</html>`;
+      <div class="d-flex gap-2 flex-wrap mb-2">${nav}</div>
+      ${filtersEnabled ? `<div class="d-flex gap-2 flex-wrap"><a class="badge rounded-pill ${!activeTag ? 'text-bg-dark' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}">All niches</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="badge rounded-pill ${activeTag === tag ? 'text-bg-primary' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
+    </div></div>
+    <main class="container py-4">${content}</main>
+    <script src="/assets/bootstrap.bundle.min.js"></script>
+  </body></html>`;
 }
 
 const server = http.createServer(async (req, res) => {
-  if (req.url === '/favicon.ico') {
-    res.writeHead(204);
-    res.end();
-    return;
-  }
-
+  if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   try {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    const source = ['x', 'github', 'hn', 'all'].includes(requestUrl.searchParams.get('source'))
-      ? requestUrl.searchParams.get('source')
-      : 'x';
-    const html = await renderPage(source);
-    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(html);
+    if (req.method === 'GET' && requestUrl.pathname === '/assets/bootstrap.min.css') {
+      res.writeHead(200, { 'content-type': 'text/css; charset=utf-8' });
+      res.end(await fs.readFile(path.resolve('node_modules/bootstrap/dist/css/bootstrap.min.css')));
+      return;
+    }
+    if (req.method === 'GET' && requestUrl.pathname === '/assets/bootstrap.bundle.min.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      res.end(await fs.readFile(path.resolve('node_modules/bootstrap/dist/js/bootstrap.bundle.min.js')));
+      return;
+    }
+
+    if (req.method === 'POST' && ['/candidate/save', '/interesting'].includes(requestUrl.pathname)) {
+      const form = await readForm(req);
+      const key = form.get('key');
+      const candidate = getCandidate(key);
+      if (!candidate) throw new Error('Candidate not found. Refresh research first.');
+      markCandidateSaved(key, form.get('saved') !== '0');
+      res.writeHead(303, { location: form.get('returnTo') || '/?source=interesting' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/draft/create') {
+      const form = await readForm(req);
+      const candidate = getCandidate(form.get('key'));
+      if (!candidate) throw new Error('Candidate not found.');
+      let draft = getDraftByCandidate(candidate.key);
+      if (!draft) draft = saveDraft(createDraftScaffold(candidate));
+      markCandidateSaved(candidate.key, true);
+      res.writeHead(303, { location: `/?source=drafts&draft=${draft.id}` }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/draft/save') {
+      const form = await readForm(req);
+      const current = getDraft(Number(form.get('id')));
+      if (!current) throw new Error('Draft not found.');
+      const candidate = getCandidate(current.candidateKey);
+      if (!candidate) throw new Error('Draft source candidate not found.');
+      const scheduledRaw = form.get('scheduledAt');
+      const scheduledAt = scheduledRaw ? Date.parse(scheduledRaw) : null;
+      if (scheduledRaw && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
+      const updated = {
+        ...current,
+        hook: form.get('hook') || '',
+        insight: form.get('insight') || '',
+        evidence: form.get('evidence') || '',
+        action: form.get('action') || '',
+        scheduledAt,
+      };
+      updated.body = composeDraft(updated);
+      const analysis = scoreDraft(updated, candidate);
+      updated.qualityScore = analysis.score;
+      const requestedStatus = form.get('status') || 'draft';
+      if (!['draft', 'ready', 'published'].includes(requestedStatus)) throw new Error('Invalid draft status.');
+      if (requestedStatus === 'published' && current.status !== 'published') throw new Error('Publishing state is owned by the publisher.');
+      updated.status = requestedStatus === 'ready' && !analysis.publishable ? 'draft' : requestedStatus;
+      const saved = saveDraft(updated);
+      res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
+    }
+
+    const allowedSources = ['x', 'viral', 'interesting', 'drafts', 'opportunities', 'audience', 'performance', 'github', 'hn', 'all'];
+    const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
+    const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
+    const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1');
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html);
   } catch (error) {
     res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(`Dashboard failed: ${error.message}`);
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[web] X automation dashboard: http://localhost:${PORT}`);
-});
+server.listen(PORT, '0.0.0.0', () => console.log(`[web] X research system: http://localhost:${PORT}`));

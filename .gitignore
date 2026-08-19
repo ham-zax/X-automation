@@ -2,4 +2,6 @@ node_modules/
 .env
 *.log
 .automation-state.json
+.interesting-posts.json
+.x-research.sqlite*
 .DS_Store
