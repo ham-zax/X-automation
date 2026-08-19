@@ -128,3 +128,62 @@ export function useCreate() {
     staleTime: 30_000,
   })
 }
+
+
+// Discover types
+export interface DiscoveredCandidate {
+  key: string
+  title: string
+  text: string
+  url: string
+  source: string
+  score: number
+  viralScore: number
+  viralTier: string
+  nicheLabel: string
+  nicheMatches: string[]
+  saved: boolean
+  discoveredAt: number
+}
+
+export interface DiscoverData {
+  candidates: DiscoveredCandidate[]
+  total: number
+}
+
+export function useDiscover() {
+  return useQuery({
+    queryKey: ['discover'],
+    queryFn: () => fetchApi<DiscoverData>('/discover'),
+    staleTime: 30_000,
+  })
+}
+
+
+// Audience types
+export interface AudienceProfile {
+  username: string
+  displayName: string
+  bio: string
+  followsYou: boolean
+  youFollow: boolean
+  nicheState: string
+  nicheLabel: string
+  nicheConfidence: number
+  topicFit: number
+  firstSeenAt: number
+  lastSeenAt: number
+}
+
+export interface AudienceData {
+  profiles: AudienceProfile[]
+  total: number
+}
+
+export function useAudience() {
+  return useQuery({
+    queryKey: ['audience'],
+    queryFn: () => fetchApi<AudienceData>('/audience'),
+    staleTime: 30_000,
+  })
+}

@@ -222,6 +222,71 @@ export async function handleApi(req, res, requestUrl) {
       });
     }
 
+
+    if (req.method === 'GET' && path === '/discover') {
+      const candidates = listCandidates({ saved: false, limit: 20 });
+      
+      const formatCandidate = (c) => {
+        const niche = c.niche || {};
+        const matches = niche.matches || [];
+        const tags = niche.tags || [];
+        const primaryTag = tags[0];
+        const label = primaryTag ? NICHE_LABELS[primaryTag] || primaryTag : 'General';
+        
+        return {
+          key: c.key,
+          title: c.title || c.text?.slice(0, 80) || 'Untitled',
+          text: c.text || '',
+          url: c.url || '',
+          source: c.source || 'unknown',
+          score: c.score || 0,
+          viralScore: c.viralScore || 0,
+          viralTier: c.viralTier || 'standard',
+          nicheLabel: label,
+          nicheMatches: matches,
+          saved: Boolean(c.saved),
+          discoveredAt: c.discoveredAt,
+        };
+      };
+      
+      return sendJson(200, {
+        state: 'success',
+        data: {
+          candidates: candidates.map(formatCandidate),
+          total: candidates.length,
+        }
+      });
+    }
+
+    if (req.method === 'GET' && path === '/audience') {
+      const profiles = listAudienceProfiles({ limit: 100 });
+      
+      const formatProfile = (p) => {
+        const niche = classifyAudienceProfile(p);
+        return {
+          username: p.username,
+          displayName: p.displayName || p.username,
+          bio: p.bio || '',
+          followsYou: Boolean(p.followsYou),
+          youFollow: Boolean(p.youFollow),
+          nicheState: niche.state,
+          nicheLabel: niche.label || 'Unknown',
+          nicheConfidence: niche.confidence || 0,
+          topicFit: p.topicFit || 0,
+          firstSeenAt: p.firstSeenAt,
+          lastSeenAt: p.lastSeenAt,
+        };
+      };
+      
+      return sendJson(200, {
+        state: 'success',
+        data: {
+          profiles: profiles.map(formatProfile),
+          total: profiles.length,
+        }
+      });
+    }
+
     // Fallback
     return sendJson(404, {
       state: 'error',

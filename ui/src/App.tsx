@@ -3,6 +3,8 @@ import { useState } from 'react'
 import { Today } from './features/today/Today'
 import { Conversations } from './features/conversations/Conversations'
 import { Create } from './features/create/Create'
+import { Discover } from './features/discover/Discover'
+import { Audience } from './features/discover/Audience'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +59,10 @@ function Shell() {
           <Conversations />
         ) : active === 'create' ? (
           <Create />
+        ) : active === 'discover' ? (
+          <Discover />
+        ) : active === 'advanced' ? (
+          <Audience />
         ) : (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
             <h2 className="text-2xl font-semibold mb-4 capitalize">{active}</h2>
