@@ -43,6 +43,19 @@ export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
   'platform_restriction_observed',
   'operator_note',
 ];
+export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy']);
+export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
+export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
+export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'writer']);
+
+const AI_RUNTIME_SET = new Set(AI_RUNTIME_TYPES);
+const AI_PROVIDER_SET = new Set(AI_PROVIDER_KINDS);
+const AI_PROTOCOL_SET = new Set(AI_PROTOCOLS);
+const AI_ROLE_SET = new Set(AI_ROLES);
+const AI_ATTEMPT_KIND_SET = new Set(['primary', 'fallback']);
+const AI_RUN_STATUS_SET = new Set(['running', 'complete', 'failed']);
+const AI_STRUCTURED_OUTPUT_STATE_SET = new Set(['supported', 'compatible_fallback', 'unknown', 'unsupported']);
+const AI_PROFILE_SETTING_KEYS = new Set(['catalogPath', 'structuredOutput', 'httpReferer', 'appTitle']);
 
 const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
@@ -303,6 +316,64 @@ db.exec(`
     UNIQUE(scope, key)
   );
 
+  CREATE TABLE IF NOT EXISTS ai_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    runtime TEXT NOT NULL,
+    provider_kind TEXT NOT NULL,
+    base_url TEXT NOT NULL DEFAULT '',
+    protocol TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    reasoning TEXT NOT NULL DEFAULT '',
+    runtime_profile TEXT NOT NULL DEFAULT '',
+    secret_ref TEXT NOT NULL DEFAULT '',
+    settings_json TEXT NOT NULL DEFAULT '{}',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_runtime_settings (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    default_profile_id INTEGER,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(default_profile_id) REFERENCES ai_profiles(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_role_bindings (
+    role TEXT PRIMARY KEY,
+    primary_profile_id INTEGER,
+    fallback_profile_id INTEGER,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(primary_profile_id) REFERENCES ai_profiles(id),
+    FOREIGN KEY(fallback_profile_id) REFERENCES ai_profiles(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS ai_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invocation_id TEXT NOT NULL,
+    attempt INTEGER NOT NULL DEFAULT 1,
+    attempt_kind TEXT NOT NULL DEFAULT 'primary',
+    role TEXT NOT NULL,
+    profile_id INTEGER,
+    runtime TEXT NOT NULL,
+    provider_kind TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    reasoning TEXT NOT NULL DEFAULT '',
+    fallback_profile_id INTEGER,
+    fallback_used INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error_code TEXT NOT NULL DEFAULT '',
+    started_at INTEGER NOT NULL,
+    completed_at INTEGER,
+    duration_ms INTEGER,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    cost_usd REAL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY(profile_id) REFERENCES ai_profiles(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_candidates_source_updated ON candidates(source, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_saved ON candidates(saved, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_viral ON candidates(viral_score DESC, published_at DESC);
@@ -326,6 +397,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_variants_experiment ON experiment_variants(experiment_id, id);
   CREATE INDEX IF NOT EXISTS idx_learned_rules_status ON learned_rules(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_learned_rules_scope ON learned_rules(scope, status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_profiles_enabled_updated ON ai_profiles(enabled, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_runs_started ON ai_runs(started_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_runs_role_started ON ai_runs(role, started_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_runs_profile_started ON ai_runs(profile_id, started_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_ai_runs_invocation_attempt ON ai_runs(invocation_id, attempt ASC);
+
+  INSERT OR IGNORE INTO ai_runtime_settings(id, default_profile_id, updated_at) VALUES (1, NULL, 0);
 
   INSERT OR IGNORE INTO queue_items (
     candidate_key, lane, pipeline, status,
@@ -2592,6 +2670,478 @@ export function getPerformanceSnapshot(limit = 30) {
       ON x.tweet_id = p.tweet_id AND x.latest = p.captured_at
     ORDER BY p.published_at DESC LIMIT ?`).all(limit);
   return { account, previousAccount, posts };
+}
+
+function requireAiEnum(value, allowed, label) {
+  const normalized = String(value || '').trim();
+  if (!allowed.has(normalized)) throw new Error(`Invalid ${label}: ${normalized || 'missing'}`);
+  return normalized;
+}
+
+function normalizeAiProfileSettings(settings = {}) {
+  if (settings == null) return {};
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('AI profile settings must be an object.');
+  const normalized = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (!AI_PROFILE_SETTING_KEYS.has(key)) throw new Error(`Unsupported AI profile setting: ${key}`);
+    if (key === 'catalogPath') {
+      const pathValue = String(value || '').trim();
+      if (!pathValue.startsWith('/')) throw new Error('AI catalogPath must start with /.');
+      normalized.catalogPath = pathValue;
+    } else if (key === 'structuredOutput') {
+      const state = String(value || '').trim();
+      if (!AI_STRUCTURED_OUTPUT_STATE_SET.has(state)) throw new Error(`Invalid AI structuredOutput state: ${state || 'missing'}`);
+      normalized.structuredOutput = state;
+    } else {
+      normalized[key] = String(value || '').trim();
+    }
+  }
+  return normalized;
+}
+
+function validateAiSecretRef(secretRef) {
+  const value = String(secretRef || '').trim();
+  if (!value) return '';
+  if (/^file:[A-Za-z0-9._-]+$/.test(value)) return value;
+  if (/^env:[A-Za-z_][A-Za-z0-9_]*$/.test(value)) return value;
+  throw new Error('AI secret_ref must be a file:<id> or env:<NAME> reference.');
+}
+
+function validateAiBaseUrl(baseUrl, { required = false } = {}) {
+  const value = String(baseUrl || '').trim().replace(/\/+$/, '');
+  if (!value) {
+    if (required) throw new Error('AI baseUrl is required for openai_compatible profiles.');
+    return '';
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error('AI baseUrl must be a valid http(s) URL.');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('AI baseUrl must use http or https.');
+  return value;
+}
+
+function normalizeAiProfileInput(input = {}, current = null) {
+  const merged = { ...(current || {}), ...(input || {}) };
+  const name = String(merged.name || '').trim();
+  if (!name) throw new Error('AI profile name is required.');
+  const runtime = requireAiEnum(merged.runtime, AI_RUNTIME_SET, 'AI runtime');
+  const providerKind = requireAiEnum(merged.providerKind, AI_PROVIDER_SET, 'AI provider kind');
+  const protocol = requireAiEnum(merged.protocol, AI_PROTOCOL_SET, 'AI protocol');
+  const isDirect = runtime === 'direct_api';
+  if (isDirect && providerKind === 'runtime_managed') throw new Error('Direct API profiles require a direct provider kind.');
+  if (!isDirect && providerKind !== 'runtime_managed') throw new Error(`${runtime} profiles must use provider_kind=runtime_managed.`);
+  if (isDirect && protocol === 'runtime_native') throw new Error('Direct API profiles must use responses or chat_completions.');
+  if (!isDirect && protocol !== 'runtime_native') throw new Error(`${runtime} profiles must use protocol=runtime_native.`);
+  const model = String(merged.model || '').trim();
+  if (!model) throw new Error('AI profile model is required; use "inherit" explicitly for runtime-managed inheritance.');
+  if (isDirect && model === 'inherit') throw new Error('Direct API profiles require an explicit model ID.');
+  const baseUrl = validateAiBaseUrl(merged.baseUrl, { required: isDirect && providerKind === 'openai_compatible' });
+  const secretRef = validateAiSecretRef(merged.secretRef);
+  if (isDirect && ['openai', 'openrouter'].includes(providerKind) && !secretRef) {
+    throw new Error(`${providerKind} profiles require a secret_ref.`);
+  }
+  return {
+    name,
+    runtime,
+    providerKind,
+    baseUrl,
+    protocol,
+    model,
+    reasoning: String(merged.reasoning || '').trim(),
+    runtimeProfile: String(merged.runtimeProfile || '').trim(),
+    secretRef,
+    settings: normalizeAiProfileSettings(merged.settings || {}),
+    enabled: merged.enabled !== false,
+  };
+}
+
+function decodeAiProfile(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    name: row.name,
+    runtime: row.runtime,
+    providerKind: row.provider_kind,
+    baseUrl: row.base_url,
+    protocol: row.protocol,
+    model: row.model,
+    reasoning: row.reasoning,
+    runtimeProfile: row.runtime_profile,
+    secretRef: row.secret_ref,
+    settings: json(row.settings_json, {}),
+    enabled: Boolean(row.enabled),
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function getAiProfile(id) {
+  return decodeAiProfile(db.prepare('SELECT * FROM ai_profiles WHERE id = ?').get(Number(id)));
+}
+
+export function listAiProfiles({ enabled = null, limit = 200 } = {}) {
+  const bounded = Math.max(1, Math.min(1000, Number(limit || 200)));
+  if (enabled == null) {
+    return db.prepare('SELECT * FROM ai_profiles ORDER BY enabled DESC, updated_at DESC, id DESC LIMIT ?').all(bounded).map(decodeAiProfile);
+  }
+  return db.prepare('SELECT * FROM ai_profiles WHERE enabled = ? ORDER BY updated_at DESC, id DESC LIMIT ?')
+    .all(enabled ? 1 : 0, bounded).map(decodeAiProfile);
+}
+
+export function createAiProfile(profile = {}) {
+  const normalized = normalizeAiProfileInput(profile);
+  const now = Date.now();
+  const inserted = db.prepare(`INSERT INTO ai_profiles(
+    name, runtime, provider_kind, base_url, protocol, model, reasoning, runtime_profile,
+    secret_ref, settings_json, enabled, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    normalized.name, normalized.runtime, normalized.providerKind, normalized.baseUrl, normalized.protocol,
+    normalized.model, normalized.reasoning, normalized.runtimeProfile, normalized.secretRef,
+    JSON.stringify(normalized.settings), normalized.enabled ? 1 : 0, now, now,
+  );
+  return getAiProfile(Number(inserted.lastInsertRowid));
+}
+
+export function updateAiProfile(id, changes = {}) {
+  const current = getAiProfile(id);
+  if (!current) throw new Error(`AI profile not found: ${id}`);
+  const normalized = normalizeAiProfileInput(changes, current);
+  const now = Date.now();
+  db.prepare(`UPDATE ai_profiles SET
+    name = ?, runtime = ?, provider_kind = ?, base_url = ?, protocol = ?, model = ?, reasoning = ?,
+    runtime_profile = ?, secret_ref = ?, settings_json = ?, enabled = ?, updated_at = ? WHERE id = ?`).run(
+    normalized.name, normalized.runtime, normalized.providerKind, normalized.baseUrl, normalized.protocol,
+    normalized.model, normalized.reasoning, normalized.runtimeProfile, normalized.secretRef,
+    JSON.stringify(normalized.settings), normalized.enabled ? 1 : 0, now, current.id,
+  );
+  return getAiProfile(current.id);
+}
+
+export function setAiProfileEnabled(id, enabled) {
+  return updateAiProfile(id, { enabled: enabled === true });
+}
+
+export function countAiProfilesUsingSecretRef(secretRef, { excludeProfileId = null } = {}) {
+  const ref = String(secretRef || '').trim();
+  if (!ref) return 0;
+  if (excludeProfileId == null) {
+    return Number(db.prepare('SELECT COUNT(*) AS count FROM ai_profiles WHERE secret_ref = ?').get(ref)?.count || 0);
+  }
+  return Number(db.prepare('SELECT COUNT(*) AS count FROM ai_profiles WHERE secret_ref = ? AND id != ?')
+    .get(ref, Number(excludeProfileId))?.count || 0);
+}
+
+export function deleteAiProfile(id) {
+  const current = getAiProfile(id);
+  if (!current) return null;
+  const now = Date.now();
+  db.exec('BEGIN');
+  try {
+    db.prepare('UPDATE ai_runtime_settings SET default_profile_id = NULL, updated_at = ? WHERE id = 1 AND default_profile_id = ?')
+      .run(now, current.id);
+    db.prepare('UPDATE ai_role_bindings SET primary_profile_id = NULL, updated_at = ? WHERE primary_profile_id = ?').run(now, current.id);
+    db.prepare('UPDATE ai_role_bindings SET fallback_profile_id = NULL, updated_at = ? WHERE fallback_profile_id = ?').run(now, current.id);
+    db.prepare('DELETE FROM ai_role_bindings WHERE primary_profile_id IS NULL AND fallback_profile_id IS NULL').run();
+    db.prepare('DELETE FROM ai_profiles WHERE id = ?').run(current.id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return {
+    profile: current,
+    secretRefStillUsed: current.secretRef ? countAiProfilesUsingSecretRef(current.secretRef) > 0 : false,
+  };
+}
+
+export function getAiRuntimeSettings() {
+  const row = db.prepare('SELECT * FROM ai_runtime_settings WHERE id = 1').get();
+  const defaultProfileId = row?.default_profile_id == null ? null : Number(row.default_profile_id);
+  return {
+    defaultProfileId,
+    defaultProfile: defaultProfileId == null ? null : getAiProfile(defaultProfileId),
+    updatedAt: Number(row?.updated_at || 0),
+  };
+}
+
+export function getAiDefaultProfile() {
+  return getAiRuntimeSettings().defaultProfile;
+}
+
+export function setAiDefaultProfile(profileId) {
+  if (profileId == null) return clearAiDefaultProfile();
+  const profile = getAiProfile(profileId);
+  if (!profile) throw new Error(`AI profile not found: ${profileId}`);
+  if (!profile.enabled) throw new Error(`AI profile is disabled: ${profileId}`);
+  db.prepare('UPDATE ai_runtime_settings SET default_profile_id = ?, updated_at = ? WHERE id = 1').run(profile.id, Date.now());
+  return getAiRuntimeSettings();
+}
+
+export function clearAiDefaultProfile() {
+  db.prepare('UPDATE ai_runtime_settings SET default_profile_id = NULL, updated_at = ? WHERE id = 1').run(Date.now());
+  return getAiRuntimeSettings();
+}
+
+function decodeAiRoleBinding(row) {
+  if (!row) return null;
+  const primaryProfileId = row.primary_profile_id == null ? null : Number(row.primary_profile_id);
+  const fallbackProfileId = row.fallback_profile_id == null ? null : Number(row.fallback_profile_id);
+  return {
+    role: row.role,
+    primaryProfileId,
+    fallbackProfileId,
+    primaryProfile: primaryProfileId == null ? null : getAiProfile(primaryProfileId),
+    fallbackProfile: fallbackProfileId == null ? null : getAiProfile(fallbackProfileId),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
+export function getAiRoleBinding(role) {
+  const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  return decodeAiRoleBinding(db.prepare('SELECT * FROM ai_role_bindings WHERE role = ?').get(normalizedRole));
+}
+
+export function listAiRoleBindings() {
+  return db.prepare('SELECT * FROM ai_role_bindings ORDER BY role ASC').all().map(decodeAiRoleBinding);
+}
+
+function requireEnabledAiProfile(profileId, label) {
+  if (profileId == null) return null;
+  const profile = getAiProfile(profileId);
+  if (!profile) throw new Error(`${label} AI profile not found: ${profileId}`);
+  if (!profile.enabled) throw new Error(`${label} AI profile is disabled: ${profileId}`);
+  return profile;
+}
+
+export function setAiRoleBinding(role, { primaryProfileId = null, fallbackProfileId = null } = {}) {
+  const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  if (primaryProfileId == null && fallbackProfileId == null) return clearAiRoleBinding(normalizedRole);
+  const primary = requireEnabledAiProfile(primaryProfileId, 'Primary');
+  const fallback = requireEnabledAiProfile(fallbackProfileId, 'Fallback');
+  if (primary && fallback && primary.id === fallback.id) throw new Error('AI primary and fallback profiles must be different.');
+  const now = Date.now();
+  db.prepare(`INSERT INTO ai_role_bindings(role, primary_profile_id, fallback_profile_id, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(role) DO UPDATE SET primary_profile_id = excluded.primary_profile_id,
+      fallback_profile_id = excluded.fallback_profile_id, updated_at = excluded.updated_at`)
+    .run(normalizedRole, primary?.id ?? null, fallback?.id ?? null, now);
+  return getAiRoleBinding(normalizedRole);
+}
+
+export function clearAiRoleBinding(role) {
+  const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  db.prepare('DELETE FROM ai_role_bindings WHERE role = ?').run(normalizedRole);
+  return null;
+}
+
+export function getAiCompatibilityProfile(role) {
+  const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  if (normalizedRole !== 'writer') return null;
+  return {
+    id: null,
+    name: 'Current Codex configuration',
+    runtime: 'codex',
+    providerKind: 'runtime_managed',
+    baseUrl: '',
+    protocol: 'runtime_native',
+    model: 'inherit',
+    reasoning: '',
+    runtimeProfile: '',
+    secretRef: '',
+    settings: {},
+    enabled: true,
+    compatibility: true,
+    createdAt: null,
+    updatedAt: null,
+  };
+}
+
+function resolveExplicitAiProfile(profile) {
+  if (profile == null) return null;
+  if (typeof profile === 'object' && !Array.isArray(profile)) {
+    if (profile.id != null) {
+      const persisted = getAiProfile(profile.id);
+      if (!persisted) throw new Error(`AI profile not found: ${profile.id}`);
+      return persisted;
+    }
+    return { id: null, ...normalizeAiProfileInput(profile), compatibility: false, createdAt: null, updatedAt: null };
+  }
+  const persisted = getAiProfile(profile);
+  if (!persisted) throw new Error(`AI profile not found: ${profile}`);
+  return persisted;
+}
+
+export function resolveAiProfileForRole(role, explicitProfile = null) {
+  const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  const binding = getAiRoleBinding(normalizedRole);
+  let profile = resolveExplicitAiProfile(explicitProfile);
+  let source = profile ? 'explicit' : null;
+  if (!profile && binding?.primaryProfileId != null) {
+    profile = getAiProfile(binding.primaryProfileId);
+    if (!profile) throw new Error(`Bound AI profile not found: ${binding.primaryProfileId}`);
+    source = 'role';
+  }
+  if (!profile) {
+    const settings = getAiRuntimeSettings();
+    if (settings.defaultProfileId != null) {
+      profile = settings.defaultProfile;
+      if (!profile) throw new Error(`Default AI profile not found: ${settings.defaultProfileId}`);
+      source = 'global';
+    }
+  }
+  if (!profile) {
+    profile = getAiCompatibilityProfile(normalizedRole);
+    source = profile ? 'compatibility' : 'unconfigured';
+  }
+  const fallbackProfile = binding?.fallbackProfileId == null ? null : getAiProfile(binding.fallbackProfileId);
+  if (binding?.fallbackProfileId != null && !fallbackProfile) {
+    throw new Error(`Fallback AI profile not found: ${binding.fallbackProfileId}`);
+  }
+  return {
+    role: normalizedRole,
+    source,
+    profile,
+    fallbackProfile: fallbackProfile && fallbackProfile.id !== profile?.id ? fallbackProfile : null,
+    binding,
+  };
+}
+
+function normalizeAiRunMetadata(metadata = {}) {
+  if (metadata == null) return {};
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error('AI run metadata must be an object.');
+  const isSensitiveKey = (key) => {
+    const normalized = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+    return normalized.includes('prompt')
+      || normalized.includes('apikey')
+      || normalized.includes('secret')
+      || normalized.includes('authorization')
+      || normalized.includes('chainofthought')
+      || normalized.includes('rawresponse')
+      || normalized.includes('responsebody')
+      || normalized === 'output'
+      || normalized === 'outputtext'
+      || normalized === 'result';
+  };
+  const visit = (value) => {
+    if (Array.isArray(value)) return value.map(visit);
+    if (!value || typeof value !== 'object') return value;
+    const result = {};
+    for (const [key, child] of Object.entries(value)) {
+      if (isSensitiveKey(key)) throw new Error(`AI run metadata cannot contain ${key}.`);
+      result[key] = visit(child);
+    }
+    return result;
+  };
+  return visit(metadata);
+}
+
+function decodeAiRun(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    invocationId: row.invocation_id,
+    attempt: Number(row.attempt),
+    attemptKind: row.attempt_kind,
+    role: row.role,
+    profileId: row.profile_id == null ? null : Number(row.profile_id),
+    runtime: row.runtime,
+    providerKind: row.provider_kind,
+    model: row.model,
+    reasoning: row.reasoning,
+    fallbackProfileId: row.fallback_profile_id == null ? null : Number(row.fallback_profile_id),
+    fallbackUsed: Boolean(row.fallback_used),
+    status: row.status,
+    errorCode: row.error_code,
+    startedAt: Number(row.started_at),
+    completedAt: row.completed_at == null ? null : Number(row.completed_at),
+    durationMs: row.duration_ms == null ? null : Number(row.duration_ms),
+    inputTokens: row.input_tokens == null ? null : Number(row.input_tokens),
+    outputTokens: row.output_tokens == null ? null : Number(row.output_tokens),
+    costUsd: row.cost_usd == null ? null : Number(row.cost_usd),
+    metadata: json(row.metadata_json, {}),
+  };
+}
+
+export function getAiRun(id) {
+  return decodeAiRun(db.prepare('SELECT * FROM ai_runs WHERE id = ?').get(Number(id)));
+}
+
+export function createAiRunAttempt(input = {}) {
+  const invocationId = String(input.invocationId || '').trim();
+  if (!invocationId) throw new Error('AI run invocationId is required.');
+  const attempt = Number(input.attempt || 1);
+  if (!Number.isInteger(attempt) || attempt < 1) throw new Error('AI run attempt must be a positive integer.');
+  const attemptKind = requireAiEnum(input.attemptKind || 'primary', AI_ATTEMPT_KIND_SET, 'AI attempt kind');
+  const role = requireAiEnum(input.role, AI_ROLE_SET, 'AI role');
+  const runtime = requireAiEnum(input.runtime, AI_RUNTIME_SET, 'AI runtime');
+  const providerKind = requireAiEnum(input.providerKind, AI_PROVIDER_SET, 'AI provider kind');
+  const startedAt = Number(input.startedAt || Date.now());
+  if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error('AI run startedAt must be a positive timestamp.');
+  const inserted = db.prepare(`INSERT INTO ai_runs(
+    invocation_id, attempt, attempt_kind, role, profile_id, runtime, provider_kind, model, reasoning,
+    fallback_profile_id, fallback_used, status, error_code, started_at, completed_at, duration_ms,
+    input_tokens, output_tokens, cost_usd, metadata_json
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running', '', ?, NULL, NULL, NULL, NULL, NULL, ?)`).run(
+    invocationId, attempt, attemptKind, role, input.profileId == null ? null : Number(input.profileId), runtime,
+    providerKind, String(input.model || ''), String(input.reasoning || ''),
+    input.fallbackProfileId == null ? null : Number(input.fallbackProfileId), input.fallbackUsed ? 1 : 0,
+    startedAt, JSON.stringify(normalizeAiRunMetadata(input.metadata || {})),
+  );
+  return getAiRun(Number(inserted.lastInsertRowid));
+}
+
+export function finishAiRunAttempt(id, changes = {}) {
+  const current = getAiRun(id);
+  if (!current) throw new Error(`AI run not found: ${id}`);
+  const status = requireAiEnum(changes.status || current.status, AI_RUN_STATUS_SET, 'AI run status');
+  const completedAt = changes.completedAt == null ? (status === 'running' ? null : Date.now()) : Number(changes.completedAt);
+  if (completedAt != null && (!Number.isFinite(completedAt) || completedAt < current.startedAt)) {
+    throw new Error('AI run completedAt must be at or after startedAt.');
+  }
+  const nullableNumber = (value, label) => {
+    if (value == null) return null;
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new Error(`${label} must be a finite number.`);
+    return number;
+  };
+  const metadata = normalizeAiRunMetadata({ ...current.metadata, ...(changes.metadata || {}) });
+  const model = changes.model == null ? current.model : String(changes.model || '');
+  const reasoning = changes.reasoning == null ? current.reasoning : String(changes.reasoning || '');
+  db.prepare(`UPDATE ai_runs SET status = ?, error_code = ?, completed_at = ?, duration_ms = ?,
+    model = ?, reasoning = ?, input_tokens = ?, output_tokens = ?, cost_usd = ?, metadata_json = ? WHERE id = ?`).run(
+    status, String(changes.errorCode || ''), completedAt,
+    completedAt == null ? null : Math.max(0, completedAt - current.startedAt), model, reasoning,
+    nullableNumber(changes.inputTokens, 'AI inputTokens'), nullableNumber(changes.outputTokens, 'AI outputTokens'),
+    nullableNumber(changes.costUsd, 'AI costUsd'), JSON.stringify(metadata), current.id,
+  );
+  return getAiRun(current.id);
+}
+
+export function listAiRuns({ role = null, profileId = null, invocationId = null, status = null, limit = 100 } = {}) {
+  const where = [];
+  const params = [];
+  if (role != null) {
+    where.push('role = ?');
+    params.push(requireAiEnum(role, AI_ROLE_SET, 'AI role'));
+  }
+  if (profileId != null) {
+    where.push('profile_id = ?');
+    params.push(Number(profileId));
+  }
+  if (invocationId != null) {
+    where.push('invocation_id = ?');
+    params.push(String(invocationId));
+  }
+  if (status != null) {
+    where.push('status = ?');
+    params.push(requireAiEnum(status, AI_RUN_STATUS_SET, 'AI run status'));
+  }
+  params.push(Math.max(1, Math.min(1000, Number(limit || 100))));
+  return db.prepare(`SELECT * FROM ai_runs ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY started_at DESC, id DESC LIMIT ?`).all(...params).map(decodeAiRun);
 }
 
 function migrateLegacyFiles() {
