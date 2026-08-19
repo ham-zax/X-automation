@@ -1,7 +1,7 @@
 # Network Growth System — Wave 2 Agent Coordination
 
 **Repository:** `/home/hamza/repo/x_test`  
-**Combined code base:** `0784943` (`fa1a6a1` Content Core + Phase 1B Relationship Intelligence)  
+**Current integration base:** `1d480e3` (Phase 1A + Relationship Intelligence + Content Core + Engage Next Core)
 **Source of truth:** `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`, `docs/plans/PHASE_1C_ENGAGE_NEXT.md`, `docs/plans/PHASE_2_CONTENT_QUALITY.md`  
 **Execution shape:** parallel isolated cores with central integration  
 **Current wave:** 2
@@ -10,34 +10,35 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A — Engage Next Core | executable | ready after worktree setup | now | `/home/hamza/repo/x_test-w2-engagement` | concurrent writer; owns only new pure `engagement.js` domain core | none |
-| Agent B — Phase 2 Content Integration | executable/mixed | ready after worktree setup | now | `/home/hamza/repo/x_test-w2-content-integration` | concurrent writer; owns persistence/workflow/UI/bridge content integration while Agent A avoids shared surfaces | none |
+| Agent A — Engage Next Core | executable | complete + integrated (`1d480e3`) | complete | `/home/hamza/repo/x_test-w2-engagement` | isolated writer; verified one-file engagement core | none |
+| Agent A2 — Engage Target Discovery | executable | ready after branch reset to current base | now | `/home/hamza/repo/x_test-w2-engagement` | sequential reuse of Agent A worktree; owns only `tech_news.js` while Agent B continues on shared files | Engage Next Core integrated |
+| Agent B — Phase 2 Content Integration | executable/mixed | active / working | now | `/home/hamza/repo/x_test-w2-content-integration` | concurrent writer; owns persistence/workflow/UI/bridge content integration while Agent A2 avoids shared surfaces | none |
 
 ## Dependency map
 
 ```text
-0784943 combined Wave-1 implementation
+1d480e3 integrated Engage Next Core
         |
-        +---------------------------+
-        |                           |
-        v                           v
-Agent A: Engage Next Core      Agent B: Phase 2 Integration
-engagement.js only             store/pipeline/bridge/dashboard
-        |                           |
-        +-------------+-------------+
-                      |
-                      v
-               central integration
-                      |
-                      v
-             Phase 1C integration
-        store/read-path/UI/bridge/automation
-                      |
-                      v
-             Phase 1D Account Health
-                      |
-                      v
-             Phase 3 Distribution
+        +------------------------------+
+        |                              |
+        v                              v
+Agent A2: Target Discovery       Agent B: Phase 2 Integration
+tech_news.js only                store/pipeline/bridge/dashboard
+        |                              |
+        +---------------+--------------+
+                        |
+                        v
+                 central integration
+                        |
+                        v
+             remaining Phase 1C integration
+       persistence/responses/UI/bridge/automation/send
+                        |
+                        v
+               Phase 1D Account Health
+                        |
+                        v
+               Phase 3 Distribution
 ```
 
 ## Shared contracts
@@ -46,7 +47,8 @@ engagement.js only             store/pipeline/bridge/dashboard
 - `relationship.js` owns target profiles/events/TargetScore/stage and is read-only to both agents unless a concrete correctness defect is discovered and reported.
 - `opportunity.js` owns Reach/Follow/Conversation/Relationship candidate scores.
 - `drafting.js` owns content composition/writer/gate behavior from integrated Content Core.
-- **Agent A owns only `engagement.js` in this wave.** It must not modify persistence, dashboard, bridge, authenticated X reads, automation, workflow, docs, or content code.
+- Engage Next Core is integrated as `1d480e3`; `engagement.js` is now a stable input to later integration.
+- **Agent A2 owns only `tech_news.js`** for bounded relationship-target timeline reads. It must not modify persistence, dashboard, bridge, automation, workflow, docs, content code, or X write paths.
 - **Agent B owns Phase-2 integration surfaces:** `store.js`, `pipeline.js`, `agent_bridge.js`, `dashboard.js`, `drafting.js` only when needed for a discovered integration defect, and Phase-2 operating docs.
 - Agent B must not create/modify `engagement.js`, `tech_news.js`, `automation.js`, or implement Engage Next/Account Health.
 - No autonomous reply sending, scheduler migration, media upload, experiments, or learning in this wave.
@@ -56,7 +58,7 @@ engagement.js only             store/pipeline/bridge/dashboard
 
 The main checkout remains the single integration writer. Agents commit only to their assigned branches. The orchestrator verifies each branch against its mission, integrates centrally, resolves interface drift, and then materializes the next frontier.
 
-Agent A's module is intentionally persistence-free so it can be integrated independently of Agent B. Phase 1C storage/discovery/UI/send integration is a later mission after both branches land.
+Agent A's pure engagement core is already integrated. Agent A2 may now build only the target-timeline read adapter while Agent B continues on shared Phase-2 surfaces. Phase 1C persistence/response detection/UI/bridge/automation/send integration remains central/later work after both active branches land.
 
 Agent B must normalize the Phase-2 prompt/editor media vocabulary before bridge exposure. The authoritative persisted/editor enum is:
 
@@ -82,7 +84,8 @@ Use the narrowest direct evidence capable of disproving the claimed behavior. No
 
 ## Future / blocked work
 
-- Phase 1C persistence + authenticated discovery + Active Conversations/Engage Next UI + explicit send path — blocked by integrated Agent A core and stable Phase-2 content contract.
+- Phase 1C target timeline discovery — Agent A2 is ready now and stays isolated in `tech_news.js`.
+- Phase 1C persistence + response detection + Active Conversations/Engage Next UI + explicit send path — blocked by Agent A2 target discovery plus stable Phase-2 shared surfaces from Agent B.
 - Phase 1D Account Health — blocked by completed Phase 1C relationship-event/engagement history.
 - Phase 3 Distribution — blocked by Phase 2 gates/final content integration.
 - Phase 4 Measurement/Experiments — blocked by publication and network outcome metadata.
@@ -92,3 +95,4 @@ Use the narrowest direct evidence capable of disproving the claimed behavior. No
 
 - `2026-08-19` — Wave 1 integrated: Content Core on `fa1a6a1`, Relationship Intelligence on `0784943`.
 - `2026-08-19` — Wave 2 materialized as isolated Engage Next Core + Phase-2 Content Integration to avoid concurrent edits to shared persistence/UI/bridge files.
+- `2026-08-19` — Agent A returned `ba91a23`; verified as one-file `engagement.js` and integrated on `main` as `1d480e3`. Agent B remains active. Agent A2 target discovery is the new collision-free frontier.
