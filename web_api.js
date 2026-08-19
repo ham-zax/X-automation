@@ -41,6 +41,7 @@ import {
   getExperimentSummary,
   getLearningOverview,
   getMainFeedScheduleItem,
+  getAppState,
   getNewFollowerQuality,
   getPerformanceSnapshot,
   getPreferenceProfile,
@@ -65,6 +66,7 @@ import {
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
   saveDraft,
+  setAppState,
   setExperimentStatus,
   setMainFeedSchedule,
   upsertCandidates,
@@ -77,7 +79,7 @@ const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
-const DISCOVER_FEEDS = new Set(['for-you', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
+const DISCOVER_FEEDS = new Set(['for-you', 'x', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
 const REFRESHABLE_FEEDS = new Set(['x', 'viral', 'github', 'hn', 'all']);
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
@@ -289,32 +291,66 @@ export async function generateDraftCandidate(current) {
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 
+const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
+
+function persistDiscoverSnapshot(source, candidates) {
+  const snapshot = {
+    fetchedAt: Date.now(),
+    keys: [...new Set(candidates.map((candidate) => candidate?.key).filter(Boolean))],
+  };
+  setAppState(`${DISCOVER_SNAPSHOT_PREFIX}${source}`, JSON.stringify(snapshot));
+  return snapshot;
+}
+
+function loadDiscoverSnapshot(source) {
+  try {
+    const stored = JSON.parse(getAppState(`${DISCOVER_SNAPSHOT_PREFIX}${source}`, 'null'));
+    if (!stored || !Array.isArray(stored.keys)) return { fetchedAt: null, candidates: [] };
+    return {
+      fetchedAt: Number(stored.fetchedAt || 0) || null,
+      candidates: stored.keys.map((key) => getCandidate(key)).filter(Boolean),
+    };
+  } catch {
+    return { fetchedAt: null, candidates: [] };
+  }
+}
+
 export async function collectResearch(source) {
+  const preference = getPreferenceProfile();
+
   if (source === 'x') {
     const result = await fetchXNichePosts(Math.max(NEWS_LIMIT * 6, 48));
-    const ranked = personalizeCandidates(rankNews({ xPosts: result.posts }), getPreferenceProfile());
+    const ranked = personalizeCandidates(rankNews({ xPosts: result.posts }), preference);
     upsertCandidates(ranked);
+    if (!result.error) persistDiscoverSnapshot('x', ranked);
     return result.error;
   }
 
   if (source === 'viral') {
-    const result = await fetchXViralPosts(Math.max(NEWS_LIMIT * 10, 80));
-    const ranked = personalizeCandidates(rankXViralPosts(result.posts), getPreferenceProfile());
+    const result = await fetchXViralPosts(Math.max(NEWS_LIMIT * 2, 16), 1, true);
+    const ranked = personalizeCandidates(rankXViralPosts(result.posts), preference);
     upsertCandidates(ranked);
+    if (!result.error) persistDiscoverSnapshot('viral', ranked);
     return result.error;
   }
 
   if (source === 'github') {
     const repos = await fetchGitHubTrending(Math.max(NEWS_LIMIT * 2, 16));
-    if (!Array.isArray(repos)) return repos?.error || 'GitHub research failed.';
-    upsertCandidates(personalizeCandidates(rankNews({ ghRepos: repos }), getPreferenceProfile()));
+    if (!Array.isArray(repos)) return repos?.error || 'GitHub Trending research failed.';
+    const ranked = personalizeCandidates(rankNews({ ghRepos: repos }), preference);
+    upsertCandidates(ranked);
+    const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
+    persistDiscoverSnapshot('github', repos.map((repo) => byKey.get(repo.url)).filter(Boolean));
     return null;
   }
 
   if (source === 'hn') {
     const stories = await fetchHackerNews(Math.max(NEWS_LIMIT * 2, 16));
     if (!Array.isArray(stories)) return stories?.error || 'Hacker News research failed.';
-    upsertCandidates(personalizeCandidates(rankNews({ hnStories: stories }), getPreferenceProfile()));
+    const ranked = personalizeCandidates(rankNews({ hnStories: stories }), preference);
+    upsertCandidates(ranked);
+    const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
+    persistDiscoverSnapshot('hn', stories.map((story) => byKey.get(story.url)).filter(Boolean));
     return null;
   }
 
@@ -324,11 +360,19 @@ export async function collectResearch(source) {
       fetchGitHubTrending(NEWS_LIMIT),
       fetchHackerNews(NEWS_LIMIT),
     ]);
-    upsertCandidates(personalizeCandidates(rankNews({
-      xPosts: xResult.posts,
-      ghRepos: Array.isArray(repos) ? repos : [],
-      hnStories: Array.isArray(stories) ? stories : [],
-    }), getPreferenceProfile()));
+    const xRanked = personalizeCandidates(rankNews({ xPosts: xResult.posts }), preference);
+    const githubRanked = Array.isArray(repos) ? personalizeCandidates(rankNews({ ghRepos: repos }), preference) : [];
+    const hnRanked = Array.isArray(stories) ? personalizeCandidates(rankNews({ hnStories: stories }), preference) : [];
+    upsertCandidates([...xRanked, ...githubRanked, ...hnRanked]);
+    if (!xResult.error) persistDiscoverSnapshot('x', xRanked);
+    if (Array.isArray(repos)) {
+      const byKey = new Map(githubRanked.map((candidate) => [candidate.key, candidate]));
+      persistDiscoverSnapshot('github', repos.map((repo) => byKey.get(repo.url)).filter(Boolean));
+    }
+    if (Array.isArray(stories)) {
+      const byKey = new Map(hnRanked.map((candidate) => [candidate.key, candidate]));
+      persistDiscoverSnapshot('hn', stories.map((story) => byKey.get(story.url)).filter(Boolean));
+    }
     return xResult.error || (!Array.isArray(repos) ? repos?.error : null) || (!Array.isArray(stories) ? stories?.error : null);
   }
 
@@ -375,9 +419,20 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
     score: candidate.score || 0,
     saved: Boolean(candidate.saved),
     metrics: candidate.source === 'github'
-      ? { stars: metrics.stars, starsPerDay: metrics.starsPerDay, kind: 'github' }
+      ? metrics.starsToday != null && metrics.rank != null
+        ? {
+            stars: metrics.stars,
+            starsToday: metrics.starsToday,
+            forks: metrics.forks,
+            language: metrics.language,
+            rank: metrics.rank,
+            kind: 'github',
+          }
+        : { stars: metrics.stars, starsPerDay: metrics.starsPerDay, kind: 'github_legacy' }
       : candidate.source === 'hn'
-        ? { points: metrics.points, comments: metrics.comments, kind: 'hn' }
+        ? metrics.rank != null
+          ? { points: metrics.points, comments: metrics.comments, rank: metrics.rank, hnUrl: metrics.hnUrl, kind: 'hn' }
+          : { points: metrics.points, comments: metrics.comments, kind: 'hn_legacy' }
         : { views: metrics.views, likes: metrics.likes, retweets: metrics.retweets, replies: metrics.replies, kind: 'x' },
     niche: {
       tags: (niche.tags || []).map((tag) => ({ tag, label: NICHE_LABELS[tag] || tag })),
@@ -971,21 +1026,37 @@ export async function handleApi(req, res, requestUrl) {
       const feed = DISCOVER_FEEDS.has(query.get('feed')) ? query.get('feed') : 'for-you';
       const tag = query.get('tag') || '';
       let candidates;
+      let snapshotAt = null;
       switch (feed) {
-        case 'trending':
-          candidates = listCandidates({ source: 'x', viralOnly: true, withinHours: 24, resolution: 'actionable', limit: 100 });
+        case 'x': {
+          const snapshot = loadDiscoverSnapshot('x');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
           break;
+        }
+        case 'trending': {
+          const snapshot = loadDiscoverSnapshot('viral');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
+          break;
+        }
         case 'opportunities':
           candidates = listCandidates({ source: 'x', withinHours: 168, resolution: 'actionable', limit: 250 }).filter(isOpportunityCandidate);
           break;
-        case 'github':
-          candidates = listCandidates({ source: 'github', withinHours: 168, resolution: 'actionable', limit: 100 });
+        case 'github': {
+          const snapshot = loadDiscoverSnapshot('github');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
           break;
-        case 'hn':
-          candidates = listCandidates({ source: 'hn', withinHours: 168, resolution: 'actionable', limit: 100 });
+        }
+        case 'hn': {
+          const snapshot = loadDiscoverSnapshot('hn');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
           break;
+        }
         case 'all':
-          candidates = listCandidates({ withinHours: 168, limit: 150 });
+          candidates = listCandidates({ limit: 150 });
           break;
         case 'saved':
           candidates = listCandidates({ saved: true, limit: 150 });
@@ -994,13 +1065,17 @@ export async function handleApi(req, res, requestUrl) {
           candidates = listCandidates({ resolution: 'handled', limit: 150 });
           break;
         default:
-          candidates = listCandidates({ source: 'x', withinHours: 72, resolution: 'actionable', limit: 120 });
+          candidates = listCandidates({ resolution: 'actionable', limit: 500 })
+            .filter((candidate) => candidate.source !== 'github' || candidate.metrics?.starsToday != null)
+            .slice(0, 250);
       }
       if (tag) candidates = candidates.filter((item) => item.niche?.tags?.includes(tag));
       const visible = candidates.slice(0, 60).map((candidate) => formatCandidate(candidate));
+      const refreshable = feed === 'x' ? 'x' : feed === 'trending' ? 'viral' : ['github', 'hn'].includes(feed) ? feed : null;
       return sendSuccess({
         feed,
-        refreshable: ['opportunities', 'saved', 'handled'].includes(feed) ? null : (feed === 'for-you' ? 'x' : feed === 'trending' ? 'viral' : feed),
+        refreshable,
+        snapshotAt,
         topicFilters: Object.entries(NICHE_LABELS).map(([value, labelText]) => ({ value, label: labelText })),
         candidates: visible,
         total: candidates.length,

@@ -227,6 +227,7 @@ export interface DiscoveredCandidate {
 export interface DiscoverData {
   feed: string
   refreshable: string | null
+  snapshotAt: number | null
   topicFilters: { value: string; label: string }[]
   candidates: DiscoveredCandidate[]
   total: number

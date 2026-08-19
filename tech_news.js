@@ -41,7 +41,7 @@ export async function fetchHackerNews(limit = 5) {
       })
     );
 
-    return stories.filter(Boolean).map((s) => ({
+    return stories.filter(Boolean).map((s, index) => ({
       source: 'hn',
       title: s.title,
       url: s.url || `https://news.ycombinator.com/item?id=${s.id}`,
@@ -50,6 +50,7 @@ export async function fetchHackerNews(limit = 5) {
       comments: s.descendants || 0,
       timestamp: s.time ? s.time * 1000 : 0,
       hnUrl: `https://news.ycombinator.com/item?id=${s.id}`,
+      rank: index + 1,
     }));
   } catch (err) {
     return { error: err.message };
@@ -57,42 +58,55 @@ export async function fetchHackerNews(limit = 5) {
 }
 
 // ============================================================================
-// 2. GitHub Trending & Hot Repositories Fetcher
+// 2. GitHub Trending (Today) Fetcher
 // ============================================================================
 export async function fetchGitHubTrending(limit = 5) {
   try {
-    const createdAfter = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const fetchLimit = Math.min(Math.max(limit * 4, 20), 100);
-    const url = `https://api.github.com/search/repositories?q=created:>${createdAfter}+stars:>5&sort=stars&order=desc&per_page=${fetchLimit}`;
-    const res = await fetch(url, {
+    const fetchedAt = Date.now();
+    const res = await fetch('https://github.com/trending?since=daily', {
       headers: {
         'User-Agent': 'xactions-tech-news/1.0',
-        Accept: 'application/vnd.github.v3+json',
+        Accept: 'text/html',
       },
     });
 
-    if (!res.ok) throw new Error(`GitHub API error: ${res.status}`);
-    const data = await res.json();
+    if (!res.ok) throw new Error(`GitHub Trending error: ${res.status}`);
+    const html = await res.text();
+    const articles = [...html.matchAll(/<article class="Box-row">([\s\S]*?)<\/article>/g)].slice(0, limit);
+    const decodeText = (value = '') => String(value)
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;|&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const metric = (article, repoName, suffix) => {
+      const escaped = repoName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const match = article.match(new RegExp(`href="/${escaped}/${suffix}"[^>]*>[\\s\\S]*?<\\/svg>\\s*([\\d,]+)\\s*<\\/a>`));
+      return Number(String(match?.[1] || '0').replace(/,/g, ''));
+    };
 
-    return (data.items || [])
-      .map((repo) => {
-        const createdAt = Date.parse(repo.created_at);
-        const ageDays = Math.max((Date.now() - createdAt) / 86_400_000, 1);
-        return {
-          source: 'github',
-          name: repo.full_name,
-          description: repo.description || 'No description provided.',
-          stars: repo.stargazers_count,
-          starsPerDay: repo.stargazers_count / ageDays,
-          language: repo.language || 'Code',
-          url: repo.html_url,
-          forks: repo.forks_count,
-          createdAt,
-          pushedAt: Date.parse(repo.pushed_at),
-        };
-      })
-      .sort((a, b) => b.starsPerDay - a.starsPerDay)
-      .slice(0, limit);
+    return articles.map((match, index) => {
+      const article = match[1];
+      const repoName = article.match(/<h2[^>]*>[\s\S]*?<a[^>]*href="\/([^"?#]+\/[^"?#]+)"[^>]*>/)?.[1] || '';
+      const description = decodeText(article.match(/<p class="col-9 color-fg-muted my-1 pr-4">([\s\S]*?)<\/p>/)?.[1] || '');
+      const language = decodeText(article.match(/<span itemprop="programmingLanguage">([\s\S]*?)<\/span>/)?.[1] || '');
+      const starsToday = Number(String(article.match(/([\d,]+)\s+stars?\s+today/i)?.[1] || '0').replace(/,/g, ''));
+      return {
+        source: 'github',
+        name: repoName,
+        description: description || 'No description provided.',
+        stars: metric(article, repoName, 'stargazers'),
+        starsToday,
+        language: language || 'Code',
+        url: `https://github.com/${repoName}`,
+        forks: metric(article, repoName, 'forks'),
+        rank: index + 1,
+        fetchedAt,
+      };
+    }).filter((repo) => repo.name);
   } catch (err) {
     return { error: err.message };
   }
@@ -615,11 +629,12 @@ export function fetchXNichePosts(limit = 30) {
   return fetchXSearchPosts(queries, limit, 'live', 3);
 }
 
-export async function fetchXViralPosts(limit = 60) {
+export async function fetchXViralPosts(limit = 60, passes = 4, fast = false) {
   const cutoff = Date.now() - 24 * 3_600_000;
   const since = new Date(cutoff).toISOString().slice(0, 10);
   const queries = X_VIRAL_QUERIES.map((query) => `(${query}) since:${since} lang:en -filter:replies -filter:retweets`);
-  const result = await fetchXSearchPosts(queries, limit, 'top', 4);
+  const search = fast ? queries.slice(0, 2) : queries;
+  const result = await fetchXSearchPosts(search, limit, 'top', passes);
   if (result.error) return result;
   return {
     posts: result.posts.filter((post) => post.timestamp >= cutoff && post.timestamp <= Date.now() + 300_000),
@@ -758,14 +773,14 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         url: story.url,
         timestamp: story.timestamp,
         score: Math.round(Math.min(100, momentum + relevanceScore(story.title, topics) + freshnessScore(story.timestamp))),
-        metrics: { points: story.score, comments: story.comments },
+        metrics: { points: story.score, comments: story.comments, rank: story.rank || null, hnUrl: story.hnUrl || '' },
       });
     }
   }
 
   if (Array.isArray(ghRepos)) {
     for (const repo of ghRepos) {
-      const momentum = Math.min(50, Math.log10(repo.starsPerDay + 1) * 22);
+      const momentum = Math.min(50, Math.log10(Number(repo.starsToday || 0) + 1) * 22);
       const text = `${repo.name} ${repo.description}`;
       candidates.push({
         key: repo.url,
@@ -773,9 +788,15 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         title: repo.name,
         text: repo.description,
         url: repo.url,
-        timestamp: repo.createdAt,
-        score: Math.round(Math.min(100, momentum + relevanceScore(text, topics) + freshnessScore(repo.createdAt))),
-        metrics: { stars: repo.stars, starsPerDay: Math.round(repo.starsPerDay) },
+        timestamp: repo.fetchedAt || Date.now(),
+        score: Math.round(Math.min(100, momentum + relevanceScore(text, topics) + freshnessScore(repo.fetchedAt))),
+        metrics: {
+          stars: repo.stars,
+          starsToday: repo.starsToday,
+          forks: repo.forks,
+          language: repo.language,
+          rank: repo.rank || null,
+        },
       });
     }
   }
@@ -817,8 +838,12 @@ export function generateMomentumPost(candidate) {
   if (!candidate) throw new Error('No ranked candidate available.');
 
   if (candidate.source === 'github') {
-    const metrics = candidate.metrics?.starsPerDay ? ` (~${candidate.metrics.starsPerDay} stars/day)` : '';
-    return fitWithUrl(`Open-source momentum: ${candidate.title}\n\n`, `${candidate.text}${metrics}`, candidate.url);
+    if (candidate.metrics?.starsToday != null) {
+      const metrics = candidate.metrics.starsToday ? ` (${candidate.metrics.starsToday} stars today)` : '';
+      return fitWithUrl(`GitHub Trending: ${candidate.title}\n\n`, `${candidate.text}${metrics}`, candidate.url);
+    }
+    const legacyMetrics = candidate.metrics?.starsPerDay ? ` (~${candidate.metrics.starsPerDay} stars/day since creation)` : '';
+    return fitWithUrl(`Legacy GitHub discovery: ${candidate.title}\n\n`, `${candidate.text}${legacyMetrics}`, candidate.url);
   }
 
   if (candidate.source === 'hn') {
@@ -900,7 +925,7 @@ async function main() {
 
   // --- Display GitHub Trending ---
   if (showGithub) {
-    console.log(`${colors.bold}${colors.green}⭐ EMERGING OPEN SOURCE REPOSITORIES (GitHub)${colors.reset}`);
+    console.log(`${colors.bold}${colors.green}⭐ GITHUB TRENDING — TODAY${colors.reset}`);
     console.log(`${colors.dim}------------------------------------------------------${colors.reset}`);
     if (ghRepos.error) {
       console.log(`${colors.red}  Error fetching GitHub: ${ghRepos.error}${colors.reset}`);
@@ -909,7 +934,7 @@ async function main() {
         console.log(`  ${colors.bold}${idx + 1}. ${r.name}${colors.reset} ${colors.yellow}[${r.language}]${colors.reset}`);
         console.log(`     ${r.description}`);
         console.log(`     ${colors.green}⭐ ${r.stars.toLocaleString()} stars${colors.reset} | ${colors.cyan}🍴 ${r.forks.toLocaleString()} forks${colors.reset}`);
-        console.log(`     ${colors.yellow}⚡ ~${Math.round(r.starsPerDay).toLocaleString()} stars/day since creation${colors.reset}`);
+        console.log(`     ${colors.yellow}⚡ ${Number(r.starsToday || 0).toLocaleString()} stars today · source rank #${r.rank || idx + 1}${colors.reset}`);
         console.log(`     ${colors.dim}🔗 ${r.url}${colors.reset}\n`);
       });
     } else {

@@ -10,9 +10,10 @@ import { navigate } from '../../router'
 
 const FEEDS = [
   { id: 'for-you', label: 'To review' },
-  { id: 'trending', label: 'Trending' },
+  { id: 'x', label: 'X latest' },
+  { id: 'trending', label: 'X momentum' },
   { id: 'opportunities', label: 'Opportunities' },
-  { id: 'github', label: 'GitHub' },
+  { id: 'github', label: 'GitHub Trending' },
   { id: 'hn', label: 'Hacker News' },
   { id: 'saved', label: 'Bookmarks' },
   { id: 'handled', label: 'Handled' },
@@ -20,23 +21,28 @@ const FEEDS = [
 ]
 
 const FEED_DESCRIPTIONS: Record<string, string> = {
-  'for-you': 'New X sources that still need a decision. Drafting, paused, skipped, and completed sources are hidden here.',
-  trending: 'Trending X sources that still need a decision.',
-  opportunities: 'Conversation opportunities that still need a decision.',
-  github: 'GitHub sources that still need a decision.',
-  hn: 'Hacker News sources that still need a decision.',
+  'for-you': 'Your unresolved inbox across sources. Live source tabs are snapshots; items stay here until you draft, pause, skip, or complete them.',
+  x: 'Latest fetched posts from the configured X topic searches, re-ranked for your topics. This is not X’s global timeline or Trends page.',
+  trending: 'Latest fetched Top results from the core AI/dev-tool X searches over the last 24 hours, then ranked by observed momentum. This is not X’s global Trends page.',
+  opportunities: 'Unresolved X sources in your inbox that match the relationship, career, builder, or business opportunity filters.',
+  github: 'Latest fetched GitHub Trending repositories for Today, preserved in GitHub’s displayed order.',
+  hn: 'Latest fetched Hacker News Top Stories snapshot, preserved in the official API order.',
   saved: 'Sources you explicitly bookmarked for reference, whether or not you already acted on them.',
   handled: 'Sources with recorded publication, quote, reply, or repost history.',
-  all: 'Recent source history across active, paused, skipped, and completed work.',
+  all: 'Your persisted source history across active, paused, skipped, and completed work.',
 }
 
 function candidateMetricLine(candidate: DiscoveredCandidate): string {
   const metrics = candidate.metrics
   if (metrics.kind === 'github') {
-    return `${formatNumber(metrics.stars as number)} stars · ~${formatNumber(metrics.starsPerDay as number)} stars/day`
+    const language = metrics.language ? ` · ${metrics.language}` : ''
+    return `${formatNumber(metrics.stars as number)} stars · ${formatNumber(metrics.starsToday as number)} stars today · ${formatNumber(metrics.forks as number)} forks${language}`
   }
-  if (metrics.kind === 'hn') {
-    return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments`
+  if (metrics.kind === 'github_legacy') {
+    return `${formatNumber(metrics.stars as number)} stars · ~${formatNumber(metrics.starsPerDay as number)} stars/day since creation · legacy heuristic`
+  }
+  if (metrics.kind === 'hn' || metrics.kind === 'hn_legacy') {
+    return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments${metrics.kind === 'hn_legacy' ? ' · historical collected candidate' : ''}`
   }
   return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies`
 }
@@ -56,6 +62,21 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
   }
 
   const isX = candidate.source === 'x'
+  const isGitHub = candidate.source === 'github'
+  const isHn = candidate.source === 'hn'
+  const isGitHubTrending = candidate.metrics.kind === 'github'
+  const isHnTopStory = candidate.metrics.kind === 'hn'
+  const sourceRank = Number(candidate.metrics.rank || 0) || null
+  const sourceLabel = isGitHubTrending
+    ? 'GITHUB TRENDING'
+    : isGitHub
+      ? 'GITHUB DISCOVERY · LEGACY HEURISTIC'
+      : isHnTopStory
+        ? 'HN TOP STORIES'
+        : isHn
+          ? 'HACKER NEWS · HISTORICAL CANDIDATE'
+          : 'X'
+  const openSourceLabel = isGitHub ? 'Open repository ↗' : isHn ? 'Open article ↗' : 'Open on X ↗'
   const queue = candidate.queue
   const completion = candidate.completion
   const skipped = queue?.status === 'ignored'
@@ -64,14 +85,16 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
     <article className="rounded-lg border border-slate-200 bg-white p-6">
       <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
         <div>
-          <div className="text-lg font-semibold text-slate-900">#{index + 1} {candidate.title}</div>
+          <div className="text-lg font-semibold text-slate-900">#{sourceRank || index + 1} {candidate.title}</div>
           <div className="text-xs text-slate-500">
-            {candidate.source.toUpperCase()}
-            {candidate.timestamp ? ` · ${new Date(candidate.timestamp).toLocaleString()}` : ''}
+            {sourceLabel}
+            {!isGitHub && candidate.timestamp ? ` · ${new Date(candidate.timestamp).toLocaleString()}` : ''}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {candidate.viral ? <Badge tone="danger">{candidate.viral.label}</Badge> : <Badge>{isX ? 'Relevant signal' : 'Research signal'}</Badge>}
+          {candidate.viral
+            ? <Badge tone="danger">Internal momentum · {candidate.viral.label}</Badge>
+            : <Badge>{isGitHubTrending ? 'GitHub Trending' : isGitHub ? 'Legacy GitHub signal' : isHnTopStory ? 'HN Top Stories' : isHn ? 'Historical HN signal' : 'X search signal'}</Badge>}
           {candidate.saved && <Badge tone="success">Bookmarked</Badge>}
           {completion ? <Badge tone="success">Handled · {completion.label}</Badge> : queue && <Badge tone="info">{queue.statusLabel}</Badge>}
         </div>
@@ -84,7 +107,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
       )}
 
       {candidate.viral && (
-        <Disclosure summary="Trend details">
+        <Disclosure summary="X momentum details">
           <div className="flex flex-wrap gap-2">
             <Badge>{candidate.viral.ageHours.toFixed(1)}h old</Badge>
             <Badge>{formatNumber(candidate.viral.viewsPerHour)} views/h</Badge>
@@ -152,7 +175,12 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
           </button>
           {candidate.url && (
             <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
-              Open source ↗
+              {openSourceLabel}
+            </a>
+          )}
+          {isHn && typeof candidate.metrics.hnUrl === 'string' && candidate.metrics.hnUrl && candidate.metrics.hnUrl !== candidate.url && (
+            <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
+              HN discussion ↗
             </a>
           )}
         </div>
@@ -218,7 +246,12 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
               rel="noopener noreferrer"
               className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
             >
-              Open source ↗
+              {openSourceLabel}
+            </a>
+          )}
+          {isHn && typeof candidate.metrics.hnUrl === 'string' && candidate.metrics.hnUrl && candidate.metrics.hnUrl !== candidate.url && (
+            <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
+              HN discussion ↗
             </a>
           )}
         </div>
@@ -260,7 +293,7 @@ export function Discover() {
             disabled={refresh.isPending}
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            {refresh.isPending ? 'Refreshing…' : 'Refresh'}
+            {refresh.isPending ? 'Refreshing source…' : 'Refresh source'}
           </button>
         )}
       </div>
@@ -285,7 +318,7 @@ export function Discover() {
         ))}
       </div>
 
-      {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
+      {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'x' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setTag('')}
@@ -311,14 +344,15 @@ export function Discover() {
         <Error message={error.message} onRetry={() => refetch()} />
       ) : !data || data.candidates.length === 0 ? (
         <Empty
-          title="No candidates found for this view"
-          message={data?.refreshable ? 'This feed refreshes automatically the first time it is empty, or use Refresh.' : 'Check back later or try another feed.'}
+          title={data?.refreshable ? 'No source snapshot yet' : 'No candidates found for this view'}
+          message={data?.refreshable ? 'This source refreshes automatically the first time it is empty, or use Refresh source.' : 'Check back later or try another view.'}
         />
       ) : (
         <>
-          <p className="text-sm text-slate-600">
-            {data.total} {data.total === 1 ? 'candidate' : 'candidates'}
-          </p>
+          <div className="text-sm text-slate-600">
+            <div>{data.total} {data.total === 1 ? 'item' : 'items'}</div>
+            {data.snapshotAt && <div className="mt-1 text-xs text-slate-500">Source snapshot updated {formatDateTime(data.snapshotAt)}. Refresh source to check upstream again.</div>}
+          </div>
           <div className="space-y-4">
             {data.candidates.map((candidate, index) => (
               <CandidateCard key={candidate.key} candidate={candidate} index={index} />
