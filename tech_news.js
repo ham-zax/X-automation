@@ -170,6 +170,16 @@ function normalizeSince(value) {
   throw new TypeError('since must be a timestamp, Date, or parseable date string.');
 }
 
+async function createAuthenticatedXScraper() {
+  const scraper = new Scraper();
+  if (process.env.AUTH_TOKEN) {
+    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
+    await scraper.setCookies(cookies);
+  }
+  return scraper;
+}
+
 function normalizeTargetTweet(tweet, targetUsername) {
   const id = String(tweet?.id || '');
   const authorUsername = String(tweet?.username || targetUsername || '').replace(/^@/, '').toLowerCase();
@@ -209,13 +219,7 @@ export async function fetchXTargetRecentPosts(usernames, {
   const posts = [];
   const errors = [];
   const seenTweetIds = new Set();
-  const scraper = new Scraper();
-
-  if (process.env.AUTH_TOKEN) {
-    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
-    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
-    await scraper.setCookies(cookies);
-  }
+  const scraper = await createAuthenticatedXScraper();
 
   const rawPerTarget = Math.min(X_TARGET_MAX_RAW_PER_TARGET, perTargetLimit * 3);
   for (const targetUsername of targets) {
@@ -254,6 +258,71 @@ export async function fetchXTargetRecentPosts(usernames, {
       includeReplies: Boolean(includeReplies),
       excludeReposts: true,
     },
+  };
+}
+
+export async function fetchXTargetResponses(usernames, ourTweetIds, {
+  maxTargets = 20,
+  responsesPerTarget = 10,
+  since = null,
+} = {}) {
+  const normalizedTargets = normalizeTargetUsernames(usernames);
+  const targets = normalizedTargets.slice(0, boundedTargetCount(maxTargets, 20, X_TARGET_MAX_TARGETS));
+  const responseLimit = boundedTargetCount(responsesPerTarget, 10, X_TARGET_MAX_POSTS_PER_TARGET);
+  const parentIds = [...new Set((Array.isArray(ourTweetIds) ? ourTweetIds : [ourTweetIds])
+    .map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 100);
+  const parentSet = new Set(parentIds);
+  const sinceTimestamp = normalizeSince(since);
+  const responses = [];
+  const errors = [];
+  const seenTweetIds = new Set();
+  if (!targets.length || !parentIds.length) {
+    return { responses, errors, bounds: { targets: targets.length, parents: parentIds.length, responsesPerTarget: responseLimit }, filters: { since: sinceTimestamp } };
+  }
+
+  const scraper = await createAuthenticatedXScraper();
+  const rawPerTarget = Math.min(50, Math.max(responseLimit * 4, 20));
+  for (const targetUsername of targets) {
+    try {
+      let accepted = 0;
+      for await (const tweet of scraper.getTweetsAndReplies(targetUsername, rawPerTarget)) {
+        const response = normalizeTargetTweet(tweet, targetUsername);
+        if (response.isRepost) continue;
+        const replyParent = response.inReplyToStatusId && parentSet.has(response.inReplyToStatusId)
+          ? response.inReplyToStatusId
+          : null;
+        const quoteParent = response.isQuote && response.quotedStatusId && parentSet.has(response.quotedStatusId)
+          ? response.quotedStatusId
+          : null;
+        const parentOurTweetId = replyParent || quoteParent;
+        if (!parentOurTweetId) continue;
+        if (sinceTimestamp != null && (!response.timestamp || response.timestamp < sinceTimestamp)) continue;
+        if (response.id && seenTweetIds.has(response.id)) continue;
+        if (response.id) seenTweetIds.add(response.id);
+        responses.push({
+          ...response,
+          responseType: replyParent ? 'reply' : 'quote',
+          parentOurTweetId,
+        });
+        accepted++;
+        if (accepted >= responseLimit) break;
+      }
+    } catch (error) {
+      errors.push({ targetUsername, error: error.message });
+    }
+  }
+
+  return {
+    responses,
+    errors,
+    bounds: {
+      targets: targets.length,
+      parents: parentIds.length,
+      responsesPerTarget: responseLimit,
+      rawPerTarget,
+      truncatedTargets: Math.max(0, normalizedTargets.length - targets.length),
+    },
+    filters: { since: sinceTimestamp },
   };
 }
 

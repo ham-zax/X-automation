@@ -8,6 +8,7 @@ import {
   rankXViralPosts,
 } from './tech_news.js';
 import { postTweetHttp } from './x_http.js';
+import { refreshEngagementOpportunities } from './engagement.js';
 import { personalizeCandidates } from './strategy.js';
 import {
   getAppState,
@@ -64,10 +65,25 @@ export async function runCycle() {
   }
   if (research.errors.length) console.log(`[automation] Partial research errors: ${research.errors.join(' | ')}`);
 
+  let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [] };
+  try {
+    engagement = await refreshEngagementOpportunities();
+    const nextEngagement = engagement.items[0];
+    if (nextEngagement) {
+      console.log(`[automation] Engage Next leader: ${Math.round(nextEngagement.priority)}/100 @${nextEngagement.targetUsername} ${nextEngagement.engagementKind}.`);
+    } else {
+      console.log('[automation] No actionable Engage Next items this cycle.');
+    }
+    if (engagement.errors.length) console.log(`[automation] Partial engagement read errors: ${engagement.errors.join(' | ')}`);
+  } catch (error) {
+    engagement.errors = [error.message];
+    console.log(`[automation] Engagement refresh failed: ${error.message}`);
+  }
+
   const draft = getNextReadyDraft(Date.now(), MIN_DRAFT_SCORE);
   if (!draft) {
     console.log(`[automation] No ready draft at or above ${MIN_DRAFT_SCORE}/50.`);
-    return { action: 'research-only', top, errors: research.errors };
+    return { action: 'research-only', top, engagement, errors: [...research.errors, ...engagement.errors] };
   }
 
   const candidate = getCandidate(draft.candidateKey);
@@ -77,13 +93,13 @@ export async function runCycle() {
   const nextAllowedAt = lastPostedAt + POST_INTERVAL_HOURS * 3_600_000;
   if (Date.now() < nextAllowedAt) {
     console.log(`[automation] Ready draft ${draft.id} waiting for cooldown until ${new Date(nextAllowedAt).toLocaleString()}.`);
-    return { action: 'cooldown', draft, candidate, nextAllowedAt };
+    return { action: 'cooldown', draft, candidate, engagement, nextAllowedAt };
   }
 
   console.log(`[automation] Ready draft ${draft.id} (${draft.qualityScore}/50):\n${draft.body}`);
   if (!AUTO_POST) {
     console.log('[automation] AUTO_POST=false; queue preview only.');
-    return { action: 'preview', draft, candidate };
+    return { action: 'preview', draft, candidate, engagement };
   }
 
   const authToken = process.env.AUTH_TOKEN;
@@ -96,7 +112,7 @@ export async function runCycle() {
   setAppState('last_posted_at', Date.now());
 
   console.log(`[automation] Published draft ${draft.id}${tweetId ? ` as ${tweetId}` : ''}.`);
-  return { action: 'posted', draft, candidate, tweetId };
+  return { action: 'posted', draft, candidate, engagement, tweetId };
 }
 
 async function main() {

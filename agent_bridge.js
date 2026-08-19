@@ -1,12 +1,15 @@
 import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
+import { refreshEngagementOpportunities } from './engagement.js';
 import { syncAudience } from './audience.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
   inspectWorkflow,
   requestQueueReview,
+  resolveEngagementItem,
   routeCandidate,
   saveCandidateToWorkflow,
+  sendApprovedEngagementReply,
 } from './pipeline.js';
 import {
   candidateKey,
@@ -22,6 +25,7 @@ import {
   listCandidateActions,
   listCandidates,
   listDrafts,
+  listEngagementItems,
   listQueueItems,
   listRecentPublishedContent,
   listRelationshipEvents,
@@ -84,6 +88,13 @@ function manualCandidate(payload) {
 
 function result(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function engagementPacket(queueItem) {
+  const candidate = getCandidate(queueItem.candidateKey);
+  const draft = getDraftByCandidate(queueItem.candidateKey);
+  const relationship = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
+  return { queueItem, candidate, draft, relationship };
 }
 
 async function main() {
@@ -285,6 +296,95 @@ async function main() {
     return;
   }
 
+  if (command === 'engage-next') {
+    const refresh = payload.refresh === false ? null : await refreshEngagementOpportunities({
+      targetLimit: Math.max(1, Math.min(50, Number(payload.targetLimit || 12))),
+      postsPerTarget: Math.max(1, Math.min(10, Number(payload.postsPerTarget || 4))),
+      minTargetScore: Number(payload.minTargetScore ?? 35),
+      targetSinceHours: Math.max(1, Number(payload.targetSinceHours || 24)),
+      responseSinceHours: Math.max(1, Number(payload.responseSinceHours || 72)),
+    });
+    const items = listEngagementItems({
+      status: payload.status || undefined,
+      minPriority: Number(payload.minPriority || 0),
+      includeExpired: Boolean(payload.includeExpired),
+      limit: Math.max(1, Math.min(200, Number(payload.limit || 50))),
+    });
+    const packets = items.map(engagementPacket);
+    result({
+      refresh: refresh ? { refreshed: refresh.refreshed, rejected: refresh.rejected, expired: refresh.expired, errors: refresh.errors } : null,
+      activeConversations: packets.filter((item) => item.queueItem.engagementKind !== 'initial_reply'),
+      newOpportunities: packets.filter((item) => item.queueItem.engagementKind === 'initial_reply'),
+    });
+    return;
+  }
+
+  if (command === 'engage-draft') {
+    const key = String(payload.key || '');
+    if (!key) throw new Error('engage-draft requires key.');
+    const item = listEngagementItems({ includeExpired: true, limit: 500 }).find((queueItem) => queueItem.candidateKey === key);
+    if (!item) throw new Error(`Engagement item not found: ${key}`);
+    if (['published', 'ignored', 'expired'].includes(item.status)) throw new Error(`Engagement item is terminal: ${item.status}.`);
+    routeCandidate(key, 'reply', { actor: 'agent' });
+    let workflow = inspectWorkflow(key);
+    if (payload.body != null) {
+      const body = String(payload.body).trim();
+      if (!body) throw new Error('engage-draft body cannot be empty.');
+      const updated = {
+        ...workflow.draft,
+        body,
+        gates: {},
+        status: 'draft',
+        editor: { ...(workflow.draft.editor || {}), pipeline: 'reply', finalText: body },
+      };
+      updated.qualityScore = scoreDraft(updated, workflow.candidate).score;
+      saveDraft(updated);
+      routeCandidate(key, 'reply', { actor: 'agent' });
+      workflow = inspectWorkflow(key);
+    }
+    let review = null;
+    if (payload.requestReview === true) {
+      review = requestQueueReview(key, {
+        factualityConfirmed: payload.factualityConfirmed === true,
+        evidenceConfirmed: payload.evidenceConfirmed === true,
+      });
+      workflow = inspectWorkflow(key);
+    }
+    const queueItem = workflow.queueItem;
+    result({
+      ...engagementPacket(queueItem),
+      review: review ? { analysis: review.analysis, approvalRequired: true } : null,
+      writerPacket: buildWriterPacket({
+        candidate: workflow.candidate,
+        queueItem,
+        draft: workflow.draft,
+        relationship: queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null,
+        recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: key }),
+        recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: key }),
+        recentReplyArchetypes: listEngagementItems({ includeExpired: true, limit: 30 })
+          .filter((recent) => recent.candidateKey !== key && recent.replyArchetype)
+          .map((recent) => recent.replyArchetype),
+      }),
+    });
+    return;
+  }
+
+  if (command === 'engage-resolve') {
+    const key = String(payload.key || '');
+    const action = String(payload.action || '');
+    if (!key) throw new Error('engage-resolve requires key.');
+    if (action === 'ignore' || action === 'expire') {
+      result({ queueItem: resolveEngagementItem(key, action, payload.reason || '') });
+      return;
+    }
+    if (action === 'send') {
+      if (payload.confirmSend !== true) throw new Error('engage-resolve send requires confirmSend=true for the explicit send action.');
+      result(await sendApprovedEngagementReply(key));
+      return;
+    }
+    throw new Error(`Invalid engage-resolve action: ${action || 'missing'}.`);
+  }
+
   if (command === 'relationship-targets') {
     result({
       targets: listRelationshipProfiles({
@@ -328,7 +428,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|route|workflow|research|performance|decide|record-action|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

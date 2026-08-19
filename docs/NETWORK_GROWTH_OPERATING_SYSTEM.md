@@ -162,7 +162,9 @@ BETTER TARGETS + BETTER CONTENT + BETTER TIMING
 
 Phase 1A currently owns persistent Save -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
 
-Engage Next discovery, reply drafting/sending, Account Health/Under the Hood, later scheduler changes, experiments, and learned strategy remain planned. The implemented relationship layer does not add an outbound engagement or approval bypass.
+Phase 1C Engage Next is current: bounded target timelines and observed replies/quotes feed `queue_items(lane=engagement, pipeline=reply)`; active conversations are refreshed before cold opportunities; every actionable item carries a concrete proposed contribution plus transparent EngagePriority/expiry state; Phase-2 reply gates own draft quality; and only an explicit human approval/send path may issue one reply. Successful replies become candidate-action and relationship-event history. Automation refreshes engagement state but cannot send from this lane, and approved engagement drafts are excluded from its main-feed ready selector.
+
+Account Health/Under the Hood, later scheduler changes, experiments, and learned strategy remain planned.
 
 ---
 
@@ -486,11 +488,11 @@ The event stream is the source of truth for relationship analytics.
 
 ## 10. Engage Next
 
-The daily Engagement view should answer:
+The implemented Engagement view answers:
 
 > **Which conversation is most worth entering right now, and what can we genuinely contribute?**
 
-Each opportunity card should show:
+Each opportunity card shows the current equivalent of:
 
 ```text
 @Target · 12m old
@@ -507,7 +509,7 @@ The author asked whether tool context resets across retries.
 Useful contribution:
 Share our task-ledger observation and ask whether their eval preserves tool context.
 
-[Research] [Draft reply] [Quote instead] [Ignore]
+[Draft reply] [Quote instead] [Ignore] [Expire] [Approve & Send]
 ```
 
 Sort primarily by:
@@ -528,7 +530,7 @@ Do not sort by follower count alone and do not impose a fixed daily reply quota.
 
 ## 11. Conversation follow-up
 
-The system should prioritize responses to existing conversations above finding endless new targets.
+The current refresh path prioritizes observed responses to existing conversations above finding endless new targets.
 
 A sent reply can enter:
 
@@ -541,7 +543,7 @@ sent
 -> resolved
 ```
 
-If the target replies, the item should re-enter **Engage Next** with elevated priority.
+If an existing relationship target replies/quotes one of our tracked posts or replies, that observed response appends relationship history and re-enters **Engage Next** as an elevated `follow_up` or `own_post_response` item when a concrete contribution exists.
 
 Follow-up priority is higher when:
 

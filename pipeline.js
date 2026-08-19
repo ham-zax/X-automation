@@ -1,5 +1,6 @@
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { scoreOpportunity } from './opportunity.js';
+import { postTweetHttp } from './x_http.js';
 import { recommendDistributionAction } from './strategy.js';
 import {
   ensureQueueItem,
@@ -11,7 +12,10 @@ import {
   listAudienceProfiles,
   listCandidateActions,
   listRecentPublishedContent,
+  listRelationshipEvents,
   markCandidateSaved,
+  recordCandidateAction,
+  recordRelationshipEvent,
   saveDraft,
   saveQueueItem,
 } from './store.js';
@@ -34,8 +38,12 @@ export const QUEUE_STATUSES = [
   'drafting',
   'needs_review',
   'approved',
+  'publishing',
+  'published',
   'watching',
   'ignored',
+  'expired',
+  'failed',
 ];
 
 const TEXT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
@@ -96,6 +104,7 @@ function routeState(pipeline) {
 }
 
 function contentGateContext(candidateKey, pipeline, confirmations = {}) {
+  const queueItem = getQueueItemByCandidate(candidateKey);
   return {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidateKey }),
@@ -105,6 +114,7 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     factualityConfirmed: confirmations.factualityConfirmed === true,
     evidenceConfirmed: confirmations.evidenceConfirmed === true,
     mediaReady: false,
+    replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
 }
 
@@ -155,11 +165,15 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
   if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid routing actor: ${actor}`);
 
   ensureQueueItem(key);
+  const previousQueueItem = getQueueItemByCandidate(key);
   const state = routeState(pipeline);
   let draft = getDraftByCandidate(key);
   if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
   let draftId = null;
   if (TEXT_PIPELINES.has(pipeline)) {
+    if (draft && previousQueueItem?.pipeline && previousQueueItem.pipeline !== pipeline) {
+      draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key });
+    }
     draft ||= saveDraft(createDraftScaffold(candidate, { pipeline }));
     draftId = draft.id;
   }
@@ -171,6 +185,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
     status: state.status,
     draftId,
     humanApprovedAt: null,
+    approvedText: null,
     routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
   });
 }
@@ -190,7 +205,7 @@ export function requestQueueReview(key, confirmations = {}) {
   const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
   const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   return {
-    queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id }),
+    queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id, humanApprovedAt: null, approvedText: null }),
     draft: savedDraft,
     analysis,
   };
@@ -228,6 +243,175 @@ export function approveQueueItem(key, confirmations = {}) {
     draft,
     analysis,
   };
+}
+
+export function approveEngagementQueueItem(key, confirmations = {}, { actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('Engagement approval requires an explicit human action.');
+  const candidate = requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
+    throw new Error(`Engagement reply not found: ${key}`);
+  }
+  if (queueItem.status !== 'needs_review') throw new Error('Engagement reply must be in needs_review before approval.');
+
+  const draft = getDraftByCandidate(key);
+  if (!draft) throw new Error('A reply draft is required before approval.');
+  const analysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply', confirmations));
+  const checkedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+  if (!analysis.publishable) {
+    const firstFailure = analysis.gates?.failures?.[0];
+    const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
+    throw new Error(`Reply is not publishable (${analysis.score}/50).${detail}`);
+  }
+  const approvedText = String(checkedDraft.body || '');
+  if (!approvedText.trim()) throw new Error('Approved reply text cannot be empty.');
+  const readyDraft = saveDraft({ ...checkedDraft, status: 'ready' });
+  return {
+    queueItem: saveQueueItem({
+      candidateKey: key,
+      status: 'approved',
+      draftId: readyDraft.id,
+      humanApprovedAt: Date.now(),
+      approvedText,
+    }),
+    draft: readyDraft,
+    analysis,
+  };
+}
+
+export function resolveEngagementItem(key, resolution, reason = '') {
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'engagement') throw new Error(`Engagement item not found: ${key}`);
+  if (!['ignore', 'expire'].includes(resolution)) throw new Error(`Invalid engagement resolution: ${resolution}`);
+  const status = resolution === 'ignore' ? 'ignored' : 'expired';
+  return saveQueueItem({
+    ...queueItem,
+    status,
+    humanApprovedAt: null,
+    approvedText: null,
+    engagement: {
+      ...(queueItem.engagement || {}),
+      resolution: { action: resolution, reason: String(reason || ''), resolvedAt: Date.now() },
+    },
+  });
+}
+
+function outputTweetIdentity(result, account) {
+  const tweetId = String(result?.rest_id || result?.id || result?.legacy?.id_str || '');
+  const url = result?.permanentUrl || result?.url || (tweetId ? `https://x.com/${account}/status/${tweetId}` : '');
+  return { tweetId, url };
+}
+
+export async function sendApprovedEngagementReply(key, {
+  authToken = process.env.AUTH_TOKEN,
+  csrfToken = process.env.CT0,
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  transport = postTweetHttp,
+} = {}) {
+  const candidate = requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
+    throw new Error(`Engagement reply not found: ${key}`);
+  }
+  if (queueItem.status !== 'approved' || !queueItem.humanApprovedAt || !queueItem.approvedText) {
+    throw new Error('Reply must be explicitly human-approved before sending.');
+  }
+  if (!queueItem.targetTweetId) throw new Error('Engagement reply is missing targetTweetId.');
+  const draft = getDraftByCandidate(key);
+  if (!draft || draft.status !== 'ready') throw new Error('Approved reply draft is not ready.');
+  const currentText = String(draft.body || '');
+  if (currentText !== queueItem.approvedText) {
+    saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
+    throw new Error('Reply text changed after approval; approval was invalidated.');
+  }
+  if (!authToken || !csrfToken) throw new Error('Sending an approved reply requires AUTH_TOKEN and CT0.');
+
+  saveQueueItem({ ...queueItem, status: 'publishing' });
+  let result;
+  try {
+    result = await transport(currentText, { authToken, csrfToken }, { replyTo: queueItem.targetTweetId });
+  } catch (error) {
+    saveQueueItem({
+      ...queueItem,
+      status: 'failed',
+      humanApprovedAt: null,
+      approvedText: null,
+      engagement: {
+        ...(queueItem.engagement || {}),
+        send: { failedAt: Date.now(), error: error.message },
+      },
+    });
+    throw error;
+  }
+
+  const { tweetId, url } = outputTweetIdentity(result, account);
+  if (!tweetId) {
+    saveQueueItem({
+      ...queueItem,
+      status: 'publishing',
+      outputUrl: url || null,
+      engagement: {
+        ...(queueItem.engagement || {}),
+        send: { postedAt: Date.now(), recordingError: 'Transport returned no tweet ID.' },
+      },
+    });
+    throw new Error('Reply transport succeeded but returned no tweet ID; item remains publishing for manual reconciliation.');
+  }
+
+  try {
+    const publishedDraft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
+    const publishedItem = saveQueueItem({
+      ...queueItem,
+      status: 'published',
+      draftId: publishedDraft.id,
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      engagement: {
+        ...(queueItem.engagement || {}),
+        send: { postedAt: Date.now(), tweetId, url: url || null },
+      },
+    });
+    recordCandidateAction({
+      candidateKey: key,
+      action: 'reply',
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      commentary: currentText,
+    });
+    const alreadyRecorded = queueItem.targetUsername
+      ? listRelationshipEvents(queueItem.targetUsername, { limit: 1000 })
+        .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId)
+      : false;
+    if (queueItem.targetUsername && !alreadyRecorded) {
+      recordRelationshipEvent({
+        username: queueItem.targetUsername,
+        eventType: 'our_reply',
+        candidateKey: key,
+        sourceTweetId: queueItem.targetTweetId,
+        ourTweetId: tweetId,
+        topic: candidate.niche?.tags?.[0] || null,
+        occurredAt: Date.now(),
+        metadata: {
+          meaningful: true,
+          replyArchetype: queueItem.replyArchetype || null,
+          engagementKind: queueItem.engagementKind || 'initial_reply',
+        },
+      });
+    }
+    return { queueItem: publishedItem, draft: publishedDraft, tweetId, url: url || null, result };
+  } catch (error) {
+    saveQueueItem({
+      ...queueItem,
+      status: 'publishing',
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      engagement: {
+        ...(queueItem.engagement || {}),
+        send: { postedAt: Date.now(), tweetId, url: url || null, recordingError: error.message },
+      },
+    });
+    throw new Error(`Reply posted as ${tweetId}, but local recording is incomplete: ${error.message}`);
+  }
 }
 
 export function ignoreQueueItem(key, reason = '') {

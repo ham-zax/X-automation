@@ -42,6 +42,9 @@ Available commands:
 - `relationship-targets` - list strategic relationship profiles with optional class/stage/min-TargetScore filters.
 - `relationship-inspect` - inspect one relationship profile plus recent append-only event history.
 - `relationship-events` - read bounded recent relationship events for one username.
+- `engage-next` - refresh/read ranked actionable engagement items, grouped into Active Conversations and New Opportunities.
+- `engage-draft` - create/update a Phase-2 reply draft and optionally request review; it never approves or sends.
+- `engage-resolve` - ignore/expire an item or explicitly send an already human-approved exact reply; it cannot approve one.
 - `audience-sync` - refresh the authenticated follower/following audience snapshot and strategic state for currently observed relevant profiles.
 - `audience` - inspect the raw niche-aligned follower/following observation layer.
 
@@ -125,19 +128,38 @@ npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
 npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
 ```
 
-These Phase-1B commands are read-only. Recording new relationship events is an internal persistence path for current/future system integrations; Phase 1C owns engagement discovery and execution.
+These Phase-1B commands remain read-only. Phase 1C now records relationship events internally only when it observes a real target response or after an explicitly approved reply is successfully sent.
 
-### Planned Engage Next upgrade — not implemented yet
+### Engage Next — implemented
 
-Phase 1C adds a separate engagement lane that prioritizes:
+Phase 1C uses a separate `queue_items(lane=engagement, pipeline=reply)` workflow and prioritizes:
 
-1. responses to our existing conversations;
+1. observed replies/quotes to our existing conversations;
 2. fresh posts from high-value relationship/authority/distribution targets;
 3. research candidates where a reply is a better action than a quote/original.
 
-Every Engage Next item must explain target relationship context, Conversation Potential, Relationship Potential, freshness/expiry, the concrete contribution we can add, and whether the opportunity is an initial reply or a follow-up.
+Every actionable item exposes target relationship context, Conversation Potential, Relationship Potential, TargetScore, freshness/expiry, per-post ReplyVisibility, EngagePriority, the concrete proposed contribution, and `initial_reply` / `follow_up` / `own_post_response` kind. If the current source cannot support a concrete contribution, it is not queued. Saturation/repetition are bounded soft modifiers; active/direct-response evidence can neutralize them.
 
-The agent may eventually draft these items, but outbound replies remain explicit human decisions. See `plans/PHASE_1C_ENGAGE_NEXT.md`.
+Inspect/refresh:
+
+```bash
+npm run agent -- engage-next <<<'{"refresh":true,"minPriority":40,"limit":30}'
+```
+
+Create or update reviewable reply text without approving it:
+
+```bash
+npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123"}'
+npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123","body":"Concrete reply text","requestReview":true,"factualityConfirmed":true,"evidenceConfirmed":true}'
+```
+
+Resolve without sending:
+
+```bash
+npm run agent -- engage-resolve <<<'{"key":"https://x.com/example/status/123","action":"ignore","reason":"No additional value now"}'
+```
+
+The bridge has no engagement-approval command. Human approval lives in the dashboard and recomputes the Phase-2 reply gates, then snapshots the exact approved reply text. Editing/rerouting invalidates that approval. `engage-resolve` can use `action: send` only after that approval exists and requires `confirmSend: true`; the send path verifies the saved draft still matches the approved text exactly before issuing one `replyTo` write. Successful sends record the queue result, candidate `reply` action, and append-only `our_reply` relationship event. Transport failures become recoverable `failed` items; a post that succeeds remotely but cannot finish local recording remains `publishing` for reconciliation rather than being sent again.
 
 ### Planned Account Health upgrade — not implemented yet
 
@@ -296,7 +318,7 @@ Current quality dimensions:
 - action: 7
 - originality vs source: 5
 
-Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover explicit factuality confirmation; evidence confirmation when claims require it; niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; first-person evidence; thread rules; and required-media readiness. The dashboard confirmation checkboxes are deliberately unchecked on every review/approval submission, and approval recomputes the latest saved content. On approval, `pipeline.js` sets the queue item to `approved` and sets the associated text draft to compatibility `ready`; no bridge command can do this.
+Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover explicit factuality confirmation; evidence confirmation when claims require it; niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; first-person evidence; thread rules; and required-media readiness. The dashboard confirmation checkboxes are deliberately unchecked on every review/approval submission, and approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval additionally snapshots the exact reply body; only the explicit Engage send path can consume that snapshot. No bridge command can create either human approval.
 
 ## Queue and automation interaction
 
@@ -307,6 +329,7 @@ Phase 1A workflow is current:
 3. `writer-packet` prepares inspectable writing context and `apply-writer-output` persists allow-listed editor output without workflow authorization.
 4. `status: ready` through `update-draft` only requests `needs_review`; review computes and persists current hard gates even when they fail so the human can inspect them.
 5. The dashboard's explicit human **Approve for publishing** action recomputes the latest gates and is the only workflow path that moves a main-feed item to `approved` and sets its associated text draft to compatibility `ready`.
+6. Engage Next uses the same drafting/review gates but a distinct explicit **Approve & send exact reply** boundary; approved engagement drafts are excluded from the daemon's main-feed ready selector.
 
 Inspect workflow state:
 
@@ -321,13 +344,13 @@ Route an item without approving it:
 printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
 ```
 
-The automation daemon is **not yet migrated to `queue_items`**. It still consumes only human-approved compatibility `ready` drafts, so Phase 1A preserves the existing publishing behavior while enforcing the new approval boundary.
+The automation daemon now refreshes Engage Next after research, with observed responses checked before cold opportunities, but it does **not** send replies. Its publication consumer still selects only human-approved compatibility `ready` drafts from the main lane, preserving the existing main-feed publishing behavior while keeping engagement execution one-by-one and explicit.
 
-When `AUTO_POST=false`, automation only previews the next compatibility-ready draft. When `AUTO_POST=true`, it may publish the next eligible compatibility-ready draft after the existing cooldown.
+When `AUTO_POST=false`, automation only previews the next compatibility-ready main-feed draft. When `AUTO_POST=true`, it may publish the next eligible main-feed draft after the existing cooldown. Engagement approval never makes a reply eligible for this daemon path.
 
-A successfully published queued draft is marked `published` and records the returned tweet ID.
+A successfully published main-feed draft is marked `published` and records the returned tweet ID. A successful Engage Next reply is recorded by the explicit engagement send path instead.
 
-Implemented here: Phase-2 format-aware writing, writer packet/structured output persistence, deterministic hard gates, thread/editor/gate storage, and media-plan review state. Still planned: Engage Next integration, Account Health, actual media upload/readiness, the Phase-3 scheduler/format-aware publishing migration, experiments, follower conversion, and learned strategy.
+Implemented here: Phase-2 format-aware writing/gates plus Phase-1C Engage Next persistence, discovery/follow-up, dashboard/bridge, human-approved exact-reply send, and refresh-only automation. Still planned: Account Health, actual media upload/readiness, the Phase-3 scheduler/format-aware publishing migration, experiments, follower conversion, and learned strategy.
 
 ## Agent behavior by user request
 
@@ -373,7 +396,7 @@ Use persisted candidates with tags `jobs/career`, `builders`, or `business`, the
 - Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
 - Treat target saturation/repeated archetype/concentration as advisory until Phase 1D evidence says otherwise; exact/near-duplicate replies remain a hard stop.
 - Replies and quote-posts should add a specific technical contribution, not generic praise or engagement bait.
-- Record successful candidate-based direct/quote/repost/reply actions through `record-action` so the same source is not accidentally recycled.
+- Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another path has not already done so. The Engage Next approved-send path records its own successful `reply` action and `our_reply` relationship event exactly once.
 - Preserve the content and engagement standards in `CONTENT_OPERATING_STANDARD.md`, `ENGAGEMENT_INTEGRITY.md`, and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.
 
 ## Feedback loop

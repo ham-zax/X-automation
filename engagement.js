@@ -356,3 +356,300 @@ export function rankEngagementOpportunities(opportunities = [], { now } = {}) {
     ))
     .map(({ result }, index) => ({ ...result, rank: index + 1 }));
 }
+
+function contributionTopic(candidate = {}) {
+  const niche = candidate.niche || {};
+  const explicit = niche.matches?.[0] || niche.tags?.[0];
+  if (explicit) return String(explicit).replaceAll('_', ' ');
+  return String(candidate.text || '').replace(/https?:\/\/\S+/g, '').trim().split(/\s+/).slice(0, 6).join(' ') || 'the technical point';
+}
+
+export function proposeEngagementContribution(candidate = {}, { response = false, directQuestion = false } = {}) {
+  const text = String(candidate.text || '');
+  const topic = contributionTopic(candidate);
+  if (response) {
+    if (directQuestion) {
+      return {
+        archetype: 'implementation_detail',
+        summary: `Answer the target's direct question about ${topic} with one concrete implementation detail or explicitly verified fact.`,
+        contextAdjustment: -15,
+      };
+    }
+    return {
+      archetype: 'synthesis',
+      summary: `Connect the target's response about ${topic} to the prior thread and state one new technical implication.`,
+    };
+  }
+  if (/\b(?:benchmark|latency|throughput|performance|measured|result(?:s)?)\b/i.test(text)) {
+    return {
+      archetype: 'caveat_or_edge_case',
+      summary: `Probe the workload, version, or environment assumptions behind the source's ${topic} result before generalizing it.`,
+      contextAdjustment: -10,
+    };
+  }
+  if (/\b(?:compare|comparison|vs\.?|versus|trade-?off|better|worse)\b/i.test(text)) {
+    return {
+      archetype: 'comparison',
+      summary: `Compare the ${topic} trade-off on one concrete developer constraint such as latency, cost, reliability, or compatibility.`,
+      contextAdjustment: -10,
+    };
+  }
+  if (/\b(?:api|sdk|cli|config|configuration|install|deploy|repository|repo|code|agent|model)\b/i.test(text)) {
+    return {
+      archetype: 'informed_question',
+      summary: `Ask which concrete integration constraint around ${topic} mattered most in the described workflow, and why.`,
+      contextAdjustment: -10,
+    };
+  }
+  if (text.includes('?')) {
+    return {
+      archetype: 'informed_question',
+      summary: `Ask a precise follow-up about the unresolved ${topic} constraint instead of offering generic agreement.`,
+      contextAdjustment: -10,
+    };
+  }
+  return null;
+}
+
+function sourceUsername(candidate = {}) {
+  const title = String(candidate.title || '');
+  if (title.startsWith('@')) return title.slice(1).toLowerCase();
+  return String(candidate.url || '').match(/x\.com\/([^/]+)/i)?.[1]?.toLowerCase() || '';
+}
+
+function tweetIdFromCandidate(candidate = {}) {
+  return String(candidate.url || '').match(/\/status\/(\d+)/)?.[1] || '';
+}
+
+function engagementExpiryClass(candidate = {}) {
+  if (['viral', 'breakout'].includes(candidate.viral?.tier)) return 'viral';
+  const text = String(candidate.text || '');
+  if (/\b(?:api|sdk|cli|benchmark|latency|throughput|architecture|implementation|config|configuration|deploy|repository|repo|code)\b/i.test(text)) {
+    return 'slow_technical';
+  }
+  return 'normal';
+}
+
+export async function refreshEngagementOpportunities({
+  now = Date.now(),
+  targetLimit = 12,
+  postsPerTarget = 4,
+  minTargetScore = 35,
+  targetSinceHours = 24,
+  responseSinceHours = 72,
+} = {}) {
+  const [store, tech, opportunity, strategy] = await Promise.all([
+    import('./store.js'),
+    import('./tech_news.js'),
+    import('./opportunity.js'),
+    import('./strategy.js'),
+  ]);
+  const coldProfiles = store.listRelationshipProfiles({ minTargetScore, limit: Math.max(1, Math.min(50, Number(targetLimit || 12))) });
+  const allResponseProfiles = store.listRelationshipProfiles({ minTargetScore: 0, limit: 1000 });
+  const responseProfilesByUsername = new Map(allResponseProfiles.map((profile) => [profile.username, profile]));
+  const ourPosts = store.listRecentOurConversationPosts({ limit: 100 });
+  const recentResponseUsernames = ourPosts
+    .map((item) => sourceUsername(store.getCandidate(item.candidateKey) || {}))
+    .filter((username) => responseProfilesByUsername.has(username));
+  const responseUsernames = [...new Set([...recentResponseUsernames, ...allResponseProfiles.map((profile) => profile.username)])].slice(0, 20);
+  const responseProfiles = responseUsernames.map((username) => responseProfilesByUsername.get(username)).filter(Boolean);
+  const parentById = new Map(ourPosts.map((item) => [item.tweetId, item]));
+  const seenItemIds = new Set();
+  const createdOrRefreshed = [];
+  const rejected = [];
+  const errors = [];
+
+  const candidateFromPost = (post, profile = null, response = false) => {
+    const classified = strategy.classifyNiche(post.text || '');
+    const profileTopics = response ? (profile?.primaryTopics || []) : [];
+    const profileKeywords = response ? (profile?.matchedKeywords || []) : [];
+    const niche = {
+      score: response ? Math.max(Number(classified.score || 0), Number(profile?.relevanceScore || 0)) : Number(classified.score || 0),
+      tags: [...new Set([...(classified.tags || []), ...profileTopics])],
+      matches: [...new Set([...(classified.matches || []), ...profileKeywords])],
+    };
+    return {
+      key: post.url || `x:${post.id}`,
+      source: 'x',
+      title: `@${post.authorUsername || post.targetUsername}`,
+      text: post.text || '',
+      url: post.url || `https://x.com/${post.authorUsername || post.targetUsername}/status/${post.id}`,
+      timestamp: Number(post.timestamp || 0),
+      score: niche.score,
+      niche,
+      metrics: {
+        views: Number(post.views || 0),
+        likes: Number(post.likes || 0),
+        retweets: Number(post.reposts || 0),
+        replies: Number(post.replies || 0),
+      },
+    };
+  };
+
+  const persistOpportunity = (candidate, profile, context = {}) => {
+    const contribution = context.contribution || proposeEngagementContribution(candidate, {
+      response: context.response === true,
+      directQuestion: context.directQuestion === true,
+    });
+    if (!contribution) {
+      rejected.push({ candidateKey: candidate.key, reason: 'NO_CONCRETE_CONTRIBUTION' });
+      return null;
+    }
+    const targetTweetId = context.targetTweetId || tweetIdFromCandidate(candidate);
+    if (!targetTweetId) {
+      rejected.push({ candidateKey: candidate.key, reason: 'MISSING_TARGET_TWEET_ID' });
+      return null;
+    }
+    const opportunityScores = opportunity.scoreOpportunity(candidate, {
+      now,
+      relationship: profile ? { ...profile, nicheTags: profile.primaryTopics || [] } : null,
+    });
+    const scored = scoreEngagementOpportunity({
+      candidate,
+      targetUsername: context.targetUsername || profile?.username || sourceUsername(candidate),
+      targetTweetId,
+      engagementKind: context.engagementKind || 'initial_reply',
+      relationship: profile || {},
+      conversationPotential: opportunityScores.conversationPotential,
+      relationshipPotential: Number(profile?.relationshipPotential ?? opportunityScores.relationshipPotential ?? 0),
+      targetScore: Number(profile?.targetScore ?? 0),
+      profileReplyVisibility: profile?.replyVisibility ?? undefined,
+      expiryClass: context.response === true ? undefined : engagementExpiryClass(candidate),
+      contribution,
+      directQuestion: context.directQuestion === true,
+      targetReplied: context.response === true,
+      activeConversation: context.response === true,
+      activeRecurring: profile?.relationshipStage === 'recurring',
+      ownPostSubstantiveReply: context.engagementKind === 'own_post_response' && candidate.text.length >= 24,
+      authorResponding: context.response === true,
+      replyCount: candidate.metrics?.replies,
+      sameSourceExhausted: store.hasCandidateAction(candidate.key),
+      newValue: context.response === true,
+    }, { now });
+    if (!scored.actionable) {
+      rejected.push({ candidateKey: candidate.key, rejectionReasons: scored.rejectionReasons });
+      return null;
+    }
+    store.upsertCandidates([candidate]);
+    const item = store.ensureEngagementItem({
+      ...scored.queueProposal,
+      parentOurTweetId: context.parentOurTweetId || '',
+      status: 'triage',
+      urgency: Number(scored.components.freshness || 0),
+      routingReason: `EngagePriority ${scored.engagePriority}: ${scored.contribution.summary}`,
+      engagement: { ...scored, refreshedAt: now, source: context.source || 'target_timeline' },
+    });
+    if (item.lane !== 'engagement') {
+      rejected.push({ candidateKey: candidate.key, reason: 'HUMAN_ROUTE_PRESERVED' });
+      return null;
+    }
+    if (['ignored', 'expired', 'published', 'failed'].includes(item.status)) {
+      rejected.push({ candidateKey: candidate.key, reason: `EXISTING_${item.status.toUpperCase()}` });
+      return null;
+    }
+    seenItemIds.add(item.id);
+    createdOrRefreshed.push(item);
+    return item;
+  };
+
+  if (ourPosts.length && responseProfiles.length) {
+    const responseRead = await tech.fetchXTargetResponses(
+      responseProfiles.map((profile) => profile.username),
+      ourPosts.map((item) => item.tweetId),
+      { maxTargets: responseProfiles.length, responsesPerTarget: 10, since: now - responseSinceHours * 3_600_000 },
+    );
+    errors.push(...responseRead.errors.map((item) => `response @${item.targetUsername}: ${item.error}`));
+    for (const response of responseRead.responses) {
+      const parent = parentById.get(response.parentOurTweetId);
+      let profile = store.getRelationshipProfile(response.targetUsername);
+      if (!profile) continue;
+      const candidate = candidateFromPost(response, profile, true);
+      const alreadyRecorded = store.listRelationshipEvents(response.targetUsername, { limit: 1000 })
+        .some((event) => String(event.metadata?.responseTweetId || '') === String(response.id));
+      if (!alreadyRecorded) {
+        store.recordRelationshipEvent({
+          username: response.targetUsername,
+          eventType: response.responseType === 'quote' ? 'target_quote' : 'target_reply',
+          candidateKey: candidate.key,
+          sourceTweetId: parent?.sourceTweetId || response.parentOurTweetId,
+          ourTweetId: response.parentOurTweetId,
+          topic: candidate.niche.tags?.[0] || null,
+          occurredAt: response.timestamp || now,
+          metadata: {
+            responseTweetId: response.id,
+            responseType: response.responseType,
+            parentOurTweetId: response.parentOurTweetId,
+          },
+        });
+        profile = store.getRelationshipProfile(response.targetUsername) || profile;
+      }
+      persistOpportunity(candidate, profile, {
+        source: 'target_response',
+        response: true,
+        directQuestion: candidate.text.includes('?'),
+        targetUsername: response.targetUsername,
+        targetTweetId: response.id,
+        parentOurTweetId: response.parentOurTweetId,
+        engagementKind: parent?.kind === 'reply' ? 'follow_up' : 'own_post_response',
+      });
+    }
+  }
+
+  if (coldProfiles.length) {
+    const targetRead = await tech.fetchXTargetRecentPosts(
+      coldProfiles.map((profile) => profile.username),
+      { maxTargets: coldProfiles.length, postsPerTarget, since: now - targetSinceHours * 3_600_000 },
+    );
+    errors.push(...targetRead.errors.map((item) => `target @${item.targetUsername}: ${item.error}`));
+    const profilesByUsername = new Map(coldProfiles.map((profile) => [profile.username, profile]));
+    for (const post of targetRead.posts) {
+      const profile = profilesByUsername.get(post.targetUsername);
+      if (!profile) continue;
+      const candidate = candidateFromPost(post, profile, false);
+      persistOpportunity(candidate, profile, {
+        source: 'target_timeline',
+        targetUsername: post.targetUsername,
+        targetTweetId: post.id,
+        engagementKind: 'initial_reply',
+      });
+    }
+  }
+
+  for (const queueItem of store.listQueueItems({ limit: 250 })) {
+    if (queueItem.lane === 'engagement'
+      || queueItem.recommendedPipeline !== 'reply'
+      || queueItem.pipeline !== 'triage'
+      || queueItem.status !== 'triage') continue;
+    const candidate = store.getCandidate(queueItem.candidateKey);
+    if (!candidate || candidate.source !== 'x') continue;
+    const username = sourceUsername(candidate);
+    const profile = username ? store.getRelationshipProfile(username) : null;
+    if (!profile) continue;
+    persistOpportunity(candidate, profile, {
+      source: 'research_candidate',
+      targetUsername: username,
+      targetTweetId: tweetIdFromCandidate(candidate),
+      engagementKind: 'initial_reply',
+    });
+  }
+
+  let expired = 0;
+  for (const item of store.listEngagementItems({ includeExpired: true, limit: 500 })) {
+    if (seenItemIds.has(item.id) || ['ignored', 'expired', 'published', 'failed'].includes(item.status)) continue;
+    if (item.expiresAt != null && now >= item.expiresAt) {
+      store.saveQueueItem({ ...item, status: 'expired', humanApprovedAt: null, approvedText: null });
+      expired++;
+    }
+  }
+
+  const items = store.listEngagementItems({ includeExpired: false, limit: 200 });
+  return {
+    items,
+    activeConversations: items.filter((item) => item.engagementKind !== 'initial_reply'),
+    newOpportunities: items.filter((item) => item.engagementKind === 'initial_reply'),
+    refreshed: createdOrRefreshed.length,
+    rejected: rejected.length,
+    expired,
+    errors,
+  };
+}

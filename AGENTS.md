@@ -50,6 +50,9 @@ npm run agent -- record-action
 npm run agent -- relationship-targets
 npm run agent -- relationship-inspect
 npm run agent -- relationship-events
+npm run agent -- engage-next
+npm run agent -- engage-draft
+npm run agent -- engage-resolve
 npm run agent -- audience
 npm run agent -- audience-sync
 ```
@@ -69,8 +72,9 @@ When a user manually supplies an X post or URL:
 9. persist structured output with `apply-writer-output`; this always returns edited content to `drafting` and never self-approves;
 10. request `status: ready` only to move the item to `needs_review`, where deterministic gates are visible;
 11. require explicit human factuality confirmation, evidence confirmation when the gate requires it, and the dashboard approval action before a main-feed text draft becomes compatibility `ready`;
-12. after any successful direct/quote/repost/reply action, call `record-action` with the resulting tweet ID/URL;
-13. let `automation.js` handle the normal publishing queue.
+12. for Engage Next, let `engage-draft` create/update reviewable reply text but never self-approve; only the dashboard human action may snapshot the exact approved reply, and `engage-resolve` may send only that already-approved text;
+13. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path;
+14. let `automation.js` refresh Engage Next and handle the normal main-feed publishing queue; it must never send engagement replies.
 
 A human-approved compatibility-ready main-feed draft requires >=40/50 and a passing Phase-2 hard-gate result. Factuality is always an explicit human confirmation; evidence confirmation is required when the gate detects evidence-dependent claims. Required media cannot pass approval until Phase 3 provides real attachment readiness.
 
@@ -87,10 +91,11 @@ A human-approved compatibility-ready main-feed draft requires >=40/50 and a pass
 - Treat `docs/ALGORITHM_EVIDENCE_LEDGER.md` as the authority for whether a growth claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Optimize network recommendations around target relevance, conversation quality, relationship potential, and qualified follower conversion; do not reduce target selection to follower count.
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
-- Phase 1A triage/routing/review interfaces are current: use `queue`, `route`, and `workflow`; do not invent later scheduler/engagement interfaces from `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`.
+- Phase 1A triage/routing/review interfaces are current: use `queue`, `route`, and `workflow`; do not invent later scheduler interfaces from `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`.
 - Phase 1B Relationship Intelligence is current: use `relationship-targets`, `relationship-inspect`, and `relationship-events` for strategic relationship reads. `audience_profiles` remains raw observation; `relationship_profiles` and append-only `relationship_events` own strategic state/history.
 - Phase 2 content integration is current: use `writer-packet` / `apply-writer-output`, persisted thread/editor/gate metadata, and dashboard hard-gate review. The persisted media enum is `none|screenshot|chart|code|diagram`; actual media upload remains Phase 3 work.
-- Phase 1C Engage Next remains planned. Do not invent `engage-next`, reply-drafting/sending, or other engagement-execution behavior before that phase lands.
+- Phase 1C Engage Next is current: use `engage-next`, `engage-draft`, and `engage-resolve`. Active conversation responses are refreshed before cold opportunities; no concrete contribution means no item; saturation/repetition remain soft; every outbound reply requires exact human-approved text and one explicit send action.
+- Engagement replies are never eligible for the daemon's main-feed `ready` selector. Editing or rerouting an approved reply invalidates approval; a successful explicit send records the reply once in candidate action history and relationship history.
 - `docs/ACCOUNT_HEALTH_AND_VISIBILITY.md` and Phase 1D describe planned account-health/visibility behavior. Do not invent `account-health`, `health-observe`, or `health-under-the-hood` before implementation.
 - Do not impose arbitrary reply quotas, human-looking delay/jitter rules, or a hard target-saturation ban. Until Phase 1D exists, treat those as editorial/empirical judgments rather than platform laws.
 

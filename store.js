@@ -163,6 +163,19 @@ db.exec(`
     routing_reason TEXT NOT NULL DEFAULT '',
     draft_id INTEGER,
     human_approved_at INTEGER,
+    target_username TEXT,
+    target_tweet_id TEXT,
+    engagement_kind TEXT NOT NULL DEFAULT '',
+    parent_our_tweet_id TEXT,
+    priority REAL NOT NULL DEFAULT 0,
+    urgency REAL NOT NULL DEFAULT 0,
+    expires_at INTEGER,
+    contribution_summary TEXT NOT NULL DEFAULT '',
+    reply_archetype TEXT NOT NULL DEFAULT '',
+    engagement_json TEXT NOT NULL DEFAULT '{}',
+    approved_text TEXT,
+    output_tweet_id TEXT,
+    output_url TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key),
@@ -209,6 +222,29 @@ for (const [name, sql] of [
 ]) {
   if (!draftColumns.has(name)) db.exec(sql);
 }
+
+const queueColumns = new Set(db.prepare('PRAGMA table_info(queue_items)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['target_username', 'ALTER TABLE queue_items ADD COLUMN target_username TEXT'],
+  ['target_tweet_id', 'ALTER TABLE queue_items ADD COLUMN target_tweet_id TEXT'],
+  ['engagement_kind', "ALTER TABLE queue_items ADD COLUMN engagement_kind TEXT NOT NULL DEFAULT ''"],
+  ['parent_our_tweet_id', 'ALTER TABLE queue_items ADD COLUMN parent_our_tweet_id TEXT'],
+  ['priority', 'ALTER TABLE queue_items ADD COLUMN priority REAL NOT NULL DEFAULT 0'],
+  ['urgency', 'ALTER TABLE queue_items ADD COLUMN urgency REAL NOT NULL DEFAULT 0'],
+  ['expires_at', 'ALTER TABLE queue_items ADD COLUMN expires_at INTEGER'],
+  ['contribution_summary', "ALTER TABLE queue_items ADD COLUMN contribution_summary TEXT NOT NULL DEFAULT ''"],
+  ['reply_archetype', "ALTER TABLE queue_items ADD COLUMN reply_archetype TEXT NOT NULL DEFAULT ''"],
+  ['engagement_json', "ALTER TABLE queue_items ADD COLUMN engagement_json TEXT NOT NULL DEFAULT '{}'"],
+  ['approved_text', 'ALTER TABLE queue_items ADD COLUMN approved_text TEXT'],
+  ['output_tweet_id', 'ALTER TABLE queue_items ADD COLUMN output_tweet_id TEXT'],
+  ['output_url', 'ALTER TABLE queue_items ADD COLUMN output_url TEXT'],
+]) {
+  if (!queueColumns.has(name)) db.exec(sql);
+}
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_queue_engagement_priority ON queue_items(lane, status, priority DESC, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_engagement_source ON queue_items(target_tweet_id, engagement_kind, updated_at DESC);
+`);
 
 function json(value, fallback) {
   try {
@@ -365,6 +401,19 @@ function decodeQueueItem(row) {
     routingReason: row.routing_reason || '',
     draftId: row.draft_id == null ? null : Number(row.draft_id),
     humanApprovedAt: row.human_approved_at == null ? null : Number(row.human_approved_at),
+    targetUsername: row.target_username || '',
+    targetTweetId: row.target_tweet_id || '',
+    engagementKind: row.engagement_kind || '',
+    parentOurTweetId: row.parent_our_tweet_id || '',
+    priority: Number(row.priority || 0),
+    urgency: Number(row.urgency || 0),
+    expiresAt: row.expires_at == null ? null : Number(row.expires_at),
+    contributionSummary: row.contribution_summary || '',
+    replyArchetype: row.reply_archetype || '',
+    engagement: json(row.engagement_json, {}),
+    approvedText: row.approved_text,
+    outputTweetId: row.output_tweet_id,
+    outputUrl: row.output_url,
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0),
   };
@@ -421,7 +470,10 @@ export function saveQueueItem(item) {
   db.prepare(`UPDATE queue_items SET
     lane = ?, pipeline = ?, status = ?,
     reach_potential = ?, follow_potential = ?, conversation_potential = ?, relationship_potential = ?,
-    recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?, updated_at = ?
+    recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?,
+    target_username = ?, target_tweet_id = ?, engagement_kind = ?, parent_our_tweet_id = ?,
+    priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
+    engagement_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?, updated_at = ?
     WHERE id = ?`).run(
     next.lane,
     next.pipeline,
@@ -434,15 +486,133 @@ export function saveQueueItem(item) {
     next.routingReason || '',
     next.draftId ?? null,
     next.humanApprovedAt ?? null,
+    next.targetUsername || null,
+    next.targetTweetId || null,
+    next.engagementKind || '',
+    next.parentOurTweetId || null,
+    Number(next.priority || 0),
+    Number(next.urgency || 0),
+    next.expiresAt ?? null,
+    next.contributionSummary || '',
+    next.replyArchetype || '',
+    JSON.stringify(next.engagement || {}),
+    next.approvedText ?? null,
+    next.outputTweetId ?? null,
+    next.outputUrl ?? null,
     Date.now(),
     current.id,
   );
   return getQueueItem(current.id);
 }
 
-export function countQueueItems({ status } = {}) {
-  if (status) return Number(db.prepare('SELECT COUNT(*) AS count FROM queue_items WHERE status = ?').get(status).count || 0);
-  return Number(db.prepare('SELECT COUNT(*) AS count FROM queue_items').get().count || 0);
+const ENGAGEMENT_TERMINAL_STATUSES = new Set(['ignored', 'expired', 'published', 'failed']);
+
+export function ensureEngagementItem(item = {}) {
+  const candidateKey = String(item.candidateKey || '');
+  const targetTweetId = String(item.targetTweetId || '');
+  const engagementKind = String(item.engagementKind || 'initial_reply');
+  if (!candidateKey || !targetTweetId) throw new Error('candidateKey and targetTweetId are required for engagement items.');
+
+  const existingBySource = decodeQueueItem(db.prepare(`SELECT * FROM queue_items
+    WHERE lane = 'engagement' AND target_tweet_id = ? AND engagement_kind = ?
+    ORDER BY id DESC LIMIT 1`).get(targetTweetId, engagementKind));
+  if (existingBySource) {
+    if (ENGAGEMENT_TERMINAL_STATUSES.has(existingBySource.status)) return existingBySource;
+    return saveQueueItem({
+      ...item,
+      id: existingBySource.id,
+      candidateKey: existingBySource.candidateKey,
+      lane: 'engagement',
+      pipeline: 'reply',
+      status: existingBySource.status,
+    });
+  }
+
+  const existingCandidate = getQueueItemByCandidate(candidateKey);
+  if (existingCandidate) {
+    if (ENGAGEMENT_TERMINAL_STATUSES.has(existingCandidate.status)) return existingCandidate;
+    if (existingCandidate.lane !== 'engagement'
+      && (existingCandidate.pipeline !== 'triage' || existingCandidate.status !== 'triage')) {
+      return existingCandidate;
+    }
+    return saveQueueItem({
+      ...item,
+      id: existingCandidate.id,
+      lane: 'engagement',
+      pipeline: 'reply',
+      status: existingCandidate.lane === 'engagement' ? existingCandidate.status : (item.status || 'triage'),
+    });
+  }
+
+  ensureQueueItem(candidateKey, { lane: 'engagement', pipeline: 'reply', status: item.status || 'triage' });
+  return saveQueueItem({ ...item, candidateKey, lane: 'engagement', pipeline: 'reply' });
+}
+
+export function getActiveEngagementItem(targetTweetId, engagementKind = 'initial_reply') {
+  return decodeQueueItem(db.prepare(`SELECT * FROM queue_items
+    WHERE lane = 'engagement' AND target_tweet_id = ? AND engagement_kind = ?
+      AND status NOT IN ('ignored', 'expired', 'published', 'failed')
+    ORDER BY priority DESC, updated_at DESC LIMIT 1`).get(String(targetTweetId || ''), engagementKind));
+}
+
+export function listEngagementItems({ status, minPriority = 0, includeExpired = false, limit = 100 } = {}) {
+  const where = ["lane = 'engagement'", 'priority >= ?'];
+  const params = [Number(minPriority || 0)];
+  if (status) { where.push('status = ?'); params.push(status); }
+  params.push(Math.max(1, Math.min(500, Number(limit || 100))));
+  const items = db.prepare(`SELECT * FROM queue_items WHERE ${where.join(' AND ')}
+    ORDER BY priority DESC, updated_at DESC LIMIT ?`).all(...params).map(decodeQueueItem);
+  if (includeExpired) return items;
+  return items.filter((item) => !['ignored', 'expired', 'published'].includes(item.status)
+    && item.engagement?.expiry?.effectiveExpired !== true);
+}
+
+export function listRecentOurConversationPosts({ limit = 100 } = {}) {
+  const bounded = Math.max(1, Math.min(500, Number(limit || 100)));
+  const actions = db.prepare(`SELECT a.output_tweet_id AS tweet_id, a.candidate_key, a.action AS kind,
+      a.created_at AS occurred_at, q.target_tweet_id AS source_tweet_id
+    FROM candidate_actions a LEFT JOIN queue_items q ON q.candidate_key = a.candidate_key
+    WHERE a.output_tweet_id IS NOT NULL AND a.action IN ('direct', 'quote', 'reply')
+    ORDER BY a.created_at DESC LIMIT ?`).all(bounded);
+  const drafts = db.prepare(`SELECT d.published_tweet_id AS tweet_id, d.candidate_key,
+      CASE WHEN q.pipeline = 'reply' THEN 'reply' WHEN q.pipeline = 'quote' THEN 'quote' ELSE 'direct' END AS kind,
+      d.updated_at AS occurred_at, q.target_tweet_id AS source_tweet_id
+    FROM drafts d LEFT JOIN queue_items q ON q.candidate_key = d.candidate_key
+    WHERE d.published_tweet_id IS NOT NULL
+    ORDER BY d.updated_at DESC LIMIT ?`).all(bounded);
+  const events = db.prepare(`SELECT our_tweet_id AS tweet_id, candidate_key,
+      CASE WHEN event_type = 'our_reply' THEN 'reply' ELSE 'quote' END AS kind,
+      occurred_at, source_tweet_id
+    FROM relationship_events
+    WHERE our_tweet_id IS NOT NULL AND event_type IN ('our_reply', 'our_quote')
+    ORDER BY occurred_at DESC LIMIT ?`).all(bounded);
+
+  const seen = new Set();
+  return [...actions, ...drafts, ...events]
+    .filter((row) => row.tweet_id)
+    .sort((left, right) => Number(right.occurred_at || 0) - Number(left.occurred_at || 0))
+    .filter((row) => {
+      const tweetId = String(row.tweet_id);
+      if (seen.has(tweetId)) return false;
+      seen.add(tweetId);
+      return true;
+    })
+    .slice(0, bounded)
+    .map((row) => ({
+      tweetId: String(row.tweet_id),
+      candidateKey: row.candidate_key || '',
+      kind: row.kind || 'direct',
+      sourceTweetId: row.source_tweet_id ? String(row.source_tweet_id) : '',
+      occurredAt: Number(row.occurred_at || 0),
+    }));
+}
+
+export function countQueueItems({ status, lane } = {}) {
+  const where = [];
+  const params = [];
+  if (status) { where.push('status = ?'); params.push(status); }
+  if (lane) { where.push('lane = ?'); params.push(lane); }
+  return Number(db.prepare(`SELECT COUNT(*) AS count FROM queue_items${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`).get(...params).count || 0);
 }
 
 export function recordCandidateAction({ candidateKey: key, action, outputTweetId = null, outputUrl = null, commentary = '' }) {
@@ -918,9 +1088,11 @@ export function listRecentPublishedContent({ kind = 'main', limit = 20, excludeC
 }
 
 export function getNextReadyDraft(now = Date.now(), minScore = 40) {
-  return decodeDraft(db.prepare(`SELECT * FROM drafts
-    WHERE status = 'ready' AND quality_score >= ? AND (scheduled_at IS NULL OR scheduled_at <= ?)
-    ORDER BY COALESCE(scheduled_at, updated_at) ASC LIMIT 1`).get(minScore, now));
+  return decodeDraft(db.prepare(`SELECT d.* FROM drafts d
+    LEFT JOIN queue_items q ON q.candidate_key = d.candidate_key
+    WHERE d.status = 'ready' AND d.quality_score >= ? AND (d.scheduled_at IS NULL OR d.scheduled_at <= ?)
+      AND (q.lane IS NULL OR q.lane = 'main')
+    ORDER BY COALESCE(d.scheduled_at, d.updated_at) ASC LIMIT 1`).get(minScore, now));
 }
 
 export function setAppState(key, value) {

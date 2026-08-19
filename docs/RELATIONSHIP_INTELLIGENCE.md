@@ -1,6 +1,6 @@
 # Relationship Intelligence
 
-This document defines the current Phase-1B relationship-memory and target-selection layer for `@ham_zax`, plus the planned Engage Next behavior that consumes it.
+This document defines the current Phase-1B relationship-memory/target-selection layer for `@ham_zax` and the implemented Phase-1C Engage Next workflow that consumes it.
 
 The system should stop treating every X post as an isolated content opportunity. It should remember **who** the account interacts with, **why** they matter, **what topics overlap**, **how prior conversations went**, and **whether the relationship is compounding**.
 
@@ -589,7 +589,7 @@ relationship-events
 
 `relationship-targets` supports target-class, relationship-stage, minimum-TargetScore, and bounded-limit filters. `relationship-inspect` returns one strategic profile plus recent event history. `relationship-events` returns bounded append-only history for one username.
 
-Phase 1C commands remain planned:
+Phase 1C exposes these current engagement commands:
 
 ```text
 engage-next
@@ -597,29 +597,20 @@ engage-draft
 engage-resolve
 ```
 
-Example conceptual future request:
+`engage-next` can refresh bounded target/response reads or return persisted actionable items, grouped into Active Conversations and New Opportunities. `engage-draft` creates/updates the existing Phase-2 reply draft and may request review but cannot approve or send. `engage-resolve` supports Ignore/Expire and one explicit Send action only for an already human-approved exact reply.
+
+Example:
 
 ```json
 {
   "command": "engage-next",
-  "limit": 20,
-  "classes": ["relationship", "authority"]
+  "refresh": true,
+  "minPriority": 40,
+  "limit": 20
 }
 ```
 
-Expected response includes:
-
-- target profile;
-- target classes;
-- TargetScore breakdown;
-- source post;
-- opportunity scores;
-- prior relationship stage;
-- why the conversation is useful;
-- proposed contribution;
-- whether a prior action already exists.
-
-Do not invent the Phase-1C commands before that phase is implemented.
+Each result packet includes the queue item/EngagePriority breakdown, target relationship profile, exact source candidate, draft when present, contribution/expiry state, and prior stage. Human approval remains a dashboard-only transition; editing/rerouting invalidates approval before any later send.
 
 ---
 
@@ -640,19 +631,20 @@ The read-only **Relationships** view provides:
 
 It does not expose reply/send/approval actions.
 
-### Engage Next view — planned
+### Engage Next view — current
 
-Each conversation card shows:
+The **Engage Next** view separates **Active Conversations** from **New Opportunities** and shows:
 
-- source post age/velocity;
-- target identity/classes;
-- target score;
-- Conversation + Relationship Potential;
-- relationship stage;
-- exact contribution idea;
-- drafted reply if available;
-- expiry;
-- action buttons.
+- exact source post and age;
+- target identity/classes, TargetScore, and relationship stage;
+- Conversation + Relationship Potential plus freshness/ReplyVisibility/contribution components;
+- concrete contribution archetype/summary;
+- drafted reply and Phase-2 hard-gate state when available;
+- expiry and active-conversation override state;
+- soft saturation/repetition warning context;
+- one-item actions: Draft/Edit reply, Quote instead for initial opportunities, Ignore, Expire, and explicit Approve & Send / Send approved reply.
+
+There is no batch-send control. Approval recomputes the latest Phase-2 reply gates and snapshots the exact body; the send path refuses edited/unapproved text. Automation refreshes this view but does not send from it.
 
 ---
 
@@ -681,4 +673,4 @@ Phase 1B Relationship Intelligence is implemented when the system can:
 6. refresh strategic relationship state from raw audience observations without erasing omitted profiles or prior history;
 7. inspect relationship profiles/events through the dashboard and bridge without an engagement-send or approval bypass.
 
-The next items remain Phase 1C+ work: surface recent high-value target posts, distinguish cold insertion from active follow-up, rank Engage Next opportunities, and connect those interaction outcomes into later measurement/learning.
+Phase 1C is also implemented: the system surfaces bounded recent target posts and observed responses, distinguishes active follow-up from cold insertion, ranks Engage Next opportunities, requires a concrete contribution, drafts/reviews replies through Phase-2 gates, sends only an exact human-approved reply through an explicit one-item action, and records successful/observed relationship history while automation remains refresh-only. Later phases still own Account Health, richer visibility/saturation diagnostics, measurement/experiments, and learned strategy.

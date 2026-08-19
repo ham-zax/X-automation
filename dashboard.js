@@ -13,16 +13,20 @@ import {
   rankXViralPosts,
 } from './tech_news.js';
 import { composeDraft, scoreDraft, weightedPostLength } from './drafting.js';
+import { refreshEngagementOpportunities } from './engagement.js';
 import { syncAudience } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
 import {
+  approveEngagementQueueItem,
   approveQueueItem,
   inspectWorkflow,
   refreshQueueRecommendation,
   requestQueueReview,
+  resolveEngagementItem,
   routeCandidate,
   saveCandidateToWorkflow,
+  sendApprovedEngagementReply,
 } from './pipeline.js';
 import {
   candidateKey,
@@ -36,11 +40,13 @@ import {
   getPerformanceSnapshot,
   getPreferenceProfile,
   getQueueItemByCandidate,
+  getRelationshipProfile,
   getRelationshipSummary,
   listAudienceProfiles,
   listCandidateActions,
   listCandidates,
   listDrafts,
+  listEngagementItems,
   listQueueItems,
   listRelationshipProfiles,
   recordPerformanceSnapshot,
@@ -268,8 +274,11 @@ function draftCard(draft) {
   const queueItem = getQueueItemByCandidate(candidate.key);
   const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
   const gatesPassed = draft.gates?.passed === true;
+  const engagementReply = queueItem?.lane === 'engagement' && pipeline === 'reply';
   const canReview = CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status);
   const canApprove = queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && draft.qualityScore >= 40 && gatesPassed;
+  const canApproveSend = engagementReply && queueItem?.status === 'needs_review' && draft.qualityScore >= 40 && gatesPassed;
+  const canSendApproved = engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
   const media = draft.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
   const editor = draft.editor || {};
   const threadParts = pipeline === 'thread' ? (draft.threadParts?.length ? draft.threadParts : ['', '']) : [];
@@ -286,11 +295,11 @@ function draftCard(draft) {
         <details class="mb-3"><summary class="fw-semibold">Research/editor fields</summary><div class="mt-3"><div class="mb-3"><label class="form-label">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div><div class="mb-3"><label class="form-label">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div><div class="mb-3"><label class="form-label">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div><div class="mb-3"><label class="form-label">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div></div></details>
         <div class="card bg-light border-0 mb-3"><div class="card-body"><div class="fw-semibold mb-2">${escapeHtml(mediaLabel(media))}</div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="mediaRequired" value="1" id="media-required-${draft.id}" ${media.required ? 'checked' : ''}><label class="form-check-label" for="media-required-${draft.id}">Required for the claim</label></div><div class="row g-2"><div class="col-md-3"><label class="form-label small">Type</label><select class="form-select" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div><div class="col-md-9"><label class="form-label small">Reason</label><input class="form-control" name="mediaReason" value="${escapeHtml(media.reason || '')}"></div><div class="col-md-6"><label class="form-label small">Source / local evidence ref</label><input class="form-control" name="mediaSource" value="${escapeHtml(media.source || '')}"></div><div class="col-md-6"><label class="form-label small">Alt text</label><input class="form-control" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></div></div></div></div>
         <div class="small text-secondary mb-3"><strong>Semantic anchors:</strong> ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · <strong>Evidence used:</strong> ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')} · <strong>Discussion:</strong> ${escapeHtml(editor.discussionQuestion || '—')} · <strong>Follow reason:</strong> ${escapeHtml(editor.followReason || '—')} · <strong>Risk flags:</strong> ${escapeHtml((editor.riskFlags || []).join(', ') || '—')}</div>
-        <div class="row g-3 align-items-end"><div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div><div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
+        <div class="row g-3 align-items-end">${engagementReply ? '<div class="col-md-5"><div class="small text-secondary">Engagement replies send immediately only after explicit approval; they are never scheduled.</div></div>' : `<div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div>`}<div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
       </form>
       ${pipeline === 'thread' ? `<div class="d-flex gap-2 mt-3"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}
-      <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}${queueItem?.status === 'approved' ? '<span class="badge text-bg-success align-self-center">Approved · compatibility draft ready</span>' : ''}</div>
-      ${queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked until score is ≥40 and the saved hard-gate result passes. Recheck gates after explicit human confirmations or content edits.</div>` : ''}
+      <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}${canApproveSend ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>` : ''}${canSendApproved ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>` : ''}${queueItem?.status === 'approved' ? `<span class="badge text-bg-success align-self-center">${engagementReply ? 'Exact reply approved' : 'Approved · compatibility draft ready'}</span>` : ''}</div>
+      ${queueItem?.status === 'needs_review' && (MAIN_FEED_PIPELINES.has(pipeline) || engagementReply) && !(canApprove || canApproveSend) ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked until score is ≥40 and the saved hard-gate result passes. Recheck gates after explicit human confirmations or content edits.</div>` : ''}
       <hr><div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5. Hard-gate failures always override the numeric score.</div>
     </div>
   </article>`;
@@ -385,6 +394,66 @@ function relationshipsView(className = '', stage = '') {
   return summary + filters + (cards || '<div class="alert alert-secondary">No relationship profiles match these filters.</div>');
 }
 
+function engagementCard(queueItem) {
+  const candidate = getCandidate(queueItem.candidateKey);
+  if (!candidate) return '';
+  const draft = getDraftByCandidate(queueItem.candidateKey);
+  const profile = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
+  const score = queueItem.engagement || {};
+  const ageMinutes = Number(score.freshness?.ageMinutes);
+  const ageLabel = Number.isFinite(ageMinutes)
+    ? ageMinutes < 60 ? `${Math.round(ageMinutes)}m old` : `${(ageMinutes / 60).toFixed(1)}h old`
+    : 'age unavailable';
+  const expiry = score.expiry || {};
+  const expiryLabel = queueItem.expiresAt ? new Date(queueItem.expiresAt).toLocaleString() : 'unavailable';
+  const activeOverride = expiry.activeConversationOverride === true;
+  const pressure = score.explanation?.softPressure;
+  const pressureWarning = Number(pressure?.rawModifier || 0) < 0
+    ? `<div class="alert alert-warning py-2 mt-3 mb-0">Soft saturation/repetition adjustment ${escapeHtml(pressure.rawModifier)}${pressure.appliedModifier === 0 ? ' · neutralized by active/direct-response evidence' : ''}. This is advisory, not a hard block.</div>`
+    : '';
+  const relationshipBadges = profile
+    ? `<div class="d-flex gap-1 flex-wrap mt-2">${(profile.classes || []).map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('')}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">TargetScore ${Math.round(profile.targetScore)}</span></div>`
+    : '<div class="small text-secondary mt-2">Relationship profile unavailable.</div>';
+  const canReview = draft && ['drafting', 'needs_review', 'failed'].includes(queueItem.status);
+  const canApproveSend = queueItem.status === 'needs_review' && draft?.qualityScore >= 40 && draft?.gates?.passed === true;
+  const approved = queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
+  const contribution = queueItem.contributionSummary || score.contribution?.summary || '';
+  const archetype = queueItem.replyArchetype || score.contribution?.archetype || '';
+  const components = score.components || {};
+
+  return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
+    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(relationshipLabel(queueItem.engagementKind || 'initial_reply'))}</div><div class="small text-secondary">${escapeHtml(ageLabel)} · expires ${escapeHtml(expiryLabel)}${activeOverride ? ' · active conversation override' : ''} · ${escapeHtml(queueItem.status)}</div></div><div class="text-end"><div class="fs-4 fw-semibold">${Math.round(queueItem.priority)}</div><div class="small text-secondary">EngagePriority</div></div></div>
+    ${relationshipBadges}
+    <div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span></div>
+    <div class="mt-3"><strong>Contribution:</strong> <span class="badge text-bg-info">${escapeHtml(relationshipLabel(archetype))}</span> ${escapeHtml(contribution || 'No contribution stored.')}</div>
+    <div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary mb-1">Exact source</div><div class="text-break">${escapeHtml(candidate.text)}</div></div></div>
+    ${draft ? `<div class="mt-3">${gatePanel(draft.gates)}<div class="small text-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</div><div class="mt-2 text-break">${escapeHtml(draft.body || '')}</div></div>` : ''}
+    ${pressureWarning}
+    ${(score.rejectionReasons || []).length ? `<div class="alert alert-danger py-2 mt-3 mb-0">${escapeHtml(score.rejectionReasons.map((item) => item.code || item.reason).join(', '))}</div>` : ''}
+    <div class="d-flex gap-2 flex-wrap mt-3 align-items-end">
+      <form method="post" action="/engage/draft"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-primary btn-sm" type="submit">${draft ? 'Edit reply' : 'Draft reply'}</button></form>
+      ${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck review gates' : 'Request review'}</button></form>` : ''}
+      ${canApproveSend ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>` : ''}
+      ${approved ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>` : ''}
+      ${queueItem.engagementKind === 'initial_reply' ? `<form method="post" action="/engage/quote"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-secondary btn-sm" type="submit">Quote instead</button></form>` : ''}
+      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="ignore"><button class="btn btn-outline-secondary btn-sm" type="submit">Ignore</button></form>
+      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="expire"><button class="btn btn-outline-secondary btn-sm" type="submit">Expire</button></form>
+      <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a>
+    </div>
+  </div></article>`;
+}
+
+function engageView(error = null) {
+  const items = listEngagementItems({ limit: 200 });
+  const active = items.filter((item) => item.engagementKind !== 'initial_reply');
+  const cold = items.filter((item) => item.engagementKind === 'initial_reply');
+  const warning = error ? `<div class="alert alert-warning">Engage refresh failed: ${escapeHtml(error)}</div>` : '';
+  const group = (title, note, rows) => `<h2 class="h5 mt-4">${escapeHtml(title)} <span class="badge text-bg-light border">${rows.length}</span></h2><p class="small text-secondary">${escapeHtml(note)}</p>${rows.map(engagementCard).join('') || '<div class="alert alert-secondary">No items in this group.</div>'}`;
+  return warning
+    + group('Active conversations', 'Observed replies/quotes to our existing posts or replies are shown before cold opportunities.', active)
+    + group('New opportunities', 'Fresh target posts and reply-suitable research candidates with a concrete proposed contribution.', cold);
+}
+
 const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'watching'];
 
 function queueCard(queueItem) {
@@ -420,7 +489,7 @@ function queueCard(queueItem) {
 }
 
 function queueView() {
-  const items = listQueueItems({ limit: 250 });
+  const items = listQueueItems({ lane: 'main', limit: 250 });
   return QUEUE_GROUPS.map((status) => {
     const group = items.filter((item) => item.status === status);
     if (!group.length) return '';
@@ -461,6 +530,15 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     }
   }
 
+  let engagementError = null;
+  if (activeSource === 'engage' && (forceRefresh || listEngagementItems({ limit: 1 }).length === 0)) {
+    try {
+      await refreshEngagementOpportunities();
+    } catch (error) {
+      engagementError = error.message;
+    }
+  }
+
   const savedCount = countSavedCandidates();
   const nextReady = getNextReadyDraft();
   let visible = [];
@@ -481,8 +559,13 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
   else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
   else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
-  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage' })} items need routing · ${countQueueItems({ status: 'needs_review' })} need review.`;
+  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} items need routing · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review.`;
   else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} human-approved compatibility-ready.`;
+  else if (activeSource === 'engage') {
+    const engagementItems = listEngagementItems({ limit: 200 });
+    const activeCount = engagementItems.filter((item) => item.engagementKind !== 'initial_reply').length;
+    decision = engagementError ? `Engage refresh failed: ${engagementError}` : `${activeCount} active conversations · ${engagementItems.length - activeCount} new opportunities.`;
+  }
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
   else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot and recent post outcomes.`;
   else if (activeSource === 'audience') {
@@ -504,7 +587,8 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['x', 'X posts'],
     ['viral', 'Viral · 24h'],
     ['interesting', `Saved (${savedCount})`],
-    ['queue', `Queue (${countQueueItems({ status: 'triage' })})`],
+    ['queue', `Queue (${countQueueItems({ status: 'triage', lane: 'main' })})`],
+    ['engage', `Engage Next (${listEngagementItems({ limit: 200 }).length})`],
     ['drafts', 'Drafts'],
     ['opportunities', 'Opportunities'],
     ['relationships', 'Relationships'],
@@ -517,6 +601,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
 
   let content;
   if (activeSource === 'queue') content = queueView();
+  else if (activeSource === 'engage') content = engageView(engagementError);
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
   else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
@@ -572,11 +657,52 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && requestUrl.pathname === '/queue/review') {
       const form = await readForm(req);
-      requestQueueReview(form.get('key'), {
+      const key = form.get('key');
+      const queueItem = getQueueItemByCandidate(key);
+      requestQueueReview(key, {
         factualityConfirmed: form.get('factualityConfirmed') === '1',
         evidenceConfirmed: form.get('evidenceConfirmed') === '1',
       });
-      res.writeHead(303, { location: '/?source=drafts' }); res.end(); return;
+      res.writeHead(303, { location: queueItem?.lane === 'engagement' ? '/?source=engage' : '/?source=drafts' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/engage/draft') {
+      const form = await readForm(req);
+      const key = form.get('key');
+      routeCandidate(key, 'reply', { actor: 'human' });
+      const draft = getDraftByCandidate(key);
+      res.writeHead(303, { location: draft ? `/?source=drafts&draft=${draft.id}` : '/?source=engage' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/engage/resolve') {
+      const form = await readForm(req);
+      resolveEngagementItem(form.get('key'), form.get('action'), form.get('reason') || '');
+      res.writeHead(303, { location: '/?source=engage' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/engage/quote') {
+      const form = await readForm(req);
+      const key = form.get('key');
+      routeCandidate(key, 'quote', { actor: 'human', reason: 'Operator chose Quote instead from Engage Next.' });
+      const draft = getDraftByCandidate(key);
+      res.writeHead(303, { location: draft ? `/?source=drafts&draft=${draft.id}` : '/?source=queue' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/engage/approve-send') {
+      const form = await readForm(req);
+      const key = form.get('key');
+      approveEngagementQueueItem(key, {
+        factualityConfirmed: form.get('factualityConfirmed') === '1',
+        evidenceConfirmed: form.get('evidenceConfirmed') === '1',
+      }, { actor: 'human' });
+      await sendApprovedEngagementReply(key);
+      res.writeHead(303, { location: '/?source=engage' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/engage/send') {
+      const form = await readForm(req);
+      await sendApprovedEngagementReply(form.get('key'));
+      res.writeHead(303, { location: '/?source=engage' }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/queue/approve') {
@@ -673,7 +799,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'drafts', 'opportunities', 'relationships', 'audience', 'performance', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'audience', 'performance', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';
