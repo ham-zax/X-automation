@@ -134,6 +134,129 @@ export async function fetchXTechNews(accounts = ['github', 'OpenAI', 'ycombinato
   return tweets;
 }
 
+const X_TARGET_MAX_TARGETS = 20;
+const X_TARGET_MAX_POSTS_PER_TARGET = 10;
+const X_TARGET_MAX_RAW_PER_TARGET = 30;
+
+function boundedTargetCount(value, fallback, max) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.min(max, Math.max(1, Math.floor(numeric)));
+}
+
+function normalizeTargetUsernames(usernames) {
+  const values = Array.isArray(usernames) ? usernames : [usernames];
+  const seen = new Set();
+  const normalized = [];
+  for (const value of values) {
+    const username = String(value || '').trim().replace(/^@/, '').toLowerCase();
+    if (!username || seen.has(username)) continue;
+    seen.add(username);
+    normalized.push(username);
+  }
+  return normalized;
+}
+
+function normalizeSince(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) {
+    const timestamp = value.getTime();
+    if (Number.isFinite(timestamp)) return timestamp;
+  }
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric;
+  const parsed = Date.parse(value);
+  if (Number.isFinite(parsed)) return parsed;
+  throw new TypeError('since must be a timestamp, Date, or parseable date string.');
+}
+
+function normalizeTargetTweet(tweet, targetUsername) {
+  const id = String(tweet?.id || '');
+  const authorUsername = String(tweet?.username || targetUsername || '').replace(/^@/, '').toLowerCase();
+  const timestamp = Number(tweet?.timestamp || (tweet?.timeParsed ? Date.parse(tweet.timeParsed) : 0)) || 0;
+  return {
+    source: 'x',
+    targetUsername,
+    authorUsername,
+    id,
+    text: String(tweet?.text || tweet?.fullText || '').replace(/\s+/g, ' ').trim(),
+    timestamp,
+    url: tweet?.permanentUrl || (id && authorUsername ? `https://x.com/${authorUsername}/status/${id}` : ''),
+    views: Number(tweet?.views || 0),
+    likes: Number(tweet?.likes || 0),
+    reposts: Number(tweet?.retweets || 0),
+    replies: Number(tweet?.replies || 0),
+    isReply: Boolean(tweet?.isReply),
+    isRepost: Boolean(tweet?.isRetweet),
+    isQuote: Boolean(tweet?.isQuote),
+    inReplyToStatusId: tweet?.inReplyToStatusId ? String(tweet.inReplyToStatusId) : null,
+    quotedStatusId: tweet?.quotedStatusId ? String(tweet.quotedStatusId) : null,
+    conversationId: tweet?.conversationId ? String(tweet.conversationId) : null,
+  };
+}
+
+export async function fetchXTargetRecentPosts(usernames, {
+  maxTargets = 10,
+  postsPerTarget = 5,
+  since = null,
+  includeReplies = false,
+} = {}) {
+  const normalizedTargets = normalizeTargetUsernames(usernames);
+  const targetLimit = boundedTargetCount(maxTargets, 10, X_TARGET_MAX_TARGETS);
+  const perTargetLimit = boundedTargetCount(postsPerTarget, 5, X_TARGET_MAX_POSTS_PER_TARGET);
+  const targets = normalizedTargets.slice(0, targetLimit);
+  const sinceTimestamp = normalizeSince(since);
+  const posts = [];
+  const errors = [];
+  const seenTweetIds = new Set();
+  const scraper = new Scraper();
+
+  if (process.env.AUTH_TOKEN) {
+    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
+    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
+    await scraper.setCookies(cookies);
+  }
+
+  const rawPerTarget = Math.min(X_TARGET_MAX_RAW_PER_TARGET, perTargetLimit * 3);
+  for (const targetUsername of targets) {
+    try {
+      let accepted = 0;
+      const timeline = includeReplies
+        ? scraper.getTweetsAndReplies(targetUsername, rawPerTarget)
+        : scraper.getTweets(targetUsername, rawPerTarget);
+      for await (const tweet of timeline) {
+        const post = normalizeTargetTweet(tweet, targetUsername);
+        if (post.isRepost) continue;
+        if (!includeReplies && post.isReply) continue;
+        if (sinceTimestamp != null && (!post.timestamp || post.timestamp < sinceTimestamp)) continue;
+        if (post.id && seenTweetIds.has(post.id)) continue;
+        if (post.id) seenTweetIds.add(post.id);
+        posts.push(post);
+        accepted++;
+        if (accepted >= perTargetLimit) break;
+      }
+    } catch (error) {
+      errors.push({ targetUsername, error: error.message });
+    }
+  }
+
+  return {
+    posts,
+    errors,
+    bounds: {
+      maxTargets: targetLimit,
+      postsPerTarget: perTargetLimit,
+      rawPerTarget,
+      truncatedTargets: Math.max(0, normalizedTargets.length - targets.length),
+    },
+    filters: {
+      since: sinceTimestamp,
+      includeReplies: Boolean(includeReplies),
+      excludeReposts: true,
+    },
+  };
+}
+
 export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) {
   try {
     const scraper = new Scraper();
