@@ -1,7 +1,7 @@
 # Network Growth System — Wave 4 Agent Coordination
 
 **Repository:** `/home/hamza/repo/x_test`
-**Coordination base:** `fc50a60` (full Phase 1C + full Phase 2 + full Phase 3 + Account Health Core + Under-the-Hood reader)
+**Current integration base:** `86533fa` (full Phase 1D + full Phase 3 + Phase-4 experiment/measurement core)
 **Source of truth:** `docs/plans/PHASE_1D_ACCOUNT_HEALTH.md`, `docs/plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`
 **Execution shape:** parallel isolated integration + pure core
 **Current wave:** 4
@@ -10,19 +10,19 @@
 
 | Mission | Type | Status | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|
-| Agent A6 — Account Health Integration | executable/mixed | ready after worktree setup | `/home/hamza/repo/x_test-w2-engagement` | owns Phase-1D persistence/UI/bridge/Engage integration | Health Core + Under-the-Hood reader + Phase 1C complete |
-| Agent B4 — Experiment & Measurement Core | executable | ready after worktree setup | `/home/hamza/repo/x_test-w2-content-integration` | owns only new pure `experiments.js`; no shared persistence/UI writes | Phase 3 metadata + pure health diagnostics available |
+| Agent A6 — Account Health Integration | executable/mixed | complete + integrated (`3d987d0`) | `/home/hamza/repo/x_test-w2-engagement` | verified Phase-1D integration slice | none |
+| Agent B4 — Experiment & Measurement Core | executable | complete + integrated (`86533fa`) | `/home/hamza/repo/x_test-w2-content-integration` | verified one-file pure `experiments.js` owner | none |
 
 ## Dependency map
 
 ```text
-fc50a60 full Phase 3 + health core + visibility reader
+86533fa full Phase 1D + Phase 3 + Phase-4 pure core
         |
         +--------------------------------+
         |                                |
         v                                v
 Agent A6: Phase 1D Integration     Agent B4: Phase 4 Pure Core
-store/engagement/UI/bridge/docs    experiments.js only
+complete + integrated              complete + integrated
         |                                |
         +----------------+---------------+
                          |
@@ -43,16 +43,15 @@ store/engagement/UI/bridge/docs    experiments.js only
 - `tech_news.js#fetchXUnderTheHoodReport()` is observation-only and may return `available:false`; absence is never health failure.
 - `engagement.js` owns EngagePriority and the explicit human-reviewed reply flow. WATCH-only health signals may modify priority/warnings but must not block useful human-approved replies.
 - `scheduler.js` and Phase-3 queue state own main-feed publication; engagement replies remain outside it.
-- **Agent A6 may modify Phase-1D integration surfaces**: `store.js`, `engagement.js`, `dashboard.js`, `agent_bridge.js`, `tech_news.js` only for reader integration defects, `relationship.js` only if current event aggregates are insufficient, and Phase-1D operating docs. `health.js` should remain stable unless a concrete integration defect is demonstrated.
-- **Agent B4 owns only new `experiments.js`.** It must not modify persistence, automation, audience, health, dashboard, scheduler, bridge, engagement, or docs.
-- Agent B4 must treat health/network/publication observations as supplied inputs; it may not claim Phase 4 persistence/capture is implemented.
+- Phase 1D is complete on main as `3d987d0`; `getAccountHealthSummary()` is now a stable structured input for later measurement/learning work.
+- Phase-4 pure experiment/measurement ownership is integrated as `86533fa`; `experiments.js` is stable for persistence/UI integration unless a concrete integration defect is found.
 - No tests are authorized by current plans; use focused pure/isolated smoke evidence and static checks.
 
 ## Integration policy
 
 The main checkout remains the single integration writer. Both current missions derive from the same coordination commit and have disjoint writable ownership. Agents commit only to their assigned branches. The orchestrator verifies and integrates each result centrally.
 
-Phase 4 full persistence/capture/UI work remains blocked until Agent A6 lands. Agent B4 is intentionally limited to the pure owner so it can proceed without depending on SQLite health observations or competing for shared files.
+Both Wave-4 missions are landed. Phase 4 full persistence/capture/audience/UI/bridge work is now ready. Phase 5 remains non-operational until real Phase-4 persisted evidence exists, although an isolated pure `learning.js` contract may be prepared in parallel with Phase-4 integration.
 
 ## Execution lifetime policy
 
@@ -64,10 +63,12 @@ Use the smallest evidence capable of disproving the claimed behavior. Do not cre
 
 ## Future / blocked work
 
-- Phase 4 full measurement/experiment integration — blocked by integrated Agent A6 plus Agent B4 core.
-- Phase 5 Learned Strategy — blocked by Phase 4 persisted evidence/cohort summaries.
+- Phase 4 full measurement/experiment integration — ready now.
+- Phase 5 full Learned Strategy integration — blocked by Phase 4 persisted evidence/cohort summaries.
 
 ## Status log
 
 - `2026-08-19` — Under-the-Hood reader integrated as `342616d`; Phase 3 Distribution Integration integrated as `fc50a60`.
 - `2026-08-19` — Wave 4 prepared as full Account Health integration in parallel with isolated Phase-4 experiment/measurement core.
+- `2026-08-19` — Agent A6 Account Health Integration `ac04124` verified and integrated as `3d987d0`; Phase 1D is complete.
+- `2026-08-19` — Agent B4 Experiment & Measurement Core `bbedeb8` verified as one-file `experiments.js` and integrated as `86533fa`.
