@@ -1,0 +1,151 @@
+import {
+  listEngagementItems,
+  listQueueItems,
+  getNewFollowerQuality,
+  getAccountHealthSummary,
+  getCandidate,
+  getDraftByCandidate,
+  getRelationshipProfile,
+  listApprovedMainFeedItems,
+  listRecentMainFeedPublications,
+  listAcceptedLearnedRules
+} from './store.js';
+import { rankMainFeedItems } from './scheduler.js';
+
+const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
+
+function schedulerContext(now = Date.now()) {
+  const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  return {
+    now,
+    recentPosts,
+    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    learnedRules: listAcceptedLearnedRules({ limit: 500 }),
+  };
+}
+
+export async function handleApi(req, res, requestUrl) {
+  const sendJson = (status, payload) => {
+    res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(payload));
+  };
+
+  try {
+    const path = requestUrl.pathname.replace(/^\/api/, '');
+    
+    if (req.method === 'GET' && path === '/today') {
+      const now = Date.now();
+      const engagementItems = listEngagementItems({ limit: 100 });
+      const activeConversations = engagementItems.filter((item) => item.engagementKind !== 'initial_reply');
+      const newOpportunities = engagementItems.filter((item) => item.engagementKind === 'initial_reply');
+      const reviewItems = listQueueItems({ lane: 'main', status: 'needs_review', limit: 20 });
+      const followerQuality = getNewFollowerQuality({ since: Number(now) - 24 * 3_600_000 });
+      const accountHealth = getAccountHealthSummary();
+      const scheduleDecisions = rankMainFeedItems(listApprovedMainFeedItems({ automatedOnly: true, limit: 100 }), schedulerContext(now));
+      const nextScheduled = scheduleDecisions.find((item) => item.eligible) || null;
+      
+      const actions = [];
+      
+      if (accountHealth?.health?.state === 'constrained') {
+        actions.push({
+          eyebrow: 'Needs attention',
+          title: 'Some actions are temporarily limited',
+          body: accountHealth.health.explanation || 'Observed account evidence is limiting some actions until it is resolved.',
+          href: '/?source=health',
+          action: 'Review account status',
+          tone: 'danger',
+        });
+      }
+      
+      const conversation = activeConversations[0];
+      if (conversation) {
+        const candidate = getCandidate(conversation.candidateKey);
+        const profile = conversation.targetUsername ? getRelationshipProfile(conversation.targetUsername) : null;
+        const contribution = conversation.contributionSummary || conversation.engagement?.contribution?.summary || 'Review the conversation and decide whether you have something useful to add.';
+        actions.push({
+          eyebrow: 'Continue a conversation',
+          title: `@${conversation.targetUsername || profile?.username || 'conversation'} has new activity`,
+          body: contribution,
+          note: candidate?.text ? `Source: ${candidate.text.slice(0, 140)}${candidate.text.length > 140 ? '…' : ''}` : '',
+          href: '/?source=engage',
+          action: 'Review reply',
+          tone: 'primary',
+        });
+      }
+      
+      const reviewItem = reviewItems[0];
+      if (reviewItem) {
+        const draft = getDraftByCandidate(reviewItem.candidateKey);
+        const candidate = getCandidate(reviewItem.candidateKey);
+        const ready = Boolean(draft && draft.qualityScore >= 40 && draft.gates?.passed === true);
+        actions.push({
+          eyebrow: 'Review a post',
+          title: candidate?.title || 'A draft needs your decision',
+          body: ready ? 'The draft passed its checks and is ready for your approval.' : 'The draft still needs a fix or confirmation before it can be approved.',
+          note: draft ? `Quality ${draft.qualityScore}/50 · ${reviewItem.pipeline}` : reviewItem.pipeline,
+          href: draft ? `/?source=drafts&draft=${draft.id}` : '/?source=queue',
+          action: 'Review draft',
+          tone: ready ? 'success' : 'warning',
+        });
+      }
+      
+      if (nextScheduled?.item) {
+        const candidate = nextScheduled.item.candidate || getCandidate(nextScheduled.item.candidateKey);
+        const dueNow = Number(nextScheduled.recommendedAt) <= Number(now);
+        actions.push({
+          eyebrow: 'Next post',
+          title: candidate?.title || 'An approved post is ready',
+          body: dueNow ? 'Approved and ready to publish when your publishing mode allows it.' : `Approved and recommended for around ${new Date(nextScheduled.recommendedAt).toLocaleString()}.`,
+          note: AUTO_POST ? 'Main-feed automation is enabled.' : 'Main-feed automation is off. Nothing is auto-published from this recommendation.',
+          href: '/?source=queue',
+          action: 'View publishing plan',
+          tone: 'primary',
+        });
+      }
+      
+      if (!activeConversations.length && newOpportunities[0]) {
+        const item = newOpportunities[0];
+        actions.push({
+          eyebrow: 'New opportunity',
+          title: 'Something new is worth answering',
+          body: item.contributionSummary || 'A relevant post from your audience is worth a thoughtful first reply.',
+          note: item.candidateKey ? `From @${item.targetUsername || 'someone you follow'}` : '',
+          href: '/?source=engage',
+          action: 'Review opportunity',
+          tone: 'primary',
+        });
+      }
+      
+      return sendJson(200, {
+        state: 'success',
+        data: {
+          taskCount: actions.length,
+          actions,
+          accountHealth,
+          followerQuality,
+          nextScheduled: nextScheduled ? {
+            recommendedAt: nextScheduled.recommendedAt,
+            item: nextScheduled.item,
+          } : null,
+          automation: AUTO_POST,
+        }
+      });
+    }
+
+    // Fallback
+    return sendJson(404, {
+      state: 'error',
+      code: 'NOT_FOUND',
+      message: 'API route not found',
+    });
+
+  } catch (err) {
+    return sendJson(500, {
+      state: 'error',
+      code: 'INTERNAL_ERROR',
+      message: err.message || 'Unknown error',
+      details: err.stack,
+    });
+  }
+}
+
