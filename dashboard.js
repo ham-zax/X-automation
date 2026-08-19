@@ -17,15 +17,15 @@ import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft, weighte
 import { generateWriterOutput } from './writer_runtime.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
-import {
-  AUDIENCE_NICHE_LABELS,
-  classifyAudienceProfile,
-  syncAudience,
-  unfollowAudienceUser,
-} from './audience.js';
+import { syncAudience, unfollowAudienceUser } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
+import {
+  AUDIENCE_NICHE_LABELS,
+  NICHE_LABELS,
+  isOpportunityCandidate,
+  personalizeCandidates,
+} from './strategy.js';
 import {
   approveEngagementQueueItem,
   approveQueueItem,
@@ -709,23 +709,8 @@ function resultsView(snapshot, accountHealth) {
 function audienceView(error = null) {
   if (error) return `<div class="alert alert-warning">Audience refresh failed: ${escapeHtml(error)}</div>`;
   const summary = getAudienceSummary();
-  const nicheThreshold = 12;
-  const allFollowing = listAudienceProfiles({ youFollow: true, minScore: 0, limit: Math.max(100, summary.following + 20) });
-
-  const classifiedFollowing = allFollowing.map((profile) => {
-    const classification = classifyAudienceProfile(profile);
-    const fitBucket = profile.relevanceScore >= nicheThreshold
-      ? 'in_niche'
-      : classification.fitBucket;
-    return {
-      ...profile,
-      relevanceScore: Math.max(profile.relevanceScore, classification.relevanceScore),
-      nicheTags: profile.nicheTags.length ? profile.nicheTags : classification.nicheTags,
-      matchedKeywords: profile.matchedKeywords.length ? profile.matchedKeywords : classification.matchedKeywords,
-      negativeMatches: classification.negativeMatches || [],
-      fitBucket,
-    };
-  });
+  const classifiedFollowing = listAudienceProfiles({ youFollow: true, minScore: 0, limit: Math.max(100, summary.following + 20) });
+  const classifiedFollowers = listAudienceProfiles({ followsYou: true, minScore: 0, limit: Math.max(100, summary.followers + 20) });
 
   const outsideFollowing = classifiedFollowing
     .filter((profile) => profile.fitBucket === 'outside_niche')
@@ -736,15 +721,16 @@ function audienceView(error = null) {
     .sort((left, right) => Number(left.followsYou) - Number(right.followsYou) || left.username.localeCompare(right.username));
 
   const inNicheFollowing = classifiedFollowing.filter((profile) => profile.fitBucket === 'in_niche');
+  const inNicheFollowers = classifiedFollowers.filter((profile) => profile.fitBucket === 'in_niche');
 
   const targets = classifiedFollowing
     .filter((profile) => !profile.followsYou && profile.fitBucket === 'in_niche')
     .slice(0, 40);
-  const relevantFollowers = listAudienceProfiles({ followsYou: true, minScore: 12, limit: 20 });
+  const relevantFollowers = inNicheFollowers.slice(0, 20);
 
   const stats = `<div class="row g-3 mb-4">
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Observed followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.followers)}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_followers)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(inNicheFollowers.length)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(inNicheFollowing.length)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Outside-niche following</div><div class="fs-3 fw-semibold">${formatNumber(outsideFollowing.length)}</div></div></div></div>
   </div>`;
@@ -763,13 +749,17 @@ function audienceView(error = null) {
     if (bucket === 'outside_niche') {
       fitBadgeClass = 'text-bg-danger';
       fitLabel = 'Outside current niche';
-      signals = profile.negativeMatches?.length
-        ? `Outside-niche: ${profile.negativeMatches.slice(0, 4).join(', ')}`
-        : 'Non-technical signal';
+      signals = profile.exclusionMatches?.length
+        ? `Exclusion signals: ${profile.exclusionMatches.slice(0, 4).join(', ')}`
+        : profile.deprioritizationMatches?.length
+          ? `Outside current focus: ${profile.deprioritizationMatches.slice(0, 4).join(', ')}`
+          : 'Non-technical signal';
     } else if (bucket === 'uncertain') {
       fitBadgeClass = 'text-bg-secondary';
       fitLabel = 'Not enough profile evidence';
-      signals = 'No recognizable profile signals';
+      signals = profile.deprioritizationMatches?.length
+        ? `Needs technical context: ${profile.deprioritizationMatches.slice(0, 4).join(', ')}`
+        : 'No recognizable profile signals';
     } else {
       fitBadgeClass = 'text-bg-primary';
       fitLabel = 'In niche';
@@ -794,7 +784,7 @@ function audienceView(error = null) {
   const outsideRows = outsideBatch.map((p) => renderCandidateRow(p, 'outside_niche')).join('');
   const remainingOutsideRows = outsideFollowing.slice(10).map((p) => renderCandidateRow(p, 'outside_niche')).join('');
 
-  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">High-confidence removal candidates with positive evidence of non-technical focus (e.g., crypto trading, spam, adult content). Unfollow acts immediately for that one account; there is no bulk unfollow action.</p></div></div>
+  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">Profiles with clear outside-focus signals and no matching technical context, plus explicit exclusions such as engagement spam, gambling, or adult content. Review the profile before using the immediate single-account unfollow action.</p></div></div>
     ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> Each Unfollow button performs one explicit XActions unfollow immediately. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${outsideRows}</tbody></table></div>${remainingOutsideRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - outsideBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingOutsideRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow have confirmed outside-niche signals.</div>'}
   </section>`;
 
@@ -802,8 +792,8 @@ function audienceView(error = null) {
   const uncertainRows = uncertainBatch.map((p) => renderCandidateRow(p, 'uncertain')).join('');
   const remainingUncertainRows = uncertainFollowing.slice(10).map((p) => renderCandidateRow(p, 'uncertain')).join('');
 
-  const uncertainSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts with uncertain fit / not enough profile evidence <span class="badge text-bg-light border">${uncertainFollowing.length}</span></h2><p class="text-secondary small mb-0">These accounts do not contain recognizable developer or non-niche keywords in their profile bio. They are uncertain rather than confirmed low fit. Review individually before deciding to unfollow.</p></div></div>
-    ${uncertainFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Uncertain accounts:</strong> Missing keywords is lack of evidence, not negative evidence. Accounts that follow you back are flagged.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${uncertainRows}</tbody></table></div>${remainingUncertainRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${uncertainFollowing.length - uncertainBatch.length} uncertain accounts</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingUncertainRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-secondary mt-3">No accounts with uncertain profile evidence.</div>'}
+  const uncertainSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts with uncertain fit / not enough profile evidence <span class="badge text-bg-light border">${uncertainFollowing.length}</span></h2><p class="text-secondary small mb-0">These profiles either lack recognizable signals or mention deprioritized topics without enough technical context. They are uncertain rather than confirmed low fit. Review individually before deciding to unfollow.</p></div></div>
+    ${uncertainFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Uncertain accounts:</strong> A missing technical signal—or a deprioritized topic without developer context—is not enough to recommend removal. Accounts that follow you back are flagged.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${uncertainRows}</tbody></table></div>${remainingUncertainRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${uncertainFollowing.length - uncertainBatch.length} uncertain accounts</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingUncertainRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-secondary mt-3">No accounts with uncertain profile evidence.</div>'}
   </section>`;
 
   return stats
@@ -1135,16 +1125,17 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   const secondaryEdit = (approved || canApproveSend) ? editReplyAction : '';
 
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
-    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(queueItem.engagementKind === 'initial_reply' ? 'New conversation' : 'Continue conversation')}</div><div class="small text-secondary">${escapeHtml(ageLabel)}${activeOverride ? ' · active conversation' : ''} · ${escapeHtml(statusLabel(queueItem.status))}</div></div><div class="text-end"><div class="fw-semibold">${escapeHtml(opportunityLabel(queueItem.priority))}</div><div class="small text-secondary">Reply priority</div></div></div>
+    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(queueItem.engagementKind === 'initial_reply' ? 'New conversation' : 'Continue conversation')}</div><div class="small text-secondary">${escapeHtml(ageLabel)}${activeOverride ? ' · active conversation' : ''} · ${escapeHtml(statusLabel(queueItem.status))}</div></div></div>
+    <div class="mt-3 fs-5 fw-semibold">What you can add:</div>
+    <div class="mt-1">${escapeHtml(contribution || 'Review the source and decide whether you have a concrete contribution.')}</div>
     ${relationshipSummary}
-    <div class="mt-3"><strong>What you can add:</strong> ${escapeHtml(contribution || 'Review the source and decide whether you have a concrete contribution.')}</div>
     <div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary mb-1">Exact source</div><div class="text-break">${escapeHtml(candidate.text)}</div></div></div>
     ${draft ? `<div class="mt-3">${gatePanel(draft.gates)}<div class="small text-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</div><div class="mt-2 text-break">${escapeHtml(draft.body || '')}</div></div>` : ''}
     ${pressureWarning}
     ${repetitionWarning}
     ${hardHealthWarning}
     ${(score.rejectionReasons || []).length ? `<div class="alert alert-danger py-2 mt-3 mb-0">This opportunity is currently unavailable. <details class="small mt-2"><summary>Why?</summary>${escapeHtml(score.rejectionReasons.map((item) => item.code || item.reason).join(', '))}</details></div>` : ''}
-    <details class="small mt-3"><summary>Why this recommendation?</summary><div class="mt-2">${relationshipTechnical}<div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span><span class="badge text-bg-light border">Internal priority ${Math.round(queueItem.priority)}</span></div>${learnedPriorityLine}<div class="text-secondary mt-2">Useful until ${escapeHtml(expiryLabel)}.</div></div></details>
+    <details class="small mt-3"><summary>Why this recommendation?</summary><div class="mt-2 mb-2"><strong>Reply priority:</strong> ${escapeHtml(opportunityLabel(queueItem.priority))} (Internal priority ${Math.round(queueItem.priority)})</div><div class="mt-2">${relationshipTechnical}<div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span></div>${learnedPriorityLine}<div class="text-secondary mt-2">Useful until ${escapeHtml(expiryLabel)}.</div></div></details>
     <div class="mt-3">${primaryReplyAction}</div>
     <details class="small mt-3"><summary>More actions</summary><div class="d-flex gap-2 flex-wrap mt-2 align-items-end">
       ${secondaryEdit}
@@ -1184,23 +1175,23 @@ function engageView(error = null, activeDraftId = null) {
   const active = items.filter((item) => item.engagementKind !== 'initial_reply');
   const cold = items.filter((item) => item.engagementKind === 'initial_reply');
   const warning = error ? `<div class="alert alert-warning">Engage refresh failed: ${escapeHtml(error)}</div>` : '';
-  const group = (title, note, rows) => `<h2 class="h5 mt-4">${escapeHtml(title)} <span class="badge text-bg-light border">${rows.length}</span></h2><p class="small text-secondary">${escapeHtml(note)}</p>${rows.map((item) => engagementCard(item, accountHealth)).join('') || '<div class="alert alert-secondary">No items in this group.</div>'}`;
   const healthBanner = accountHealth.health.state === 'constrained'
     ? '<div class="alert alert-danger"><strong>Some actions are temporarily limited.</strong> Supported account evidence is blocking reply approval/sending until it is resolved. <a href="/?source=health" class="alert-link">Review account status</a>.</div>'
     : accountHealth.health.state === 'watch'
       ? '<div class="alert alert-warning"><strong>Something deserves attention.</strong> You can keep working normally; the warning is advisory. <a href="/?source=health" class="alert-link">See why</a>.</div>'
       : '';
-  const overview = `<div class="mb-4"><h1 class="h3 mb-1">Conversations</h1><div class="text-secondary">Continue existing conversations first, then consider new ones where you have something concrete to add.</div></div><div class="row g-3 mb-4"><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Active conversations</div><div class="fs-3 fw-semibold">${active.length}</div></div></div></div><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">New opportunities</div><div class="fs-3 fw-semibold">${cold.length}</div></div></div></div></div>`;
+  const mergedItems = [...active, ...cold];
+  const overview = `<div class="mb-4"><h1 class="h3 mb-1">Conversations</h1><div class="text-secondary">Continue existing conversations first, then consider new ones where you have something concrete to add. Relationship context is shown to help you decide.</div></div><div class="row g-3 mb-4"><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Active conversations</div><div class="fs-3 fw-semibold">${active.length}</div></div></div></div><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">New opportunities</div><div class="fs-3 fw-semibold">${cold.length}</div></div></div></div></div>`;
   return overview + warning + healthBanner
-    + group('Active conversations', 'Observed replies/quotes to our existing posts or replies are shown before cold opportunities.', active)
-    + group('New opportunities', 'Fresh target posts and reply-suitable research candidates with a concrete proposed contribution.', cold);
+    + `<div class="mt-4">${mergedItems.length ? mergedItems.map((item) => engagementCard(item, accountHealth)).join('') : '<div class="alert alert-secondary">No conversations or opportunities right now.</div>'}</div>`;
 }
 
 const CREATE_LIFECYCLE = [
   { title: 'Ideas', note: 'Choose what each source should become before drafting.', statuses: ['triage', 'researching', 'watching'] },
   { title: 'Drafting', note: 'Content currently being written or edited.', statuses: ['drafting'] },
   { title: 'Needs review', note: 'Your factuality/evidence confirmation or approval decision is required.', statuses: ['needs_review'] },
-  { title: 'Ready to publish', note: 'Approved content waiting for its publishing plan or currently publishing.', statuses: ['approved', 'publishing'] },
+  { title: 'Approved — waiting', note: 'Approved by you but not published yet.', statuses: ['approved'] },
+  { title: 'Publishing', note: 'A publish action is currently in progress.', statuses: ['publishing'] },
   { title: 'Needs attention', note: 'A prior publishing attempt failed and requires a human decision.', statuses: ['failed'] },
   { title: 'Published', note: 'Completed main-feed work retained for context.', statuses: ['published'] },
 ];
@@ -1265,13 +1256,13 @@ function queueView() {
     ideas: items.filter((item) => ['triage', 'researching', 'watching'].includes(item.status)).length,
     drafting: items.filter((item) => item.status === 'drafting').length,
     review: items.filter((item) => item.status === 'needs_review').length,
-    ready: items.filter((item) => ['approved', 'publishing'].includes(item.status)).length,
+    approvedWaiting: items.filter((item) => item.status === 'approved').length,
   };
   const summary = `<div class="row g-3 mb-4">
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Ideas</div><div class="fs-3 fw-semibold">${counts.ideas}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Drafting</div><div class="fs-3 fw-semibold">${counts.drafting}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Needs review</div><div class="fs-3 fw-semibold">${counts.review}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Ready to publish</div><div class="fs-3 fw-semibold">${counts.ready}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Approved — waiting</div><div class="fs-3 fw-semibold">${counts.approvedWaiting}</div></div></div></div>
   </div>`;
   const sections = CREATE_LIFECYCLE.map(({ title, note, statuses }) => {
     const group = items.filter((item) => statuses.includes(item.status));

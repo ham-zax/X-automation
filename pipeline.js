@@ -4,12 +4,12 @@ import { postTweetHttp } from './x_http.js';
 import { recommendDistributionAction } from './strategy.js';
 import {
   ensureQueueItem,
+  getAudienceProfile,
   getCandidate,
   getDraftByCandidate,
   getPreferenceProfile,
   getQueueItemByCandidate,
   hasCandidateAction,
-  listAudienceProfiles,
   listCandidateActions,
   listAcceptedLearnedRules,
   listRecentPublishedContent,
@@ -67,8 +67,7 @@ function sourceUsername(candidate) {
 function relationshipContext(candidate) {
   const username = sourceUsername(candidate);
   if (!username) return null;
-  return listAudienceProfiles({ minScore: 0, limit: 2000 })
-    .find((profile) => String(profile.username || '').toLowerCase() === username) || null;
+  return getAudienceProfile(username);
 }
 
 function scoringContext(candidate, context = {}) {

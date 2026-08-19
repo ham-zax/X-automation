@@ -29,6 +29,7 @@ import {
   reviewLearnedRules,
   transitionLearnedRule,
 } from './learning.js';
+import { classifyAudienceProfile } from './strategy.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1036,15 +1037,16 @@ export function replaceAudienceSnapshot({
 
 function decodeAudience(row) {
   if (!row) return null;
-  return {
+  // ponytail: Reclassify on read; persist fit buckets if full audience scans become a measured bottleneck.
+  const classification = classifyAudienceProfile({
     username: row.username,
     displayName: row.display_name,
     bio: row.bio,
+  });
+  return {
+    ...classification,
     followsYou: Boolean(row.follows_you),
     youFollow: Boolean(row.you_follow),
-    relevanceScore: Number(row.relevance_score || 0),
-    nicheTags: json(row.niche_tags, []),
-    matchedKeywords: json(row.matched_keywords, []),
     firstSeenAt: Number(row.first_seen_at || row.last_seen_at || 0),
     lastSeenAt: Number(row.last_seen_at || 0),
   };
@@ -1065,25 +1067,28 @@ export function setAudienceFollowState(username, { youFollow } = {}) {
 }
 
 export function listAudienceProfiles({ followsYou, youFollow, minScore = 0, limit = 100 } = {}) {
-  const where = ['relevance_score >= ?'];
-  const params = [Number(minScore || 0)];
+  const where = [];
+  const params = [];
   if (followsYou != null) { where.push('follows_you = ?'); params.push(followsYou ? 1 : 0); }
   if (youFollow != null) { where.push('you_follow = ?'); params.push(youFollow ? 1 : 0); }
-  params.push(Number(limit || 100));
-  return db.prepare(`SELECT * FROM audience_profiles WHERE ${where.join(' AND ')}
-    ORDER BY relevance_score DESC, last_seen_at DESC LIMIT ?`).all(...params).map(decodeAudience);
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  return db.prepare(`SELECT * FROM audience_profiles ${clause}`).all(...params)
+    .map(decodeAudience)
+    .filter((profile) => profile.relevanceScore >= Number(minScore || 0))
+    .sort((left, right) => right.relevanceScore - left.relevanceScore || right.lastSeenAt - left.lastSeenAt || left.username.localeCompare(right.username))
+    .slice(0, Number(limit || 100));
 }
 
 export function getAudienceSummary() {
-  const row = db.prepare(`SELECT
-    SUM(follows_you) AS followers,
-    SUM(you_follow) AS following,
-    SUM(CASE WHEN follows_you = 1 AND you_follow = 1 THEN 1 ELSE 0 END) AS mutuals,
-    SUM(CASE WHEN follows_you = 1 AND relevance_score >= 12 THEN 1 ELSE 0 END) AS relevant_followers,
-    SUM(CASE WHEN you_follow = 1 AND relevance_score >= 12 THEN 1 ELSE 0 END) AS relevant_following,
-    SUM(CASE WHEN you_follow = 1 AND follows_you = 0 AND relevance_score >= 12 THEN 1 ELSE 0 END) AS target_accounts
-    FROM audience_profiles`).get();
-  return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key, Number(value || 0)]));
+  const profiles = db.prepare('SELECT * FROM audience_profiles').all().map(decodeAudience);
+  return {
+    followers: profiles.filter((profile) => profile.followsYou).length,
+    following: profiles.filter((profile) => profile.youFollow).length,
+    mutuals: profiles.filter((profile) => profile.followsYou && profile.youFollow).length,
+    relevant_followers: profiles.filter((profile) => profile.followsYou && profile.relevanceScore >= 12).length,
+    relevant_following: profiles.filter((profile) => profile.youFollow && profile.relevanceScore >= 12).length,
+    target_accounts: profiles.filter((profile) => profile.youFollow && !profile.followsYou && profile.relevanceScore >= 12).length,
+  };
 }
 
 export function getNewFollowerQuality({ since = 0, until = Date.now(), minScore = 12 } = {}) {
@@ -1150,6 +1155,21 @@ function normalizeRelationshipUsername(username) {
   return String(username || '').replace(/^@/, '').trim().toLowerCase();
 }
 
+function getStoredRelationshipProfile(username) {
+  return decodeRelationshipProfile(
+    db.prepare('SELECT * FROM relationship_profiles WHERE username = ?').get(normalizeRelationshipUsername(username)),
+  );
+}
+
+function relationshipNeedsAudienceRefresh(profile, audience) {
+  if (!profile || !audience) return false;
+  return Number(profile.relevanceScore || 0) !== Number(audience.relevanceScore || 0)
+    || JSON.stringify(profile.primaryTopics || []) !== JSON.stringify(audience.nicheTags || [])
+    || JSON.stringify(profile.matchedKeywords || []) !== JSON.stringify(audience.matchedKeywords || [])
+    || Boolean(profile.followsYou) !== Boolean(audience.followsYou)
+    || Boolean(profile.youFollow) !== Boolean(audience.youFollow);
+}
+
 const upsertRelationshipProfileStatement = db.prepare(`INSERT INTO relationship_profiles(
   username, display_name, bio, classes_json, primary_topics_json, matched_keywords_json,
   topic_fit, audience_overlap, conversation_quality, reply_visibility, relationship_potential,
@@ -1200,31 +1220,41 @@ ON CONFLICT(username) DO UPDATE SET
   score_explanation_json = excluded.score_explanation_json`);
 
 export function getRelationshipProfile(username) {
-  return decodeRelationshipProfile(db.prepare('SELECT * FROM relationship_profiles WHERE username = ?').get(normalizeRelationshipUsername(username)));
+  const stored = getStoredRelationshipProfile(username);
+  if (!stored) return null;
+  const audience = getAudienceProfile(stored.username);
+  return relationshipNeedsAudienceRefresh(stored, audience)
+    ? refreshRelationshipFromAudience(audience)
+    : stored;
 }
 
 export function listRelationshipProfiles({ className, stage, minTargetScore = 0, limit = 100 } = {}) {
   if (className && !TARGET_CLASSES.includes(className)) throw new Error(`Invalid relationship class: ${className}`);
   if (stage && !RELATIONSHIP_STAGES.includes(stage)) throw new Error(`Invalid relationship stage: ${stage}`);
-  const where = ['target_score >= ?'];
-  const params = [Number(minTargetScore || 0)];
-  if (className) { where.push('classes_json LIKE ?'); params.push(`%\"${className}\"%`); }
-  if (stage) { where.push('relationship_stage = ?'); params.push(stage); }
-  params.push(Math.max(1, Math.min(1000, Number(limit || 100))));
-  return db.prepare(`SELECT * FROM relationship_profiles WHERE ${where.join(' AND ')}
-    ORDER BY target_score DESC, last_scored_at DESC LIMIT ?`).all(...params).map(decodeRelationshipProfile);
+  const minScore = Number(minTargetScore || 0);
+  const maxRows = Math.max(1, Math.min(1000, Number(limit || 100)));
+  return db.prepare('SELECT username FROM relationship_profiles').all()
+    .map((row) => getRelationshipProfile(row.username))
+    .filter(Boolean)
+    .filter((profile) => profile.targetScore >= minScore)
+    .filter((profile) => !className || profile.classes.includes(className))
+    .filter((profile) => !stage || profile.relationshipStage === stage)
+    .sort((left, right) => right.targetScore - left.targetScore || right.lastScoredAt - left.lastScoredAt)
+    .slice(0, maxRows);
 }
 
 export function getRelationshipSummary() {
-  const stageRows = db.prepare('SELECT relationship_stage AS stage, COUNT(*) AS count FROM relationship_profiles GROUP BY relationship_stage').all();
+  const profiles = db.prepare('SELECT username FROM relationship_profiles').all()
+    .map((row) => getRelationshipProfile(row.username))
+    .filter(Boolean);
   const stages = Object.fromEntries(RELATIONSHIP_STAGES.map((stage) => [stage, 0]));
-  for (const row of stageRows) stages[row.stage] = Number(row.count || 0);
-  const classes = Object.fromEntries(TARGET_CLASSES.map((className) => [
-    className,
-    Number(db.prepare('SELECT COUNT(*) AS count FROM relationship_profiles WHERE classes_json LIKE ?').get(`%\"${className}\"%`).count || 0),
-  ]));
+  for (const profile of profiles) stages[profile.relationshipStage] += 1;
+  const classes = Object.fromEntries(TARGET_CLASSES.map((className) => [className, 0]));
+  for (const profile of profiles) {
+    for (const className of profile.classes) classes[className] += 1;
+  }
   return {
-    total: Number(db.prepare('SELECT COUNT(*) AS count FROM relationship_profiles').get().count || 0),
+    total: profiles.length,
     stages,
     classes,
   };
@@ -1329,7 +1359,7 @@ export function applyRelationshipEvent(username) {
 export function refreshRelationshipFromAudience(audienceProfile) {
   const username = normalizeRelationshipUsername(audienceProfile?.username);
   if (!username) throw new Error('audience relationship username is required.');
-  const current = getRelationshipProfile(username) || {};
+  const current = getStoredRelationshipProfile(username) || {};
   const events = allRelationshipEvents(username);
   const input = {
     ...current,
