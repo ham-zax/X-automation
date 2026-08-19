@@ -37,6 +37,8 @@ Key commands:
 npm run agent -- ingest
 npm run agent -- inspect
 npm run agent -- create-draft
+npm run agent -- writer-packet
+npm run agent -- apply-writer-output
 npm run agent -- update-draft
 npm run agent -- queue
 npm run agent -- route
@@ -63,13 +65,14 @@ When a user manually supplies an X post or URL:
 5. create an original angle rather than paraphrasing the source;
 6. use `docs/POST_GENERATION_PROMPT.md` for the final writing/editing pass when producing outbound text;
 7. use `route` to select the workflow pipeline when a saved signal should move beyond Triage;
-8. update the Hook/Insight/Evidence/Action draft when a text route is appropriate;
-9. request `status: ready` only to move the item to `needs_review`; this never self-approves;
-10. require the explicit dashboard human approval action before a text draft becomes compatibility `ready`;
-11. after any successful direct/quote/repost/reply action, call `record-action` with the resulting tweet ID/URL;
-12. let `automation.js` handle the normal publishing queue.
+8. obtain `writer-packet` for the routed Original/Quote/Thread/Reply context and apply `docs/POST_GENERATION_PROMPT.md`;
+9. persist structured output with `apply-writer-output`; this always returns edited content to `drafting` and never self-approves;
+10. request `status: ready` only to move the item to `needs_review`, where deterministic gates are visible;
+11. require explicit human factuality confirmation, evidence confirmation when the gate requires it, and the dashboard approval action before a main-feed text draft becomes compatibility `ready`;
+12. after any successful direct/quote/repost/reply action, call `record-action` with the resulting tweet ID/URL;
+13. let `automation.js` handle the normal publishing queue.
 
-A human-approved compatibility-ready single-post draft requires >=40/50, no scaffold placeholders, and <=280 weighted characters.
+A human-approved compatibility-ready main-feed draft requires >=40/50 and a passing Phase-2 hard-gate result. Factuality is always an explicit human confirmation; evidence confirmation is required when the gate detects evidence-dependent claims. Required media cannot pass approval until Phase 3 provides real attachment readiness.
 
 ## Strict invariants
 
@@ -86,6 +89,7 @@ A human-approved compatibility-ready single-post draft requires >=40/50, no scaf
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
 - Phase 1A triage/routing/review interfaces are current: use `queue`, `route`, and `workflow`; do not invent later scheduler/engagement interfaces from `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`.
 - Phase 1B Relationship Intelligence is current: use `relationship-targets`, `relationship-inspect`, and `relationship-events` for strategic relationship reads. `audience_profiles` remains raw observation; `relationship_profiles` and append-only `relationship_events` own strategic state/history.
+- Phase 2 content integration is current: use `writer-packet` / `apply-writer-output`, persisted thread/editor/gate metadata, and dashboard hard-gate review. The persisted media enum is `none|screenshot|chart|code|diagram`; actual media upload remains Phase 3 work.
 - Phase 1C Engage Next remains planned. Do not invent `engage-next`, reply-drafting/sending, or other engagement-execution behavior before that phase lands.
 - `docs/ACCOUNT_HEALTH_AND_VISIBILITY.md` and Phase 1D describe planned account-health/visibility behavior. Do not invent `account-health`, `health-observe`, or `health-under-the-hood` before implementation.
 - Do not impose arbitrary reply quotas, human-looking delay/jitter rules, or a hard target-saturation ban. Until Phase 1D exists, treat those as editorial/empirical judgments rather than platform laws.

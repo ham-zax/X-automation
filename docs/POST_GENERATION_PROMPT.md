@@ -459,15 +459,15 @@ Do not repeat them for SEO-like density.
 
 Recommend media only when it materially improves proof or understanding.
 
-Choose one:
+Choose one persisted/editor media type:
 
 - `none`;
-- `source-screenshot`;
-- `terminal-code`;
+- `screenshot`;
 - `chart`;
-- `diagram`;
-- `image`;
-- `video`.
+- `code`;
+- `diagram`.
+
+Use `screenshot` for source or visual proof captures and `code` for terminal/code evidence. Actual upload/attachment transport is deferred to Phase 3.
 
 Explain in one sentence why it helps.
 
@@ -507,8 +507,11 @@ Preferred shape:
   "semanticAnchors": [],
   "evidenceUsed": [],
   "media": {
+    "required": false,
     "type": "none",
-    "reason": ""
+    "reason": "",
+    "source": "",
+    "altText": ""
   },
   "discussionQuestion": null,
   "followValue": "why a target developer might follow after reading",

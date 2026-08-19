@@ -10,10 +10,10 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, drafts, current draft-queue state, and performance snapshots.
-- `drafting.js` — Hook → Insight → Evidence → Action scaffolds and the 50-point quality gate.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for another agent to ingest manual posts, draft, score, inspect workflow, and read relationship intelligence.
-- `dashboard.js` — Bootstrap research, Saved, Viral, Drafts, Opportunities, Relationships, Audience, and Performance workbench.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, format-aware drafts/editor/gate metadata, current draft-queue state, and performance snapshots.
+- `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, `writer-packet`, and `apply-writer-output`; it cannot approve publication.
+- `dashboard.js` — Bootstrap research/workflow workbench with format-aware draft editing, thread parts, editor/media metadata, hard-gate review, Relationships, Audience, and Performance.
 - `automation.js` — research polling plus the approved-draft publishing queue.
 
 ## Operating standards
@@ -38,13 +38,15 @@ Phase 1A is implemented: Saved candidates enter a persistent Triage queue, recei
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
+Phase 2 Content Quality is implemented through the human-review boundary: routed formats persist single text or explicit thread parts plus editor/gate metadata; agents can retrieve `writer-packet` and persist allow-listed structured output; review/approval recomputes deterministic hard gates with explicit human factuality/evidence confirmation; required media remains blocked because actual attachment readiness belongs to Phase 3.
+
 The remaining network-first architecture is:
 
 **Engage Next -> Account Health/visibility observability -> research/writing/media -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Engage Next discovery, Account Health/Under the Hood capture, the Phase-2 media/content engine, experiment engine, and learned scheduler remain planned until their matching phase is implemented.
+Engage Next discovery/integration, Account Health/Under the Hood capture, Phase-3 media upload and format-aware distribution, the experiment engine, and learned scheduler remain planned until their matching phase is implemented.
 
 ## Setup
 
@@ -120,7 +122,7 @@ Dashboard views:
 - **X posts** — fresh niche-matched research with exact tags and matched keywords.
 - **Viral · 24h** — rolling last-24-hour developer/AI signals with viral tier and velocity.
 - **Saved** — your explicit taste/preference library.
-- **Drafts** — editable Hook/Insight/Evidence/Action drafts with a live 50-point rubric and ready gate.
+- **Drafts** — format-aware Original/Quote/Reply/Thread editing, explicit thread parts and weighted counts, editor/media metadata, the 50-point rubric, deterministic hard-gate failures/warnings, and human factuality/evidence approval controls.
 - **Opportunities** — technical jobs/career, builders/SaaS, and productization signals.
 - **Relationships** — read-only strategic target classes, TargetScore/component evidence, follow state, stages, interaction counts, and class/stage filters.
 - **Audience** — raw follower/following niche map that feeds Relationship Intelligence without being replaced by it.

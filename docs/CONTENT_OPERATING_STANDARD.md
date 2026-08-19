@@ -392,6 +392,6 @@ Default editorial rules:
 - a question must seek useful information rather than comments for their own sake;
 - do not let the generation model self-authorize publication.
 
-A separate hard gate and the numeric quality rubric must run after generation. For the planned human+AI publishing workflow, AI may prepare main-feed content through `needs_review`, but a human must approve the exact final item before it becomes scheduler-eligible. An explicit user instruction to publish a specific finalized item counts as that item's human approval.
+A separate hard gate and the numeric quality rubric run after generation. The implemented Phase-2 workflow lets AI prepare routed Original/Quote/Thread/Reply content and persist structured writer output, but AI cannot self-approve. Review stores deterministic failures/warnings for factuality/evidence confirmation, niche/additive value, source/recent duplication, scannability/placeholders/weighted length, CTA integrity, hashtags/emoji, first-person evidence, thread rules, and media readiness. A human must explicitly reconfirm factuality (and evidence when required) on final approval; a hard-gate failure always overrides the numeric score.
 
-See `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` for the planned queue and scheduling architecture.
+Media planning is implemented with the persisted enum `none | screenshot | chart | code | diagram`. Required media remains unapprovable until Phase 3 supplies real attachment readiness. See `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` for the remaining scheduler/distribution architecture.

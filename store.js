@@ -42,6 +42,9 @@ db.exec(`
     evidence TEXT NOT NULL DEFAULT '',
     action TEXT NOT NULL DEFAULT '',
     body TEXT NOT NULL DEFAULT '',
+    thread_parts_json TEXT NOT NULL DEFAULT '[]',
+    editor_json TEXT NOT NULL DEFAULT '{}',
+    gate_json TEXT NOT NULL DEFAULT '{}',
     quality_score INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'draft',
     scheduled_at INTEGER,
@@ -197,6 +200,15 @@ db.exec(`
       SELECT 1 FROM candidate_actions a WHERE a.candidate_key = c.key
     );
 `);
+
+const draftColumns = new Set(db.prepare('PRAGMA table_info(drafts)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['thread_parts_json', "ALTER TABLE drafts ADD COLUMN thread_parts_json TEXT NOT NULL DEFAULT '[]'"],
+  ['editor_json', "ALTER TABLE drafts ADD COLUMN editor_json TEXT NOT NULL DEFAULT '{}'"],
+  ['gate_json', "ALTER TABLE drafts ADD COLUMN gate_json TEXT NOT NULL DEFAULT '{}'"],
+]) {
+  if (!draftColumns.has(name)) db.exec(sql);
+}
 
 function json(value, fallback) {
   try {
@@ -819,6 +831,9 @@ function decodeDraft(row) {
     evidence: row.evidence,
     action: row.action,
     body: row.body,
+    threadParts: json(row.thread_parts_json, []),
+    editor: json(row.editor_json, {}),
+    gates: json(row.gate_json, {}),
     qualityScore: Number(row.quality_score || 0),
     status: row.status,
     scheduledAt: row.scheduled_at,
@@ -835,8 +850,10 @@ export function saveDraft(draft) {
     : db.prepare('SELECT id, created_at FROM drafts WHERE candidate_key = ?').get(draft.candidateKey);
   if (existing) {
     db.prepare(`UPDATE drafts SET hook = ?, insight = ?, evidence = ?, action = ?, body = ?,
-      quality_score = ?, status = ?, scheduled_at = ?, published_tweet_id = ?, updated_at = ? WHERE id = ?`).run(
+      thread_parts_json = ?, editor_json = ?, gate_json = ?, quality_score = ?, status = ?,
+      scheduled_at = ?, published_tweet_id = ?, updated_at = ? WHERE id = ?`).run(
       draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '', draft.body || '',
+      JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
       Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
       draft.publishedTweetId || null, now, existing.id,
     );
@@ -844,11 +861,12 @@ export function saveDraft(draft) {
   }
 
   const result = db.prepare(`INSERT INTO drafts (
-    candidate_key, hook, insight, evidence, action, body, quality_score, status,
-    scheduled_at, published_tweet_id, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    candidate_key, hook, insight, evidence, action, body, thread_parts_json, editor_json, gate_json,
+    quality_score, status, scheduled_at, published_tweet_id, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     draft.candidateKey, draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '',
-    draft.body || '', Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
+    draft.body || '', JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
+    Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
     draft.publishedTweetId || null, now, now,
   );
   return getDraft(Number(result.lastInsertRowid));
@@ -867,6 +885,36 @@ export function listDrafts({ status, limit = 100 } = {}) {
     ? db.prepare('SELECT * FROM drafts WHERE status = ? ORDER BY updated_at DESC LIMIT ?').all(status, limit)
     : db.prepare('SELECT * FROM drafts ORDER BY updated_at DESC LIMIT ?').all(limit);
   return rows.map(decodeDraft);
+}
+
+export function listRecentPublishedContent({ kind = 'main', limit = 20, excludeCandidateKey = null } = {}) {
+  const routeClause = kind === 'reply'
+    ? `(q.pipeline = 'reply' OR ((q.pipeline IS NULL OR q.pipeline = 'triage')
+        AND EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key AND a.action = 'reply')
+        AND NOT EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key AND a.action IN ('direct', 'quote'))))`
+    : `(q.pipeline IN ('original', 'quote', 'thread') OR ((q.pipeline IS NULL OR q.pipeline = 'triage')
+        AND EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key AND a.action IN ('direct', 'quote')))
+        OR (q.pipeline IS NULL AND d.status = 'published'
+          AND NOT EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key)))`;
+  const where = [routeClause, "(q.status = 'approved' OR d.status = 'published')"];
+  const params = [];
+  if (excludeCandidateKey) {
+    where.push('d.candidate_key <> ?');
+    params.push(excludeCandidateKey);
+  }
+  params.push(Math.max(1, Math.min(100, Number(limit || 20))));
+  const rows = db.prepare(`SELECT d.*, q.pipeline AS queue_pipeline
+    FROM drafts d LEFT JOIN queue_items q ON q.candidate_key = d.candidate_key
+    WHERE ${where.join(' AND ')}
+    ORDER BY MAX(d.updated_at, COALESCE(q.updated_at, 0)) DESC LIMIT ?`).all(...params);
+  return rows.map((row) => {
+    const draft = decodeDraft(row);
+    const pipeline = row.queue_pipeline && row.queue_pipeline !== 'triage'
+      ? row.queue_pipeline
+      : (kind === 'reply' ? 'reply' : 'original');
+    const text = pipeline === 'thread' ? String(draft.threadParts?.[0] || '') : String(draft.body || '');
+    return { candidateKey: draft.candidateKey, pipeline, text };
+  }).filter((item) => item.text.trim());
 }
 
 export function getNextReadyDraft(now = Date.now(), minScore = 40) {

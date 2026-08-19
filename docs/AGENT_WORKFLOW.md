@@ -234,7 +234,43 @@ printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js 
 
 The generated scaffold is deliberately incomplete and normally scores below publishable quality. Replace every placeholder.
 
-### 6. Update and score the draft
+### 6. Get the canonical writer packet and apply structured output
+
+```bash
+printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js writer-packet
+```
+
+`writer-packet` returns the routed pipeline, candidate/queue opportunity context, relationship context when available, current draft, recent approved/published content, profile-proof slot, constraints, and `docs/POST_GENERATION_PROMPT.md`. It does not call an LLM.
+
+After applying that prompt externally, persist only the structured candidate output:
+
+```bash
+cat <<'JSON' | node agent_bridge.js apply-writer-output
+{
+  "id": 12,
+  "output": {
+    "decision": "POST",
+    "pipeline": "original",
+    "thesis": "One defensible developer thesis.",
+    "finalText": "Final publication text.",
+    "threadParts": [],
+    "semanticAnchors": ["MCP"],
+    "evidenceUsed": ["verified primary-source fact"],
+    "discussionQuestion": "",
+    "media": {"required": false, "type": "none", "reason": "", "source": "", "altText": ""},
+    "riskFlags": [],
+    "followReason": "Why the target developer would want future posts.",
+    "notes": ""
+  }
+}
+JSON
+```
+
+The writer output pipeline must match the currently routed queue item. Applying output persists editor/thread text and returns the item to `drafting`; it never requests review or approval. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
+
+The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media upload/readiness is not implemented in Phase 2.
+
+### 7. Edit and request review
 
 ```bash
 cat <<'JSON' | node agent_bridge.js update-draft
@@ -260,16 +296,17 @@ Current quality dimensions:
 - action: 7
 - originality vs source: 5
 
-Final human approval requires at least **40/50**, no scaffold placeholders, and a single-post weighted length of at most **280 characters** (URLs count as 23 characters). On approval, `pipeline.js` sets the queue item to `approved` and temporarily sets the associated text draft to compatibility `ready` for the existing automation consumer.
+Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover explicit factuality confirmation; evidence confirmation when claims require it; niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; first-person evidence; thread rules; and required-media readiness. The dashboard confirmation checkboxes are deliberately unchecked on every review/approval submission, and approval recomputes the latest saved content. On approval, `pipeline.js` sets the queue item to `approved` and sets the associated text draft to compatibility `ready`; no bridge command can do this.
 
 ## Queue and automation interaction
 
 Phase 1A workflow is current:
 
 1. Save creates/ensures `queue_items(status=triage)` and stores four opportunity scores plus an AI route recommendation.
-2. `route` selects the pipeline but does not approve it.
-3. Text routes use `drafting`; `status: ready` through `update-draft` only requests `needs_review`.
-4. The dashboard's explicit human **Approve for publishing** action is the only Phase-1 workflow path that moves a main-feed item to `approved` and sets its associated text draft to compatibility `ready`.
+2. `route` selects the pipeline but does not approve it; newly created text drafts use the actual Original/Quote/Thread/Reply scaffold.
+3. `writer-packet` prepares inspectable writing context and `apply-writer-output` persists allow-listed editor output without workflow authorization.
+4. `status: ready` through `update-draft` only requests `needs_review`; review computes and persists current hard gates even when they fail so the human can inspect them.
+5. The dashboard's explicit human **Approve for publishing** action recomputes the latest gates and is the only workflow path that moves a main-feed item to `approved` and sets its associated text draft to compatibility `ready`.
 
 Inspect workflow state:
 
@@ -290,7 +327,7 @@ When `AUTO_POST=false`, automation only previews the next compatibility-ready dr
 
 A successfully published queued draft is marked `published` and records the returned tweet ID.
 
-Still planned: Engage Next, Account Health, Phase-2 hard gates/media, the Phase-3 scheduler migration, experiments, follower conversion, and learned strategy.
+Implemented here: Phase-2 format-aware writing, writer packet/structured output persistence, deterministic hard gates, thread/editor/gate storage, and media-plan review state. Still planned: Engage Next integration, Account Health, actual media upload/readiness, the Phase-3 scheduler/format-aware publishing migration, experiments, follower conversion, and learned strategy.
 
 ## Agent behavior by user request
 

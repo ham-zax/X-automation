@@ -574,10 +574,10 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: structured final draft packet appropriate to Original / Quote / Thread / Reply.
 
 **Steps:**
-- [ ] Keep Hook / Insight / Evidence / Action as the core reasoning fields.
-- [ ] Add format-specific composition rules so quote copy does not paraphrase the source and thread Post 1 stands alone.
-- [ ] Include recent account posts in the writing packet for semantic repetition checks.
-- [ ] Return `DO_NOT_POST` when no additive thesis exists instead of forcing a draft.
+- [x] Keep Hook / Insight / Evidence / Action as the core reasoning fields.
+- [x] Add format-specific composition rules so quote copy does not paraphrase the source and thread Post 1 stands alone.
+- [x] Include recent approved/published account content in the writer packet and deterministic duplicate context.
+- [x] Preserve structured `DO_NOT_POST` output and recommend Research/Watch/Ignore rather than forcing publication.
 
 **Acceptance criteria:**
 - The same source produces meaningfully different valid structures depending on the human-selected pipeline.
@@ -593,10 +593,10 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: hard-gate result plus existing numeric quality score.
 
 **Steps:**
-- [ ] Add deterministic gates for factuality/evidence presence, niche fit, additive value, originality, placeholders, weighted length, CTA integrity, recent near-duplicate risk, hashtag count, and required human approval.
-- [ ] Keep the numeric 50-point rubric separate from hard pass/fail.
-- [ ] Require at least 40/50 to enter human review; target 43+ for scheduler eligibility and 45+ for major evergreen originals as an editorial preference rather than a hidden-platform rule.
-- [ ] Refuse scheduling when any hard invariant fails regardless of score.
+- [x] Add deterministic gates for explicit factuality/evidence confirmation, niche fit, additive value, source/recent originality, placeholders, scannability/weighted length, CTA integrity, hashtag/emoji limits, first-person evidence, thread rules, and required-media readiness.
+- [x] Keep the numeric 50-point rubric separate from hard pass/fail.
+- [x] Allow `needs_review` to expose gate failures, but require at least 40/50 plus passing current gates for explicit human approval.
+- [x] Recompute current gates at approval so a high score cannot override a hard invariant.
 
 **Acceptance criteria:**
 - A high-scoring draft that violates a hard invariant cannot become scheduler-eligible.
@@ -614,10 +614,10 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: optional media plan and attached media IDs at publication.
 
 **Steps:**
-- [ ] Store media type, reason, source/local path, alt text, and uploaded media ID with the queue item.
-- [ ] Support media decisions: `none`, `source-screenshot`, `terminal/code`, `chart`, `diagram`, `image`, `video` where available.
-- [ ] Default to no media unless it proves or explains something the text cannot.
-- [ ] Reuse XActions' installed media upload capability rather than adding a new media-upload dependency.
+- [x] Store the Phase-2 media plan inside draft editor metadata: required flag, type, reason, source/local evidence reference, and alt text.
+- [x] Normalize the persisted/editor media enum to `none`, `screenshot`, `chart`, `code`, `diagram`.
+- [x] Default to no media unless it proves or explains something the text cannot; required media blocks approval while readiness is unavailable.
+- [ ] Add actual attachment/media-ID persistence and reuse available upload transport in Phase 3; Phase 2 does not fake readiness or upload media.
 
 **Acceptance criteria:**
 - An approved item can clearly explain why it needs media, and the publisher can attach an already prepared media ID without changing text workflow responsibility.
@@ -940,10 +940,13 @@ Plan: `plans/PHASE_1D_ACCOUNT_HEALTH.md`
 
 Plan: `plans/PHASE_2_CONTENT_QUALITY.md`
 
-- format-aware writing;
-- hard gates;
-- media plan;
-- recent-content/profile-proof context so owned posts reinforce conversations the account is entering.
+Implemented through the human-review boundary:
+
+- format-aware Original/Quote/Thread/Reply writing and structured writer packets;
+- deterministic hard gates plus the separate 50-point score;
+- persisted thread/editor/gate metadata and human factuality/evidence confirmation;
+- media-plan state with required media blocked until Phase 3 attachment readiness;
+- recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
 ### Phase 3 — Main-feed distribution
 

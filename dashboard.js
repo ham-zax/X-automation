@@ -12,7 +12,7 @@ import {
   rankNews,
   rankXViralPosts,
 } from './tech_news.js';
-import { composeDraft, scoreDraft } from './drafting.js';
+import { composeDraft, scoreDraft, weightedPostLength } from './drafting.js';
 import { syncAudience } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
@@ -52,6 +52,9 @@ const PORT = Number(process.env.WEB_PORT || 3030);
 const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
+const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
+const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -238,45 +241,57 @@ function candidateCard(candidate, index, returnTo) {
   </article>`;
 }
 
+function confirmationFields() {
+  return `<div class="d-flex gap-3 flex-wrap small my-2">
+    <label><input class="form-check-input me-1" type="checkbox" name="factualityConfirmed" value="1"> Factuality confirmed</label>
+    <label><input class="form-check-input me-1" type="checkbox" name="evidenceConfirmed" value="1"> Evidence confirmed when required</label>
+  </div>`;
+}
+
+function gatePanel(gates = {}) {
+  if (!Object.keys(gates).length) return '<div class="alert alert-secondary py-2">Hard gates have not been reviewed for the current edit.</div>';
+  const failures = (gates.failures || []).map((item) => `<li><strong>${escapeHtml(item.code)}</strong> — ${escapeHtml(item.message)}</li>`).join('');
+  const warnings = (gates.warnings || []).map((item) => `<li><strong>${escapeHtml(item.code)}</strong> — ${escapeHtml(item.message)}</li>`).join('');
+  return `<div class="alert ${gates.passed ? 'alert-success' : 'alert-warning'} py-2 mb-3"><strong>Hard gates: ${gates.passed ? 'pass' : 'blocked'}</strong>${failures ? `<ul class="mb-1 mt-2">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Warnings</div><ul class="mb-0">${warnings}</ul>` : ''}</div>`;
+}
+
+function mediaLabel(media = {}) {
+  if (media.required) return 'Media required · not ready until Phase 3 attachment support';
+  if (media.type && media.type !== 'none') return `Media recommended · ${media.type}`;
+  return 'Media: none';
+}
+
 function draftCard(draft) {
   const candidate = getCandidate(draft.candidateKey);
   if (!candidate) return '';
   const analysis = scoreDraft(draft, candidate);
   const queueItem = getQueueItemByCandidate(candidate.key);
-  const canRequestReview = queueItem && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) && queueItem.status === 'drafting';
-  const canApprove = queueItem?.status === 'needs_review' && ['original', 'quote', 'thread'].includes(queueItem.pipeline) && analysis.publishable;
+  const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
+  const gatesPassed = draft.gates?.passed === true;
+  const canReview = CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status);
+  const canApprove = queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && draft.qualityScore >= 40 && gatesPassed;
+  const media = draft.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
+  const editor = draft.editor || {};
+  const threadParts = pipeline === 'thread' ? (draft.threadParts?.length ? draft.threadParts : ['', '']) : [];
+  const publishEditor = pipeline === 'thread'
+    ? threadParts.map((part, index) => `<div class="mb-3"><label class="form-label fw-semibold">Thread part ${index + 1} <span class="text-secondary fw-normal">${weightedPostLength(part)}/280</span></label><textarea class="form-control" rows="4" name="threadPart">${escapeHtml(part)}</textarea></div>`).join('')
+    : `<div class="mb-3"><label class="form-label fw-semibold">Final ${escapeHtml(pipeline)} text <span class="text-secondary fw-normal">${weightedPostLength(draft.body)}/280</span></label><textarea class="form-control" rows="5" name="body">${escapeHtml(draft.body)}</textarea></div>`;
   return `<article class="card shadow-sm border-0 mb-4">
     <div class="card-body p-4">
-      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3">
-        <div>
-          <div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div>
-          <div class="text-secondary small">${escapeHtml((candidate.niche?.tags || []).map((tag) => NICHE_LABELS[tag] || tag).join(' · '))}</div>
-          ${workflowBadges(queueItem)}
-        </div>
-        <div class="d-flex gap-2 align-items-start">
-          <span class="badge ${analysis.publishable ? 'text-bg-success' : analysis.score >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">${escapeHtml(analysis.quality)} ${analysis.score}/50</span>
-          <span class="badge text-bg-light border">Draft ${escapeHtml(draft.status)}</span>
-        </div>
-      </div>
+      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3"><div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">Pipeline: <strong>${escapeHtml(pipeline)}</strong></div>${workflowBadges(queueItem)}</div><div class="d-flex gap-2 align-items-start"><span class="badge ${draft.qualityScore >= 40 && gatesPassed ? 'text-bg-success' : draft.qualityScore >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">${escapeHtml(analysis.quality)} ${draft.qualityScore}/50</span><span class="badge text-bg-light border">Draft ${escapeHtml(draft.status)}</span></div></div>
+      ${gatePanel(draft.gates)}
       <form method="post" action="/draft/save">
         <input type="hidden" name="id" value="${draft.id}">
-        <div class="mb-3"><label class="form-label fw-semibold">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div>
-        <div class="mb-3"><label class="form-label fw-semibold">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div>
-        <div class="mb-3"><label class="form-label fw-semibold">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div>
-        <div class="mb-3"><label class="form-label fw-semibold">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div>
-        <div class="row g-3 align-items-end">
-          <div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div>
-          <div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div>
-        </div>
+        ${publishEditor}
+        <details class="mb-3"><summary class="fw-semibold">Research/editor fields</summary><div class="mt-3"><div class="mb-3"><label class="form-label">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div><div class="mb-3"><label class="form-label">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div><div class="mb-3"><label class="form-label">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div><div class="mb-3"><label class="form-label">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div></div></details>
+        <div class="card bg-light border-0 mb-3"><div class="card-body"><div class="fw-semibold mb-2">${escapeHtml(mediaLabel(media))}</div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="mediaRequired" value="1" id="media-required-${draft.id}" ${media.required ? 'checked' : ''}><label class="form-check-label" for="media-required-${draft.id}">Required for the claim</label></div><div class="row g-2"><div class="col-md-3"><label class="form-label small">Type</label><select class="form-select" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div><div class="col-md-9"><label class="form-label small">Reason</label><input class="form-control" name="mediaReason" value="${escapeHtml(media.reason || '')}"></div><div class="col-md-6"><label class="form-label small">Source / local evidence ref</label><input class="form-control" name="mediaSource" value="${escapeHtml(media.source || '')}"></div><div class="col-md-6"><label class="form-label small">Alt text</label><input class="form-control" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></div></div></div></div>
+        <div class="small text-secondary mb-3"><strong>Semantic anchors:</strong> ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · <strong>Evidence used:</strong> ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')} · <strong>Discussion:</strong> ${escapeHtml(editor.discussionQuestion || '—')} · <strong>Follow reason:</strong> ${escapeHtml(editor.followReason || '—')} · <strong>Risk flags:</strong> ${escapeHtml((editor.riskFlags || []).join(', ') || '—')}</div>
+        <div class="row g-3 align-items-end"><div class="col-md-5"><label class="form-label">Schedule</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(draft.scheduledAt))}"></div><div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
       </form>
-      <div class="d-flex gap-2 flex-wrap mt-3">
-        ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-outline-primary btn-sm" type="submit">Request review</button></form>` : ''}
-        ${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
-        ${queueItem?.status === 'approved' ? '<span class="badge text-bg-success align-self-center">Approved · compatibility draft ready</span>' : ''}
-      </div>
-      ${queueItem?.status === 'needs_review' && !analysis.publishable && queueItem.pipeline !== 'reply' ? `<div class="alert alert-warning py-2 mt-3 mb-0">Needs review, but the current draft is not publishable (${analysis.score}/50).</div>` : ''}
-      <hr>
-      <div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5 · ${analysis.weightedLength}/280 weighted chars. Human approval requires ≥40/50, no placeholders, and ≤280 weighted chars.</div>
+      ${pipeline === 'thread' ? `<div class="d-flex gap-2 mt-3"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}
+      <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}${queueItem?.status === 'approved' ? '<span class="badge text-bg-success align-self-center">Approved · compatibility draft ready</span>' : ''}</div>
+      ${queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked until score is ≥40 and the saved hard-gate result passes. Recheck gates after explicit human confirmations or content edits.</div>` : ''}
+      <hr><div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5. Hard-gate failures always override the numeric score.</div>
     </div>
   </article>`;
 }
@@ -378,9 +393,9 @@ function queueCard(queueItem) {
   const candidate = snapshot.candidate;
   const draft = snapshot.draft;
   const analysis = draft ? scoreDraft(draft, candidate) : null;
-  const mainFeedReview = queueItem.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(queueItem.pipeline);
-  const canApprove = mainFeedReview && (queueItem.pipeline === 'repost' || analysis?.publishable);
-  const canRequestReview = queueItem.status === 'drafting' && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline);
+  const mainFeedReview = queueItem.status === 'needs_review' && [...MAIN_FEED_PIPELINES, 'repost'].includes(queueItem.pipeline);
+  const canApprove = mainFeedReview && (queueItem.pipeline === 'repost' || (draft?.qualityScore >= 40 && draft?.gates?.passed === true));
+  const canRequestReview = CONTENT_PIPELINES.has(queueItem.pipeline) && ['drafting', 'needs_review'].includes(queueItem.status);
   const breakdown = snapshot.scores.breakdown;
   const returnTo = '/?source=queue';
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
@@ -393,12 +408,14 @@ function queueCard(queueItem) {
     <div class="small mt-2"><strong>AI recommendation:</strong> ${escapeHtml(queueItem.recommendedPipeline || 'none')} · <span class="text-secondary">${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
     <div class="small text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div>
     ${routeForm(queueItem, candidate.key, returnTo)}
-    <div class="d-flex gap-2 flex-wrap mt-3">
+    ${draft ? gatePanel(draft.gates) : ''}
+    <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">
       ${draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Draft ${draft.qualityScore}/50</a>` : ''}
-      ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-outline-primary btn-sm" type="submit">Request review</button></form>` : ''}
-      ${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
+      ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}
+      ${canApprove && queueItem.pipeline !== 'repost' ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
+      ${canApprove && queueItem.pipeline === 'repost' ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve repost</button></form>` : ''}
     </div>
-    ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked: ${analysis ? `draft ${analysis.score}/50 is not publishable` : 'a draft is required'}.</div>` : ''}
+    ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked: ${draft ? `draft ${draft.qualityScore}/50 or saved hard gates do not pass` : 'a draft is required'}.</div>` : ''}
   </div></article>`;
 }
 
@@ -555,13 +572,19 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && requestUrl.pathname === '/queue/review') {
       const form = await readForm(req);
-      requestQueueReview(form.get('key'));
+      requestQueueReview(form.get('key'), {
+        factualityConfirmed: form.get('factualityConfirmed') === '1',
+        evidenceConfirmed: form.get('evidenceConfirmed') === '1',
+      });
       res.writeHead(303, { location: '/?source=drafts' }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/queue/approve') {
       const form = await readForm(req);
-      approveQueueItem(form.get('key'));
+      approveQueueItem(form.get('key'), {
+        factualityConfirmed: form.get('factualityConfirmed') === '1',
+        evidenceConfirmed: form.get('evidenceConfirmed') === '1',
+      });
       res.writeHead(303, { location: '/?source=queue' }); res.end(); return;
     }
 
@@ -585,9 +608,14 @@ const server = http.createServer(async (req, res) => {
       if (!current) throw new Error('Draft not found.');
       const candidate = getCandidate(current.candidateKey);
       if (!candidate) throw new Error('Draft source candidate not found.');
+      let queueItem = getQueueItemByCandidate(candidate.key);
+      if (!queueItem) queueItem = saveCandidateToWorkflow(candidate.key, true).queueItem;
+      const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
       const scheduledRaw = form.get('scheduledAt');
       const scheduledAt = scheduledRaw ? Date.parse(scheduledRaw) : null;
       if (scheduledRaw && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
+      const mediaType = form.get('mediaType') || 'none';
+      if (!MEDIA_TYPES.includes(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
       const updated = {
         ...current,
         hook: form.get('hook') || '',
@@ -595,18 +623,53 @@ const server = http.createServer(async (req, res) => {
         evidence: form.get('evidence') || '',
         action: form.get('action') || '',
         scheduledAt,
+        gates: {},
+        editor: {
+          ...(current.editor || {}),
+          pipeline,
+          media: {
+            required: form.get('mediaRequired') === '1',
+            type: mediaType,
+            reason: form.get('mediaReason') || '',
+            source: form.get('mediaSource') || '',
+            altText: form.get('mediaAltText') || '',
+          },
+        },
       };
-      updated.body = composeDraft(updated);
+      if (pipeline === 'thread') {
+        updated.threadParts = form.getAll('threadPart').map((part) => String(part));
+        updated.body = '';
+        updated.editor.threadParts = [...updated.threadParts];
+      } else {
+        updated.body = form.get('body') ?? composeDraft(updated, { pipeline });
+        updated.editor.finalText = updated.body;
+      }
       const analysis = scoreDraft(updated, candidate);
       updated.qualityScore = analysis.score;
       updated.status = current.status === 'published' ? 'published' : 'draft';
       const saved = saveDraft(updated);
-      if (current.status !== 'published') {
-        let queueItem = getQueueItemByCandidate(candidate.key);
-        if (!queueItem) queueItem = saveCandidateToWorkflow(candidate.key, true).queueItem;
-        const pipeline = ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original';
-        routeCandidate(candidate.key, pipeline, { actor: 'human' });
-      }
+      if (current.status !== 'published') routeCandidate(candidate.key, pipeline, { actor: 'human' });
+      res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/draft/thread-parts') {
+      const form = await readForm(req);
+      const current = getDraft(Number(form.get('id')));
+      if (!current) throw new Error('Draft not found.');
+      const queueItem = getQueueItemByCandidate(current.candidateKey);
+      if (queueItem?.pipeline !== 'thread') throw new Error('Thread controls require the thread pipeline.');
+      const parts = current.threadParts?.length ? [...current.threadParts] : ['', ''];
+      while (parts.length < 2) parts.push('');
+      if (form.get('op') === 'add' && parts.length < 6) parts.push('');
+      if (form.get('op') === 'remove' && parts.length > 2) parts.pop();
+      const saved = saveDraft({
+        ...current,
+        threadParts: parts,
+        editor: { ...(current.editor || {}), pipeline: 'thread', threadParts: [...parts] },
+        gates: {},
+        status: 'draft',
+      });
+      routeCandidate(current.candidateKey, 'thread', { actor: 'human' });
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 

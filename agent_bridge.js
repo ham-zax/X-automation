@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { composeDraft, scoreDraft } from './drafting.js';
+import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { syncAudience } from './audience.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
@@ -23,6 +23,7 @@ import {
   listCandidates,
   listDrafts,
   listQueueItems,
+  listRecentPublishedContent,
   listRelationshipEvents,
   listRelationshipProfiles,
   recordCandidateAction,
@@ -47,6 +48,14 @@ function requireDraft(id) {
   const draft = getDraft(Number(id));
   if (!draft) throw new Error(`Draft not found: ${id}`);
   return draft;
+}
+
+function sourceUsername(candidate) {
+  if (candidate?.source !== 'x') return '';
+  const title = String(candidate.title || '').trim();
+  if (title.startsWith('@')) return title.slice(1).toLowerCase();
+  const match = String(candidate.url || '').match(/x\.com\/([^/]+)/i);
+  return match?.[1]?.toLowerCase() || '';
 }
 
 function manualCandidate(payload) {
@@ -112,9 +121,69 @@ async function main() {
     return;
   }
 
+  if (command === 'writer-packet') {
+    const workflow = inspectWorkflow(payload.key);
+    const pipeline = workflow.queueItem?.pipeline;
+    if (!['original', 'quote', 'thread', 'reply'].includes(pipeline)) {
+      throw new Error(`writer-packet requires a routed text pipeline; current pipeline is ${pipeline || 'none'}.`);
+    }
+    if (!workflow.draft) throw new Error(`Draft required for ${pipeline}.`);
+    const username = sourceUsername(workflow.candidate);
+    result(buildWriterPacket({
+      candidate: workflow.candidate,
+      queueItem: workflow.queueItem,
+      draft: workflow.draft,
+      relationship: username ? getRelationshipProfile(username) : null,
+      recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: workflow.candidate.key }),
+      recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: workflow.candidate.key }),
+    }));
+    return;
+  }
+
+  if (command === 'apply-writer-output') {
+    const current = requireDraft(payload.id);
+    const candidate = requireCandidate(current.candidateKey);
+    const workflow = inspectWorkflow(candidate.key);
+    const pipeline = workflow.queueItem?.pipeline;
+    if (!['original', 'quote', 'thread', 'reply'].includes(pipeline)) {
+      throw new Error(`apply-writer-output requires a routed text pipeline; current pipeline is ${pipeline || 'none'}.`);
+    }
+    if (payload.output?.pipeline !== pipeline) {
+      throw new Error(`Writer pipeline mismatch: ${payload.output?.pipeline || 'missing'} !== ${pipeline}. Route the queue item first.`);
+    }
+    const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
+      ? { ...current, editor: {} }
+      : current;
+    const next = applyWriterOutput(writerBase, payload.output || {});
+    const analysis = scoreDraft(next, candidate, {
+      pipeline,
+      recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
+      recentReplies: pipeline === 'reply'
+        ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key })
+        : [],
+      factualityConfirmed: false,
+      evidenceConfirmed: false,
+      mediaReady: false,
+    });
+    const draft = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+    const queueItem = routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+    result({
+      draft,
+      analysis,
+      queueItem,
+      ...(payload.output?.decision === 'DO_NOT_POST'
+        ? { recommendation: 'Do not publish this draft; route the queue item to research, watch, or ignore as appropriate.' }
+        : {}),
+    });
+    return;
+  }
+
   if (command === 'update-draft') {
     const current = requireDraft(payload.id);
     const candidate = requireCandidate(current.candidateKey);
+    let workflow = inspectWorkflow(candidate.key);
+    if (!workflow.queueItem) workflow = saveCandidateToWorkflow(candidate.key, true);
+    const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
     const next = {
       ...current,
       hook: payload.hook ?? current.hook,
@@ -124,9 +193,18 @@ async function main() {
       scheduledAt: payload.scheduledAt == null ? current.scheduledAt : Number(payload.scheduledAt),
       publishedTweetId: payload.publishedTweetId ?? current.publishedTweetId,
     };
-    next.body = composeDraft(next);
+    if (pipeline === 'thread') {
+      if (payload.threadParts != null && !Array.isArray(payload.threadParts)) throw new Error('threadParts must be an array.');
+      next.threadParts = (payload.threadParts ?? current.threadParts ?? []).map((part) => String(part ?? ''));
+      next.body = '';
+      if (Object.keys(current.editor || {}).length) next.editor = { ...current.editor, pipeline, threadParts: [...next.threadParts] };
+    } else {
+      next.body = payload.body ?? (current.editor?.finalText ? current.body : composeDraft(next, { pipeline }));
+      if (Object.keys(current.editor || {}).length) next.editor = { ...current.editor, pipeline, finalText: next.body };
+    }
     const analysis = scoreDraft(next, candidate);
     next.qualityScore = analysis.score;
+    next.gates = {};
     const requestedStatus = payload.status ?? current.status;
     if (!['draft', 'ready', 'published'].includes(requestedStatus)) throw new Error(`Invalid draft status: ${requestedStatus}`);
     if (requestedStatus === 'published' && !next.publishedTweetId) throw new Error('published status requires publishedTweetId.');
@@ -138,9 +216,6 @@ async function main() {
     }
 
     const draft = saveDraft({ ...next, status: 'draft' });
-    let workflow = inspectWorkflow(candidate.key);
-    if (!workflow.queueItem) workflow = saveCandidateToWorkflow(candidate.key, true);
-    const pipeline = ['original', 'quote', 'thread', 'reply'].includes(workflow.queueItem?.pipeline) ? workflow.queueItem.pipeline : 'original';
     routeCandidate(candidate.key, pipeline, { actor: 'agent' });
 
     if (requestedStatus === 'ready') {
@@ -253,7 +328,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|update-draft|queue|route|workflow|research|performance|decide|record-action|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|route|workflow|research|performance|decide|record-action|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

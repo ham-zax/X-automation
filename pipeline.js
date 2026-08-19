@@ -10,6 +10,7 @@ import {
   hasCandidateAction,
   listAudienceProfiles,
   listCandidateActions,
+  listRecentPublishedContent,
   markCandidateSaved,
   saveDraft,
   saveQueueItem,
@@ -94,6 +95,19 @@ function routeState(pipeline) {
   return { lane: 'main', status: 'drafting' };
 }
 
+function contentGateContext(candidateKey, pipeline, confirmations = {}) {
+  return {
+    pipeline,
+    recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidateKey }),
+    recentReplies: pipeline === 'reply'
+      ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidateKey })
+      : [],
+    factualityConfirmed: confirmations.factualityConfirmed === true,
+    evidenceConfirmed: confirmations.evidenceConfirmed === true,
+    mediaReady: false,
+  };
+}
+
 export function refreshQueueRecommendation(key, context = {}) {
   const candidate = requireCandidate(key);
   ensureQueueItem(key);
@@ -142,9 +156,11 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
 
   ensureQueueItem(key);
   const state = routeState(pipeline);
+  let draft = getDraftByCandidate(key);
+  if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
   let draftId = null;
   if (TEXT_PIPELINES.has(pipeline)) {
-    const draft = getDraftByCandidate(key) || saveDraft(createDraftScaffold(candidate));
+    draft ||= saveDraft(createDraftScaffold(candidate, { pipeline }));
     draftId = draft.id;
   }
 
@@ -159,7 +175,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
   });
 }
 
-export function requestQueueReview(key) {
+export function requestQueueReview(key, confirmations = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem) throw new Error(`Queue item not found: ${key}`);
@@ -171,8 +187,8 @@ export function requestQueueReview(key) {
 
   const draft = getDraftByCandidate(key);
   if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
-  const analysis = scoreDraft(draft, candidate);
-  const savedDraft = saveDraft({ ...draft, qualityScore: analysis.score, status: 'draft' });
+  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
+  const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   return {
     queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id }),
     draft: savedDraft,
@@ -180,7 +196,7 @@ export function requestQueueReview(key) {
   };
 }
 
-export function approveQueueItem(key) {
+export function approveQueueItem(key, confirmations = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem) throw new Error(`Queue item not found: ${key}`);
@@ -192,9 +208,14 @@ export function approveQueueItem(key) {
   if (queueItem.pipeline !== 'repost') {
     draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
-    analysis = scoreDraft(draft, candidate);
-    if (!analysis.publishable) throw new Error(`Draft is not publishable (${analysis.score}/50).`);
-    draft = saveDraft({ ...draft, qualityScore: analysis.score, status: 'ready' });
+    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
+    draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+    if (!analysis.publishable) {
+      const firstFailure = analysis.gates?.failures?.[0];
+      const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
+      throw new Error(`Draft is not publishable (${analysis.score}/50).${detail}`);
+    }
+    draft = saveDraft({ ...draft, status: 'ready' });
   }
 
   return {
