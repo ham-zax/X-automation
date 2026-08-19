@@ -357,6 +357,157 @@ export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) 
   }
 }
 
+const X_UNDER_THE_HOOD_URL = 'https://x.com/i/under_the_hood';
+const X_UNDER_THE_HOOD_TIMEOUT_MS = 12_000;
+
+function findNestedValue(value, keys, depth = 0) {
+  if (depth > 12 || value == null) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findNestedValue(item, keys, depth + 1);
+      if (found != null) return found;
+    }
+    return null;
+  }
+  if (typeof value !== 'object') return null;
+  for (const key of keys) {
+    if (Object.hasOwn(value, key) && value[key] != null) return value[key];
+  }
+  for (const child of Object.values(value)) {
+    const found = findNestedValue(child, keys, depth + 1);
+    if (found != null) return found;
+  }
+  return null;
+}
+
+function optionalUnderTheHoodNumber(value) {
+  return value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value))
+    ? Number(value)
+    : null;
+}
+
+function normalizedUnderTheHoodLabel(label, kind) {
+  if (!label || typeof label !== 'object') return null;
+  const normalized = {
+    label: String(label.label || '').trim(),
+    about: String(label.about || '').trim(),
+    effect: String(label.effect || '').trim(),
+  };
+  if (!normalized.label) return null;
+  if (kind === 'account') {
+    normalized.days = optionalUnderTheHoodNumber(label.days);
+    normalized.daysInPeriod = optionalUnderTheHoodNumber(label.daysInPeriod);
+    normalized.percentageOfDays = String(label.percentageOfDays || '').trim() || null;
+  } else {
+    normalized.posts = optionalUnderTheHoodNumber(label.posts);
+    normalized.totalPostsInMonth = optionalUnderTheHoodNumber(label.totalPostsInMonth);
+    normalized.percentageOfPosts = String(label.percentageOfPosts || '').trim() || null;
+  }
+  return normalized;
+}
+
+function normalizeUnderTheHoodPayload(payload, capturedAt) {
+  const reportValue = findNestedValue(payload, ['reportJson', 'report_json']);
+  let report = reportValue;
+  if (typeof reportValue === 'string') {
+    try {
+      report = JSON.parse(reportValue);
+    } catch {
+      return null;
+    }
+  }
+  if (!report || typeof report !== 'object'
+    || !Array.isArray(report.accountLabels)
+    || !Array.isArray(report.postLabels)) return null;
+
+  const reportInfo = findNestedValue(payload, ['reportInfo', 'report_info']);
+  const periodValue = report.period && typeof report.period === 'object' ? report.period : null;
+  const period = periodValue || reportInfo?.reportPeriod
+    ? {
+        label: String(reportInfo?.reportPeriod || '').trim() || null,
+        startDate: String(periodValue?.startDate || '').trim() || null,
+        endDate: String(periodValue?.endDate || '').trim() || null,
+        timezone: String(periodValue?.timezone || '').trim() || null,
+      }
+    : null;
+
+  return {
+    available: true,
+    capturedAt,
+    accountLabels: report.accountLabels.map((label) => normalizedUnderTheHoodLabel(label, 'account')).filter(Boolean),
+    postLabels: report.postLabels.map((label) => normalizedUnderTheHoodLabel(label, 'post')).filter(Boolean),
+    period,
+    rawSummary: {
+      generatedAt: String(report.generatedAt || '').trim() || null,
+      postCount: optionalUnderTheHoodNumber(report.postCount),
+      totalAccountLabels: optionalUnderTheHoodNumber(report.totalAccountLabels),
+      totalPostLabels: optionalUnderTheHoodNumber(report.totalPostLabels),
+      eligibilityChecks: reportInfo?.eligibilityChecks && typeof reportInfo.eligibilityChecks === 'object'
+        ? { ...reportInfo.eligibilityChecks }
+        : {},
+    },
+  };
+}
+
+function unavailableUnderTheHood(capturedAt) {
+  return {
+    available: false,
+    capturedAt,
+    reason: 'surface unavailable or not readable',
+    accountLabels: [],
+    postLabels: [],
+    period: null,
+    rawSummary: {},
+  };
+}
+
+export async function fetchXUnderTheHoodReport() {
+  const capturedAt = Date.now();
+  if (!process.env.AUTH_TOKEN) return unavailableUnderTheHood(capturedAt);
+
+  let browser;
+  try {
+    browser = await createBrowser({ headless: true });
+    const page = await createPage(browser);
+    const cookies = [{
+      name: 'auth_token',
+      value: process.env.AUTH_TOKEN,
+      domain: '.x.com',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+    }];
+    if (process.env.CT0) {
+      cookies.push({
+        name: 'ct0',
+        value: process.env.CT0,
+        domain: '.x.com',
+        path: '/',
+        secure: true,
+      });
+    }
+    await page.setCookie(...cookies);
+
+    const reportResponse = page.waitForResponse(
+      (response) => response.url().includes('/graphql/') && /under.?the.?hood/i.test(response.url()),
+      { timeout: X_UNDER_THE_HOOD_TIMEOUT_MS },
+    ).catch(() => null);
+    await page.goto(X_UNDER_THE_HOOD_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 45_000,
+    });
+
+    const response = await reportResponse;
+    if (!response) return unavailableUnderTheHood(capturedAt);
+    const payload = await response.json().catch(() => null);
+    return normalizeUnderTheHoodPayload(payload, capturedAt) || unavailableUnderTheHood(capturedAt);
+  } catch {
+    return unavailableUnderTheHood(capturedAt);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
 async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4) {
   if (!process.env.AUTH_TOKEN) return { posts: [], error: 'Missing AUTH_TOKEN.' };
 
