@@ -95,11 +95,27 @@ export async function unfollowAudienceUser(username) {
   if (!profile?.youFollow) throw new Error(`@${normalized} is not marked as currently followed.`);
   if (!process.env.AUTH_TOKEN) throw new Error('Missing AUTH_TOKEN.');
 
-  const scraper = new Scraper();
-  const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN }];
-  if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
-  await scraper.setCookies(cookies);
-  await scraper.unfollowUser(normalized);
+  let browser;
+  try {
+    browser = await createBrowser({ headless: true });
+    const page = await createPage(browser);
+    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true }];
+    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
+    await page.setCookie(...cookies);
+    await page.goto(`https://x.com/${encodeURIComponent(normalized)}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+
+    const unfollowSelector = '[data-testid$="-unfollow"]';
+    const confirmSelector = '[data-testid="confirmationSheetConfirm"]';
+    await page.waitForSelector(unfollowSelector, { timeout: 12_000 });
+    await page.click(unfollowSelector);
+    await page.waitForSelector(confirmSelector, { timeout: 6_000 });
+    await page.click(confirmSelector);
+    await page.waitForSelector('[data-testid$="-follow"]', { timeout: 12_000 });
+  } catch (error) {
+    throw new Error(`X did not confirm the unfollow for @${normalized}: ${error.message}`);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
 
   const updated = setAudienceFollowState(normalized, { youFollow: false });
   if (getRelationshipProfile(normalized)) refreshRelationshipFromAudience(updated);
