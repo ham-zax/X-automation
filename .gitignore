@@ -5,3 +5,4 @@ node_modules/
 .interesting-posts.json
 .x-research.sqlite*
 .DS_Store
+dashboard.tailwind.generated.css

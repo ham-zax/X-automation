@@ -13,8 +13,10 @@ import {
   rankNews,
   rankXViralPosts,
 } from './tech_news.js';
-import { composeDraft, scoreDraft, weightedPostLength } from './drafting.js';
+import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft, weightedPostLength } from './drafting.js';
+import { generateWriterOutput } from './writer_runtime.js';
 import { refreshEngagementOpportunities } from './engagement.js';
+import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import { syncAudience } from './audience.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
@@ -64,6 +66,7 @@ import {
   listPublicationMeasurementSeries,
   listQueueItems,
   listRecentMainFeedPublications,
+  listRecentPublishedContent,
   listRelationshipProfiles,
   recordAccountHealthObservation,
   recordPerformanceSnapshot,
@@ -111,6 +114,86 @@ async function readForm(req) {
     if (body.length > 128_000) throw new Error('Request too large.');
   }
   return new URLSearchParams(body);
+}
+
+
+function draftEditorState(current, queueItem, form) {
+  const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
+  const mediaType = form.get('mediaType') || current.editor?.media?.type || 'none';
+  if (!MEDIA_TYPES.includes(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
+  const updated = {
+    ...current,
+    hook: form.has('hook') ? (form.get('hook') || '') : current.hook,
+    insight: form.has('insight') ? (form.get('insight') || '') : current.insight,
+    evidence: form.has('evidence') ? (form.get('evidence') || '') : current.evidence,
+    action: form.has('action') ? (form.get('action') || '') : current.action,
+    gates: {},
+    editor: {
+      ...(current.editor || {}),
+      pipeline,
+      media: {
+        required: form.get('mediaRequired') === '1',
+        type: mediaType,
+        reason: form.get('mediaReason') || current.editor?.media?.reason || '',
+        source: form.get('mediaSource') || current.editor?.media?.source || '',
+        altText: form.get('mediaAltText') || current.editor?.media?.altText || '',
+      },
+    },
+  };
+  if (pipeline === 'thread') {
+    updated.threadParts = form.getAll('threadPart').map((part) => String(part));
+    updated.body = '';
+    updated.editor.threadParts = [...updated.threadParts];
+  } else {
+    updated.body = form.get('body') ?? current.body ?? composeDraft(updated, { pipeline });
+    updated.editor.finalText = updated.body;
+  }
+  return { updated, pipeline };
+}
+
+function dashboardDraftScore(candidate, draft, pipeline) {
+  return scoreDraft(draft, candidate, {
+    pipeline,
+    recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
+    recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
+    factualityConfirmed: false,
+    evidenceConfirmed: false,
+    mediaReady: !draft.editor?.media?.required,
+  });
+}
+
+
+async function generateDraftCandidate(current) {
+  const candidate = getCandidate(current.candidateKey);
+  if (!candidate) throw new Error('Draft source candidate not found.');
+  const queueItem = getQueueItemByCandidate(candidate.key) || saveCandidateToWorkflow(candidate.key, true).queueItem;
+  const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
+  const username = String(queueItem.engagementTargetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
+  const packet = buildWriterPacket({
+    candidate,
+    queueItem,
+    draft: current,
+    relationship: username ? getRelationshipProfile(username) : null,
+    recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
+    recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
+    health: getAccountHealthSummary().health,
+  });
+  const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
+  const output = await generateWriterOutput(packet, promptDocumentText);
+  if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
+  const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline ? { ...current, editor: {} } : current;
+  const next = applyWriterOutput(writerBase, output);
+  if (output.decision === 'DO_NOT_POST') {
+    const priorText = pipeline === 'thread' ? (current.threadParts || []).join('\n') : String(current.body || '');
+    if (/\[[^\]]+\]/.test(priorText)) {
+      if (pipeline === 'thread') next.threadParts = ['', ''];
+      else next.body = '';
+    }
+  }
+  const analysis = dashboardDraftScore(candidate, next, pipeline);
+  const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+  routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+  return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 
 async function collectResearch(source) {
@@ -187,18 +270,18 @@ const PRIMARY_NAV = [
   ['discover', 'x', 'Discover'],
   ['conversations', 'engage', 'Conversations'],
   ['create', 'queue', 'Create'],
-  ['results', 'performance', 'Results'],
-  ['improve', 'experiments', 'Improve'],
+  ['results', 'results', 'Results'],
+  ['improve', 'improve', 'Improve'],
   ['advanced', 'advanced', 'Advanced'],
 ];
 
 const SOURCE_GROUPS = Object.freeze({
   today: 'today',
   x: 'discover', viral: 'discover', interesting: 'discover', opportunities: 'discover', github: 'discover', hn: 'discover', all: 'discover',
-  engage: 'conversations', relationships: 'conversations', audience: 'conversations',
+  engage: 'conversations', relationships: 'conversations',
   queue: 'create', drafts: 'create',
-  performance: 'results', health: 'results',
-  experiments: 'improve', learning: 'improve',
+  results: 'results', performance: 'results', health: 'results', audience: 'results',
+  improve: 'improve', experiments: 'improve', learning: 'improve',
   advanced: 'advanced',
 });
 
@@ -228,12 +311,44 @@ const PIPELINE_LABELS = Object.freeze({
   ignore: 'Ignore',
 });
 
+const EXPERIMENT_DIMENSION_LABELS = Object.freeze({
+  style: 'Writing style', hook_type: 'Opening / hook', media_type: 'Media type', format: 'Content format', timing_bucket: 'Publishing time',
+  target_class: 'Type of person/account', target_score_bucket: 'Relationship fit', target_size_bucket: 'Account size', reply_age_bucket: 'How fresh the conversation is',
+  conversation_saturation_bucket: 'Recent interaction level', reply_archetype: 'Reply style', relationship_stage: 'Relationship stage',
+  interaction_volume_bucket: 'Interaction volume', target_concentration_bucket: 'Target concentration', archetype_repetition_bucket: 'Reply-style repetition',
+});
+
+const EXPERIMENT_METRIC_LABELS = Object.freeze({
+  views_per_hour: 'Views per hour', replies_per_1000_views: 'Replies per 1,000 views', reposts_per_1000_views: 'Reposts per 1,000 views',
+  visible_engagement_per_1000_views: 'Visible engagement per 1,000 views', associated_follows_per_1000_views: 'Associated follows per 1,000 views',
+  author_response_rate: 'People who respond', conversation_continuation_rate: 'Conversations that continue', relationship_stage_progression: 'Relationship progression',
+  connected_target_conversion: 'New connected relationships', recurring_relationship_conversion: 'New recurring relationships', mutual_relationship_count: 'New mutual relationships',
+  interaction_yield: 'Useful outcomes per interaction', target_diversity: 'Target diversity', class_diversity: 'Audience-class diversity', topic_diversity: 'Topic diversity',
+  top_target_concentration: 'Top-target concentration',
+});
+
+const EVIDENCE_LABELS = Object.freeze({
+  insufficient: 'Not enough evidence', preliminary: 'Early signal', directional: 'Promising — needs more evidence', repeated: 'Consistent pattern — still observational',
+});
+
 function statusLabel(value) {
   return STATUS_LABELS[value] || relationshipLabel(value || 'unknown');
 }
 
 function pipelineLabel(value) {
   return PIPELINE_LABELS[value] || relationshipLabel(value || 'unknown');
+}
+
+function experimentDimensionLabel(value) {
+  return EXPERIMENT_DIMENSION_LABELS[value] || relationshipLabel(value || 'unknown');
+}
+
+function experimentMetricLabel(value) {
+  return EXPERIMENT_METRIC_LABELS[value] || relationshipLabel(value || 'unknown');
+}
+
+function evidenceLabel(value) {
+  return EVIDENCE_LABELS[value] || relationshipLabel(value || 'unknown');
 }
 
 function sourceGroup(source) {
@@ -296,7 +411,16 @@ function candidateCard(candidate, index, returnTo) {
     : '';
   const primaryAction = draft
     ? `<a class="btn btn-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Continue draft</a>`
-    : `<form method="post" action="/draft/create" class="m-0"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-primary btn-sm" type="submit">Create something</button></form>`;
+    : `<form method="post" action="/draft/create" class="d-flex gap-2 align-items-center flex-wrap m-0">
+        <input type="hidden" name="key" value="${escapeHtml(candidate.key)}">
+        <label class="visually-hidden" for="create-type-${index}">What do you want to make?</label>
+        <select class="form-select form-select-sm" id="create-type-${index}" name="pipeline" style="width:auto">
+          <option value="original">Original post</option>
+          ${isX ? '<option value="quote">Quote post</option>' : ''}
+          <option value="thread">Thread</option>
+        </select>
+        <button class="btn btn-primary btn-sm" type="submit">Create</button>
+      </form>`;
 
   return `<article class="card shadow-sm border-0 mb-3">
     <div class="card-body p-4">
@@ -313,7 +437,6 @@ function candidateCard(candidate, index, returnTo) {
       <div class="text-secondary small mb-2">${escapeHtml(metricLine)}</div>
       ${workflowBadges(queueItem)}
       ${recommendation}
-      ${candidate.saved ? routeForm(queueItem, candidate.key, returnTo) : ''}
       <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mt-3">
         <div class="d-flex gap-2 flex-wrap">
           ${candidate.saved ? '<span class="badge text-bg-success">Saved</span>' : ''}
@@ -336,19 +459,23 @@ function candidateCard(candidate, index, returnTo) {
 }
 
 function confirmationFields() {
-  return `<div class="d-flex gap-3 flex-wrap small my-2">
-    <label><input class="form-check-input me-1" type="checkbox" name="factualityConfirmed" value="1"> Factuality confirmed</label>
-    <label><input class="form-check-input me-1" type="checkbox" name="evidenceConfirmed" value="1"> Evidence confirmed when required</label>
+  return `<div class="my-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="factualityConfirmed" value="1"> <span><strong>Facts checked</strong><br><span class="text-xs text-slate-500">I reviewed the final wording against the source/context.</span></span></label>
+    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="evidenceConfirmed" value="1"> <span><strong>Evidence checked</strong><br><span class="text-xs text-slate-500">Any benchmark/result/capability claim is actually supported.</span></span></label>
   </div>`;
 }
 
-function gatePanel(gates = {}) {
-  if (!Object.keys(gates).length) return '<div class="alert alert-secondary py-2">Checks have not been run for this version yet.</div>';
-  const failures = (gates.failures || []).map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
+function gatePanel(gates = {}, { live = false } = {}) {
+  if (!Object.keys(gates).length) return '<div class="editor-checks editor-checks-warn" data-live-checks><div class="font-semibold text-amber-950">Checks update as you edit.</div><div class="mt-1 text-sm text-amber-900">Generate or change the draft to see the current approval blockers.</div></div>';
+  const humanCodes = new Set(['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED']);
+  const allFailures = gates.failures || [];
+  const writingFailures = allFailures.filter((item) => !humanCodes.has(item.code));
+  const humanConfirmations = allFailures.filter((item) => humanCodes.has(item.code));
+  const failures = writingFailures.map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
   const warnings = (gates.warnings || []).map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
-  const technical = [...(gates.failures || []), ...(gates.warnings || [])]
-    .map((item) => `${item.code}: ${item.message}`).join('\n');
-  return `<div class="alert ${gates.passed ? 'alert-success' : 'alert-warning'} py-2 mb-3"><strong>${gates.passed ? 'Ready for approval' : 'Fix before approval'}</strong>${failures ? `<ul class="mb-1 mt-2">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Worth checking</div><ul class="mb-0">${warnings}</ul>` : ''}${technical ? `<details class="small mt-2"><summary>Technical check details</summary><pre class="text-wrap mb-0 mt-2">${escapeHtml(technical)}</pre></details>` : ''}</div>`;
+  const technical = [...allFailures, ...(gates.warnings || [])].map((item) => `${item.code}: ${item.message}`).join('\n');
+  const ready = writingFailures.length === 0;
+  return `<div class="editor-checks ${ready ? 'editor-checks-ok' : 'editor-checks-warn'}" ${live ? 'data-live-checks' : ''}><strong>${ready ? 'Draft checks look good' : 'Fix before approval'}</strong>${failures ? `<ul class="mt-2 mb-0">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Worth checking</div><ul class="mb-0">${warnings}</ul>` : ''}${humanConfirmations.length ? '<div class="mt-2 text-sm text-sky-800">Factuality/evidence confirmation is a human approval step, not text you need to fill in.</div>' : ''}${technical ? `<details class="small mt-2"><summary>Technical check details</summary><pre class="text-wrap mb-0 mt-2">${escapeHtml(technical)}</pre></details>` : ''}</div>`;
 }
 
 function mediaLabel(media = {}) {
@@ -403,37 +530,63 @@ function schedulePanel(queueItem, context) {
 function draftCard(draft) {
   const candidate = getCandidate(draft.candidateKey);
   if (!candidate) return '';
-  const analysis = scoreDraft(draft, candidate);
   const queueItem = getQueueItemByCandidate(candidate.key);
   const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
+  const media = draft.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
+  const analysis = dashboardDraftScore(candidate, draft, pipeline);
   const gatesPassed = draft.gates?.passed === true;
   const engagementReply = queueItem?.lane === 'engagement' && pipeline === 'reply';
+  const engagementConstrained = engagementReply && getAccountHealthSummary().health.state === 'constrained';
   const canReview = CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status);
   const canApprove = queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && draft.qualityScore >= 40 && gatesPassed;
-  const canApproveSend = engagementReply && queueItem?.status === 'needs_review' && draft.qualityScore >= 40 && gatesPassed;
-  const canSendApproved = engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
-  const media = draft.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
+  const canApproveSend = engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && draft.qualityScore >= 40 && gatesPassed;
+  const canSendApproved = engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
+  const approvedMainFeed = !engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt);
   const editor = draft.editor || {};
   const threadParts = pipeline === 'thread' ? (draft.threadParts?.length ? draft.threadParts : ['', '']) : [];
+  const qualityClass = analysis.score >= 40 && analysis.gates?.failures?.filter((item) => !['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED'].includes(item.code)).length === 0
+    ? 'quality-good'
+    : analysis.score >= 30 ? 'quality-warn' : 'quality-low';
   const publishEditor = pipeline === 'thread'
-    ? threadParts.map((part, index) => `<div class="mb-3"><label class="form-label fw-semibold">Thread part ${index + 1} <span class="text-secondary fw-normal">${weightedPostLength(part)}/280</span></label><textarea class="form-control" rows="4" name="threadPart">${escapeHtml(part)}</textarea></div>`).join('')
-    : `<div class="mb-3"><label class="form-label fw-semibold">Final ${escapeHtml(pipeline)} text <span class="text-secondary fw-normal">${weightedPostLength(draft.body)}/280</span></label><textarea class="form-control" rows="5" name="body">${escapeHtml(draft.body)}</textarea></div>`;
-  return `<article class="card shadow-sm border-0 mb-4">
-    <div class="card-body p-4">
-      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3"><div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">Content type: <strong>${escapeHtml(pipelineLabel(pipeline))}</strong></div>${workflowBadges(queueItem)}</div><div class="d-flex gap-2 align-items-start"><span class="badge ${draft.qualityScore >= 40 && gatesPassed ? 'text-bg-success' : draft.qualityScore >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">Quality ${draft.qualityScore}/50</span><span class="badge text-bg-light border">${escapeHtml(statusLabel(queueItem?.status || draft.status))}</span></div></div>
-      ${gatePanel(draft.gates)}
-      <form method="post" action="/draft/save">
+    ? threadParts.map((part, index) => `<div class="mb-5"><label class="editor-label">Thread part ${index + 1}<span class="text-xs font-medium text-slate-400">${weightedPostLength(part)}/280</span></label><textarea class="editor-textarea editor-textarea-thread" rows="4" name="threadPart">${escapeHtml(part)}</textarea></div>`).join('')
+    : `<div class="mb-5"><label class="editor-label">Final ${escapeHtml(pipelineLabel(pipeline))} text <span class="text-xs font-medium text-slate-400" data-live-weighted-length>${weightedPostLength(draft.body)}/280</span></label><textarea class="editor-textarea" rows="7" name="body" placeholder="Generate a draft or edit the final text here.">${escapeHtml(draft.body)}</textarea></div>`;
+  const workflowAction = canApproveSend
+    ? `<form method="post" action="/engage/approve-send">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">Approve &amp; send exact reply</button></form>`
+    : canSendApproved
+      ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">Send approved reply</button></form>`
+      : canApprove
+        ? `<form method="post" action="/queue/approve">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">Approve for publishing</button></form>`
+        : approvedMainFeed
+          ? '<a class="editor-btn editor-btn-primary" href="/?source=queue">Review publishing plan</a>'
+          : canReview
+            ? `<form method="post" action="/queue/review">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">${queueItem.status === 'needs_review' ? 'Recheck approval' : 'Check for approval'}</button></form>`
+            : '';
+  const aiNote = editor.decision === 'DO_NOT_POST'
+    ? `<div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>AI recommends not posting this source.</strong><div class="mt-1">${escapeHtml((editor.riskFlags || []).join(' · ') || 'There is not enough verified additive value in the current packet.')}</div><div class="mt-2 text-xs text-amber-800">You do not need to fill a scaffold. Add stronger evidence/source context, or move on.</div></div>`
+    : editor.finalText || editor.threadParts?.length
+      ? '<div class="mt-2 text-sm text-slate-500">AI prepared this candidate. Your job is to review the exact text and confirm facts/evidence before approval—not fill a scaffold.</div>'
+      : '';
+  return `<article class="editor-card mb-6">
+    <div class="editor-header">
+      <div class="min-w-0"><div class="app-kicker">${engagementReply ? 'Conversation reply' : 'Create'}</div><h1 class="editor-title mt-1">${escapeHtml(candidate.title)}</h1><div class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500"><span>${escapeHtml(pipelineLabel(pipeline))}</span><span>·</span><span>${escapeHtml(statusLabel(queueItem?.status || draft.status))}</span></div>${aiNote}</div>
+      <div class="flex flex-wrap items-center gap-2"><span class="quality-pill ${qualityClass}" data-live-quality-score>${analysis.score}/50</span><form method="post" action="/draft/generate"><input type="hidden" name="id" value="${draft.id}"><button class="editor-btn editor-btn-ai" type="submit">Generate with AI</button></form><a class="editor-btn editor-btn-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Open source ↗</a></div>
+    </div>
+    <div class="editor-body">
+      <div class="mb-5">
+        ${gatePanel(analysis.gates, { live: true })}
+        <div class="human-confirm mt-3"><strong>What you still own:</strong> read the final text, then confirm factuality and supplied evidence when you approve. The AI writes; approval remains human.</div>
+      </div>
+      <form method="post" action="/draft/save" data-live-draft-editor>
         <input type="hidden" name="id" value="${draft.id}">
         ${publishEditor}
-        <details class="mb-3"><summary class="fw-semibold">Research/editor fields</summary><div class="mt-3"><div class="mb-3"><label class="form-label">Hook</label><textarea class="form-control" rows="2" name="hook">${escapeHtml(draft.hook)}</textarea></div><div class="mb-3"><label class="form-label">Insight</label><textarea class="form-control" rows="3" name="insight">${escapeHtml(draft.insight)}</textarea></div><div class="mb-3"><label class="form-label">Evidence</label><textarea class="form-control" rows="3" name="evidence">${escapeHtml(draft.evidence)}</textarea></div><div class="mb-3"><label class="form-label">Action</label><textarea class="form-control" rows="2" name="action">${escapeHtml(draft.action)}</textarea></div></div></details>
-        <div class="card bg-light border-0 mb-3"><div class="card-body"><div class="fw-semibold mb-2">${escapeHtml(mediaLabel(media))}</div><div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="mediaRequired" value="1" id="media-required-${draft.id}" ${media.required ? 'checked' : ''}><label class="form-check-label" for="media-required-${draft.id}">Required for the claim</label></div><div class="row g-2"><div class="col-md-3"><label class="form-label small">Type</label><select class="form-select" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></div><div class="col-md-9"><label class="form-label small">Reason</label><input class="form-control" name="mediaReason" value="${escapeHtml(media.reason || '')}"></div><div class="col-md-6"><label class="form-label small">Source / local evidence ref</label><input class="form-control" name="mediaSource" value="${escapeHtml(media.source || '')}"></div><div class="col-md-6"><label class="form-label small">Alt text</label><input class="form-control" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></div></div></div></div>
-        <div class="small text-secondary mb-3"><strong>Semantic anchors:</strong> ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · <strong>Evidence used:</strong> ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')} · <strong>Discussion:</strong> ${escapeHtml(editor.discussionQuestion || '—')} · <strong>Follow reason:</strong> ${escapeHtml(editor.followReason || '—')} · <strong>Risk flags:</strong> ${escapeHtml((editor.riskFlags || []).join(', ') || '—')}</div>
-        <div class="row g-3 align-items-end"><div class="col-md-5"><div class="small text-secondary">${engagementReply ? 'Engagement replies send immediately only after explicit approval; they are never scheduled.' : 'Main-feed timing is queue-owned after approval. Use Queue → Scheduler to set an explicit human override.'}</div></div><div class="col-md-7 d-flex gap-2 flex-wrap"><button class="btn btn-dark" type="submit">Save & score</button><a class="btn btn-outline-secondary" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a></div></div>
+        <div class="mb-5"><div class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Live quality signals</div><dl class="editor-score-grid" data-live-breakdown>${Object.entries(analysis.breakdown).map(([key, value]) => `<div class="editor-score-item"><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl><div class="mt-2 text-xs text-slate-500">These are editorial heuristics recalculated from the exact text as you type. Approval checks still decide whether publishing is allowed.</div></div>
+        ${engagementReply ? '<input type="hidden" name="mediaType" value="none">' : `<details class="muted-panel mb-5"><summary class="font-semibold text-slate-700">Media &amp; advanced draft details</summary><div class="mt-4"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="mediaRequired" value="1" ${media.required ? 'checked' : ''}> This post requires media</label><div class="mt-3 grid gap-3 md:grid-cols-2"><label class="text-sm text-slate-600">Type<select class="form-select mt-1" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></label><label class="text-sm text-slate-600">Reason<input class="form-control mt-1" name="mediaReason" value="${escapeHtml(media.reason || '')}"></label><label class="text-sm text-slate-600">Media source<input class="form-control mt-1" name="mediaSource" value="${escapeHtml(media.source || '')}"></label><label class="text-sm text-slate-600">Alt text<input class="form-control mt-1" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></label></div><div class="mt-4 text-xs text-slate-500">Semantic anchors: ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · Evidence used: ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')}</div></div></details>`}
+        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5"><div class="max-w-2xl text-sm text-slate-500">${engagementReply ? 'This exact reply sends only after explicit approval. It is never scheduled.' : 'Saving does not publish. Approval and the publishing plan remain separate decisions.'}</div><div class="editor-toolbar"><button class="editor-btn editor-btn-secondary" type="submit">Save changes</button></div></div>
       </form>
-      ${pipeline === 'thread' ? `<div class="d-flex gap-2 mt-3"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="btn btn-outline-secondary btn-sm" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}
-      <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}${canApprove ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}${canApproveSend ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>` : ''}${canSendApproved ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>` : ''}${queueItem?.status === 'approved' ? `<span class="badge text-bg-success align-self-center">${engagementReply ? 'Exact reply approved' : 'Approved · compatibility draft ready'}</span>` : ''}</div>
-      ${queueItem?.status === 'needs_review' && (MAIN_FEED_PIPELINES.has(pipeline) || engagementReply) && !(canApprove || canApproveSend) ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked until score is ≥40 and the saved hard-gate result passes. Recheck gates after explicit human confirmations or content edits.</div>` : ''}
-      <hr><div class="small text-secondary">Rubric: niche ${analysis.breakdown.niche}/10 · hook ${analysis.breakdown.hook}/8 · insight ${analysis.breakdown.insight}/10 · evidence ${analysis.breakdown.evidence}/10 · action ${analysis.breakdown.action}/7 · originality ${analysis.breakdown.originality}/5. Hard-gate failures always override the numeric score.</div>
+      ${pipeline === 'thread' ? `<div class="editor-toolbar mt-4"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="editor-btn editor-btn-secondary" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="editor-btn editor-btn-secondary" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}
+      ${workflowAction ? `<div class="mt-5 border-t border-slate-100 pt-5">${workflowAction}</div>` : ''}
+      ${engagementConstrained ? '<div class="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"><strong>Sending is temporarily unavailable.</strong> Supported account evidence is currently limiting reply approval/sending.</div>' : ''}
+      ${approvedMainFeed ? '<div class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><strong>Approved — not published yet.</strong> The publishing plan remains a separate decision in Create.</div>' : ''}
     </div>
   </article>`;
 }
@@ -471,23 +624,101 @@ function performanceView(snapshot, error) {
   return summary + (posts || '<div class="alert alert-secondary">No recent post metrics.</div>') + phase4;
 }
 
+function resultsView(snapshot, accountHealth) {
+  const audience = getAudienceSummary();
+  const followerQuality = getNewFollowerQuality({ since: Date.now() - 24 * 3_600_000 });
+  const account = snapshot?.account || null;
+  const previous = snapshot?.previousAccount || null;
+  const followerDelta = account && previous ? Number(account.followers || 0) - Number(previous.followers || 0) : null;
+  const network = accountHealth?.networkQuality?.components || {};
+  const responseRate = network.authorResponseRate?.rate;
+  const continuationRate = network.conversationContinuationRate?.rate;
+  const healthState = accountHealth?.health?.state || 'healthy';
+  const healthCopy = healthState === 'healthy'
+    ? 'Everything looks normal.'
+    : healthState === 'watch'
+      ? 'Something deserves attention, but normal human-reviewed work can continue.'
+      : 'Some actions are temporarily limited until observed account evidence is resolved.';
+  const healthClass = healthState === 'healthy' ? 'success' : healthState === 'watch' ? 'warning' : 'danger';
+  const measured = listPublicationMeasurementSeries({ limit: 8 })
+    .map((series) => ({ ...series, latest: series.measurements.at(-1) || null }))
+    .filter((series) => series.latest)
+    .slice(0, 4);
+  const measuredCards = measured.map(({ queueItem, candidate, latest }) => {
+    const windowLabel = Number(latest.windowMinutes) === 1440 ? '24h' : Number(latest.windowMinutes) === 360 ? '6h' : Number(latest.windowMinutes) === 60 ? '1h' : `${latest.windowMinutes}m`;
+    const followerText = Number.isFinite(Number(latest.followerDelta))
+      ? `${Number(latest.followerDelta) >= 0 ? '+' : ''}${Number(latest.followerDelta)} associated follower change`
+      : 'Follower change unavailable';
+    return `<article class="card border-0 shadow-sm mb-3"><div class="card-body"><div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(candidate?.title || queueItem.candidateKey)}</div><div class="small text-secondary">Latest available measurement · ${escapeHtml(windowLabel)}</div></div>${queueItem.outputUrl ? `<a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(queueItem.outputUrl)}" target="_blank">View post ↗</a>` : ''}</div><div class="d-flex gap-3 flex-wrap mt-3"><span><strong>${formatNumber(latest.views)}</strong> views</span><span><strong>${formatNumber(latest.replies)}</strong> replies</span><span><strong>${formatNumber(latest.reposts)}</strong> reposts</span></div><div class="small text-secondary mt-2">${escapeHtml(followerText)} · isolation confidence ${escapeHtml(latest.attributionConfidence || 'unknown')}. This is associated account-level change, not direct post causality.</div></div></article>`;
+  }).join('');
+  const followerLine = account
+    ? `${formatNumber(account.followers)} followers${followerDelta == null ? '' : ` · ${followerDelta >= 0 ? '+' : ''}${followerDelta} since the previous snapshot`}`
+    : 'No recent account snapshot yet.';
+  const conversationLine = responseRate == null
+    ? 'Not enough conversation history for a response rate yet.'
+    : `${escapeHtml(responseRate)}% of measured initial conversations received a response${continuationRate == null ? '' : ` · ${escapeHtml(continuationRate)}% continued`}.`;
+  const attention = healthState === 'healthy'
+    ? '<div class="alert alert-success"><strong>No account intervention is currently indicated.</strong> Keep using the human-reviewed workflow and judge patterns over repeated outcomes.</div>'
+    : `<div class="alert alert-${healthClass}"><strong>${escapeHtml(healthCopy)}</strong> <a class="alert-link" href="/?source=health">Review account status</a>.</div>`;
+  return `<div class="mb-4"><h1 class="h3 mb-1">Results</h1><div class="text-secondary">A plain-language view of recent outcomes. Detailed measurements remain available when you need them.</div></div>
+    <div class="row g-3 mb-4">
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Audience</div><div class="fw-semibold fs-5 mt-1">${escapeHtml(followerLine)}</div><div class="small text-secondary mt-2">${formatNumber(audience.relevant_followers || 0)} observed followers currently match the target AI/developer audience.</div></div></div></div>
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">New follower quality · 24h</div><div class="fw-semibold fs-5 mt-1">${followerQuality.nicheAlignedNewFollowers} relevant / ${followerQuality.newlyObservedFollowers} newly observed</div><div class="small text-secondary mt-2">First-observed follower quality, not a claimed causal follow event.</div></div></div></div>
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Conversations</div><div class="fw-semibold fs-5 mt-1">${accountHealth?.interactionCounts?.meaningfulInteractions7d || 0} useful interactions · 7d</div><div class="small text-secondary mt-2">${conversationLine}</div></div></div></div>
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Account status</div><div class="fw-semibold fs-5 mt-1">${escapeHtml(healthCopy)}</div><div class="small text-secondary mt-2">Internal efficiency warnings remain separate from observed platform constraints.</div></div></div></div>
+    </div>
+    ${attention}
+    <div class="d-flex justify-content-between gap-3 flex-wrap align-items-end mt-5 mb-3"><div><h2 class="h5 mb-1">Recent measured posts</h2><div class="small text-secondary">Latest available window for each recent publication.</div></div><a class="btn btn-outline-primary btn-sm" href="/?source=performance">Detailed content measurements</a></div>
+    ${measuredCards || '<div class="alert alert-secondary">No fixed-window publication measurements yet.</div>'}
+    <div class="d-flex gap-2 flex-wrap mt-4"><a class="btn btn-outline-secondary btn-sm" href="/?source=audience">Audience quality</a><a class="btn btn-outline-secondary btn-sm" href="/?source=health">Account status details</a><a class="btn btn-outline-secondary btn-sm" href="/?source=performance">Raw performance details</a></div>`;
+}
+
 function audienceView(error = null) {
   if (error) return `<div class="alert alert-warning">Audience refresh failed: ${escapeHtml(error)}</div>`;
   const summary = getAudienceSummary();
+  const nicheThreshold = 12;
+  const allFollowing = listAudienceProfiles({ youFollow: true, minScore: 0, limit: Math.max(100, summary.following + 20) });
+  const outsideFollowing = allFollowing
+    .filter((profile) => profile.relevanceScore < nicheThreshold)
+    .sort((left, right) => Number(left.followsYou) - Number(right.followsYou) || left.relevanceScore - right.relevanceScore || left.username.localeCompare(right.username));
   const targets = listAudienceProfiles({ youFollow: true, followsYou: false, minScore: 12, limit: 40 });
   const relevantFollowers = listAudienceProfiles({ followsYou: true, minScore: 12, limit: 20 });
   const stats = `<div class="row g-3 mb-4">
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Observed followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.followers)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche followers</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_followers)}</div></div></div></div>
     <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Niche following</div><div class="fs-3 fw-semibold">${formatNumber(summary.relevant_following)}</div></div></div></div>
-    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Relevant followed accounts</div><div class="fs-3 fw-semibold">${formatNumber(summary.target_accounts)}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="text-secondary small">Outside-niche following</div><div class="fs-3 fw-semibold">${formatNumber(outsideFollowing.length)}</div></div></div></div>
   </div>`;
   const profileCards = (profiles, title, note) => `<h2 class="h5 mt-4">${escapeHtml(title)}</h2><p class="text-secondary small">${escapeHtml(note)}</p>${profiles.map((profile) => `<div class="card border-0 shadow-sm mb-2"><div class="card-body py-3">
     <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)} <span class="text-secondary">@${escapeHtml(profile.username)}</span></div><div class="small text-secondary">${escapeHtml(profile.bio)}</div></div><div class="d-flex gap-2 align-items-start flex-wrap"><span class="badge text-bg-primary">fit ${profile.relevanceScore}/50</span><a class="btn btn-outline-secondary btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank">Open profile ↗</a></div></div>
     <div class="d-flex gap-1 flex-wrap mt-2">${profile.nicheTags.map((tag) => `<span class="badge text-bg-light border">${escapeHtml(NICHE_LABELS[tag] || tag)}</span>`).join('')}</div>
   </div></div>`).join('') || '<div class="alert alert-secondary">No matching profiles in the current snapshot.</div>'}`;
+  const outsideRow = (profile) => {
+    const relationship = profile.followsYou ? '<span class="badge text-bg-warning">follows you too</span>' : '<span class="text-secondary">one-way follow</span>';
+    const signals = profile.nicheTags.length
+      ? profile.nicheTags.map((tag) => NICHE_LABELS[tag] || tag).join(', ')
+      : profile.matchedKeywords.length
+        ? profile.matchedKeywords.slice(0, 4).join(', ')
+        : 'No current AI/dev/builder signal';
+    const fitLabel = profile.relevanceScore <= 3 ? 'Very low fit' : profile.relevanceScore < nicheThreshold ? 'Outside current niche' : 'In niche';
+    return `<tr>
+      <td><div class="fw-semibold">${escapeHtml(profile.displayName || profile.username)}</div><div class="small text-secondary">@${escapeHtml(profile.username)}</div><div class="small text-secondary text-break">${escapeHtml(profile.bio || 'No bio observed.')}</div></td>
+      <td><span class="badge ${profile.relevanceScore <= 3 ? 'text-bg-secondary' : 'text-bg-light border'}">${escapeHtml(fitLabel)} · ${profile.relevanceScore}/50</span></td>
+      <td>${relationship}</td>
+      <td class="small text-secondary">${escapeHtml(signals)}</td>
+      <td class="small text-secondary">${profile.lastSeenAt ? escapeHtml(new Date(profile.lastSeenAt).toLocaleDateString()) : 'unknown'}</td>
+      <td><a class="btn btn-outline-danger btn-sm" href="https://x.com/${encodeURIComponent(profile.username)}" target="_blank" rel="noopener">Unfollow on X ↗</a></td>
+    </tr>`;
+  };
+  const cleanupBatch = outsideFollowing.slice(0, 10);
+  const cleanupRows = cleanupBatch.map(outsideRow).join('');
+  const remainingRows = outsideFollowing.slice(10).map(outsideRow).join('');
+  const outsideSection = `<section class="mt-4 mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end"><div><h2 class="h5 mb-1">Accounts you follow outside your niche <span class="badge text-bg-light border">${outsideFollowing.length}</span></h2><p class="text-secondary small mb-0">Review the lowest-fit accounts manually. This dashboard intentionally does not automate unfollowing. Start with the 10 shown below, make each decision on X, then refresh Audience before continuing.</p></div></div>
+    ${outsideFollowing.length ? `<div class="alert alert-light border mt-3 mb-0"><strong>Cleanup review: 10 at a time.</strong> X does not publish a numeric safe unfollow quota; avoid bulk/aggressive follow churn. Accounts that follow you back are flagged for extra review.</div><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${cleanupRows}</tbody></table></div>${remainingRows ? `<details class="mt-3"><summary class="text-secondary">Show remaining ${outsideFollowing.length - cleanupBatch.length} review candidates</summary><div class="table-responsive mt-3"><table class="table table-hover align-middle"><thead><tr><th>Account</th><th>Niche fit</th><th>Relationship</th><th>Observed signals</th><th>Last seen</th><th></th></tr></thead><tbody>${remainingRows}</tbody></table></div></details>` : ''}` : '<div class="alert alert-success mt-3">No observed accounts you follow are currently below the niche threshold.</div>'}
+  </section>`;
   return stats
-    + profileCards(targets, 'Observed followed accounts', 'Raw audience observations for relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships.')
+    + outsideSection
+    + profileCards(targets, 'In-niche accounts you follow', 'Relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships.')
     + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
 }
 
@@ -500,7 +731,7 @@ function experimentSummaryCard(result, label) {
   return `<div class="border rounded p-3 mb-2"><div class="d-flex justify-content-between gap-2 flex-wrap"><strong>${escapeHtml(label)}</strong><span class="badge text-bg-${summary.evidence?.state === 'repeated' ? 'success' : summary.evidence?.state === 'directional' ? 'primary' : 'secondary'}">${escapeHtml(summary.evidence?.state || 'insufficient')}</span></div><div class="small mt-1">${escapeHtml(summary.primaryMetric)} · ${escapeHtml(primary || 'no completed observations')}</div><div class="small text-secondary">Samples: ${escapeHtml(JSON.stringify(summary.completedByVariant || {}))}. No automatic winner/causal label.</div><details class="mt-2"><summary class="small">Confounders &amp; health/network context</summary><pre class="small text-wrap mt-2 mb-0">${escapeHtml(JSON.stringify({ confounders, contexts }, null, 2))}</pre></details></div>`;
 }
 
-function experimentsView() {
+function technicalExperimentsView() {
   const experiments = listExperiments({ limit: 100 });
   const cards = experiments.map((experiment) => {
     const result = getExperimentSummary(experiment.id);
@@ -516,6 +747,42 @@ function experimentsView() {
   }).join('');
   const create = `<form method="post" action="/experiment/create" class="card border-0 shadow-sm mb-4"><div class="card-body"><h2 class="h5">Create experiment</h2><div class="row g-2"><div class="col-md-4"><label class="form-label small">Name</label><input class="form-control form-control-sm" name="name" required></div><div class="col-md-4"><label class="form-label small">Dimension</label><input class="form-control form-control-sm" name="dimension" placeholder="format or reply_archetype" required></div><div class="col-md-4"><label class="form-label small">Primary metric</label><input class="form-control form-control-sm" name="primaryMetric" required></div><div class="col-12"><label class="form-label small">Hypothesis</label><input class="form-control form-control-sm" name="hypothesis" required></div><div class="col-md-6"><label class="form-label small">Population JSON</label><input class="form-control form-control-sm" name="populationJson" value="{}"></div><div class="col-md-6"><label class="form-label small">Variants (comma-separated)</label><input class="form-control form-control-sm" name="variants" required></div><div class="col-md-6"><label class="form-label small">Secondary metrics (comma-separated)</label><input class="form-control form-control-sm" name="secondaryMetrics"></div><div class="col-md-3"><label class="form-label small">Minimum / variant</label><input class="form-control form-control-sm" type="number" min="1" name="minimumCompletedPerVariant" value="5"></div><div class="col-md-3"><label class="form-label small">Status</label><select class="form-select form-select-sm" name="status"><option>draft</option><option>active</option></select></div></div><button class="btn btn-dark btn-sm mt-3" type="submit">Create declared experiment</button><div class="small text-secondary mt-2">Creation and assignment are explicit. The system does not randomize variants or create duplicate/near-duplicate A/B posts.</div></div></form>`;
   return create + (cards || '<div class="alert alert-secondary">No experiments declared yet.</div>');
+}
+
+function experimentsView() {
+  const experiments = listExperiments({ limit: 100 });
+  const queueItems = listQueueItems({ limit: 250 });
+  const dimensionOptions = [
+    ['Content', [...EXPERIMENT_DIMENSIONS.content, ...EXPERIMENT_DIMENSIONS.timing]],
+    ['Conversations & relationships', EXPERIMENT_DIMENSIONS.network],
+  ].map(([label, dimensions]) => `<optgroup label="${escapeHtml(label)}">${dimensions.map((dimension) => `<option value="${escapeHtml(dimension)}" data-kind="${EXPERIMENT_DIMENSIONS.network.includes(dimension) ? 'network' : 'content'}">${escapeHtml(experimentDimensionLabel(dimension))}</option>`).join('')}</optgroup>`).join('');
+  const metricOptions = [
+    ...CONTENT_METRICS.map((metric) => `<option value="${escapeHtml(metric)}" data-kind="content">${escapeHtml(experimentMetricLabel(metric))}</option>`),
+    ...NETWORK_METRICS.map((metric) => `<option value="${escapeHtml(metric)}" data-kind="network">${escapeHtml(experimentMetricLabel(metric))}</option>`),
+  ].join('');
+  const create = `<form method="post" action="/experiment/create" class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><h1 class="h3 mb-1">Tests</h1><p class="text-secondary">Compare one choice at a time. Creating a test does not assign, approve, schedule, or publish anything.</p><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label">Test name</label><input class="form-control" name="name" placeholder="Reply style: implementation detail vs question" required></div><div class="col-md-6"><label class="form-label">What are you changing?</label><select class="form-select" id="test-dimension" name="dimension" required>${dimensionOptions}</select></div><div class="col-12"><label class="form-label">What do you want to learn?</label><input class="form-control" name="hypothesis" placeholder="Implementation-detail replies may continue more conversations." required></div><div class="col-md-6"><label class="form-label">Option A</label><input class="form-control" name="variantA" required></div><div class="col-md-6"><label class="form-label">Option B</label><input class="form-control" name="variantB" required></div><div class="col-md-6"><label class="form-label">Success looks like</label><select class="form-select" id="test-primary-metric" name="primaryMetric" required>${metricOptions}</select></div><div class="col-md-6"><label class="form-label">Test state</label><select class="form-select" name="status"><option value="draft">Draft — set up only</option><option value="active">Active — ready for explicit assignments</option></select></div></div><details class="mt-3"><summary>Advanced setup</summary><div class="row g-3 mt-1"><div class="col-md-6"><label class="form-label small">Applies when (population JSON)</label><input class="form-control form-control-sm" name="populationJson" value="{}"></div><div class="col-md-4"><label class="form-label small">Secondary metrics</label><input class="form-control form-control-sm" name="secondaryMetrics" placeholder="comma-separated"></div><div class="col-md-2"><label class="form-label small">Minimum / option</label><input class="form-control form-control-sm" type="number" min="1" name="minimumCompletedPerVariant" value="5"></div></div></details><button class="btn btn-dark mt-3" type="submit">Create test</button><div class="small text-secondary mt-2">Assignments remain explicit and non-random. The system never creates duplicate A/B posts automatically.</div></div></form>`;
+  const cards = experiments.map((experiment) => {
+    const result = getExperimentSummary(experiment.id);
+    const network = EXPERIMENT_DIMENSIONS.network.includes(experiment.dimension);
+    const summaries = network ? [['Conversation outcomes', result.summary]] : Object.entries(result.byWindow || {}).map(([window, summary]) => [`${window}m window`, summary]);
+    const evidence = summaries.map(([label, summary]) => summary ? `<span class="badge text-bg-light border">${escapeHtml(label)} · ${escapeHtml(evidenceLabel(summary.evidence?.state || 'insufficient'))}</span>` : '').join(' ');
+    const assignedItems = listExperimentAssignments(experiment.id);
+    const candidates = queueItems.filter((item) => {
+      if (['published', 'publishing', 'ignored', 'expired'].includes(item.status)) return false;
+      return network ? item.lane === 'engagement' : ['main', 'main_feed'].includes(item.lane);
+    });
+    const candidateOptions = candidates.map((item) => {
+      const candidate = getCandidate(item.candidateKey);
+      const label = network && item.targetUsername ? `@${item.targetUsername}` : (candidate?.title || item.candidateKey);
+      return `<option value="${escapeHtml(item.candidateKey)}">${escapeHtml(label)} · ${escapeHtml(statusLabel(item.status))}</option>`;
+    }).join('');
+    const assignment = candidates.length
+      ? `<form method="post" action="/experiment/assign" class="row g-2 align-items-end mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="col-md-6"><label class="form-label small">Use this test on</label><select class="form-select form-select-sm" name="key">${candidateOptions}</select></div><div class="col-md-4"><label class="form-label small">Use option</label><select class="form-select form-select-sm" name="variant">${experiment.variants.map((variant) => `<option value="${escapeHtml(variant.label)}">${escapeHtml(variant.label)}</option>`).join('')}</select></div><div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Assign option</button></div>${experiment.dimension === 'timing_bucket' ? '<div class="col-12"><label class="small"><input class="form-check-input me-1" type="checkbox" name="timingHistorySufficient" value="1"> I have enough prior timing history to use this timing test.</label></div>' : ''}<details class="col-12"><summary class="small">Advanced assignment context</summary><input class="form-control form-control-sm mt-2" name="contextJson" value="{}"></details></form>`
+      : '<div class="small text-secondary mt-3">No eligible current items are available for explicit assignment.</div>';
+    const technicalSummaries = summaries.map(([label, summary]) => experimentSummaryCard({ summary }, label)).join('');
+    return `<article class="card border-0 shadow-sm mb-4"><div class="card-body p-4"><div class="d-flex justify-content-between gap-3 flex-wrap"><div><h2 class="h5 mb-1">${escapeHtml(experiment.name)}</h2><div class="small text-secondary">Testing ${escapeHtml(experimentDimensionLabel(experiment.dimension))} · success measured by ${escapeHtml(experimentMetricLabel(experiment.primaryMetric))}</div></div><span class="badge text-bg-light border">${escapeHtml(experiment.status)}</span></div><p class="mt-3 mb-2">${escapeHtml(experiment.hypothesis)}</p><div class="d-flex gap-2 flex-wrap">${evidence || '<span class="badge text-bg-light border">Not enough evidence yet</span>'}</div><div class="small text-secondary mt-2">${assignedItems.length} item${assignedItems.length === 1 ? '' : 's'} assigned. No automatic winner or causal claim is produced.</div>${assignment}<details class="mt-3"><summary>Technical evidence and exact configuration</summary><div class="small mt-3">Dimension <code>${escapeHtml(experiment.dimension)}</code> · metric <code>${escapeHtml(experiment.primaryMetric)}</code> · population <code>${escapeHtml(JSON.stringify(experiment.population))}</code> · minimum ${experiment.minimumCompletedPerVariant}/option</div><div class="mt-3">${technicalSummaries || '<div class="text-secondary small">No completed cohort summary yet.</div>'}</div></details></div></article>`;
+  }).join('');
+  return create + (cards || '<div class="alert alert-secondary">No tests yet. Create one when you have a specific question worth comparing.</div>') + `<details class="mt-5"><summary class="text-secondary">Legacy advanced experiment controls</summary><div class="mt-3">${technicalExperimentsView()}</div></details><script>(()=>{const d=document.getElementById('test-dimension');const m=document.getElementById('test-primary-metric');if(!d||!m)return;const sync=()=>{const selected=d.options[d.selectedIndex];const kind=selected?.dataset?.kind||'content';let first=null;for(const option of m.options){const show=option.dataset.kind===kind;option.hidden=!show;option.disabled=!show;if(show&&first==null)first=option;}if(m.selectedOptions[0]?.disabled&&first)first.selected=true;};d.addEventListener('change',sync);sync();})();</script>`;
 }
 
 function learnedRuleCard(rule) {
@@ -547,7 +814,7 @@ function learnedRuleCard(rule) {
   </div></article>`;
 }
 
-function learningView(overview = getLearningOverview()) {
+function technicalLearningView(overview = getLearningOverview()) {
   const experiments = listExperiments({ limit: 100 });
   const refreshForms = experiments.map((experiment) => {
     const variants = experiment.variants || [];
@@ -562,6 +829,55 @@ function learningView(overview = getLearningOverview()) {
     <div class="alert alert-light border">Learned strategy is account-specific and observational. Refresh computes suggestions only; accepted rules are bounded additions after transparent base scoring. Hard gates, expiry, human approval, and explicit manual routing/scheduling always win.</div>
     <h2 class="h5 mt-4">Refresh suggestions from declared experiments</h2>${refreshForms || '<div class="alert alert-secondary">No experiment with at least two variants is available.</div>'}
     <h2 class="h5 mt-4">Learned rules</h2>${rules || '<div class="alert alert-secondary">No learned-rule suggestions yet.</div>'}`;
+}
+
+function learnedAdjustmentLabel(target) {
+  return ({
+    target_score_component: 'relationship-fit component', engage_priority: 'reply priority', saturation_pressure: 'recent-interaction pressure', health_watch_modifier: 'advisory account-status pressure',
+    reach_potential: 'reach potential', follow_potential: 'follow potential', conversation_potential: 'conversation potential', scheduler_timing_preference: 'publishing-time preference',
+    content_preference: 'content preference', format_preference: 'format preference', topic_preference: 'topic preference',
+  })[target] || relationshipLabel(target || 'recommendation');
+}
+
+function plainLearnedRuleCard(rule) {
+  const adjustment = rule.adjustment || {};
+  const evidence = rule.evidence || {};
+  const review = rule.review || {};
+  const comparison = rule.comparison || {};
+  const statusLabelText = rule.status === 'accepted' ? 'Accepted change' : rule.status === 'retired' ? 'Past learning' : 'Suggested change';
+  const statusClass = rule.status === 'accepted' ? 'success' : rule.status === 'retired' ? 'secondary' : 'primary';
+  const proposed = Number(adjustment.proposed || 0);
+  const effective = Number(adjustment.effective || 0);
+  const adjustmentAmount = rule.status === 'accepted' ? effective : proposed;
+  const changeCopy = adjustmentAmount === 0
+    ? 'No production priority changes yet.'
+    : `Future matching recommendations may adjust ${learnedAdjustmentLabel(adjustment.target)} by ${adjustmentAmount >= 0 ? '+' : ''}${adjustmentAmount}, within the existing bound.`;
+  const reviewReasons = (review.reasons || []).map((reason) => `<li><strong>${escapeHtml(reason.code)}</strong> — ${escapeHtml(reason.message)}</li>`).join('');
+  let action = '';
+  if (rule.status === 'suggested') {
+    action = rule.acceptance?.eligible
+      ? `<div class="d-flex gap-2 flex-wrap"><form method="post" action="/learning/accept"><input type="hidden" name="id" value="${rule.id}"><button class="btn btn-success" type="submit">Accept change</button></form><a class="btn btn-outline-secondary" href="/?source=learning">Not now</a></div>`
+      : '<div class="small text-secondary">More evidence is required before this suggestion can affect recommendations.</div>';
+  } else if (rule.status === 'accepted') {
+    action = `<details class="mt-3"><summary>Manage accepted change</summary><form method="post" action="/learning/retire" class="d-flex gap-2 mt-2"><input type="hidden" name="id" value="${rule.id}"><input class="form-control form-control-sm" name="reason" placeholder="Why are you retiring it?"><button class="btn btn-outline-danger btn-sm" type="submit">Retire change</button></form></details>`;
+  } else {
+    action = '<div class="small text-secondary">This learning is kept for history and has zero production effect.</div>';
+  }
+  return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-start"><div><div class="small text-secondary text-uppercase fw-semibold">We noticed something</div><h2 class="h5 mb-1 mt-1">${escapeHtml(rule.finding || rule.key || 'Observed pattern')}</h2><div class="small text-secondary">${escapeHtml(evidenceLabel(evidence.state || 'insufficient'))} · ${escapeHtml(evidence.sampleSize || 0)} example${Number(evidence.sampleSize || 0) === 1 ? '' : 's'}</div></div><div class="d-flex gap-2"><span class="badge text-bg-${statusClass}">${escapeHtml(statusLabelText)}</span>${review.reviewRequired ? '<span class="badge text-bg-warning">Needs review</span>' : ''}</div></div><div class="mt-3"><div class="small text-secondary">Suggested change</div><div class="fw-semibold">${escapeHtml(rule.recommendation || 'Keep watching this pattern.')}</div></div><div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary">${rule.status === 'suggested' ? 'What will change if accepted' : 'What this changes'}</div><div>${escapeHtml(changeCopy)}</div><div class="small text-secondary mt-2">This never sends content, bypasses approval, ignores expiry, or overrides a manual route/schedule.</div></div></div>${reviewReasons ? `<div class="alert alert-warning py-2 mt-3"><strong>Review before relying on this change.</strong><ul class="mb-0 mt-1">${reviewReasons}</ul></div>` : ''}<div class="mt-3">${action}</div><details class="mt-3"><summary>Why?</summary><div class="small mt-2"><strong>Measured:</strong> ${escapeHtml(experimentMetricLabel(rule.primaryMetric || 'unknown'))}<br><strong>Comparison:</strong> ${escapeHtml(comparison.baselineLabel || 'baseline')} ${escapeHtml(comparison.baselineValue ?? 'n/a')} → ${escapeHtml(comparison.comparisonLabel || 'comparison')} ${escapeHtml(comparison.comparisonValue ?? 'n/a')}<br><strong>Evidence state:</strong> <code>${escapeHtml(evidence.state || 'insufficient')}</code><br><strong>Adjustment:</strong> <code>${escapeHtml(adjustment.target || 'none')}</code>${adjustment.component ? ` / <code>${escapeHtml(adjustment.component)}</code>` : ''} · proposed ${escapeHtml(adjustment.proposed ?? 0)} · effective ${effective >= 0 ? '+' : ''}${escapeHtml(effective)}<br><strong>Match context:</strong> <code>${escapeHtml(JSON.stringify(rule.match || {}))}</code><br><strong>Mechanism tags:</strong> ${escapeHtml((rule.mechanismTags || []).join(', ') || 'none')}</div></details></div></article>`;
+}
+
+function learningView(overview = getLearningOverview()) {
+  const experiments = listExperiments({ limit: 100 });
+  const refreshForms = experiments.map((experiment) => {
+    const variants = experiment.variants || [];
+    if (variants.length < 2) return '';
+    const options = variants.map((variant, index) => `<option value="${escapeHtml(variant.label)}" ${index === 0 ? 'selected' : ''}>${escapeHtml(variant.label)}</option>`).join('');
+    const comparisonOptions = variants.map((variant, index) => `<option value="${escapeHtml(variant.label)}" ${index === 1 ? 'selected' : ''}>${escapeHtml(variant.label)}</option>`).join('');
+    const network = EXPERIMENT_DIMENSIONS.network.includes(experiment.dimension);
+    return `<form method="post" action="/learning/refresh" class="border rounded p-3 mb-2"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="fw-semibold">${escapeHtml(experiment.name)}</div><div class="small text-secondary mb-2">Look for a pattern in ${escapeHtml(experimentMetricLabel(experiment.primaryMetric))}. This creates a suggestion only; it changes nothing until you accept it.</div><div class="row g-2 align-items-end"><div class="col-md-3"><label class="form-label small">Compare</label><select class="form-select form-select-sm" name="baselineLabel">${options}</select></div><div class="col-md-3"><label class="form-label small">Against</label><select class="form-select form-select-sm" name="comparisonLabel">${comparisonOptions}</select></div>${network ? '' : `<div class="col-md-2"><label class="form-label small">Measurement point</label><select class="form-select form-select-sm" name="windowMinutes"><option value="15">15 minutes</option><option value="60" selected>1 hour</option><option value="360">6 hours</option><option value="1440">24 hours</option></select></div>`}<div class="col-md-${network ? '4' : '2'}"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Check for a pattern</button></div><details class="col-12"><summary class="small">Advanced evidence links</summary><label class="form-label small mt-2">Mechanism tags</label><input class="form-control form-control-sm" name="mechanismTags" placeholder="optional, comma-separated"></details></div></form>`;
+  }).join('');
+  const rules = overview.rules.map(plainLearnedRuleCard).join('');
+  return `<div class="mb-4"><h1 class="h3 mb-1">What we've learned</h1><div class="text-secondary">Patterns from your own measured work. Suggestions stay inert until you explicitly accept them.</div></div><div class="row g-3 mb-4"><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Suggested changes</div><div class="fs-3 fw-semibold">${overview.suggested}</div></div></div></div><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Accepted changes</div><div class="fs-3 fw-semibold">${overview.accepted}</div></div></div></div><div class="col-4"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Past learnings</div><div class="fs-3 fw-semibold">${overview.retired}</div></div></div></div></div><div class="alert alert-light border"><strong>You stay in control.</strong> Accepting a change can only make a bounded adjustment to future recommendations. It cannot send content or bypass approval, expiry, account restrictions, or a manual choice.</div><h2 class="h5 mt-4">Patterns and changes</h2>${rules || '<div class="alert alert-secondary">No learning suggestions yet. Run tests and collect measured outcomes first.</div>'}<h2 class="h5 mt-5">Look for a new pattern</h2>${refreshForms || '<div class="alert alert-secondary">No test with at least two options is available yet.</div>'}<details class="mt-5"><summary class="text-secondary">Legacy advanced learned-strategy controls</summary><div class="mt-3">${technicalLearningView(overview)}</div></details>`;
 }
 
 function relationshipLabel(value) {
@@ -689,7 +1005,7 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
     ? `<div class="alert alert-danger py-2 mt-3 mb-0">Current Account Health is CONSTRAINED from supported observed evidence. Drafting/review may continue, but approval/send is unavailable until the hard evidence is cleared/resolved.</div>`
     : '';
   const relationshipSummary = profile
-    ? `<div class="small text-secondary mt-2">${escapeHtml(opportunityLabel(profile.targetScore))} relationship fit · ${escapeHtml(relationshipLabel(profile.relationshipStage))}</div>`
+    ? `<div class="small text-secondary mt-2">${escapeHtml(opportunityLabel(profile.targetScore))} relationship fit · ${escapeHtml(relationshipLabel(profile.relationshipStage))} · ${escapeHtml(profile.theirRepliesToUs || 0)} prior repl${Number(profile.theirRepliesToUs || 0) === 1 ? 'y' : 'ies'} · ${escapeHtml(profile.meaningfulInteractions || 0)} useful interaction${Number(profile.meaningfulInteractions || 0) === 1 ? '' : 's'}</div>`
     : '<div class="small text-secondary mt-2">Relationship context is still limited.</div>';
   const relationshipTechnical = profile
     ? `<div class="d-flex gap-1 flex-wrap mt-2">${(profile.classes || []).map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('')}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">TargetScore ${Math.round(profile.targetScore)}</span></div>`
@@ -735,7 +1051,28 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   </div></article>`;
 }
 
-function engageView(error = null) {
+function focusedDraftView(draftId, { mode = 'create' } = {}) {
+  const draft = getDraft(Number(draftId));
+  if (!draft) return '<div class="alert alert-warning">That draft is no longer available.</div>';
+  const queueItem = getQueueItemByCandidate(draft.candidateKey);
+  if (mode === 'conversation' && queueItem?.lane !== 'engagement') return '<div class="alert alert-warning">That draft does not belong to a conversation.</div>';
+  const backHref = mode === 'conversation' ? '/?source=engage' : '/?source=queue';
+  const backLabel = mode === 'conversation' ? 'Back to conversations' : 'Back to Create';
+  const title = mode === 'conversation' ? 'Review reply' : 'Review draft';
+  const note = mode === 'conversation'
+    ? 'Edit the exact reply, run the same approval checks, and send only after explicit human approval.'
+    : 'Edit the content, run approval checks, then return to Create for the publishing plan.';
+  return `<div class="mb-4"><a class="btn btn-outline-secondary btn-sm mb-3" href="${backHref}">← ${escapeHtml(backLabel)}</a><h1 class="h3 mb-1">${escapeHtml(title)}</h1><div class="text-secondary">${escapeHtml(note)}</div></div>${draftCard(draft)}`;
+}
+
+function draftsView(drafts, activeDraftId = null) {
+  if (activeDraftId) return focusedDraftView(activeDraftId, { mode: 'create' });
+  const content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Start from Discover or choose an idea in Create.</div>';
+  return `<div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-4"><div><h1 class="h3 mb-1">All drafts</h1><div class="text-secondary">Draft editor history. Day-to-day work should normally start from Create.</div></div><a class="btn btn-outline-primary btn-sm" href="/?source=queue">Back to Create</a></div>${content}`;
+}
+
+function engageView(error = null, activeDraftId = null) {
+  if (activeDraftId) return focusedDraftView(activeDraftId, { mode: 'conversation' });
   const items = listEngagementItems({ limit: 200 });
   const accountHealth = getAccountHealthSummary();
   const active = items.filter((item) => item.engagementKind !== 'initial_reply');
@@ -747,22 +1084,31 @@ function engageView(error = null) {
     : accountHealth.health.state === 'watch'
       ? '<div class="alert alert-warning"><strong>Something deserves attention.</strong> You can keep working normally; the warning is advisory. <a href="/?source=health" class="alert-link">See why</a>.</div>'
       : '';
-  return warning + healthBanner
+  const overview = `<div class="mb-4"><h1 class="h3 mb-1">Conversations</h1><div class="text-secondary">Continue existing conversations first, then consider new ones where you have something concrete to add.</div></div><div class="row g-3 mb-4"><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Active conversations</div><div class="fs-3 fw-semibold">${active.length}</div></div></div></div><div class="col-6"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">New opportunities</div><div class="fs-3 fw-semibold">${cold.length}</div></div></div></div></div>`;
+  return overview + warning + healthBanner
     + group('Active conversations', 'Observed replies/quotes to our existing posts or replies are shown before cold opportunities.', active)
     + group('New opportunities', 'Fresh target posts and reply-suitable research candidates with a concrete proposed contribution.', cold);
 }
 
-const QUEUE_GROUPS = ['triage', 'researching', 'drafting', 'needs_review', 'approved', 'publishing', 'failed', 'published', 'watching'];
+const CREATE_LIFECYCLE = [
+  { title: 'Ideas', note: 'Choose what each source should become before drafting.', statuses: ['triage', 'researching', 'watching'] },
+  { title: 'Drafting', note: 'Content currently being written or edited.', statuses: ['drafting'] },
+  { title: 'Needs review', note: 'Your factuality/evidence confirmation or approval decision is required.', statuses: ['needs_review'] },
+  { title: 'Ready to publish', note: 'Approved content waiting for its publishing plan or currently publishing.', statuses: ['approved', 'publishing'] },
+  { title: 'Needs attention', note: 'A prior publishing attempt failed and requires a human decision.', statuses: ['failed'] },
+  { title: 'Published', note: 'Completed main-feed work retained for context.', statuses: ['published'] },
+];
 
 function queueCard(queueItem, scheduleContextValue) {
   if (!queueItem.recommendedPipeline) queueItem = refreshQueueRecommendation(queueItem.candidateKey).queueItem;
   const snapshot = inspectWorkflow(queueItem.candidateKey);
   const candidate = snapshot.candidate;
   const draft = snapshot.draft;
-  const analysis = draft ? scoreDraft(draft, candidate) : null;
   const mainFeedReview = queueItem.status === 'needs_review' && [...MAIN_FEED_PIPELINES, 'repost'].includes(queueItem.pipeline);
   const canApprove = mainFeedReview && (queueItem.pipeline === 'repost' || (draft?.qualityScore >= 40 && draft?.gates?.passed === true));
   const canRequestReview = CONTENT_PIPELINES.has(queueItem.pipeline) && ['drafting', 'needs_review'].includes(queueItem.status);
+  const choosingType = ['triage', 'researching', 'watching'].includes(queueItem.status);
+  const canChangeType = !['publishing', 'published'].includes(queueItem.status);
   const breakdown = snapshot.scores.breakdown;
   const returnTo = '/?source=queue';
   const publicationState = queueItem.publishStartedAt || queueItem.publishedAt || queueItem.publishError
@@ -775,8 +1121,19 @@ function queueCard(queueItem, scheduleContextValue) {
     : canApprove
       ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve repost</button></form>`
       : '';
-  const primaryQueueAction = canApprove ? approveAction : canRequestReview ? reviewAction : draftAction;
-  const secondaryDraftAction = (canApprove || canRequestReview) && draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Edit draft</a>` : '';
+  const primaryQueueAction = choosingType
+    ? routeForm(queueItem, candidate.key, returnTo)
+    : canApprove
+      ? approveAction
+      : queueItem.status === 'drafting'
+        ? draftAction
+        : queueItem.status === 'needs_review'
+          ? (draftAction || reviewAction)
+          : ['approved', 'publishing', 'published'].includes(queueItem.status)
+            ? ''
+            : draftAction;
+  const secondaryDraftAction = canApprove && draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Edit draft</a>` : '';
+  const secondaryTypeAction = !choosingType && canChangeType ? routeForm(queueItem, candidate.key, returnTo) : '';
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
     <div class="d-flex justify-content-between gap-3 flex-wrap">
       <div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">${escapeHtml(candidate.source.toUpperCase())} · ${escapeHtml(pipelineLabel(queueItem.pipeline))} · ${escapeHtml(statusLabel(queueItem.status))}</div></div>
@@ -786,12 +1143,11 @@ function queueCard(queueItem, scheduleContextValue) {
     ${workflowBadges(queueItem)}
     <div class="small mt-2"><strong>Suggested use:</strong> ${escapeHtml(pipelineLabel(queueItem.recommendedPipeline || 'triage'))} <span class="text-secondary">— ${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
     ${publicationState}
-    ${routeForm(queueItem, candidate.key, returnTo)}
     ${draft ? gatePanel(draft.gates) : ''}
     ${schedulePanel(queueItem, scheduleContextValue)}
     ${primaryQueueAction ? `<div class="mt-3">${primaryQueueAction}</div>` : ''}
     <details class="small mt-3"><summary>Why this recommendation?</summary><div class="text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div></details>
-    ${secondaryDraftAction ? `<details class="small mt-3"><summary>More actions</summary><div class="mt-2">${secondaryDraftAction}</div></details>` : ''}
+    ${(secondaryDraftAction || secondaryTypeAction) ? `<details class="small mt-3"><summary>More actions</summary><div class="d-flex gap-2 flex-wrap mt-2 align-items-end">${secondaryDraftAction}${secondaryTypeAction}</div></details>` : ''}
     ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Not ready for approval yet. ${draft ? 'Open the draft to fix the checks or complete the required confirmations.' : 'Create a draft first.'}</div>` : ''}
   </div></article>`;
 }
@@ -799,11 +1155,24 @@ function queueCard(queueItem, scheduleContextValue) {
 function queueView() {
   const items = listQueueItems({ lane: 'main', limit: 250 });
   const context = schedulerContext();
-  return QUEUE_GROUPS.map((status) => {
-    const group = items.filter((item) => item.status === status);
+  const counts = {
+    ideas: items.filter((item) => ['triage', 'researching', 'watching'].includes(item.status)).length,
+    drafting: items.filter((item) => item.status === 'drafting').length,
+    review: items.filter((item) => item.status === 'needs_review').length,
+    ready: items.filter((item) => ['approved', 'publishing'].includes(item.status)).length,
+  };
+  const summary = `<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Ideas</div><div class="fs-3 fw-semibold">${counts.ideas}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Drafting</div><div class="fs-3 fw-semibold">${counts.drafting}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Needs review</div><div class="fs-3 fw-semibold">${counts.review}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body"><div class="small text-secondary">Ready to publish</div><div class="fs-3 fw-semibold">${counts.ready}</div></div></div></div>
+  </div>`;
+  const sections = CREATE_LIFECYCLE.map(({ title, note, statuses }) => {
+    const group = items.filter((item) => statuses.includes(item.status));
     if (!group.length) return '';
-    return `<h2 class="h5 mt-4">${escapeHtml(statusLabel(status))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map((item) => queueCard(item, context)).join('')}`;
-  }).join('') || '<div class="alert alert-secondary">No active workflow items.</div>';
+    return `<section class="mb-5"><div class="d-flex justify-content-between gap-3 flex-wrap align-items-end mb-2"><div><h2 class="h5 mb-1">${escapeHtml(title)}</h2><div class="small text-secondary">${escapeHtml(note)}</div></div><span class="badge text-bg-light border">${group.length}</span></div>${group.map((item) => queueCard(item, context)).join('')}</section>`;
+  }).join('');
+  return `<div class="mb-4"><h1 class="h3 mb-1">Create</h1><div class="text-secondary">Move an idea from source to draft, review, approval, and publishing without learning the underlying queue states.</div></div>${summary}${sections || '<div class="alert alert-secondary">No active creation work.</div>'}`;
 }
 
 function todayActionCard({ eyebrow, title, body, note = '', href, action, tone = 'primary' }) {
@@ -904,6 +1273,24 @@ function todayView({ now = Date.now(), nextScheduled = null, accountHealth = get
   return summary + stats + actionSection + status;
 }
 
+function improveView(overview = getLearningOverview()) {
+  const tests = listExperiments({ limit: 100 });
+  const activeTests = tests.filter((test) => test.status === 'active');
+  const suggestedRules = (overview.rules || []).filter((rule) => rule.status === 'suggested');
+  const acceptedRules = (overview.rules || []).filter((rule) => rule.status === 'accepted');
+  const decisionRule = suggestedRules.find((rule) => rule.acceptance?.eligible) || suggestedRules[0] || null;
+  const decisionCard = decisionRule
+    ? `<div class="card border-0 shadow-sm mt-4"><div class="card-body p-4"><div class="small text-secondary text-uppercase fw-semibold">Needs a human decision</div><h2 class="h5 mt-1">${escapeHtml(decisionRule.finding || 'A measured pattern is ready to review')}</h2><div class="small text-secondary">${escapeHtml(evidenceLabel(decisionRule.evidence?.state || 'insufficient'))} · ${escapeHtml(decisionRule.evidence?.sampleSize || 0)} examples</div><p class="mt-3 mb-3">${escapeHtml(decisionRule.recommendation || 'Review the evidence before deciding whether anything should change.')}</p><a class="btn btn-primary btn-sm" href="/?source=learning">Review suggested change</a></div></div>`
+    : '<div class="alert alert-light border mt-4"><strong>No strategy decision is waiting right now.</strong> Keep collecting measured outcomes or create a focused test when you have a question worth comparing.</div>';
+  return `<div class="mb-4"><h1 class="h3 mb-1">Improve</h1><div class="text-secondary">Use measured outcomes to ask focused questions, then decide whether any recommendation should change.</div></div>
+    <div class="row g-3">
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">Tests</div><div class="fs-3 fw-semibold">${tests.length}</div><div class="small text-secondary mb-3">${activeTests.length} active. Assignments are explicit and never randomized.</div><a class="btn btn-outline-primary btn-sm" href="/?source=experiments">View or create tests</a></div></div></div>
+      <div class="col-md-6"><div class="card border-0 shadow-sm h-100"><div class="card-body p-4"><div class="small text-secondary">What we've learned</div><div class="fs-3 fw-semibold">${overview.suggested}</div><div class="small text-secondary mb-3">suggested · ${acceptedRules.length} accepted. Suggestions have zero effect until you accept them.</div><a class="btn btn-outline-primary btn-sm" href="/?source=learning">Review learnings</a></div></div></div>
+    </div>
+    ${decisionCard}
+    <div class="card bg-light border-0 mt-4"><div class="card-body"><strong>Nothing here publishes by itself.</strong><div class="small text-secondary mt-1">Tests only attach explicit comparison context. Learned suggestions stay inert until human acceptance, and accepted changes remain bounded by the existing approval, expiry, account-status, and manual-choice rules.</div></div></div>`;
+}
+
 function sectionMeta(source) {
   const group = sourceGroup(source);
   return {
@@ -919,20 +1306,20 @@ function sectionMeta(source) {
 
 function primaryNavigation(activeSource) {
   const activeGroup = sourceGroup(activeSource);
-  return PRIMARY_NAV.map(([group, source, label]) => `<a class="btn btn-sm ${activeGroup === group ? 'btn-dark' : 'btn-outline-secondary'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
+  return PRIMARY_NAV.map(([group, source, label]) => `<a data-active="${activeGroup === group ? 'true' : 'false'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
 }
 
 function secondaryNavigation(activeSource, savedCount) {
   const group = sourceGroup(activeSource);
   const items = {
     discover: [['x', 'For you'], ['viral', 'Trending'], ['interesting', `Saved (${savedCount})`], ['opportunities', 'Opportunities'], ['github', 'GitHub'], ['hn', 'Hacker News'], ['all', 'All sources']],
-    conversations: [['engage', 'What needs a reply'], ['relationships', 'People & relationships'], ['audience', 'Audience']],
-    create: [['queue', 'To review'], ['drafts', 'Drafts']],
-    results: [['performance', 'Performance'], ['health', 'Account status']],
-    improve: [['experiments', 'Tests'], ['learning', "What we've learned"]],
+    conversations: [['engage', 'What needs a reply'], ['relationships', 'People & relationships']],
+    create: [['queue', 'Create lifecycle'], ['drafts', 'All drafts']],
+    results: [['results', 'Overview'], ['performance', 'Content results'], ['audience', 'Audience quality'], ['health', 'Account status']],
+    improve: [['improve', 'Overview'], ['experiments', 'Tests'], ['learning', "What we've learned"]],
   }[group] || [];
   if (!items.length) return '';
-  return `<div class="d-flex gap-2 flex-wrap mt-2">${items.map(([source, label]) => `<a class="btn btn-sm ${activeSource === source ? 'btn-primary' : 'btn-outline-primary'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('')}</div>`;
+  return `<nav aria-label="Section" class="app-subnav">${items.map(([source, label]) => `<a data-active="${activeSource === source ? 'true' : 'false'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('')}</nav>`;
 }
 
 function advancedView() {
@@ -949,7 +1336,7 @@ function advancedView() {
     <div class="row g-3">${links.map(([source, title, body]) => `<div class="col-md-6"><a class="card border-0 shadow-sm h-100 text-decoration-none text-dark" href="/?source=${source}"><div class="card-body"><div class="fw-semibold mb-1">${escapeHtml(title)}</div><div class="small text-secondary">${escapeHtml(body)}</div></div></a></div>`).join('')}</div>`;
 }
 
-async function renderPage(activeSource = 'today', activeTag = '', forceRefresh = false, relationshipClass = '', relationshipStage = '') {
+async function renderPage(activeSource = 'today', activeTag = '', forceRefresh = false, relationshipClass = '', relationshipStage = '', activeDraftId = null) {
   let refreshError = null;
   const researchEmpty = activeSource === 'x'
     ? listCandidates({ source: 'x', withinHours: 72, limit: 1 }).length === 0
@@ -1008,9 +1395,9 @@ async function renderPage(activeSource = 'today', activeTag = '', forceRefresh =
   if (activeTag) visible = visible.filter((item) => item.niche?.tags?.includes(activeTag));
 
   const drafts = activeSource === 'drafts' ? listDrafts({ limit: 100 }) : [];
-  const performance = activeSource === 'performance' ? getPerformanceSnapshot(30) : null;
-  const accountHealth = ['today', 'health', 'engage'].includes(activeSource) ? getAccountHealthSummary() : null;
-  const learningOverview = activeSource === 'learning' ? getLearningOverview() : null;
+  const performance = ['results', 'performance'].includes(activeSource) ? getPerformanceSnapshot(30) : null;
+  const accountHealth = ['today', 'results', 'health', 'engage'].includes(activeSource) ? getAccountHealthSummary() : null;
+  const learningOverview = ['improve', 'learning'].includes(activeSource) ? getLearningOverview() : null;
 
   let decision;
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
@@ -1018,14 +1405,16 @@ async function renderPage(activeSource = 'today', activeTag = '', forceRefresh =
   else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
   else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
   else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} need a content choice · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review · ${countQueueItems({ status: 'approved', lane: 'main' })} approved.`;
-  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} approved.`;
+  else if (activeSource === 'drafts') decision = activeDraftId ? 'Editing one draft in the Create journey.' : `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} approved.`;
   else if (activeSource === 'engage') {
     const engagementItems = listEngagementItems({ limit: 200 });
     const activeCount = engagementItems.filter((item) => item.engagementKind !== 'initial_reply').length;
     decision = engagementError ? `Engage refresh failed: ${engagementError}` : `${activeCount} active conversations · ${engagementItems.length - activeCount} new opportunities.`;
   }
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
-  else if (activeSource === 'performance') decision = `Recent account and post results for @${ACCOUNT}.`;
+  else if (activeSource === 'results') decision = 'Recent outcomes, account status, and what deserves attention.';
+  else if (activeSource === 'performance') decision = `Detailed account and post measurements for @${ACCOUNT}.`;
+  else if (activeSource === 'improve') decision = `${listExperiments({ limit: 500 }).length} tests · ${learningOverview.suggested} suggested changes waiting for evidence or a human decision.`;
   else if (activeSource === 'experiments') decision = `${listExperiments({ limit: 500 }).length} tests · nothing is randomly assigned or posted just for a test.`;
   else if (activeSource === 'learning') decision = `${learningOverview.suggested} suggested changes · ${learningOverview.accepted} accepted · ${learningOverview.retired} retired. Only accepted changes affect future recommendations.`;
   else if (activeSource === 'audience') {
@@ -1046,7 +1435,8 @@ async function renderPage(activeSource = 'today', activeTag = '', forceRefresh =
   const relationshipQuery = activeSource === 'relationships'
     ? `${relationshipClass ? `&class=${encodeURIComponent(relationshipClass)}` : ''}${relationshipStage ? `&stage=${encodeURIComponent(relationshipStage)}` : ''}`
     : '';
-  const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}${relationshipQuery}`;
+  const draftQuery = activeDraftId ? `&draft=${encodeURIComponent(activeDraftId)}` : '';
+  const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}${relationshipQuery}${draftQuery}`;
   const filtersEnabled = ['x', 'viral', 'interesting', 'opportunities'].includes(activeSource);
   const nav = primaryNavigation(activeSource);
   const secondaryNav = secondaryNavigation(activeSource, savedCount);
@@ -1056,9 +1446,11 @@ async function renderPage(activeSource = 'today', activeTag = '', forceRefresh =
   if (activeSource === 'today') content = todayView({ now: scheduleNow, nextScheduled, accountHealth });
   else if (activeSource === 'advanced') content = advancedView();
   else if (activeSource === 'queue') content = queueView();
-  else if (activeSource === 'engage') content = engageView(engagementError);
-  else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
+  else if (activeSource === 'engage') content = engageView(engagementError, activeDraftId);
+  else if (activeSource === 'drafts') content = draftsView(drafts, activeDraftId);
+  else if (activeSource === 'results') content = resultsView(performance, accountHealth);
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
+  else if (activeSource === 'improve') content = improveView(learningOverview);
   else if (activeSource === 'experiments') content = experimentsView();
   else if (activeSource === 'learning') content = learningView(learningOverview);
   else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
@@ -1071,20 +1463,23 @@ async function renderPage(activeSource = 'today', activeTag = '', forceRefresh =
     : `<a class="btn btn-outline-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a>`;
   return `<!doctype html><html lang="en"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>${escapeHtml(sectionTitle)} · Growth workspace</title><link rel="stylesheet" href="/assets/bootstrap.min.css">
-  </head><body class="bg-body-tertiary">
-    <div class="sticky-top bg-body-tertiary border-bottom shadow-sm"><div class="container py-3">
-      <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-2">
-        <div><div class="small text-secondary">Growth workspace</div><div class="fw-semibold">${escapeHtml(sectionTitle)}</div><div class="text-secondary small">${escapeHtml(sectionDescription)} ${escapeHtml(decision)}</div></div>
-        <div class="d-flex gap-2 align-items-center flex-wrap">${refreshControl}<span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">Main-feed automation ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextScheduled ? `<span class="badge text-bg-success">Next post ${nextScheduled.recommendedAt <= scheduleNow ? 'ready now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
+    <title>${escapeHtml(sectionTitle)} · Growth workspace</title>
+    <link rel="stylesheet" href="/assets/bootstrap.min.css">
+    <link rel="stylesheet" href="/assets/dashboard.tailwind.css">
+  </head><body><div class="app-shell">
+    <header class="app-topbar"><div class="app-container py-4">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="min-w-0"><div class="app-kicker">Growth workspace</div><div class="app-title">${escapeHtml(sectionTitle)}</div><div class="app-subtitle">${escapeHtml(sectionDescription)} ${escapeHtml(decision)}</div></div>
+        <div class="flex flex-wrap items-center gap-2">${refreshControl}<span class="rounded-full px-3 py-1 text-xs font-semibold ${AUTO_POST ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'}">Automation ${AUTO_POST ? 'on' : 'off'}</span>${nextScheduled ? `<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Next post ${nextScheduled.recommendedAt <= scheduleNow ? 'ready now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
       </div>
-      <nav aria-label="Primary" class="d-flex gap-2 flex-wrap">${nav}</nav>
-      ${secondaryNav ? `<nav aria-label="Section" class="border-top pt-2 mt-2">${secondaryNav}</nav>` : ''}
-      ${filtersEnabled ? `<div class="d-flex gap-2 flex-wrap mt-2"><a class="badge rounded-pill ${!activeTag ? 'text-bg-dark' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}">All topics</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="badge rounded-pill ${activeTag === tag ? 'text-bg-primary' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
-    </div></div>
-    <main class="container py-4">${content}</main>
+      <nav aria-label="Primary" class="app-nav mt-4">${nav}</nav>
+      ${secondaryNav || ''}
+      ${filtersEnabled ? `<div class="mt-3 flex flex-wrap gap-2"><a class="rounded-full px-3 py-1.5 text-xs font-semibold no-underline ${!activeTag ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}" href="/?source=${escapeHtml(activeSource)}">All topics</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="rounded-full px-3 py-1.5 text-xs font-semibold no-underline ${activeTag === tag ? 'bg-sky-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
+    </div></header>
+    <main class="app-container py-6 lg:py-8">${content}</main>
+    <script defer src="/assets/dashboard-client.js"></script>
     <script src="/assets/bootstrap.bundle.min.js"></script>
-  </body></html>`;
+  </div></body></html>`;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1099,6 +1494,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && requestUrl.pathname === '/assets/bootstrap.bundle.min.js') {
       res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
       res.end(await fs.readFile(path.resolve('node_modules/bootstrap/dist/js/bootstrap.bundle.min.js')));
+      return;
+    }
+    if (req.method === 'GET' && requestUrl.pathname === '/assets/dashboard.tailwind.css') {
+      res.writeHead(200, { 'content-type': 'text/css; charset=utf-8' });
+      res.end(await fs.readFile(path.resolve('dashboard.tailwind.generated.css')));
+      return;
+    }
+    if (req.method === 'GET' && requestUrl.pathname === '/assets/dashboard-client.js') {
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+      res.end(await fs.readFile(path.resolve('dashboard-client.js')));
       return;
     }
 
@@ -1125,15 +1530,22 @@ const server = http.createServer(async (req, res) => {
         factualityConfirmed: form.get('factualityConfirmed') === '1',
         evidenceConfirmed: form.get('evidenceConfirmed') === '1',
       });
-      res.writeHead(303, { location: queueItem?.lane === 'engagement' ? '/?source=engage' : '/?source=drafts' }); res.end(); return;
+      const draft = getDraftByCandidate(key);
+      const location = queueItem?.lane === 'engagement'
+        ? (draft ? `/?source=engage&draft=${draft.id}` : '/?source=engage')
+        : (draft ? `/?source=drafts&draft=${draft.id}` : '/?source=queue');
+      res.writeHead(303, { location }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/engage/draft') {
       const form = await readForm(req);
       const key = form.get('key');
+      let draft = getDraftByCandidate(key);
+      const needsInitialGeneration = !draft;
       routeCandidate(key, 'reply', { actor: 'human' });
-      const draft = getDraftByCandidate(key);
-      res.writeHead(303, { location: draft ? `/?source=drafts&draft=${draft.id}` : '/?source=engage' }); res.end(); return;
+      draft = getDraftByCandidate(key);
+      if (needsInitialGeneration && draft) draft = (await generateDraftCandidate(draft)).saved;
+      res.writeHead(303, { location: draft ? `/?source=engage&draft=${draft.id}` : '/?source=engage' }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/engage/resolve') {
@@ -1208,6 +1620,10 @@ const server = http.createServer(async (req, res) => {
       const form = await readForm(req);
       const population = JSON.parse(String(form.get('populationJson') || '{}'));
       if (!population || typeof population !== 'object' || Array.isArray(population)) throw new Error('Experiment population JSON must be an object.');
+      const guidedVariants = [form.get('variantA'), form.get('variantB')].map((value) => String(value || '').trim()).filter(Boolean);
+      const variants = guidedVariants.length >= 2
+        ? guidedVariants
+        : String(form.get('variants') || '').split(',').map((value) => value.trim()).filter(Boolean);
       createExperiment({
         name: form.get('name'),
         hypothesis: form.get('hypothesis'),
@@ -1215,7 +1631,7 @@ const server = http.createServer(async (req, res) => {
         population,
         primaryMetric: form.get('primaryMetric'),
         secondaryMetrics: String(form.get('secondaryMetrics') || '').split(',').map((value) => value.trim()).filter(Boolean),
-        variants: String(form.get('variants') || '').split(',').map((value) => value.trim()).filter(Boolean),
+        variants,
         minimumCompletedPerVariant: Number(form.get('minimumCompletedPerVariant')),
         status: form.get('status') || 'draft',
       });
@@ -1277,14 +1693,47 @@ const server = http.createServer(async (req, res) => {
       const form = await readForm(req);
       const candidate = getCandidate(form.get('key'));
       if (!candidate) throw new Error('Candidate not found.');
+      const requestedPipeline = String(form.get('pipeline') || 'original');
+      const pipeline = ['original', 'quote', 'thread'].includes(requestedPipeline) ? requestedPipeline : 'original';
+      if (pipeline === 'quote' && candidate.source !== 'x') throw new Error('Quote posts require an X source.');
       saveCandidateToWorkflow(candidate.key, true);
       let draft = getDraftByCandidate(candidate.key);
-      const queueItem = getQueueItemByCandidate(candidate.key);
+      const needsInitialGeneration = !draft;
       if (!draft) {
-        routeCandidate(candidate.key, queueItem?.pipeline && ['original', 'quote', 'thread', 'reply'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original', { actor: 'human' });
+        routeCandidate(candidate.key, pipeline, { actor: 'human' });
         draft = getDraftByCandidate(candidate.key);
       }
+      if (needsInitialGeneration && draft) draft = (await generateDraftCandidate(draft)).saved;
       res.writeHead(303, { location: `/?source=drafts&draft=${draft.id}` }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/draft/generate') {
+      const form = await readForm(req);
+      const current = getDraft(Number(form.get('id')));
+      if (!current) throw new Error('Draft not found.');
+      const { saved, queueItem } = await generateDraftCandidate(current);
+      res.writeHead(303, { location: queueItem?.lane === 'engagement' ? `/?source=engage&draft=${saved.id}` : `/?source=drafts&draft=${saved.id}` }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/draft/preview') {
+      const form = await readForm(req);
+      const current = getDraft(Number(form.get('id')));
+      if (!current) throw new Error('Draft not found.');
+      const candidate = getCandidate(current.candidateKey);
+      if (!candidate) throw new Error('Draft source candidate not found.');
+      const queueItem = getQueueItemByCandidate(candidate.key);
+      if (!queueItem) throw new Error('Draft queue item not found.');
+      const { updated, pipeline } = draftEditorState(current, queueItem, form);
+      const analysis = dashboardDraftScore(candidate, updated, pipeline);
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({
+        score: analysis.score,
+        quality: analysis.quality,
+        breakdown: analysis.breakdown,
+        weightedLength: analysis.weightedLength,
+        gates: analysis.gates,
+      }));
+      return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/draft/save') {
@@ -1295,46 +1744,19 @@ const server = http.createServer(async (req, res) => {
       if (!candidate) throw new Error('Draft source candidate not found.');
       let queueItem = getQueueItemByCandidate(candidate.key);
       if (!queueItem) queueItem = saveCandidateToWorkflow(candidate.key, true).queueItem;
-      const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
+      const { updated, pipeline } = draftEditorState(current, queueItem, form);
       const scheduledRaw = form.get('scheduledAt');
       const scheduledAt = scheduledRaw == null ? current.scheduledAt : (scheduledRaw ? Date.parse(scheduledRaw) : null);
       if (scheduledRaw && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
-      const mediaType = form.get('mediaType') || 'none';
-      if (!MEDIA_TYPES.includes(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
-      const updated = {
-        ...current,
-        hook: form.get('hook') || '',
-        insight: form.get('insight') || '',
-        evidence: form.get('evidence') || '',
-        action: form.get('action') || '',
-        scheduledAt,
-        gates: {},
-        editor: {
-          ...(current.editor || {}),
-          pipeline,
-          media: {
-            required: form.get('mediaRequired') === '1',
-            type: mediaType,
-            reason: form.get('mediaReason') || '',
-            source: form.get('mediaSource') || '',
-            altText: form.get('mediaAltText') || '',
-          },
-        },
-      };
-      if (pipeline === 'thread') {
-        updated.threadParts = form.getAll('threadPart').map((part) => String(part));
-        updated.body = '';
-        updated.editor.threadParts = [...updated.threadParts];
-      } else {
-        updated.body = form.get('body') ?? composeDraft(updated, { pipeline });
-        updated.editor.finalText = updated.body;
-      }
-      const analysis = scoreDraft(updated, candidate);
+      updated.scheduledAt = scheduledAt;
+      const analysis = dashboardDraftScore(candidate, updated, pipeline);
+      updated.gates = analysis.gates;
       updated.qualityScore = analysis.score;
       updated.status = current.status === 'published' ? 'published' : 'draft';
       const saved = saveDraft(updated);
       if (current.status !== 'published') routeCandidate(candidate.key, pipeline, { actor: 'human' });
-      res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
+      const nextQueueItem = getQueueItemByCandidate(candidate.key);
+      res.writeHead(303, { location: nextQueueItem?.lane === 'engagement' ? `/?source=engage&draft=${saved.id}` : `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
     if (req.method === 'POST' && requestUrl.pathname === '/draft/thread-parts') {
@@ -1358,12 +1780,14 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['today', 'x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'learning', 'github', 'hn', 'all', 'advanced'];
+    const allowedSources = ['today', 'x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'results', 'health', 'audience', 'performance', 'improve', 'experiments', 'learning', 'github', 'hn', 'all', 'advanced'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'today';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';
     const relationshipStage = RELATIONSHIP_STAGES.includes(requestUrl.searchParams.get('stage')) ? requestUrl.searchParams.get('stage') : '';
-    const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1', relationshipClass, relationshipStage);
+    const draftParam = Number(requestUrl.searchParams.get('draft'));
+    const activeDraftId = Number.isInteger(draftParam) && draftParam > 0 ? draftParam : null;
+    const html = await renderPage(source, tag, requestUrl.searchParams.get('refresh') === '1', relationshipClass, relationshipStage, activeDraftId);
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end(html);
   } catch (error) {
     res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });

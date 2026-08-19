@@ -94,7 +94,9 @@ function normalizedText(text) {
 
 function contentUnits(draft, pipeline) {
   if (pipeline === 'thread') return threadParts(draft);
-  const body = String(draft?.body || draft?.editor?.finalText || composeDraft(draft, { pipeline })).trim();
+  const body = draft?.body != null
+    ? String(draft.body).trim()
+    : String(draft?.editor?.finalText || composeDraft(draft, { pipeline })).trim();
   return [body];
 }
 
@@ -551,16 +553,21 @@ export function scoreDraft(draft, candidate, context = {}) {
   const gateAware = arguments.length >= 3;
   const pipeline = gateAware ? ensurePipeline(context?.pipeline || draft?.editor?.pipeline || 'original') : 'original';
   const units = contentUnits(draft, pipeline);
-  const body = pipeline === 'thread' ? (units[0] || '') : (units[0] || composeDraft(draft));
+  const body = units[0] ?? '';
+  const blocks = String(body || '').split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+  const firstLine = String(blocks[0] || body || '').split('\n')[0].trim();
+  const insightText = blocks.length > 1 ? blocks.slice(1).join(' ') : String(body || '').trim();
+  const finalBlock = blocks.at(-1) || '';
   const niche = Math.min(10, Math.round(Number(candidate?.niche?.score || 0) / 5));
-  const hook = usefulText(draft.hook, 20) ? 8 : String(draft.hook || '').trim() ? 3 : 0;
-  const insight = usefulText(draft.insight, 45) ? 10 : String(draft.insight || '').trim() ? 3 : 0;
-  const evidenceText = String(draft.evidence || '');
-  const hasStrongEvidence = usefulText(evidenceText, 30)
-    && /(\d|benchmark|latency|ms|sec|token|cost|install|npm|pnpm|curl|git |python |node |output|result|tested|measured)/i.test(evidenceText);
-  const hasSource = /https?:\/\//i.test(evidenceText);
-  const evidence = hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 20) ? 4 : 1;
-  const action = usefulText(draft.action, 24) ? 7 : String(draft.action || '').trim() ? 2 : 0;
+  const hook = usefulText(firstLine, 20) ? 8 : firstLine ? 3 : 0;
+  const insight = usefulText(insightText, 45) ? 10 : usefulText(body, 60) ? 6 : String(body || '').trim() ? 3 : 0;
+  const evidenceText = String(body || '');
+  const hasStrongEvidence = Boolean(draft?.editor?.evidenceUsed?.length) || (usefulText(evidenceText, 30)
+    && /(\d|benchmark|latency|ms|sec|token|cost|install|npm|pnpm|curl|git |python |node |output|result|tested|measured|source|docs|release notes)/i.test(evidenceText));
+  const hasSource = /https?:\/\//i.test(evidenceText) || Boolean(draft?.editor?.evidenceUsed?.length);
+  const evidence = hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 40) ? 4 : 1;
+  const hasAction = /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|keep|check|measure|benchmark|configure|ship|test)\b)/i.test(finalBlock);
+  const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;
   const sourceSimilarity = similarity(body, candidate?.text || '');
   const originality = sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
   const score = niche + hook + insight + evidence + action + originality;
