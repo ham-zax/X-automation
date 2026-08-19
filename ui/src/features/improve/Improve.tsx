@@ -544,7 +544,7 @@ export function Improve() {
   }, [data])
 
   if (isLoading) {
-    return <Loading message="Loading Improve..." />
+    return <Loading message="Loading experiments..." />
   }
 
   if (error) {
@@ -552,7 +552,7 @@ export function Improve() {
   }
 
   if (!data) {
-    return <Error message="Improve data is unavailable." />
+    return <Error message="Experiment data is unavailable." />
   }
 
   const activeTests = data.tests.filter((test) => test.status === 'active')
@@ -560,7 +560,7 @@ export function Improve() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Improve</h2>
+        <h2 className="text-2xl font-semibold text-slate-900">Experiments</h2>
         <p className="mt-1 text-sm text-slate-600">
           Use measured outcomes to ask focused questions, then decide whether any recommendation should change.
         </p>

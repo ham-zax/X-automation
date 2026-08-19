@@ -24,6 +24,12 @@ interface PreviewResult {
   weightedLength: number | null
 }
 
+function displayRiskFlags(flags: string[]): string {
+  return flags.map((flag) => /no verified evidence beyond the source text/i.test(flag)
+    ? 'No additional verified evidence was supplied to this writing pass.'
+    : flag).join(' · ')
+}
+
 export function DraftEditor({ data }: { data: DraftEditorData }) {
   const { draft, pipeline, flags } = data
   const isThread = pipeline === 'thread'
@@ -43,6 +49,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const [mediaSource, setMediaSource] = useState(editorMeta.media?.source || '')
   const [mediaAltText, setMediaAltText] = useState(editorMeta.media?.altText || '')
   const [dirty, setDirty] = useState(false)
+  const [generationOutcome, setGenerationOutcome] = useState<{ decision: string; riskFlags: string[] } | null>(null)
 
   const [confirmReset, setConfirmReset] = useState(0)
   useEffect(() => {
@@ -73,7 +80,6 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const save = useDraftAction(draft.id, 'save')
   const generate = useDraftAction(draft.id, 'generate')
   const previewMutation = useDraftAction(draft.id, 'preview')
-  const threadPartsMutation = useDraftAction(draft.id, 'thread-parts')
 
   useEffect(() => {
     if (!dirty) {
@@ -117,8 +123,29 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   }
 
   const handleGenerate = () => {
+    if (dirty && !window.confirm('Regenerate with AI? Your unsaved edits will be replaced by a new generated draft.')) return
+    setGenerationOutcome(null)
     generate.mutate({} as never, {
-      onSuccess: () => {
+      onSuccess: (result) => {
+        const generated = result as {
+          output?: { decision?: string; riskFlags?: string[] }
+          editor?: DraftEditorData | null
+        }
+        const nextDraft = generated.editor?.draft
+        if (nextDraft) {
+          const nextEditor = (nextDraft.editor || {}) as typeof editorMeta
+          setBody(nextDraft.body)
+          setThreadParts(nextDraft.threadParts?.length ? nextDraft.threadParts : ['', ''])
+          setMediaRequired(Boolean(nextEditor.media?.required))
+          setMediaType(nextEditor.media?.type || 'none')
+          setMediaReason(nextEditor.media?.reason || '')
+          setMediaSource(nextEditor.media?.source || '')
+          setMediaAltText(nextEditor.media?.altText || '')
+        }
+        setGenerationOutcome({
+          decision: generated.output?.decision || 'POST',
+          riskFlags: generated.output?.riskFlags || [],
+        })
         setDirty(false)
         setConfirmReset((value) => value + 1)
       },
@@ -130,7 +157,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {flags.engagementReply ? 'Conversation reply' : 'Create'}
+            {flags.engagementReply ? 'Reply draft' : 'Post draft'}
           </div>
           <h1 className="mt-1 text-2xl font-semibold text-slate-900">{data.candidate.title}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
@@ -141,14 +168,14 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${qualityClass}`}>
-            {score}/50 {previewPending && dirty ? '· checking…' : ''}
+            Draft quality {score}/50 · approval threshold 40 {previewPending && dirty ? '· checking…' : ''}
           </span>
           <button
             onClick={handleGenerate}
             disabled={generate.isPending}
             className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50"
           >
-            {generate.isPending ? 'Generating…' : 'Generate with AI'}
+            {generate.isPending ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
           </button>
           {data.candidate.url && (
             <a
@@ -169,17 +196,31 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
       )}
 
-      {editorMeta.decision === 'DO_NOT_POST' ? (
+      {generationOutcome && !generate.isPending && (
+        generationOutcome.decision === 'DO_NOT_POST' ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <strong>AI suggestion: don’t post yet.</strong>
+            <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+            <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <strong>Generation completed.</strong> The editor below has been updated with the new AI draft.
+          </div>
+        )
+      )}
+
+      {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <strong>AI recommends not posting this source.</strong>
-          <div className="mt-1">{(editorMeta.riskFlags || []).join(' · ') || 'There is not enough verified additive value in the current packet.'}</div>
-          <div className="mt-2 text-xs text-amber-800">You do not need to fill a scaffold. Add stronger evidence/source context, or move on.</div>
+          <strong>AI suggestion: don’t post yet.</strong>
+          <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || []) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+          <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
         </div>
       ) : (editorMeta.decision || body) ? (
         <div className="text-sm text-slate-500">
-          AI prepared this candidate. Your job is to review the exact text and confirm facts/evidence before approval — not fill a scaffold.
+          AI prepared this candidate. Review the exact text and complete the confirmations that apply before approval.
         </div>
-      ) : null}
+      ) : null)}
 
       <GatePanel gates={gatesView} />
 
@@ -210,15 +251,15 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             ))}
             <div className="flex gap-2">
               <button
-                onClick={() => threadPartsMutation.mutate({ op: 'add' } as never)}
-                disabled={threadParts.length >= 6 || threadPartsMutation.isPending}
+                onClick={() => { markDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
+                disabled={threadParts.length >= 6}
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Add part
               </button>
               <button
-                onClick={() => threadPartsMutation.mutate({ op: 'remove' } as never)}
-                disabled={threadParts.length <= 2 || threadPartsMutation.isPending}
+                onClick={() => { markDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
+                disabled={threadParts.length <= 2}
                 className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Remove last
@@ -246,12 +287,12 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             </div>
           )}
         <div className="mt-2 text-xs text-slate-500">
-          This feedback updates from the exact text you are editing. It helps improve the draft; the approval checks above decide whether it is ready.
+          This feedback updates from the exact text you are editing. It helps improve the draft; the approval-readiness panel above decides whether it is ready.
         </div>
       </div>
 
       {!flags.engagementReply && (
-        <Disclosure summary="Add a visual or see AI context">
+        <Disclosure summary="Visual plan">
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={mediaRequired} onChange={(event) => { markDirty(); setMediaRequired(event.target.checked) }} />
             This post needs a visual before publishing
@@ -278,17 +319,20 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           </div>
           {mediaRequired && (
             <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              A required visual currently blocks scheduling/publishing until a real attachment readiness path exists.
+              Visual plans do not attach files yet. Marking a visual as required will block publishing until an attachment path exists.
             </div>
           )}
-          <TechnicalDetails>
-            <div><strong>How AI built this draft</strong></div>
-            <div className="mt-1"><strong>Key topics:</strong> {(editorMeta.semanticAnchors || []).join(', ') || 'None recorded'}</div>
-            <div><strong>Source material used:</strong> {(editorMeta.evidenceUsed || []).join('; ') || 'None recorded'}</div>
-            <div><strong>AI decision:</strong> {editorMeta.decision || 'n/a'}</div>
-          </TechnicalDetails>
         </Disclosure>
       )}
+
+      <Disclosure summary="AI draft details">
+        <TechnicalDetails>
+          <div><strong>How AI built this draft</strong></div>
+          <div className="mt-1"><strong>Key topics:</strong> {(editorMeta.semanticAnchors || []).join(', ') || 'None recorded'}</div>
+          <div><strong>Source material used:</strong> {(editorMeta.evidenceUsed || []).join('; ') || 'None recorded'}</div>
+          <div><strong>AI decision:</strong> {editorMeta.decision || 'n/a'}</div>
+        </TechnicalDetails>
+      </Disclosure>
 
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
         <div className="max-w-2xl text-sm text-slate-500">

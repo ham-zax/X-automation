@@ -15,7 +15,7 @@ const FEEDS = [
   { id: 'github', label: 'GitHub' },
   { id: 'hn', label: 'Hacker News' },
   { id: 'all', label: 'All sources' },
-  { id: 'saved', label: 'Saved' },
+  { id: 'saved', label: 'Bookmarks' },
 ]
 
 function candidateMetricLine(candidate: DiscoveredCandidate): string {
@@ -34,7 +34,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
   const pendingAction = triage.variables?.key === candidate.key && triage.isPending ? triage.variables.action : null
   const error = triage.isError && triage.variables?.key === candidate.key ? triage.error : null
 
-  const runTriage = (action: 'original' | 'quote' | 'thread' | 'reply' | 'save' | 'unsave' | 'ignore') => {
+  const runTriage = (action: 'original' | 'quote' | 'thread' | 'reply' | 'save' | 'unsave' | 'ignore' | 'discard') => {
     triage.mutate({ key: candidate.key, action }, {
       onSuccess: (result) => {
         const data = result as { draftId?: number | null }
@@ -58,7 +58,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         </div>
         <div className="flex flex-wrap gap-2">
           {candidate.viral ? <Badge tone="danger">{candidate.viral.label}</Badge> : <Badge>{isX ? 'Relevant signal' : 'Research signal'}</Badge>}
-          {candidate.saved && <Badge tone="success">Saved</Badge>}
+          {candidate.saved && <Badge tone="success">Bookmarked</Badge>}
           {queue && <Badge tone="info">{queue.statusLabel}</Badge>}
         </div>
       </div>
@@ -85,13 +85,13 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
 
       {queue?.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">
-          <strong>Suggested use:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
+          <strong>Suggested next step:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
         </div>
       )}
       {queue?.draftId && (
         <div className="mt-2">
           <a href={`#/draft/${queue.draftId}`} className="text-sm font-medium text-sky-700 hover:underline">
-            Continue draft ({queue.draftQualityScore ?? 0}/50) →
+            Continue draft · quality {queue.draftQualityScore ?? 0}/50 · approval threshold 40 →
           </a>
         </div>
       )}
@@ -109,7 +109,11 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         <div className="mt-4">
           {pendingAction === 'original' || pendingAction === 'quote' || pendingAction === 'thread' || pendingAction === 'reply'
             ? <Pending label="Generating draft…" />
-            : <Pending label="Saving…" />}
+            : pendingAction === 'discard'
+              ? <Pending label="Discarding draft…" />
+              : pendingAction === 'ignore'
+                ? <Pending label="Skipping source…" />
+              : <Pending label={pendingAction === 'unsave' ? 'Removing bookmark…' : 'Saving bookmark…'} />}
         </div>
       ) : (
         <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -117,41 +121,53 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
             onClick={() => runTriage('original')}
             className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
           >
-            Original
+            Draft original
           </button>
           {isX && (
             <button
               onClick={() => runTriage('quote')}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
-              Quote
+              Draft quote
             </button>
           )}
           <button
             onClick={() => runTriage('thread')}
             className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
           >
-            Thread
+            Draft thread
           </button>
           {isX && (
             <button
               onClick={() => runTriage('reply')}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
             >
-              Conversation
+              Draft reply
             </button>
           )}
           <button
             onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')}
             className={`rounded-md px-3 py-1.5 text-sm font-medium ${candidate.saved ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
           >
-            {candidate.saved ? 'Saved' : 'Save for later'}
+            {candidate.saved ? 'Remove bookmark' : 'Bookmark'}
           </button>
+          {queue?.draftId && (
+            <button
+              onClick={() => {
+                if (window.confirm('Discard this draft? The source and its history will remain available.')) runTriage('discard')
+              }}
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700"
+            >
+              Discard draft
+            </button>
+          )}
           <button
             onClick={() => runTriage('ignore')}
+            disabled={queue?.status === 'ignored'}
+            title="Stop pursuing this source. A bookmarked source stays bookmarked until you remove the bookmark."
             className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
           >
-            Ignore
+            {queue?.status === 'ignored' ? 'Skipped' : 'Skip source'}
           </button>
           {candidate.url && (
             <a

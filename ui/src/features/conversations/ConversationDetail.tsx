@@ -36,6 +36,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   }
 
   const editor = data.editor
+  const evidenceRequired = Boolean(editor?.analysis.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
   const canApproveSend = data.flags.canApproveSend
   const canSendApproved = data.flags.approved && !data.health.constrained
   const actionError =
@@ -147,6 +148,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                 <ConfirmCheckboxes
                   factuality={confirmations.factualityConfirmed}
                   evidence={confirmations.evidenceConfirmed}
+                  evidenceRequired={evidenceRequired}
                   onChange={setConfirmations}
                 />
                 <button
@@ -154,7 +156,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                   disabled={reviewAction.isPending}
                   className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
                 >
-                  {reviewAction.isPending ? 'Checking…' : editor.queueItem?.status === 'needs_review' ? 'Recheck approval checks' : 'Run approval checks'}
+                  {reviewAction.isPending ? 'Checking…' : editor.queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
                 </button>
                 <div className="mt-1 text-xs text-slate-500">This checks whether the current draft is ready for human approval. It does not send anything.</div>
               </div>
@@ -165,6 +167,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                 <ConfirmCheckboxes
                   factuality={confirmations.factualityConfirmed}
                   evidence={confirmations.evidenceConfirmed}
+                  evidenceRequired={evidenceRequired}
                   onChange={setConfirmations}
                 />
                 {approveSendPending ? (
@@ -172,7 +175,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                 ) : (
                   <button
                     onClick={() => approveSendAction.mutate(confirmations)}
-                    disabled={!confirmations.factualityConfirmed || !confirmations.evidenceConfirmed}
+                    disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
                     className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     Approve &amp; send exact reply
@@ -223,7 +226,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
             onClick={() => draftAction.mutate({})}
             className="mt-3 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
           >
-            Review reply
+            Generate reply with AI
           </button>
         </div>
       )}
@@ -248,7 +251,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
               disabled={resolveAction.isPending}
               className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
-              Not now
+              Skip conversation
             </button>
             <button
               onClick={() => resolveAction.mutate({ action: 'expire' }, { onSuccess: () => navigate('/conversations') })}

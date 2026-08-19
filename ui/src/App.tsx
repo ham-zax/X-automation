@@ -24,10 +24,10 @@ const NAV_ITEMS = [
   { id: 'today', label: 'Today', href: '#/today' },
   { id: 'discover', label: 'Discover', href: '#/discover' },
   { id: 'conversations', label: 'Conversations', href: '#/conversations' },
-  { id: 'create', label: 'Create', href: '#/create' },
-  { id: 'results', label: 'Results', href: '#/results' },
-  { id: 'improve', label: 'Improve', href: '#/improve' },
-  { id: 'advanced', label: 'Advanced', href: '#/advanced' },
+  { id: 'create', label: 'Posts', href: '#/create' },
+  { id: 'results', label: 'Performance', href: '#/results' },
+  { id: 'improve', label: 'Experiments', href: '#/improve' },
+  { id: 'advanced', label: 'Diagnostics', href: '#/advanced' },
 ]
 
 function RouteContent() {

@@ -32,7 +32,7 @@ function ConversationCard({ conversation }: { conversation: ConversationListItem
             {conversation.expiresAt && <span>Useful until {formatDateTime(conversation.expiresAt)}</span>}
           </div>
         </div>
-        <span className="shrink-0 text-sm font-medium text-sky-700">{conversation.draftId ? 'Review reply →' : 'Open →'}</span>
+        <span className="shrink-0 text-sm font-medium text-sky-700">{conversation.draftId ? 'Review reply →' : 'Review opportunity →'}</span>
       </div>
     </a>
   )

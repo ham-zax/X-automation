@@ -15,19 +15,19 @@ import {
 } from '../../components/primitives'
 
 const ROUTE_OPTIONS = [
-  ['original', 'Original'],
+  ['original', 'Original post'],
   ['quote', 'Quote post'],
   ['thread', 'Thread'],
   ['reply', 'Reply'],
   ['repost', 'Repost'],
-  ['research', 'Research only'],
-  ['watch', 'Save for later'],
-  ['ignore', 'Ignore'],
+  ['research', 'Research further'],
+  ['watch', 'Pause'],
+  ['ignore', 'Skip source'],
 ] as const
 
 function RouteForm({ item }: { item: QueueItemView }) {
   const route = useQueueAction('route')
-  const [pipeline, setPipeline] = useState(item.recommendedPipeline || item.pipeline !== 'triage' ? item.pipeline : item.recommendedPipeline || 'original')
+  const [pipeline, setPipeline] = useState(item.pipeline !== 'triage' ? item.pipeline : item.recommendedPipeline || 'original')
   return (
     <form
       className="mt-3 flex flex-wrap items-center gap-2"
@@ -36,7 +36,7 @@ function RouteForm({ item }: { item: QueueItemView }) {
         route.mutate({ key: item.candidateKey, pipeline })
       }}
     >
-      <span className="text-sm font-semibold text-slate-700">Use this as</span>
+      <span className="text-sm font-semibold text-slate-700">Next step</span>
       <select
         value={pipeline}
         onChange={(event) => setPipeline(event.target.value)}
@@ -49,7 +49,7 @@ function RouteForm({ item }: { item: QueueItemView }) {
         disabled={route.isPending}
         className="rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
       >
-        {route.isPending ? 'Applying…' : 'Apply choice'}
+        {route.isPending ? 'Applying…' : 'Apply'}
       </button>
       {route.isError && route.variables?.key === item.candidateKey && (
         <span className="text-xs text-red-600">{route.error.message}</span>
@@ -79,7 +79,7 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
           <strong className="text-sm text-slate-900">Publishing plan</strong>
           <div className="text-xs text-slate-600">{recommended}</div>
         </div>
-        <Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? 'Ready' : 'Needs attention'}</Badge>
+        <Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? 'Ready' : 'Not ready'}</Badge>
       </div>
       {schedule.manualOnly && (
         <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">Reposts remain manual.</div>
@@ -140,12 +140,20 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
 function QueueCard({ item, automation }: { item: QueueItemView; automation: boolean }) {
   const review = useQueueAction('review')
   const approve = useQueueAction('approve')
+  const discard = useQueueAction('discard')
   const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
   const mainFeedReview = item.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(item.pipeline)
   const canApprove = mainFeedReview && (item.pipeline === 'repost' || (item.draft != null && item.draft.qualityScore >= 40 && item.draft.gates?.passed === true))
   const canRequestReview = ['original', 'quote', 'thread', 'reply'].includes(item.pipeline) && ['drafting', 'needs_review'].includes(item.status)
   const choosingType = ['triage', 'researching', 'watching'].includes(item.status)
+  const approvalBlockers = item.draft
+    ? [
+        ...(item.draft.gatesView?.writingFailures || []).map((failure) => failure.message),
+        ...(item.draft.gatesView?.humanConfirmations || []).map((confirmation) => confirmation.message),
+      ]
+    : []
+  const evidenceRequired = Boolean(item.draft?.liveAnalysis?.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
 
   const publicationState = item.publishStartedAt || item.publishedAt || item.publishError ? (
     <div className="mt-2 text-sm text-slate-700">
@@ -178,7 +186,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
       {item.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">
-          <strong>Suggested use:</strong> {item.recommendedPipelineLabel} <span className="text-slate-500">— {item.routingReason}</span>
+          <strong>Suggested next step:</strong> {item.recommendedPipelineLabel} <span className="text-slate-500">— {item.routingReason}</span>
         </div>
       )}
       {publicationState}
@@ -186,7 +194,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
       {item.draft && (
         <div className="mt-3">
           <GatePanel gates={item.draft.gatesView} />
-          <div className="mt-1 text-xs text-slate-500">Draft {item.draft.qualityScore}/50</div>
+          <div className="mt-1 text-xs text-slate-500">Draft quality {item.draft.qualityScore}/50 · approval threshold 40</div>
         </div>
       )}
 
@@ -199,11 +207,23 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
             {item.status === 'drafting' ? 'Continue draft' : 'Review draft'}
           </a>
         )}
+        {item.draftId && !['publishing', 'published'].includes(item.status) && (
+          <button
+            onClick={() => {
+              if (window.confirm('Discard this draft? The source and its history will remain available.')) discard.mutate({ key: item.candidateKey })
+            }}
+            disabled={discard.isPending}
+            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          >
+            {discard.isPending ? 'Discarding…' : 'Discard draft'}
+          </button>
+        )}
         {canApprove && item.pipeline !== 'repost' && (
           <div className="w-full">
             <ConfirmCheckboxes
               factuality={confirmations.factualityConfirmed}
               evidence={confirmations.evidenceConfirmed}
+              evidenceRequired={evidenceRequired}
               onChange={setConfirmations}
             />
             {approve.isPending && approve.variables?.key === item.candidateKey ? (
@@ -211,7 +231,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
             ) : (
               <button
                 onClick={() => approve.mutate({ key: item.candidateKey, ...confirmations })}
-                disabled={!confirmations.factualityConfirmed || !confirmations.evidenceConfirmed}
+                disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
                 Approve for publishing
@@ -232,10 +252,11 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
       </div>
 
       {canRequestReview && (
-        <Disclosure summary="Approval checks">
+        <Disclosure summary="Approval readiness">
           <ConfirmCheckboxes
             factuality={confirmations.factualityConfirmed}
             evidence={confirmations.evidenceConfirmed}
+            evidenceRequired={evidenceRequired}
             onChange={setConfirmations}
           />
           <button
@@ -243,7 +264,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
             disabled={review.isPending}
             className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
           >
-            {review.isPending ? 'Checking…' : item.status === 'needs_review' ? 'Recheck approval checks' : 'Run approval checks'}
+            {review.isPending ? 'Checking…' : item.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
           </button>
           <div className="mt-1 text-xs text-slate-500">This checks whether the current draft is ready for human approval. It does not publish anything.</div>
         </Disclosure>
@@ -251,23 +272,40 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
       {mainFeedReview && !canApprove && (
         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Not ready for approval yet. {item.draft ? 'Open the draft to fix the checks or complete the required confirmations.' : 'Create a draft first.'}
+          <strong>Not ready for approval.</strong>{' '}
+          {item.draft
+            ? approvalBlockers.length
+              ? approvalBlockers.slice(0, 2).join(' ')
+              : 'Open the draft to fix the checks or complete the required confirmations.'
+            : 'Create a draft first.'}
         </div>
       )}
 
-      {(review.isError && review.variables?.key === item.candidateKey) || (approve.isError && approve.variables?.key === item.candidateKey) ? (
+      {(review.isError && review.variables?.key === item.candidateKey) || (approve.isError && approve.variables?.key === item.candidateKey) || (discard.isError && discard.variables?.key === item.candidateKey) ? (
         <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {(review.isError && review.variables?.key === item.candidateKey ? review.error.message : '')}
           {(approve.isError && approve.variables?.key === item.candidateKey ? approve.error.message : '')}
+          {(discard.isError && discard.variables?.key === item.candidateKey ? discard.error.message : '')}
         </div>
       ) : null}
 
       <Disclosure summary="Why this recommendation?">
-        <div className="flex flex-wrap gap-2">
-          <Badge>Reach {item.potentials.reach}</Badge>
-          <Badge>Follow {item.potentials.follow}</Badge>
-          <Badge>Conversation {item.potentials.conversation}</Badge>
-          <Badge>Relationship {item.potentials.relationship}</Badge>
+        <div className="space-y-3 text-sm text-slate-700">
+          <div>
+            <strong>Suggested next step:</strong>{' '}
+            {item.recommendedPipelineLabel || item.pipelineLabel}
+            {item.routingReason ? ` — ${item.routingReason}` : ''}
+          </div>
+          {mainFeedReview && !canApprove && approvalBlockers.length > 0 && (
+            <div><strong>Why approval is blocked:</strong> {approvalBlockers.join(' ')}</div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Badge>Reach {item.potentials.reach}</Badge>
+            <Badge>Follow {item.potentials.follow}</Badge>
+            <Badge>Conversation {item.potentials.conversation}</Badge>
+            <Badge>Relationship {item.potentials.relationship}</Badge>
+          </div>
+          <div className="text-xs text-slate-500">These scores help rank attention; they do not override the writing checks or your approval decision.</div>
         </div>
       </Disclosure>
     </article>
@@ -289,11 +327,11 @@ export function Create() {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Create</h2>
-          <p className="mt-1 text-sm text-slate-600">Move an idea from source to draft, review, approval, and publishing.</p>
+          <h2 className="text-2xl font-semibold text-slate-900">Posts</h2>
+          <p className="mt-1 text-sm text-slate-600">Move a source through drafting, review, approval, and publishing.</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          No active creation work. Start from Discover by choosing what a source should become.
+          No active post work. Start in Discover and choose what a source should become.
         </div>
       </div>
     )
@@ -303,17 +341,17 @@ export function Create() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Create</h2>
-          <p className="mt-1 text-sm text-slate-600">Move an idea from source to draft, review, approval, and publishing.</p>
+          <h2 className="text-2xl font-semibold text-slate-900">Posts</h2>
+          <p className="mt-1 text-sm text-slate-600">Move a source through drafting, review, approval, and publishing.</p>
         </div>
-        <Badge tone={data.automation ? 'danger' : 'neutral'}>Automation {data.automation ? 'on' : 'off'}</Badge>
+        <Badge tone={data.automation ? 'danger' : 'neutral'}>Auto-publishing {data.automation ? 'on' : 'off'}</Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Ideas" value={data.counts.ideas} />
-        <StatCard label="Drafting" value={data.counts.drafting} />
+        <StatCard label="Sources to decide" value={data.counts.ideas} />
+        <StatCard label="Drafts in progress" value={data.counts.drafting} />
         <StatCard label="Needs review" value={data.counts.review} />
-        <StatCard label="Approved — waiting" value={data.counts.approvedWaiting} />
+        <StatCard label="Approved · awaiting publish" value={data.counts.approvedWaiting} />
       </div>
 
       {data.sections.map((section: CreateSection) => (

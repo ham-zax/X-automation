@@ -128,12 +128,13 @@ export function Pending({ label = 'Working…' }: { label?: string }) {
 interface ConfirmCheckboxesProps {
   factuality: boolean
   evidence: boolean
+  evidenceRequired: boolean
   onChange: (flags: { factualityConfirmed: boolean; evidenceConfirmed: boolean }) => void
 }
 
-export function ConfirmCheckboxes({ factuality, evidence, onChange }: ConfirmCheckboxesProps) {
+export function ConfirmCheckboxes({ factuality, evidence, evidenceRequired, onChange }: ConfirmCheckboxesProps) {
   return (
-    <div className="my-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+    <div className={`my-3 grid gap-2 text-sm text-slate-700 ${evidenceRequired ? 'sm:grid-cols-2' : ''}`}>
       <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
         <input
           className="mt-0.5"
@@ -142,24 +143,26 @@ export function ConfirmCheckboxes({ factuality, evidence, onChange }: ConfirmChe
           onChange={(event) => onChange({ factualityConfirmed: event.target.checked, evidenceConfirmed: evidence })}
         />
         <span>
-          <strong>I checked the facts</strong>
+          <strong>I reviewed the final wording</strong>
           <br />
           <span className="text-xs text-slate-500">The final wording matches the source and context I reviewed.</span>
         </span>
       </label>
-      <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <input
-          className="mt-0.5"
-          type="checkbox"
-          checked={evidence}
-          onChange={(event) => onChange({ factualityConfirmed: factuality, evidenceConfirmed: event.target.checked })}
-        />
-        <span>
-          <strong>I checked the supporting proof</strong>
-          <br />
-          <span className="text-xs text-slate-500">Any benchmark, result, or capability claim has real support.</span>
-        </span>
-      </label>
+      {evidenceRequired && (
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+          <input
+            className="mt-0.5"
+            type="checkbox"
+            checked={evidence}
+            onChange={(event) => onChange({ factualityConfirmed: factuality, evidenceConfirmed: event.target.checked })}
+          />
+          <span>
+            <strong>I checked the supporting proof</strong>
+            <br />
+            <span className="text-xs text-slate-500">This draft makes a benchmark, result, or capability claim that needs real support.</span>
+          </span>
+        </label>
+      )}
     </div>
   )
 }
@@ -192,7 +195,7 @@ export function GatePanel({ gates }: { gates: { passed: boolean; writingFailures
       )}
       {gates.humanConfirmations.length > 0 && (
         <div className="mt-2 text-sky-800">
-          Before you approve, review the finished post and tick the two confirmation boxes below. You do not need to add any extra text.
+          Before approval, review the finished post and complete the required confirmations below. You do not need to add extra text.
         </div>
       )}
     </div>

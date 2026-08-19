@@ -31,13 +31,14 @@ export function DraftPage({ draftId }: { draftId: number }) {
 
   const { flags, schedule, queueItem } = data
   const isReply = flags.engagementReply
+  const evidenceRequired = Boolean(data.analysis.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
   const actionError = (review.isError && review.error.message) || (approve.isError && approve.error.message) || null
 
   return (
     <div className="space-y-6">
       <div>
         <a href={isReply ? (queueItem ? `#/conversations/${encodeURIComponent(queueItem.candidateKey)}` : '#/conversations') : '#/create'} className="text-sm font-medium text-slate-500 hover:text-slate-700">
-          ← {isReply ? 'Back to conversations' : 'Back to Create'}
+          ← {isReply ? 'Back to conversations' : 'Back to Posts'}
         </a>
       </div>
 
@@ -76,6 +77,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
               <ConfirmCheckboxes
                 factuality={confirmations.factualityConfirmed}
                 evidence={confirmations.evidenceConfirmed}
+                evidenceRequired={evidenceRequired}
                 onChange={setConfirmations}
               />
               <button
@@ -83,7 +85,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
                 disabled={review.isPending}
                 className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
               >
-                {review.isPending ? 'Checking…' : queueItem?.status === 'needs_review' ? 'Recheck approval checks' : 'Run approval checks'}
+                {review.isPending ? 'Checking…' : queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
               </button>
               <div className="mt-1 text-xs text-slate-500">This checks whether the current draft is ready for human approval. It does not publish anything.</div>
             </div>
@@ -94,6 +96,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
               <ConfirmCheckboxes
                 factuality={confirmations.factualityConfirmed}
                 evidence={confirmations.evidenceConfirmed}
+                evidenceRequired={evidenceRequired}
                 onChange={setConfirmations}
               />
               {approve.isPending ? (
@@ -101,7 +104,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
               ) : (
                 <button
                   onClick={() => approve.mutate({ key: data.candidate.key, ...confirmations })}
-                  disabled={!confirmations.factualityConfirmed || !confirmations.evidenceConfirmed}
+                  disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
                   className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   Approve for publishing
@@ -122,7 +125,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
                   {schedule.recommendedAt == null ? 'not ready yet' : formatDateTime(schedule.recommendedAt)}.
                 </>
               ) : null}
-              {' '}The publishing plan lives in <a href="#/create" className="underline">Create</a>.
+              {' '}The publishing plan lives in <a href="#/create" className="underline">Posts</a>.
             </div>
           )}
 
@@ -149,7 +152,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
               {schedule.scheduleSource === 'human' ? ' · you chose this time' : ''}
             </div>
             <div className="mt-1 text-xs text-slate-500">{schedule.reason}</div>
-            <div className="mt-2"><Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? 'Ready' : 'Needs attention'}</Badge></div>
+            <div className="mt-2"><Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? 'Ready' : 'Not ready'}</Badge></div>
           </Disclosure>
         )}
       </div>

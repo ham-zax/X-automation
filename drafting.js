@@ -220,9 +220,10 @@ export function applyWriterOutput(draft, writerOutput = {}) {
   if (writerOutput?.profileProofValue != null) editor.profileProofValue = String(writerOutput.profileProofValue).trim();
 
   const next = { ...draft, editor };
-  if (decision === 'POST') {
-    if (pipeline === 'thread') next.threadParts = [...editor.threadParts];
-    else next.body = editor.finalText;
+  if (pipeline === 'thread') {
+    next.threadParts = editor.threadParts.length ? [...editor.threadParts] : (editor.finalText ? [editor.finalText] : []);
+  } else {
+    next.body = editor.finalText;
   }
   return next;
 }

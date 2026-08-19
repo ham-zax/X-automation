@@ -16,6 +16,7 @@ import { generateWriterOutput } from './writer_runtime.js';
 import {
   approveEngagementQueueItem,
   approveQueueItem,
+  discardCandidateDraft,
   inspectWorkflow,
   refreshQueueRecommendation,
   requestQueueReview,
@@ -123,16 +124,16 @@ function startAudienceUnfollowJob(username) {
 
 export const STATUS_LABELS = Object.freeze({
   triage: 'Needs a decision',
-  researching: 'Researching',
-  drafting: 'In progress',
+  researching: 'Needs research',
+  drafting: 'Draft in progress',
   needs_review: 'Needs review',
-  approved: 'Approved — waiting',
-  publishing: 'Publishing now',
-  published: 'Published',
-  watching: 'Saved for later',
-  ignored: 'Ignored',
+  approved: 'Approved',
+  publishing: 'In progress',
+  published: 'Completed',
+  watching: 'On hold',
+  ignored: 'Skipped',
   expired: 'Expired',
-  failed: 'Needs attention',
+  failed: 'Action failed',
 });
 
 export const PIPELINE_LABELS = Object.freeze({
@@ -142,9 +143,9 @@ export const PIPELINE_LABELS = Object.freeze({
   thread: 'Thread',
   reply: 'Reply',
   repost: 'Repost',
-  research: 'Research only',
-  watch: 'Save for later',
-  ignore: 'Ignore',
+  research: 'Research further',
+  watch: 'Pause',
+  ignore: 'Skip source',
 });
 
 export const EVIDENCE_LABELS = Object.freeze({
@@ -171,9 +172,9 @@ export const EXPERIMENT_METRIC_LABELS = Object.freeze({
 });
 
 export const HEALTH_STATE_COPY = Object.freeze({
-  healthy: 'Everything looks normal.',
-  watch: 'Something deserves attention, but normal human-reviewed work can continue.',
-  constrained: 'Some actions are temporarily limited until observed account evidence is resolved.',
+  healthy: 'Normal',
+  watch: 'Watch',
+  constrained: 'Limited',
 });
 
 export const QUALITY_SIGNAL_LABELS = Object.freeze({
@@ -187,6 +188,18 @@ export const QUALITY_SIGNAL_LABELS = Object.freeze({
 
 function label(map, value) {
   return map[value] || String(value || 'unknown').replaceAll('_', ' ');
+}
+
+function queueStatusLabel(queueItem) {
+  if (!queueItem) return 'Unknown';
+  const engagement = queueItem.lane === 'engagement';
+  if (queueItem.status === 'drafting') return engagement ? (queueItem.draftId ? 'Reply draft in progress' : 'Reply not drafted') : 'Draft in progress';
+  if (queueItem.status === 'needs_review') return engagement ? 'Reply needs review' : 'Needs review';
+  if (queueItem.status === 'approved') return engagement ? 'Approved · ready to send' : 'Approved · awaiting publish';
+  if (queueItem.status === 'publishing') return engagement ? 'Sending now' : 'Publishing now';
+  if (queueItem.status === 'published') return engagement ? 'Reply sent' : 'Published';
+  if (queueItem.status === 'failed') return engagement ? 'Send failed' : 'Publish failed';
+  return label(STATUS_LABELS, queueItem.status);
 }
 
 function opportunityLabel(score) {
@@ -246,13 +259,6 @@ export async function generateDraftCandidate(current) {
   if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
   const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline ? { ...current, editor: {} } : current;
   const next = applyWriterOutput(writerBase, output);
-  if (output.decision === 'DO_NOT_POST') {
-    const priorText = pipeline === 'thread' ? (current.threadParts || []).join('\n') : String(current.body || '');
-    if (/\[[^\]]+\]/.test(priorText)) {
-      if (pipeline === 'thread') next.threadParts = ['', ''];
-      else next.body = '';
-    }
-  }
   const analysis = evaluateDraftQuality(candidate, next, pipeline);
   const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   routeCandidate(candidate.key, pipeline, { actor: 'agent' });
@@ -323,7 +329,7 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
   if (includeQueue && candidate.saved && queueItem && !queueItem.recommendedPipeline) {
     queueItem = refreshQueueRecommendation(candidate.key).queueItem;
   }
-  const draft = includeQueue ? getDraftByCandidate(candidate.key) : null;
+  const draft = includeQueue && queueItem?.draftId ? getDraft(queueItem.draftId) : null;
   const actions = includeQueue ? listCandidateActions(candidate.key) : [];
   return {
     key: candidate.key,
@@ -360,11 +366,11 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
           pipeline: queueItem.pipeline,
           pipelineLabel: label(PIPELINE_LABELS, queueItem.pipeline),
           status: queueItem.status,
-          statusLabel: label(STATUS_LABELS, queueItem.status),
+          statusLabel: queueStatusLabel(queueItem),
           recommendedPipeline: queueItem.recommendedPipeline || null,
           recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
           routingReason: queueItem.routingReason || '',
-          draftId: draft?.id ?? null,
+          draftId: queueItem.draftId ?? null,
           draftQualityScore: draft?.qualityScore ?? null,
           potentials: {
             reach: Math.round(queueItem.reachPotential || 0),
@@ -424,7 +430,7 @@ function formatDraft(draft, { analysis = null } = {}) {
 function formatQueueItem(queueItem) {
   if (!queueItem) return null;
   const snapshot = inspectWorkflow(queueItem.candidateKey);
-  const draft = snapshot.draft;
+  const draft = queueItem.draftId ? getDraft(queueItem.draftId) : null;
   const candidate = snapshot.candidate;
   return {
     id: queueItem.id,
@@ -436,11 +442,15 @@ function formatQueueItem(queueItem) {
     pipeline: queueItem.pipeline,
     pipelineLabel: label(PIPELINE_LABELS, queueItem.pipeline),
     status: queueItem.status,
-    statusLabel: label(STATUS_LABELS, queueItem.status),
+    statusLabel: queueStatusLabel(queueItem),
     lane: queueItem.lane,
     targetUsername: queueItem.targetUsername || null,
-    draftId: draft?.id ?? queueItem.draftId ?? null,
-    draft: formatDraft(draft),
+    draftId: queueItem.draftId ?? null,
+    draft: formatDraft(draft, {
+      analysis: draft && CONTENT_PIPELINES.has(queueItem.pipeline)
+        ? evaluateDraftQuality(candidate, draft, queueItem.pipeline)
+        : null,
+    }),
     recommendedPipeline: queueItem.recommendedPipeline || null,
     recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
     routingReason: queueItem.routingReason || '',
@@ -560,7 +570,7 @@ function formatConversationDetail(key) {
     engagementKind: queueItem.engagementKind || 'initial_reply',
     engagementKindLabel: queueItem.engagementKind === 'initial_reply' ? 'New conversation' : 'Continue conversation',
     status: queueItem.status,
-    statusLabel: label(STATUS_LABELS, queueItem.status),
+    statusLabel: queueStatusLabel(queueItem),
     priority: queueItem.priority,
     priorityLabel: opportunityLabel(queueItem.priority),
     contribution: queueItem.contributionSummary || score.contribution?.summary || '',
@@ -703,13 +713,13 @@ function formatExperiment(experiment, { queueItems = [] } = {}) {
       lane: queueItem.lane,
       pipeline: queueItem.pipeline,
       status: queueItem.status,
-      statusLabel: label(STATUS_LABELS, queueItem.status),
+      statusLabel: queueStatusLabel(queueItem),
       assignedAt: queueItem.experimentAssignedAt || null,
     })),
     assignableItems: assignable.map((item) => {
       const candidate = getCandidate(item.candidateKey);
       const itemLabel = network && item.targetUsername ? `@${item.targetUsername}` : (candidate?.title || item.candidateKey);
-      return { key: item.candidateKey, label: itemLabel, status: item.status, statusLabel: label(STATUS_LABELS, item.status) };
+      return { key: item.candidateKey, label: itemLabel, status: item.status, statusLabel: queueStatusLabel(item) };
     }),
   };
 }
@@ -833,7 +843,7 @@ export async function handleApi(req, res, requestUrl) {
 
       if (accountHealth?.health?.state === 'constrained') {
         actions.push({
-          eyebrow: 'Needs attention',
+          eyebrow: 'Account limitation',
           title: 'Some actions are temporarily limited',
           body: accountHealth.health.explanation || 'Observed account evidence is limiting some actions until it is resolved.',
           href: '#/results',
@@ -853,7 +863,7 @@ export async function handleApi(req, res, requestUrl) {
           body: contribution,
           note: candidate?.text ? `Source: ${candidate.text.slice(0, 140)}${candidate.text.length > 140 ? '…' : ''}` : '',
           href: `#/conversations/${encodeURIComponent(conversation.candidateKey)}`,
-          action: 'Review reply',
+          action: 'Open conversation',
           tone: 'primary',
         });
       }
@@ -895,7 +905,7 @@ export async function handleApi(req, res, requestUrl) {
           title: `A conversation with @${item.targetUsername || 'this account'} looks useful`,
           body: item.contributionSummary || 'There is a fresh conversation opportunity with a concrete contribution available.',
           href: `#/conversations/${encodeURIComponent(item.candidateKey)}`,
-          action: 'See conversation',
+          action: 'Review opportunity',
           tone: 'primary',
         });
       }
@@ -981,6 +991,10 @@ export async function handleApi(req, res, requestUrl) {
         const { queueItem } = saveCandidateToWorkflow(key, false);
         return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
       }
+      if (action === 'discard') {
+        const queueItem = discardCandidateDraft(key);
+        return sendSuccess({ action, queueItem: formatQueueItem(queueItem), draftId: null });
+      }
       if (['original', 'quote', 'thread', 'repost', 'research', 'watch'].includes(action)) {
         if (action === 'quote' && candidate.source !== 'x') throw new Error('Quote posts require an X source.');
         saveCandidateToWorkflow(key, true);
@@ -1032,7 +1046,7 @@ export async function handleApi(req, res, requestUrl) {
           engagementKind: item.engagementKind || 'initial_reply',
           engagementKindLabel: item.engagementKind === 'initial_reply' ? 'New conversation' : 'Continue conversation',
           status: item.status,
-          statusLabel: label(STATUS_LABELS, item.status),
+          statusLabel: queueStatusLabel(item),
           priority: item.priority,
           priorityLabel: opportunityLabel(item.priority),
           contribution: item.contributionSummary || score.contribution?.summary || 'Review the conversation',
@@ -1136,12 +1150,12 @@ export async function handleApi(req, res, requestUrl) {
       const items = listQueueItems({ lane: 'main', limit: 250 });
       const context = schedulerContext();
       const groups = [
-        { id: 'ideas', title: 'Ideas', note: 'Choose what each source should become before drafting.', statuses: ['triage', 'researching', 'watching'] },
-        { id: 'drafting', title: 'Drafting', note: 'Content currently being written or edited.', statuses: ['drafting'] },
-        { id: 'needsReview', title: 'Needs review', note: 'Your factuality/evidence confirmation or approval decision is required.', statuses: ['needs_review'] },
-        { id: 'approved', title: 'Approved — waiting', note: 'Approved by you but not published yet.', statuses: ['approved'] },
+        { id: 'ideas', title: 'Sources to decide', note: 'Choose a drafting route, research further, pause, or skip.', statuses: ['triage', 'researching', 'watching'] },
+        { id: 'drafting', title: 'Drafts in progress', note: 'Posts currently being written or edited.', statuses: ['drafting'] },
+        { id: 'needsReview', title: 'Needs review', note: 'Required review confirmations or your approval decision are still pending.', statuses: ['needs_review'] },
+        { id: 'approved', title: 'Approved · awaiting publish', note: 'Approved by you and waiting for publication.', statuses: ['approved'] },
         { id: 'publishing', title: 'Publishing', note: 'A publish action is currently in progress.', statuses: ['publishing'] },
-        { id: 'failed', title: 'Needs attention', note: 'A prior publishing attempt failed and requires a human decision.', statuses: ['failed'] },
+        { id: 'failed', title: 'Publish failed', note: 'A publishing attempt failed and requires your decision.', statuses: ['failed'] },
         { id: 'published', title: 'Published', note: 'Completed main-feed work retained for context.', statuses: ['published'] },
       ];
       const schedulePlans = new Map();
@@ -1299,6 +1313,11 @@ export async function handleApi(req, res, requestUrl) {
             ? { recommendedAt: decision.recommendedAt ?? null, eligible: Boolean(decision.eligible), reason: decision.reason || '' }
             : null,
         });
+      }
+
+      if (action === 'discard') {
+        const queueItem = discardCandidateDraft(key);
+        return sendSuccess({ queueItem: formatQueueItem(queueItem), draftId: null });
       }
 
       throw new Error(`Unknown queue action: ${action}`);

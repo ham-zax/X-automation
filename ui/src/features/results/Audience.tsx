@@ -34,7 +34,7 @@ function ProfileRow({ profile }: { profile: AudienceProfile }) {
             <span className="font-semibold text-slate-900">{profile.displayName}</span>
             <span className="text-sm text-slate-500">@{profile.username}</span>
             <Badge tone={FIT_TONES[profile.fitBucket]}>{FIT_LABELS[profile.fitBucket]} · {profile.relevanceScore}/50</Badge>
-            {profile.followsYou && <Badge tone="warning">follows you too</Badge>}
+            {profile.followsYou && <Badge tone="info">Follows you too</Badge>}
           </div>
           <div className="mt-1 break-words text-sm text-slate-600">{profile.bio || 'No bio observed.'}</div>
           <div className="mt-1 text-xs text-slate-500">{signalsText}</div>
@@ -53,7 +53,7 @@ function ProfileRow({ profile }: { profile: AudienceProfile }) {
               Unfollow
             </button>
           ) : (
-            <Badge tone="success">Unfollowed</Badge>
+            <Badge tone="neutral">Not following</Badge>
           )}
           <a
             href={`https://x.com/${encodeURIComponent(profile.username)}`}
@@ -115,10 +115,10 @@ export function Audience() {
   return (
     <div className="space-y-8">
       <div>
-        <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Results</a>
+        <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Performance</a>
         <h2 className="mt-2 text-2xl font-semibold text-slate-900">Audience quality</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Raw follower/following observations and niche alignment. These are observations, not recommendations to act on.
+          Review observed follower/following relationships and niche alignment. Classifications are advisory; nothing is unfollowed automatically.
         </p>
       </div>
 

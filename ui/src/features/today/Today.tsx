@@ -67,7 +67,7 @@ export function Today() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Active conversations" value={data.stats.activeConversations} />
-        <StatCard label="Waiting for review" value={data.stats.waitingForReview} />
+        <StatCard label="Posts awaiting review" value={data.stats.waitingForReview} />
         <StatCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} />
         <StatCard
           label="New relevant followers · 24h"
@@ -97,7 +97,7 @@ export function Today() {
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Account status</div>
             <div className="font-semibold text-slate-900">{data.accountHealth.label}</div>
           </div>
-          <a href="#/results" className="text-sm font-medium text-sky-700 hover:underline">Details</a>
+          <a href="#/results" className="text-sm font-medium text-sky-700 hover:underline">View performance</a>
         </div>
         {data.nextScheduled && (
           <div className="mt-4 border-t border-slate-100 pt-4">

@@ -2466,6 +2466,10 @@ export function getDraftByCandidate(key) {
   return decodeDraft(db.prepare('SELECT * FROM drafts WHERE candidate_key = ?').get(key));
 }
 
+export function deleteDraft(id) {
+  db.prepare('DELETE FROM drafts WHERE id = ?').run(Number(id));
+}
+
 export function listDrafts({ status, limit = 100 } = {}) {
   const rows = status
     ? db.prepare('SELECT * FROM drafts WHERE status = ? ORDER BY updated_at DESC LIMIT ?').all(status, limit)

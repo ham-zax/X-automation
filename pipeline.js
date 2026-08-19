@@ -3,6 +3,7 @@ import { scoreOpportunity } from './opportunity.js';
 import { postTweetHttp } from './x_http.js';
 import { recommendDistributionAction } from './strategy.js';
 import {
+  deleteDraft,
   ensureQueueItem,
   getAudienceProfile,
   getCandidate,
@@ -166,6 +167,34 @@ export function saveCandidateToWorkflow(key, saved = true) {
   if (!saved) return inspectWorkflow(key);
   ensureQueueItem(key);
   return refreshQueueRecommendation(key);
+}
+
+export function discardCandidateDraft(key) {
+  requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  const draft = getDraftByCandidate(key);
+  if (!draft) return queueItem;
+  if (queueItem && (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
+    throw new Error('Publishing or published work cannot be discarded.');
+  }
+  if (queueItem) {
+    const engagement = queueItem.lane === 'engagement';
+    saveQueueItem({
+      ...queueItem,
+      lane: engagement ? 'engagement' : 'main',
+      pipeline: engagement ? 'reply' : 'triage',
+      status: engagement ? 'drafting' : 'triage',
+      draftId: null,
+      humanApprovedAt: null,
+      approvedText: null,
+      scheduledAt: null,
+      scheduleSource: '',
+      publishStartedAt: null,
+      publishError: null,
+    });
+  }
+  deleteDraft(draft.id);
+  return getQueueItemByCandidate(key);
 }
 
 export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } = {}) {

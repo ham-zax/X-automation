@@ -22,7 +22,7 @@ export function Results() {
   }
 
   if (!data) {
-    return <Error message="Results are unavailable." />
+    return <Error message="Performance data is unavailable." />
   }
 
   const health = data.accountHealth
@@ -33,7 +33,7 @@ export function Results() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Results</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">Performance</h2>
           <p className="mt-1 text-sm text-slate-600">A plain-language view of recent outcomes. Detailed measurements remain available when you need them.</p>
         </div>
         <button
@@ -99,7 +99,7 @@ export function Results() {
             <h3 className="text-lg font-semibold text-slate-900">Recent measured posts</h3>
             <p className="text-sm text-slate-600">Latest available window for each recent publication.</p>
           </div>
-          <a href="#/results/audience" className="text-sm font-medium text-sky-700 hover:underline">Audience quality →</a>
+          <a href="#/results/audience" className="text-sm font-medium text-sky-700 hover:underline">Review audience quality →</a>
         </div>
         {data.measuredPosts.length > 0 ? (
           <div className="space-y-3">

@@ -237,7 +237,7 @@ If there is no additive insight, useful amplification purpose, or substantive re
 
 `DO_NOT_POST`
 
-Do not force content from a weak source.
+`DO_NOT_POST` is an advisory recommendation, not permission to hide the candidate from the human. Continue through the writing steps and produce the strongest evidence-bounded candidate the supplied packet supports. Do not invent facts or force unsupported certainty to make a weak source publishable.
 
 ### STEP 2 — CHOOSE ONE THESIS
 
@@ -522,6 +522,10 @@ Preferred shape:
 ```
 
 The AI's output is a candidate, not publication authorization.
+
+Do not imply that independent research, browsing, or verification occurred. When additional evidence is absent, say that no additional evidence was supplied to the writing pass rather than claiming that a search failed to verify the source.
+
+Always populate the candidate text even when `decision` is `DO_NOT_POST`: use `finalText` for Original/Quote/Reply and `threadParts` for Thread. The human must be able to review and edit the exact candidate text before deciding whether to continue, add evidence, or discard it.
 
 ## 11. Separate deterministic / editorial gate
 

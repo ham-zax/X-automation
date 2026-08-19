@@ -249,7 +249,7 @@ export function useDiscoverRefresh() {
   })
 }
 
-export type TriageAction = 'original' | 'quote' | 'thread' | 'reply' | 'repost' | 'research' | 'watch' | 'ignore' | 'save' | 'unsave'
+export type TriageAction = 'original' | 'quote' | 'thread' | 'reply' | 'repost' | 'research' | 'watch' | 'ignore' | 'discard' | 'save' | 'unsave'
 
 export interface TriageResult {
   action: string
@@ -267,7 +267,7 @@ export function useDiscoverTriage() {
       void queryClient.invalidateQueries({ queryKey: ['create'] })
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
-      if (vars.action === 'save' || vars.action === 'unsave' || vars.action === 'ignore') return
+      if (vars.action === 'save' || vars.action === 'unsave' || vars.action === 'ignore' || vars.action === 'discard') return
     },
   })
 }
@@ -429,6 +429,7 @@ export function useQueueAction(action: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['create'] })
       void queryClient.invalidateQueries({ queryKey: ['draft'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
       void queryClient.invalidateQueries({ queryKey: ['conversation'] })
     },
