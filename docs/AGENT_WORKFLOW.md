@@ -340,6 +340,8 @@ Final human approval requires at least **40/50** and a passing deterministic gat
 
 ## Queue and automation interaction
 
+The web dashboard now starts on **Today** and groups the existing runtime under **Discover / Conversations / Create / Results / Improve / Advanced**. These labels are a presentation layer only: agents should continue using the stable bridge commands and existing domain owners below. The guided shell must not be interpreted as a change to approval, send, scheduler, Account Health, experiment, or learned-rule authority.
+
 Phase 1A workflow is current:
 
 1. Save creates/ensures `queue_items(status=triage)` and stores four opportunity scores plus an AI route recommendation.

@@ -123,28 +123,22 @@ Before research/publication work, automation checks for missing due 15m/1h/6h/24
 ## Web preview
 
 ```bash
-npm run web
+npm start
 ```
 
-Then open `http://localhost:3030/?source=x`.
+`npm start` rebuilds the Tailwind dashboard CSS and launches the web app. Then open `http://localhost:3030/`. `npm run web` is the equivalent explicit command.
 
-Dashboard views:
+The guided dashboard shell is organized around user goals instead of implementation modules:
 
-- **X posts** — fresh niche-matched research with exact tags and matched keywords.
-- **Viral · 24h** — rolling last-24-hour developer/AI signals with viral tier and velocity.
-- **Saved** — your explicit taste/preference library.
-- **Engage Next** — Active Conversations before New Opportunities, with target/stage/TargetScore context, EngagePriority components, freshness/expiry, concrete contribution, exact source, soft warnings, reply drafting, Quote instead, Ignore/Expire, and explicit one-reply approval/send controls.
-- **Queue** — triage/review plus approved main-feed scheduler time/reason/priority, blockers/warnings/conflicts, explicit human urgency/expiry/time override, and inspectable publishing/failed/published state.
-- **Drafts** — format-aware Original/Quote/Reply/Thread editing, explicit thread parts and weighted counts, editor/media metadata, the 50-point rubric, deterministic hard-gate failures/warnings, and human factuality/evidence approval controls.
-- **Opportunities** — technical jobs/career, builders/SaaS, and productization signals.
-- **Relationships** — read-only strategic target classes, TargetScore/component evidence, follow state, stages, interaction counts, and class/stage filters.
-- **Audience** — raw follower/following niche map that feeds Relationship Intelligence without being replaced by it.
-- **Performance** — raw account/post snapshots plus fixed 15m/1h/6h/24h normalized publication outcomes, associated follower deltas with attribution confidence, health context, and recent new-follower quality.
-- **Experiments** — declared observational content/timing/network experiments, explicit assignment controls, per-variant samples/metrics/confounders/context, and cautious evidence states with no automatic winner.
-- **Learned Strategy** — suggested/accepted/retired bounded rules with evidence state, sample size, baseline/comparison, match context, effective adjustment, mechanism tags, review signals, and explicit Accept/Retire controls.
-- **GitHub / Hacker News / All** — secondary discovery sources.
+- **Today** — prioritized human decisions, useful conversations, review work, next publishing state, and a concise account-status summary.
+- **Discover** — the X, trending, saved, opportunities, GitHub, Hacker News, and combined research feeds as secondary filters.
+- **Conversations** — active/new conversation opportunities plus relationship and audience context.
+- **Create** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.
+- **Results** — performance and account-status views.
+- **Improve** — Tests and What we've learned.
+- **Advanced** — direct access to the detailed legacy/diagnostic views while the new IA is validated.
 
-Use **Save** to train the preference profile and **Create draft** to move a source into the drafting workflow.
+The shell changes presentation only: the existing approval, exact-reply send, scheduler, Account Health, experiment, and learned-rule boundaries remain authoritative. Technical scores/details are progressively disclosed rather than removed.
 
 ## Agent interface
 
