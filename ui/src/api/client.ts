@@ -55,3 +55,37 @@ export function useToday() {
     staleTime: 30_000,
   })
 }
+
+
+// Conversations types
+export interface Conversation {
+  id: string
+  targetUsername: string
+  targetTweetId: string
+  contribution: string
+  sourceText: string
+  relationshipStage: string
+  lastActivity: number | null
+  href: string
+}
+
+export interface Opportunity {
+  id: string
+  targetUsername: string
+  contribution: string
+  sourceText: string
+  href: string
+}
+
+export interface ConversationsData {
+  activeConversations: Conversation[]
+  newOpportunities: Opportunity[]
+}
+
+export function useConversations() {
+  return useQuery({
+    queryKey: ['conversations'],
+    queryFn: () => fetchApi<ConversationsData>('/conversations'),
+    staleTime: 30_000,
+  })
+}

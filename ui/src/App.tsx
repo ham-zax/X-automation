@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Today } from './features/today/Today'
+import { Conversations } from './features/conversations/Conversations'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,8 @@ function Shell() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {active === 'today' ? (
           <Today />
+        ) : active === 'conversations' ? (
+          <Conversations />
         ) : (
           <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-8">
             <h2 className="text-2xl font-semibold mb-4 capitalize">{active}</h2>

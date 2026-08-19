@@ -132,6 +132,47 @@ export async function handleApi(req, res, requestUrl) {
       });
     }
 
+
+    if (req.method === 'GET' && path === '/conversations') {
+      const engagementItems = listEngagementItems({ limit: 200 });
+      const activeConversations = engagementItems.filter((item) => item.engagementKind !== 'initial_reply');
+      const newOpportunities = engagementItems.filter((item) => item.engagementKind === 'initial_reply');
+      
+      const conversations = activeConversations.map((item) => {
+        const candidate = getCandidate(item.candidateKey);
+        const profile = item.targetUsername ? getRelationshipProfile(item.targetUsername) : null;
+        return {
+          id: item.candidateKey,
+          targetUsername: item.targetUsername,
+          targetTweetId: item.targetTweetId,
+          contribution: item.contributionSummary || item.engagement?.contribution?.summary || 'Review the conversation',
+          sourceText: candidate?.text?.slice(0, 200) || '',
+          relationshipStage: profile?.stage || 'unknown',
+          lastActivity: item.occurredAt || item.sourceTimestamp || null,
+          href: `/?source=engage&draft=${item.candidateKey}`,
+        };
+      });
+      
+      const opportunities = newOpportunities.slice(0, 10).map((item) => {
+        const candidate = getCandidate(item.candidateKey);
+        return {
+          id: item.candidateKey,
+          targetUsername: item.targetUsername,
+          contribution: item.contributionSummary || 'New opportunity worth answering',
+          sourceText: candidate?.text?.slice(0, 200) || '',
+          href: `/?source=engage&draft=${item.candidateKey}`,
+        };
+      });
+      
+      return sendJson(200, {
+        state: 'success',
+        data: {
+          activeConversations: conversations,
+          newOpportunities: opportunities,
+        }
+      });
+    }
+
     // Fallback
     return sendJson(404, {
       state: 'error',
