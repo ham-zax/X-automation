@@ -250,7 +250,7 @@ npm run agent -- audience-sync
 
 ## 10. Persistence invariants
 
-- Saved candidates remain taste signals.
+- Bookmarks remain explicit reference/taste signals. Entering the workflow or starting a draft must not silently bookmark a source.
 - Every successful direct/quote/repost/reply associated with a research candidate is written to `candidate_actions`.
 - A candidate with a recorded distribution action is treated as already used by default.
 - Audience observations live in `audience_profiles`.
@@ -270,42 +270,40 @@ Once a week, review:
 
 Then adjust topics and interaction targets—not by farming more actions, but by increasing the amount of content the desired audience finds genuinely useful.
 
-## 12. Human + AI publishing loop (planned)
+## 12. Human + AI publishing loop
 
-The next system milestone is deliberately **human + AI**, not autonomous content spraying.
+The workflow/relationship/health/writer/distribution/measurement/learning foundation in Phases 1A-5 is implemented. Phase 6 adds the missing editorial layer above individual source routing.
 
-Planned loop:
+Target loop:
 
-> Discover / manual input → Save → Triage → AI route recommendation → human route/override → research/verify → write → media decision → hard gates → human approval → coverage-aware schedule → publish → measure → learn.
+> Discover → Research → AI Editorial Director → human select/override → Writer → human edit/approve → schedule/publish → measure → learn.
 
-Planned route choices expand the current decision model into:
+Current route choices already include:
 
 - Original;
 - Quote;
 - Thread;
 - Reply/Engage;
 - Repost;
-- Research only;
+- Research;
 - Watch;
 - Ignore.
 
-Saving should mean two things once the plan is implemented:
+Phase 6 will recommend `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval and outbound reply send remain human-controlled.
 
-1. this source is an explicit taste/research signal;
-2. this source deserves a visible triage decision.
+Bookmarking is independent reference state. A source may enter Triage/Drafting/Research without being bookmarked, and a bookmarked source may already be handled.
 
-The AI should explain its recommended route, but the human decides or overrides the route. AI may prepare an item through research, drafting, scoring, and `needs_review`; the main-feed approval boundary remains human.
-
-For ordinary main-feed content, optimize spacing for coverage and semantic diversity rather than attempting to mimic a human. For viral/time-sensitive signals, urgency may pre-empt an evergreen queue item and may justify immediate serialized publication when shelf-life is short; there is no evidence-backed universal viral minimum gap.
+For ordinary main-feed content, optimize spacing for coverage and semantic diversity rather than attempting to mimic a human. For time-sensitive signals, urgency may pre-empt an evergreen queue item and may justify immediate serialized publication when shelf-life is short; there is no evidence-backed universal viral minimum gap.
 
 Canonical design:
 
-- `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` — queue, route, approval, scheduler, media, publication, and learning architecture;
+- `PRODUCT_ARCHITECTURE.md` — complete current/planned product loop, source/workflow/history semantics, AI/human authority, and AI runtime/provider model;
+- `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` — cross-system implementation/history map;
+- `plans/AI_RUNTIME_PROVIDER_LAYER.md` — planned selectable Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY execution layer;
+- `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md` — planned current-story/evidence/editorial recommendation layer;
 - `ACCOUNT_HEALTH_AND_VISIBILITY.md` — advisory account health, visibility observations, saturation/repetition, Network Quality, and InteractionYield;
 - `POST_GENERATION_PROMPT.md` — final writing/scannability contract;
 - `RESEARCH_AGENDA.md` — topics deep enough to create original account-level intellectual property.
-
-Until the plan is implemented, the existing Saved/draft/ready workflow remains authoritative.
 
 ## 13. Network-first growth upgrade
 
@@ -359,7 +357,7 @@ implemented as a weighted geometric mean with a small bounded reach modifier. Fu
 
 ## 15. Four-dimensional opportunity scoring
 
-Every saved/triaged signal should eventually expose independent 0-100 values for:
+Every signal that enters triage/workflow should eventually expose independent 0-100 values for:
 
 - **Reach Potential** — broad distribution opportunity.
 - **Follow Potential** — whether the finished contribution reinforces why the target developer should follow.

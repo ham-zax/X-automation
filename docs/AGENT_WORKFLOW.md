@@ -14,7 +14,7 @@ The architecture is also **network-first**. Publishing is one instrument inside 
 
 **conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion.**
 
-Use `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership plus planned Engage Next inputs, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification.
+Use `PRODUCT_ARCHITECTURE.md` for the complete current/planned product map, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership and Engage Next behavior, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification. Phase 6 editorial planning and the selectable AI runtime/provider layer are planned; do not treat their future bridge/UI operations as current commands until implemented.
 
 ## Stable interface
 
@@ -28,7 +28,7 @@ printf '%s' '<json>' | node agent_bridge.js <command>
 
 Available commands:
 
-- `ingest` - add a manually supplied source post to research memory; classifies niche and saves it by default.
+- `ingest` - add a manually supplied source post to research memory; classifies niche, creates workflow state only when requested/needed, and bookmarks it only when `saved: true` is explicitly supplied.
 - `inspect` - inspect one stored candidate and its draft.
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
@@ -344,7 +344,7 @@ The web dashboard now starts on **Today** and groups the existing runtime under 
 
 Phase 1A workflow is current:
 
-1. Save creates/ensures `queue_items(status=triage)` and stores four opportunity scores plus an AI route recommendation.
+1. Explicit workflow entry creates/ensures `queue_items(status=triage)` and stores four opportunity scores plus a route recommendation. Bookmark/reference state is independent and must not be inferred from queue presence.
 2. `route` selects the pipeline but does not approve it; newly created text drafts use the actual Original/Quote/Thread/Reply scaffold.
 3. `writer-packet` prepares inspectable writing context and `apply-writer-output` persists allow-listed editor output without workflow authorization.
 4. `status: ready` through `update-draft` only requests `needs_review`; review computes and persists current hard gates even when they fail so the human can inspect them.

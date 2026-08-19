@@ -129,6 +129,10 @@ NETWORK + CONTENT SCORING
    v                           v
 ENGAGEMENT LANE            OWNED-CONTENT LANE
    |                           |
+   |                     PHASE-6 EDITORIAL PLAN
+   |                    (planned: current stories,
+   |                     evidence, objective, format)
+   |                           |
 target selection            route selection
    |                           |
 contribution idea           research / verify
@@ -160,11 +164,13 @@ BETTER TARGETS + BETTER CONTENT + BETTER TIMING
 
 ### Current implementation boundary
 
-Phase 1A currently owns persistent Save -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
+Phase 1A currently owns persistent workflow entry -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Bookmark/reference state is separate from workflow entry: starting work does not implicitly bookmark a source, and removing a bookmark does not erase workflow/action history. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
 
 Phase 1C Engage Next is current: bounded target timelines and observed replies/quotes feed `queue_items(lane=engagement, pipeline=reply)`; active conversations are refreshed before cold opportunities; every actionable item carries a concrete proposed contribution plus transparent EngagePriority/expiry state; Phase-2 reply gates own draft quality; and only an explicit human approval/send path may issue one reply. Successful replies become candidate-action and relationship-event history. Automation refreshes engagement state but cannot send from this lane, and approved engagement drafts are excluded from main-feed scheduling.
 
-Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase-5 learned strategy remains a later layer; Phase-4 evidence does not automatically rewrite production rules.
+Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase 5 Learned Strategy is current: accepted rules make bounded transparent adjustments while suggestions remain inert until human acceptance.
+
+Phase 6 is planned, not current runtime behavior. It adds an AI Editorial Director above individual source routing: current X/GitHub/HN/conversation signals -> story clustering -> controlled evidence -> objective-aware Prepare/Research More/Skip recommendation -> human selection -> existing writer/gates/approval/scheduler. The shared AI runtime/provider layer lets the operator choose Codex/OpenRouter/OpenAI-compatible/local/OpenCode/OpenCode 2/AGY profiles without changing network, evidence, approval, or learning authority. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
 
 ---
 
@@ -357,7 +363,7 @@ Signals include:
 
 ## 7. Candidate opportunity scores
 
-Every saved or triaged content signal should keep four independent scores.
+Every content signal that enters triage/workflow should keep four independent scores. A pure Bookmark/reference action does not need to create workflow scoring state by itself.
 
 ### Reach Potential
 

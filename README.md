@@ -12,11 +12,12 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, authenticated Under-the-Hood visibility observations, Hacker News, GitHub, ranking, and account-performance reads.
 - `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, experiment/variant assignments, and suggested/accepted/retired learned rules.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
+- `writer_runtime.js` — current structured writer-model execution through the locally configured Codex CLI; the planned AI runtime/provider layer will move this behind a provider-independent `runStructuredAI()` boundary.
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
 - `experiments.js` — pure experiment definition/population validation, attribution-confidence semantics, normalized content/network cohorts, InteractionYield context, and cautious evidence states.
 - `learning.js` — pure learned-strategy qualification, bounded adjustment, matching/application, lifecycle transition, and stale/reversal/mechanism-review logic.
 - `agent_bridge.js` — stable JSON-in/JSON-out interface for workflow/health/relationship/measurement/experiment/learning reads and explicit writes; learning acceptance/retirement require explicit confirmation and the bridge cannot approve or publish main-feed content.
-- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, observational Experiments, and human-controlled Learned Strategy.
+- `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; exposes Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, observational Experiments, and human-controlled Learned Strategy.
 - `automation.js` — captures due publication measurement windows, refreshes research/Engage Next, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
 
 ## Operating standards
@@ -32,12 +33,15 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — separates current code-backed X mechanisms, official product/policy claims, empirical variables, and retired folklore.
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
-- [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — implementation-ready plan for Save → Triage → Route → Research → Draft → Review → Schedule → Publish → Learn.
-- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with the implemented foundation and remaining execution sequence explicit.
+- [`docs/PRODUCT_ARCHITECTURE.md`](docs/PRODUCT_ARCHITECTURE.md) — canonical current/planned product map: Phases 1–6, source truth vs workflow/history, Discover → Research → AI Editorial Director → Human → Writer → Human → Publish → Measure → Learn, AI runtime/provider choices, and authority boundaries.
+- [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — cross-system implementation/history plan for the full network-growth and publishing loop.
+- [`docs/plans/AI_RUNTIME_PROVIDER_LAYER.md`](docs/plans/AI_RUNTIME_PROVIDER_LAYER.md) — planned Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY runtime/provider/model configuration and AI Settings layer.
+- [`docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`](docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md) — planned current-signal clustering, controlled evidence, objective-aware editorial recommendations, Today plan UX, and recommendation outcome provenance.
+- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with Phases 1A–5 implemented and Phase 6 planned.
 
 ### Current implemented architecture
 
-Phase 1A is implemented: Saved candidates enter a persistent Triage queue, receive separate Reach/Follow/Conversation/Relationship scores, keep the AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Human approval is the only workflow path that creates an approved main-feed queue item; the associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
+Phase 1A is implemented: sources entering the workflow get a persistent Triage queue item, receive separate Reach/Follow/Conversation/Relationship scores, keep the rule/AI recommendation separate from the selected route, and can move through Drafting -> Needs Review -> explicit human approval. Bookmarking is independent reference state and is not required to start work. Human approval is the only workflow path that creates an approved main-feed queue item; the associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
@@ -53,13 +57,12 @@ Phase 4 Measurement & Experiments is implemented: published main-feed items accu
 
 Phase 5 Learned Strategy is implemented: Phase-4 experiment summaries can produce `suggested` evidence-backed rules; suggestions remain zero-effect until explicit human acceptance; accepted target/engagement/health/content/format/topic/timing adjustments are bounded and shown separately from base scoring; retirement preserves history; linked retired algorithm-evidence tags and newer/reversing evidence surface review signals. Hard gates, expiry, required human approval, explicit manual routing/timing, and provenance-backed Account Health constraints remain authoritative over learning.
 
-The remaining publication capability outside the completed network-learning architecture is:
+Phases 1A–5 are the current network/workflow/measurement/learning runtime. Two planned layers remain outside that implemented boundary:
 
-**media attachment/upload readiness.**
+- **media attachment/upload readiness** — required proof media remains blocked until a real attachment path exists;
+- **Phase 6 AI Editorial Director + AI runtime/provider layer** — current-story clustering, controlled research evidence, Today editorial recommendations, and operator-selectable AI runtime/provider/model configuration.
 
-`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
-
-Actual media upload/attachment readiness remains intentionally unimplemented; content that requires proof media stays blocked rather than pretending an attachment exists.
+`docs/PRODUCT_ARCHITECTURE.md` owns the end-to-end product map. `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic network model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system implementation/history map. `docs/plans/` owns implementation order and exact file/interface changes.
 
 ## Setup
 
@@ -82,9 +85,9 @@ node tech_news.js --x --limit=3
 node tech_news.js --json --limit=5
 ```
 
-X discovery is driven by the taxonomy in `strategy.js`: AI coding agents, models/inference, developer tools, infrastructure/architecture, jobs/career, builders/SaaS, and technical productization. Viral research is a separate rolling 24-hour Top-search lane ranked by reach and engagement velocity. GitHub candidates are restricted to recently created repositories and ranked by star velocity.
+X discovery is driven by the taxonomy in `strategy.js`: AI coding agents, models/inference, developer tools, infrastructure/architecture, jobs/career, builders/SaaS, and technical productization. **X Latest** is the configured Latest-search source view in real post-time order. **X Momentum** is the configured Top-search/momentum view; neither is labeled as X's global Trends product. **GitHub Trending** reads the actual GitHub Trending source order and enriches repositories with authoritative metadata. **HN Top Stories** preserves the current Hacker News top-stories order and metadata.
 
-Research candidates are persisted in `.x-research.sqlite`. Saving a post builds an explicit preference profile; matching future candidates receive a small capped ranking boost, so the system gradually adapts to what you mark interesting without changing niche identity from a single post.
+Research candidates are persisted in `.x-research.sqlite`, but live source snapshots are distinct from workflow history. **To review** contains unresolved persisted candidates; **Bookmarks** means explicit reference state; **Handled** is derived from real publication/quote/reply/repost history; **All sources** is persisted history rather than a live upstream feed. Starting a draft does not implicitly bookmark its source.
 
 ## Publishing
 
@@ -131,7 +134,7 @@ npm start
 The guided dashboard shell is organized around user goals instead of implementation modules:
 
 - **Today** — prioritized human decisions, useful conversations, review work, next publishing state, and a concise account-status summary.
-- **Discover** — the X, trending, saved, opportunities, GitHub, Hacker News, and combined research feeds as secondary filters.
+- **Discover** — source truth and source workflow context: To review, X Latest, X Momentum, Opportunities, GitHub Trending, HN Top Stories, Bookmarks, Handled, and All sources.
 - **Conversations** — active/new conversation opportunities plus relationship and audience context.
 - **Create** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.
 - **Results** — performance and account-status views.
@@ -139,6 +142,8 @@ The guided dashboard shell is organized around user goals instead of implementat
 - **Advanced** — direct access to the detailed legacy/diagnostic views while the new IA is validated.
 
 The shell changes presentation only: the existing approval, exact-reply send, scheduler, Account Health, experiment, and learned-rule boundaries remain authoritative. Technical scores/details are progressively disclosed rather than removed.
+
+Planned Phase 6 adds an **AI Editorial Plan** to Today and an **AI Settings** surface for default/per-role runtime profiles. The planned provider layer supports Codex model/reasoning selection, OpenRouter model selection, arbitrary OpenAI-compatible base URL/API key/model configuration for local or remote inference, and optional OpenCode/OpenCode 2/AGY runtimes when installed. This is documented architecture, not current runtime behavior yet.
 
 ## Agent interface
 

@@ -1,6 +1,6 @@
 # Implementation Plan Index
 
-These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-5 are implemented; the phase files now serve as the executable design/history for the current runtime.
+These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-5 are implemented; Phase 6 is the next planned layer. Implemented phase files serve as executable design/history for the current runtime.
 
 Do not implement later phases by inventing interfaces that earlier plans have not established yet.
 
@@ -29,6 +29,12 @@ Phase 4   Measurement + content/network experiments
    |
    v
 Phase 5   Learned strategy
+   |
+   v
+AI Runtime & Provider Layer (cross-cutting Phase-6 prerequisite)
+   |
+   v
+Phase 6   AI Editorial Director
 ```
 
 ## Phase 1A — implemented
@@ -38,7 +44,7 @@ Phase 5   Learned strategy
 Current code now owns:
 
 - `queue_items` foundation;
-- Save -> Triage;
+- workflow entry -> Triage with Bookmark/reference state independent in the current product;
 - route selection;
 - human approval boundary;
 - Reach / Follow / Conversation / Relationship potential;
@@ -115,7 +121,7 @@ Owns:
 
 - format-aware original/quote/reply/thread writing contracts;
 - canonical writer packet;
-- ProfileProofCoverage context;
+- ProfileProofCoverage packet/editorial contract; the strict published-only shared runtime owner is planned in Phase 6;
 - deterministic gates;
 - 50-point score integration;
 - thread storage;
@@ -184,8 +190,56 @@ Depends on:
 - Phase 4 measurements/experiments;
 - Phase 1D account-health/visibility contract.
 
+## AI Runtime & Provider Layer — planned Phase-6 prerequisite
+
+[`AI_RUNTIME_PROVIDER_LAYER.md`](AI_RUNTIME_PROVIDER_LAYER.md)
+
+Will own:
+
+- one provider-independent `runStructuredAI()` execution boundary;
+- per-role AI profiles for continuous scan, editorial scan, editorial final, and writer;
+- Codex model/reasoning selection, including an operator-created Luna/Max profile when supported by the installed model catalog;
+- first-class OpenRouter configuration and dynamic model catalog;
+- arbitrary OpenAI-compatible base URL/API key/model configuration for local or remote inference;
+- optional OpenCode, OpenCode 2, and AGY runtime adapters when installed and compatible;
+- AI Settings UI, runtime/model availability, structured-output capability checks, secret references, and observable usage/cost provenance;
+- migration of the current Codex-only writer subprocess behind the shared boundary.
+
+Changing runtime/provider/model never changes source truth, workflow state, evidence authority, human approval, publication authorization, or learned-rule acceptance.
+
+## Phase 6 — planned
+
+[`PHASE_6_AI_EDITORIAL_DIRECTOR.md`](PHASE_6_AI_EDITORIAL_DIRECTOR.md)
+
+Will own:
+
+- one shared canonical source-refresh path for X Latest / X Momentum / GitHub Trending / HN Top Stories;
+- current-source editorial context plus source-observation history and source-native momentum deltas;
+- cross-source story clustering with deterministic pre-research/final recommendation scoring;
+- controlled research evidence with claim scope, provenance, safe URL fetching, and an explicit manual/external research path when automatic evidence is insufficient;
+- objective-aware AI editorial recommendations;
+- machine-readable Research Agenda tiers plus strict published-only ProfileProofCoverage for planning/writing;
+- multi-source recommendation/source linkage and append-only human-selection provenance;
+- Today editorial-plan UX;
+- recommendation provenance into Phase-4 measurements and Phase-5 learning.
+
+Depends on:
+
+- `AI_RUNTIME_PROVIDER_LAYER.md` before Phase-6 structured AI calls are wired;
+- authoritative source snapshots/discovery data;
+- Phase 1A workflow and opportunity scores;
+- Phase 1B/1C relationship/conversation state;
+- Phase 1D account health;
+- Phase 2 writer/gates;
+- Phase 3 scheduler boundary;
+- Phase 4 measurements;
+- Phase 5 accepted learned rules.
+
+Phase 6 remains advisory: it may recommend Prepare / Research More / Skip and a format, but it cannot approve, schedule, publish, send, complete a repost, or accept learned rules.
+
 ## Cross-cutting source-of-truth docs
 
+- [`../PRODUCT_ARCHITECTURE.md`](../PRODUCT_ARCHITECTURE.md) — canonical end-to-end product map, current/planned phase state, final Discover -> Research -> Editorial AI -> Human -> Writer -> Human -> Publish -> Measure -> Learn loop, and AI/human authority boundaries.
 - [`../NETWORK_GROWTH_OPERATING_SYSTEM.md`](../NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategy and operating model.
 - [`../RELATIONSHIP_INTELLIGENCE.md`](../RELATIONSHIP_INTELLIGENCE.md) — target/relationship domain contract.
 - [`../ACCOUNT_HEALTH_AND_VISIBILITY.md`](../ACCOUNT_HEALTH_AND_VISIBILITY.md) — lenient account-health, visibility-observation, saturation/repetition, and network-quality contract.

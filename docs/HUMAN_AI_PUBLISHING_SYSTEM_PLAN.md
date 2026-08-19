@@ -1,16 +1,16 @@
 # Human + AI Network Growth & Publishing System Implementation Plan
 
-**Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where every saved signal enters triage, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
+**Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where sources selected for action enter explicit workflow triage, bookmarks remain independent reference state, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
 
-**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; add one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. AI may discover, classify, research, recommend, draft, score, surface target/conversation opportunities, propose experiments, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
+**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. Planned Phase 6 adds an editorial owner above per-source routing plus a shared AI runtime/provider boundary. AI may classify, cluster, research through controlled retrieval, recommend, draft, score, surface target/conversation opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
 
-**Tech Stack:** Node.js 24, built-in `node:sqlite`, Bootstrap dashboard, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`.
+**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`; planned structured AI execution is provider-independent through `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
 
 ## Global Constraints
 
 - Preserve the account identity: **AI-native developer + builder**.
 - The account promise is: **turn fast-moving AI/software signals into developer decisions: what changed, what actually works, what breaks, why it matters, and how to use it.**
-- Saving a research signal must eventually place it into a human-visible triage queue rather than merely storing it as preference history.
+- Bookmarking a research signal means keep it for reference/taste memory. Choosing a workflow action such as Draft/Research/Watch must ensure a human-visible queue item independently of bookmark state.
 - AI may recommend a distribution format, but the human can override it.
 - Every original post, quote post, and thread opener must pass the same factuality, originality, niche, scannability, integrity, and quality gates before scheduling.
 - Human approval is required before a queued main-feed item can become publishable. An explicit user command to publish a specific final item counts as human approval for that item.
@@ -42,7 +42,7 @@
 - niche/keyword classification;
 - fresh X and viral-24h discovery;
 - SQLite candidate persistence;
-- Saved preference memory;
+- explicit bookmark/reference state plus saved-preference history;
 - candidate action history for direct/quote/repost/reply actions;
 - audience follower/following snapshot and relevance scoring;
 - Direct / Quote / Repost / Reply / Ignore recommendation logic;
@@ -53,96 +53,88 @@
 - performance snapshots;
 - agent JSON bridge;
 - Bootstrap dashboard;
-- Phase 1A persistent `queue_items` with Save -> Triage backfill/ownership;
+- Phase 1A persistent `queue_items` with workflow-entry -> Triage ownership; bookmark/reference state is independent;
 - separate Reach / Follow / Conversation / Relationship opportunity scores;
 - stored AI recommendation separate from human-selected pipeline;
 - explicit Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore routing;
 - Queue dashboard plus `route` / `workflow` bridge commands;
 - `needs_review` workflow state and explicit dashboard human approval boundary;
-- temporary compatibility bridge where human approval alone sets an associated text draft to `ready`.
+- temporary compatibility bridge where human approval alone sets an associated text draft to `ready`;
+- Phase 1B Relationship Intelligence with strategic profiles, append-only events, TargetScore, and relationship stages;
+- Phase 1C Engage Next with active-conversation/follow-up priority and explicit one-by-one human reply send;
+- Phase 1D Account Health with provenance-backed HEALTHY/WATCH/CONSTRAINED evidence and soft saturation/repetition/network diagnostics;
+- Phase 4 fixed 15m/1h/6h/24h publication measurement, follower-quality/attribution context, and content/network experiments;
+- Phase 5 suggested/accepted/retired learned strategy with bounded accepted adjustments;
+- current Discover source-truth split: X Latest, X Momentum, actual GitHub Trending, and current HN Top Stories snapshots are separate from the persistent To review/Bookmarks/Handled/history workflow views.
 
-### Remaining work from this document
+### Remaining planned work
+
+Phases 1A-1D and 2-5 are implemented. The remaining cross-system work is:
 
 - actual media upload/attachment-ID readiness while preserving the existing media-plan hard block;
-- Account Health / visibility observability with HEALTHY/WATCH/CONSTRAINED state, Under the Hood snapshots when observable, soft saturation/repetition diagnostics, Network Quality, and InteractionYield;
-- post-publication measurement windows and follower/relationship conversion analytics;
-- an Experiment Engine for controlled content/network/timing hypotheses without duplicate posting;
-- learned timing/format/targeting recommendations and bounded account-specific strategy adjustments after enough evidence accumulates.
+- the cross-cutting AI runtime/provider layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md` so continuous scan, editorial reasoning, and writing can use operator-selected Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY profiles;
+- Phase 6 AI Editorial Director in `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`: authoritative source snapshots, story clustering, controlled claim-level research, objective-aware recommendations, Today editorial-plan UX, and recommendation provenance into measurement/learning.
+
+`PRODUCT_ARCHITECTURE.md` is the canonical product-level description of the intended final system. The phase plans remain authoritative for execution details.
 
 ## Target Operating Loop
 
+The intended full product loop is:
+
 ```text
-DISCOVER / MANUAL INPUT
+DISCOVER
+current X / GitHub Trending / HN / conversation signals
         |
         v
-       SAVE
+RESEARCH
+primary/linked evidence + unresolved questions
         |
         v
-TRIAGE QUEUE
+AI EDITORIAL DIRECTOR
+story + objective + format + thesis + evidence + why now
         |
         v
-REACH / FOLLOW / CONVERSATION / RELATIONSHIP SCORING
+HUMAN SELECT / OVERRIDE / RESEARCH MORE / DISMISS / DO NOTHING
+        |
+        +-----------------------------------+
+        |                                   |
+        v                                   v
+MAIN-FEED WORK                         ENGAGEMENT WORK
+        |                                   |
+        v                                   v
+WRITER                              REPLY CONTRIBUTION
+        |                                   |
+        v                                   v
+HUMAN EDIT + REVIEW                 HUMAN REVIEW + SEND/IGNORE
+        |                                   |
+        v                                   v
+HARD GATES + APPROVAL               RELATIONSHIP EVENT
         |
         v
-AI ROUTING RECOMMENDATION
+SCHEDULER + PUBLISH
         |
-        v
-HUMAN ROUTE / OVERRIDE
-        |
-        +------------------------------+
-        |                              |
-        v                              v
-MAIN-FEED LANE                   ENGAGEMENT LANE
-        |                              |
-        |                        TARGET/POST CONTEXT
-        |                              |
-        |                        REPLY DRAFT + REVIEW
-        |                              |
-        |                        HUMAN SEND / IGNORE
-        |                              |
-        |                        RELATIONSHIP OUTCOME
-        |
-        v
-RESEARCH + VERIFY
-        |
-        v
-ANGLE + NOVELTY CHECK
-        |
-        v
-EXPERIMENT ASSIGNMENT (OPTIONAL)
-        |
-        v
-FINAL-WRITING PROMPT
-        |
-        v
-DRAFT + MEDIA PLAN
-        |
-        v
-HARD GATES + QUALITY SCORE
-        |
-        v
-HUMAN APPROVAL
-        |
-        v
-TIMING ENGINE / OPTIONAL HUMAN OVERRIDE
-        |
-        v
-ATOMIC CLAIM + PUBLISH
-        |
-        v
-15m / 1h / 6h / 24h OUTCOMES
-        |
-        v
-FOLLOWER-CONVERSION + EXPERIMENT ANALYSIS
-        |
-        v
-LEARN
+        +--------------------+
+                             |
+                             v
+                         MEASURE
+                    15m / 1h / 6h / 24h
+                    follower / conversation /
+                    relationship outcomes
+                             |
+                             v
+                           LEARN
+                    experiments + accepted
+                    bounded learned rules
+                             |
+                             +---------------------> future Discover/Plan
 ```
 
-The viral lane shortens the middle of the loop but does not remove factual verification, quality gating, or human approval:
+Before Phase 6 is implemented, the current runtime still uses the implemented Save/Triage/rule-based route/writer flow underneath this target architecture.
+
+A time-sensitive lane may shorten research/writing latency but does not remove factual verification, human approval, or publication serialization:
 
 ```text
-VIRAL SIGNAL -> URGENT TRIAGE -> VERIFY -> DIRECT/QUOTE -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST COVERAGE SLOT
+TIME-SENSITIVE SIGNAL -> VERIFY -> EDITORIAL/ROUTE DECISION -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST REASONABLE COVERAGE SLOT
 ```
 
 ## Pipeline Types
@@ -477,7 +469,7 @@ The scheduler/account-health layer must not convert any of these observations in
 ### Integration-owner files
 
 - `store.js` — `queue_items`, relationship profiles/events, account-health observations, experiment persistence, learned-rule persistence, fixed-window follower/outcome fields, and queue queries.
-- `dashboard.js` — Save-to-triage behavior, route controls, Relationships/Engage/Account Health/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
+- `dashboard.js` / React workspace — independent Bookmark and workflow-entry controls, route controls, Relationships/Engage/Account Health/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
 - `strategy.js` — extend recommendation from five-way distribution action into pipeline recommendation inputs and urgency/expiry signals; consume opportunity/relationship scores rather than owning their formulas.
 - `audience.js` — preserve raw follower/following observations and feed strategic relationship/follower-quality layers without owning target scoring.
 - `drafting.js` — format-aware drafting and hard gates.
@@ -500,13 +492,13 @@ The scheduler/account-health layer must not convert any of these observations in
 
 **Steps:**
 - [ ] Add `queue_items` with one active queue item per candidate by default.
-- [ ] Add `ensureQueueItem(candidateKey)` so Save can idempotently create triage work.
+- [ ] Add `ensureQueueItem(candidateKey)` so routing/drafting/research can idempotently create triage work independently of bookmark state.
 - [ ] Add queue reads for status, pipeline, urgency, and scheduling order.
 - [ ] Add transition/update function that preserves one authoritative queue-state owner.
-- [ ] Backfill currently saved candidates into `triage` once without changing their Saved preference state.
+- [ ] Preserve the historical one-time saved-candidate backfill as migration history, but do not make future Bookmark actions a permanent queue-creation trigger.
 
 **Acceptance criteria:**
-- Saving a candidate can create one and only one active triage item without duplicating queue rows on repeated Save actions.
+- Entering a candidate into workflow can create one and only one active triage item without duplicating queue rows, while Bookmark remains independent reference state.
 - Existing candidate/draft/action history remains intact.
 
 ### Task 2: Define pipeline and transition contracts
@@ -528,25 +520,26 @@ The scheduler/account-health layer must not convert any of these observations in
 **Acceptance criteria:**
 - One candidate can receive an AI recommendation with a reason while allowing an explicit human override to any valid pipeline.
 
-### Task 3: Save -> triage and route-after-Save dashboard UX
+### Task 3: Separate Bookmark/reference state from workflow entry and routing UX
 
 **Files:**
 - Modify: `dashboard.js`
 - Modify: `store.js`
 
 **Interfaces:**
-- Consumes: `ensureQueueItem`, pipeline recommendations.
-- Produces: Save-and-triage behavior plus route controls.
+- Consumes: `ensureQueueItem`, bookmark state, pipeline recommendations.
+- Produces: independent Bookmark/reference actions plus explicit workflow route controls.
 
 **Steps:**
-- [ ] Make Save persist preference state and ensure a triage queue item in the same request flow.
+- [ ] Make Bookmark/Remove bookmark change reference state only; do not create/delete workflow history as a side effect.
+- [ ] Make Draft/Research/Watch/other explicit workflow actions ensure the queue item they require without implicitly bookmarking the source.
 - [ ] Show `Recommended: <pipeline>` with the recommendation reason.
 - [ ] Add explicit route buttons/menu for Original, Quote, Thread, Reply, Repost, Research, Watch, Ignore.
-- [ ] Add a Queue dashboard view grouped by queue status rather than mixing workflow into Saved/Drafts.
-- [ ] Keep Unsave independent from deleting historical queue/action records.
+- [ ] Add a Queue/dashboard view grouped by real queue status rather than mixing workflow state into Bookmarks/Drafts.
+- [ ] Keep Remove bookmark independent from deleting historical queue/action records.
 
 **Acceptance criteria:**
-- A user can Save a card, see it in Queue immediately, and deliberately choose which pipeline it should enter.
+- A user can bookmark a source purely for reference or start workflow work without bookmarking it, and each control reflects the real persisted state it changes.
 
 ### Task 4: Add human approval as a hard workflow boundary
 
@@ -899,7 +892,7 @@ Phase-specific plans in `docs/plans/` are authoritative for implementation detai
 
 Plan: `plans/PHASE_1_WORKFLOW_FOUNDATION.md`
 
-- Save -> triage;
+- explicit workflow entry -> triage, with Bookmark/reference state independent;
 - pipeline routing;
 - Queue UI;
 - human approval;
@@ -907,7 +900,7 @@ Plan: `plans/PHASE_1_WORKFLOW_FOUNDATION.md`
 
 This creates the workflow boundary every later subsystem consumes.
 
-### Phase 1B — Relationship Intelligence
+### Phase 1B — Relationship Intelligence — IMPLEMENTED
 
 Plan: `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`
 
@@ -920,7 +913,7 @@ Plan: `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md`
 
 This phase is upstream of Engage Next because the system must know **who** matters before it can rank **which conversation** matters.
 
-### Phase 1C — Engage Next
+### Phase 1C — Engage Next — IMPLEMENTED
 
 Plan: `plans/PHASE_1C_ENGAGE_NEXT.md`
 
@@ -931,7 +924,7 @@ Plan: `plans/PHASE_1C_ENGAGE_NEXT.md`
 - one-by-one human send/ignore decisions;
 - relationship-event updates after interactions.
 
-### Phase 1D — Account Health + visibility observability
+### Phase 1D — Account Health + visibility observability — IMPLEMENTED
 
 Plan: `plans/PHASE_1D_ACCOUNT_HEALTH.md`
 
@@ -943,7 +936,7 @@ Plan: `plans/PHASE_1D_ACCOUNT_HEALTH.md`
 - Network Quality components and InteractionYield;
 - no arbitrary reply quota or human-timing imitation.
 
-### Phase 2 — Content quality + profile proof
+### Phase 2 — Content quality + profile proof — IMPLEMENTED
 
 Plan: `plans/PHASE_2_CONTENT_QUALITY.md`
 
@@ -955,7 +948,7 @@ Implemented through the human-review boundary:
 - media-plan state with required media blocked until a real attachment/upload readiness path is implemented;
 - recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
-### Phase 3 — Main-feed distribution
+### Phase 3 — Main-feed distribution — IMPLEMENTED
 
 Plan: `plans/PHASE_3_DISTRIBUTION_SCHEDULER.md`
 
@@ -993,6 +986,35 @@ Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 - dashboard and bridge controls for inspect/refresh/explicit accept/explicit retire;
 - accepted rules consumed as bounded context by TargetScore components, opportunity potentials, EngagePriority/soft health pressure, and main-feed scheduler priority;
 - hard gates, expiry, required approval, explicit human route/timing, and observed hard Account Health constraints remain authoritative.
+
+### AI Runtime & Provider Layer — PLANNED PHASE-6 PREREQUISITE
+
+Plan: `plans/AI_RUNTIME_PROVIDER_LAYER.md`
+
+- one shared `runStructuredAI()` boundary instead of separate Codex-specific subprocess owners;
+- default plus per-role AI profiles for continuous scan, editorial scan, editorial final, and writer;
+- Codex model/reasoning selection, including an operator-created `gpt-5.6-luna` + `max` profile when supported by the installed catalog;
+- first-class OpenRouter model selection through its API catalog;
+- arbitrary OpenAI-compatible base URL/API key/model/protocol for local or remote inference;
+- optional OpenCode, OpenCode 2, and AGY runtime adapters when installed and compatible;
+- AI Settings UI, secret references, structured-output capability checks, and observable token/cost/runtime provenance.
+
+The provider/runtime layer changes how semantic AI work is executed. It does not change source truth, evidence ownership, queue state, approval, publishing, or learned-rule authority.
+
+### Phase 6 — AI Editorial Director — PLANNED
+
+Plan: `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`
+
+- canonical source refresh and source-observation history for X Latest / X Momentum / GitHub Trending / HN Top Stories;
+- cross-source story clustering;
+- deterministic story shortlist and final recommendation ordering;
+- controlled claim-level research with provenance and an explicit manual/external Research More path;
+- strict published-only ProfileProofCoverage plus machine-readable Research Agenda tiers;
+- objective-aware Prepare / Research More / Skip recommendations for Original / Quote / Thread / Reply / Repost;
+- Today AI Editorial Plan above the existing workflow inbox;
+- human selection/override provenance carried through writer, publication, Phase-4 measurement, and Phase-5 learning.
+
+Phase 6 is advisory. It may recommend no action and cannot approve, publish, send a reply, complete a repost, or accept a learned rule.
 
 ## Risks and Boundaries
 
@@ -1043,3 +1065,12 @@ The program is complete when a user can:
 26. See experiment cohort summaries that refuse to declare a winner before the minimum evidence threshold.
 27. See evidence-backed learned strategy suggestions remain inert until human acceptance, then apply only bounded transparent adjustments.
 28. See algorithm/tactic claims remain traceable to CODE_BACKED / OFFICIAL_PRODUCT_OR_POLICY / EMPIRICAL_VARIABLE / RETIRED evidence classes.
+29. See Discover source tabs represent current upstream source snapshots while To review, Bookmarks, Handled, and All sources represent persisted workflow/reference/history state.
+30. See the current day's X/GitHub/HN/conversation signals clustered into a small set of stories instead of treating every URL as an isolated post idea.
+31. See controlled claim-level evidence and unresolved research questions before the final editorial recommendation or writer uses a material factual claim.
+32. Select an explicit editorial objective and see Prepare / Research More / Skip recommendations with transparent Reach/Follow/Conversation/Relationship/Authority inputs and code-owned ordering.
+33. See **Research More — manual/external research required** with concrete unresolved questions and an explicit path to attach another source.
+34. Select or override an editorial recommendation without granting approval, and preserve the original recommendation plus the human-selected route for later measurement.
+35. Choose AI profiles in the UI for continuous scan, editorial scan, editorial final, and writer, including Codex model/reasoning, OpenRouter, arbitrary OpenAI-compatible endpoints, and supported installed OpenCode/OpenCode 2/AGY runtimes.
+36. See the actual AI runtime/provider/model/reasoning used for a recommendation/draft plus token/cost data when observable, without exposing stored API keys.
+37. Preserve the full loop: Discover -> Research -> AI Editorial Director -> Human -> Writer -> Human -> Publish -> Measure -> Learn, including a valid **do nothing now** result when nothing deserves a feed slot.
