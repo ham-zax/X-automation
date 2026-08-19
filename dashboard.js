@@ -37,6 +37,7 @@ import {
   saveCandidateToWorkflow,
   sendApprovedEngagementReply,
 } from './pipeline.js';
+import { handleApi } from './web_api.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
   acceptLearnedRule,
@@ -1583,6 +1584,9 @@ const server = http.createServer(async (req, res) => {
   if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   try {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (requestUrl.pathname.startsWith('/api/')) {
+      return handleApi(req, res, requestUrl);
+    }
     if (req.method === 'GET' && requestUrl.pathname === '/assets/bootstrap.min.css') {
       res.writeHead(200, { 'content-type': 'text/css; charset=utf-8' });
       res.end(await fs.readFile(path.resolve('node_modules/bootstrap/dist/css/bootstrap.min.css')));
