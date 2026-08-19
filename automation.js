@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import {
+  fetchAccountPerformance,
   fetchGitHubTrending,
   fetchHackerNews,
   fetchXNichePosts,
@@ -14,12 +15,18 @@ import { rankMainFeedItems } from './scheduler.js';
 import { personalizeCandidates } from './strategy.js';
 import {
   claimQueueItem,
+  getAccountHealthSummary,
   getPreferenceProfile,
+  getPublicationFollowerBaseline,
+  listDueMeasurementWindows,
   listApprovedMainFeedItems,
   listRecentMainFeedPublications,
   markQueueFailed,
   markQueuePublished,
   recordCandidateAction,
+  recordPerformanceSnapshot,
+  recordPublicationFollowerBaseline,
+  recordPublicationMeasurement,
   saveDraft,
   saveQueueItem,
   upsertCandidates,
@@ -28,6 +35,119 @@ import {
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
 const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
+
+function compactMeasurementContext(summary) {
+  const components = summary.networkQuality?.components || {};
+  return {
+    health: {
+      state: summary.health.state,
+      reasons: (summary.health.reasons || []).map((reason) => ({ code: reason.code, level: reason.level, evidence: reason.evidence })),
+      generatedAt: summary.generatedAt,
+    },
+    networkContext: {
+      targetDiversity: components.targetDiversity?.uniqueTargets ?? 0,
+      classDiversity: components.classDiversity?.uniqueClasses ?? 0,
+      topicDiversity: components.topicDiversity?.uniqueTopics ?? 0,
+      topTargetConcentration: components.topTargetConcentration?.rate ?? null,
+      interactionYield: summary.interactionYield?.value ?? null,
+      interactionYieldComponents: summary.interactionYield?.components || {},
+    },
+  };
+}
+
+export async function capturePublicationFollowerBaseline({
+  queueItemId,
+  now = Date.now(),
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  performanceSource = fetchAccountPerformance,
+} = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication baseline now must be numeric.');
+  try {
+    const existing = getPublicationFollowerBaseline(Number(queueItemId));
+    if (['queue_publication_baseline', 'publication_measurement'].includes(existing.source)) {
+      return { captured: true, error: null, baseline: existing };
+    }
+  } catch {
+    // No persisted baseline yet; capture one below without affecting publication state.
+  }
+  const performance = await performanceSource(account, 1);
+  if (performance?.error) return { captured: false, error: performance.error, baseline: null };
+  const capturedAt = Number(performance?.capturedAt || performance?.profile?.capturedAt || Date.now());
+  const followers = Number(performance?.profile?.followersCount);
+  if (!Number.isFinite(capturedAt) || !Number.isFinite(followers)) {
+    return { captured: false, error: 'Publication follower baseline unavailable from performance read.', baseline: null };
+  }
+  recordPerformanceSnapshot({ profile: performance.profile, posts: performance.posts || [], capturedAt });
+  const queueItem = recordPublicationFollowerBaseline(Number(queueItemId), { followers, capturedAt });
+  return {
+    captured: true,
+    error: null,
+    baseline: {
+      capturedAt: queueItem.measurementBaselineAt,
+      followers: queueItem.measurementBaselineFollowers,
+      source: 'queue_publication_baseline',
+      delayMinutes: Math.max(0, (queueItem.measurementBaselineAt - queueItem.publishedAt) / 60_000),
+    },
+  };
+}
+
+export async function captureDuePublicationMeasurements({
+  now = Date.now(),
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  performanceSource = fetchAccountPerformance,
+  attributionContext = null,
+} = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Measurement capture now must be numeric.');
+  const due = listDueMeasurementWindows(timestamp);
+  if (!due.length) return { due: 0, captured: [], skipped: [], error: null };
+
+  const uniqueTweets = new Set(due.map((item) => String(item.tweetId)));
+  const performance = await performanceSource(account, Math.max(20, uniqueTweets.size * 2));
+  if (performance?.error) return { due: due.length, captured: [], skipped: due, error: performance.error };
+  const capturedAt = Number(performance?.capturedAt || performance?.profile?.capturedAt || Date.now());
+  recordPerformanceSnapshot({ profile: performance.profile, posts: performance.posts || [], capturedAt });
+  const followers = Number(performance?.profile?.followersCount);
+  if (!Number.isFinite(followers)) return { due: due.length, captured: [], skipped: due, error: 'Follower count unavailable from performance read.' };
+  const postsById = new Map((performance.posts || []).map((post) => [String(post.id || ''), post]));
+  const healthContext = compactMeasurementContext(getAccountHealthSummary({ now: capturedAt }));
+  const captured = [];
+  const skipped = [];
+
+  for (const item of due) {
+    const post = postsById.get(String(item.tweetId));
+    if (!post) {
+      skipped.push({ ...item, reason: 'published_post_not_in_read' });
+      continue;
+    }
+    const baseline = getPublicationFollowerBaseline(item.queueItemId, { fallbackFollowers: followers, fallbackAt: capturedAt });
+    const suppliedAttribution = typeof attributionContext === 'function'
+      ? attributionContext(item) || {}
+      : attributionContext || {};
+    captured.push(recordPublicationMeasurement({
+      queueItemId: item.queueItemId,
+      tweetId: item.tweetId,
+      windowMinutes: item.windowMinutes,
+      baselineAt: baseline.capturedAt,
+      baselineFollowers: baseline.followers,
+      capturedAt,
+      views: Number(post.views || 0),
+      likes: Number(post.likes || 0),
+      reposts: Number(post.retweets || post.reposts || 0),
+      replies: Number(post.replies || 0),
+      followers,
+      attribution: suppliedAttribution,
+      metadata: {
+        dueAt: item.dueAt,
+        baselineSource: baseline.source,
+        baselineDelayMinutes: baseline.delayMinutes,
+        ...healthContext,
+      },
+    }));
+  }
+  return { due: due.length, captured, skipped, error: null };
+}
 
 async function refreshResearch() {
   const [hnStories, ghRepos] = await Promise.all([
@@ -166,6 +286,15 @@ export async function processMainFeedQueue({
 }
 
 export async function runCycle() {
+  let measurements = { due: 0, captured: [], skipped: [], error: null };
+  try {
+    measurements = await captureDuePublicationMeasurements();
+    if (measurements.captured.length) console.log(`[automation] Captured ${measurements.captured.length} due publication measurement window(s).`);
+    if (measurements.error) console.log(`[automation] Measurement capture skipped: ${measurements.error}`);
+  } catch (error) {
+    measurements.error = error.message;
+    console.log(`[automation] Measurement capture failed: ${error.message}`);
+  }
   const research = await refreshResearch();
   const top = [...research.viral, ...research.ranked].sort((a, b) => b.score - a.score)[0] || null;
   if (top) {
@@ -191,6 +320,20 @@ export async function runCycle() {
   }
 
   const mainFeed = await processMainFeedQueue();
+  let publicationBaseline = null;
+  const publicationReachedPublishedState = ['posted', 'posted-recording-incomplete'].includes(mainFeed.action)
+    && mainFeed.queueItem?.status === 'published'
+    && Boolean(mainFeed.tweetId);
+  if (publicationReachedPublishedState) {
+    try {
+      publicationBaseline = await capturePublicationFollowerBaseline({ queueItemId: mainFeed.queueItem.id });
+      if (publicationBaseline.captured) console.log(`[automation] Captured publication follower baseline for queue item ${mainFeed.queueItem.id}.`);
+      else console.log(`[automation] Publication baseline capture skipped: ${publicationBaseline.error}`);
+    } catch (error) {
+      publicationBaseline = { captured: false, error: error.message, baseline: null };
+      console.log(`[automation] Publication baseline capture failed without changing publish state: ${error.message}`);
+    }
+  }
   if (mainFeed.action === 'preview') {
     console.log(`[automation] Main-feed preview: ${mainFeed.decision.reason}`);
     console.log('[automation] AUTO_POST=false; no claim or publication write performed.');
@@ -209,7 +352,7 @@ export async function runCycle() {
   } else {
     console.log('[automation] No approved automated main-feed items this cycle.');
   }
-  return { ...mainFeed, top, engagement, errors: [...research.errors, ...engagement.errors] };
+  return { ...mainFeed, top, engagement, measurements, publicationBaseline, errors: [...research.errors, ...engagement.errors, ...(measurements.error ? [measurements.error] : [])] };
 }
 
 async function main() {

@@ -14,8 +14,15 @@ import {
   deriveAccountHealth,
   summarizeNetworkQuality,
 } from './health.js';
+import {
+  normalizeContentMeasurement,
+  summarizeExperiment,
+  validateExperimentDefinition,
+  validateVariantAssignment,
+} from './experiments.js';
 
 export const DB_FILE = path.resolve('.x-research.sqlite');
+export const PUBLICATION_MEASUREMENT_WINDOWS = Object.freeze([15, 60, 360, 1440]);
 export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
   'under_the_hood_snapshot',
   'visibility_label_observed',
@@ -114,6 +121,7 @@ db.exec(`
     relevance_score REAL NOT NULL DEFAULT 0,
     niche_tags TEXT NOT NULL DEFAULT '[]',
     matched_keywords TEXT NOT NULL DEFAULT '[]',
+    first_seen_at INTEGER NOT NULL,
     last_seen_at INTEGER NOT NULL
   );
 
@@ -208,10 +216,63 @@ db.exec(`
     publish_started_at INTEGER,
     publish_error TEXT,
     published_at INTEGER,
+    measurement_baseline_at INTEGER,
+    measurement_baseline_followers INTEGER,
+    experiment_variant_id INTEGER,
+    experiment_assigned_at INTEGER,
+    experiment_assignment_json TEXT NOT NULL DEFAULT '{}',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key),
     FOREIGN KEY(draft_id) REFERENCES drafts(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS publication_measurements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_item_id INTEGER NOT NULL,
+    tweet_id TEXT NOT NULL,
+    window_minutes INTEGER NOT NULL,
+    baseline_at INTEGER NOT NULL,
+    baseline_followers INTEGER NOT NULL,
+    captured_at INTEGER NOT NULL,
+    views INTEGER NOT NULL DEFAULT 0,
+    likes INTEGER NOT NULL DEFAULT 0,
+    reposts INTEGER NOT NULL DEFAULT 0,
+    replies INTEGER NOT NULL DEFAULT 0,
+    followers INTEGER NOT NULL DEFAULT 0,
+    follower_delta INTEGER NOT NULL DEFAULT 0,
+    follows_per_1000_views REAL,
+    replies_per_1000_views REAL,
+    reposts_per_1000_views REAL,
+    visible_engagement_per_1000_views REAL,
+    views_per_hour REAL,
+    attribution_confidence TEXT NOT NULL DEFAULT 'unknown',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(queue_item_id, window_minutes)
+  );
+
+  CREATE TABLE IF NOT EXISTS experiments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    hypothesis TEXT NOT NULL,
+    dimension TEXT NOT NULL,
+    population_json TEXT NOT NULL DEFAULT '{}',
+    primary_metric TEXT NOT NULL,
+    secondary_metrics_json TEXT NOT NULL DEFAULT '[]',
+    minimum_completed_per_variant INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at INTEGER NOT NULL,
+    started_at INTEGER,
+    ended_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS experiment_variants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    experiment_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    config_json TEXT NOT NULL DEFAULT '{}',
+    UNIQUE(experiment_id, label),
+    FOREIGN KEY(experiment_id) REFERENCES experiments(id)
   );
 
   CREATE INDEX IF NOT EXISTS idx_candidates_source_updated ON candidates(source, updated_at DESC);
@@ -231,6 +292,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_health_type_observed ON account_health_observations(type, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_measurements_queue_window ON publication_measurements(queue_item_id, window_minutes);
+  CREATE INDEX IF NOT EXISTS idx_measurements_captured ON publication_measurements(captured_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_variants_experiment ON experiment_variants(experiment_id, id);
 
   INSERT OR IGNORE INTO queue_items (
     candidate_key, lane, pipeline, status,
@@ -257,6 +322,12 @@ for (const [name, sql] of [
   if (!draftColumns.has(name)) db.exec(sql);
 }
 
+const audienceColumns = new Set(db.prepare('PRAGMA table_info(audience_profiles)').all().map((row) => row.name));
+if (!audienceColumns.has('first_seen_at')) {
+  db.exec('ALTER TABLE audience_profiles ADD COLUMN first_seen_at INTEGER');
+  db.exec('UPDATE audience_profiles SET first_seen_at = last_seen_at WHERE first_seen_at IS NULL');
+}
+
 const queueColumns = new Set(db.prepare('PRAGMA table_info(queue_items)').all().map((row) => row.name));
 for (const [name, sql] of [
   ['target_username', 'ALTER TABLE queue_items ADD COLUMN target_username TEXT'],
@@ -278,6 +349,11 @@ for (const [name, sql] of [
   ['publish_started_at', 'ALTER TABLE queue_items ADD COLUMN publish_started_at INTEGER'],
   ['publish_error', 'ALTER TABLE queue_items ADD COLUMN publish_error TEXT'],
   ['published_at', 'ALTER TABLE queue_items ADD COLUMN published_at INTEGER'],
+  ['measurement_baseline_at', 'ALTER TABLE queue_items ADD COLUMN measurement_baseline_at INTEGER'],
+  ['measurement_baseline_followers', 'ALTER TABLE queue_items ADD COLUMN measurement_baseline_followers INTEGER'],
+  ['experiment_variant_id', 'ALTER TABLE queue_items ADD COLUMN experiment_variant_id INTEGER'],
+  ['experiment_assigned_at', 'ALTER TABLE queue_items ADD COLUMN experiment_assigned_at INTEGER'],
+  ['experiment_assignment_json', "ALTER TABLE queue_items ADD COLUMN experiment_assignment_json TEXT NOT NULL DEFAULT '{}'"],
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
@@ -285,6 +361,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_priority ON queue_items(lane, status, priority DESC, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_source ON queue_items(target_tweet_id, engagement_kind, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_main_schedule ON queue_items(lane, status, scheduled_at, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_experiment_variant ON queue_items(experiment_variant_id, updated_at DESC);
 `);
 
 function json(value, fallback) {
@@ -461,6 +538,11 @@ function decodeQueueItem(row) {
     publishStartedAt: row.publish_started_at == null ? null : Number(row.publish_started_at),
     publishError: row.publish_error || '',
     publishedAt: row.published_at == null ? null : Number(row.published_at),
+    measurementBaselineAt: row.measurement_baseline_at == null ? null : Number(row.measurement_baseline_at),
+    measurementBaselineFollowers: row.measurement_baseline_followers == null ? null : Number(row.measurement_baseline_followers),
+    experimentVariantId: row.experiment_variant_id == null ? null : Number(row.experiment_variant_id),
+    experimentAssignedAt: row.experiment_assigned_at == null ? null : Number(row.experiment_assigned_at),
+    experimentAssignment: json(row.experiment_assignment_json, {}),
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0),
   };
@@ -522,7 +604,9 @@ export function saveQueueItem(item) {
     priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
     engagement_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
     schedule_urgency = ?, scheduled_at = ?, schedule_source = ?, publish_started_at = ?,
-    publish_error = ?, published_at = ?, updated_at = ?
+    publish_error = ?, published_at = ?, measurement_baseline_at = ?, measurement_baseline_followers = ?,
+    experiment_variant_id = ?, experiment_assigned_at = ?,
+    experiment_assignment_json = ?, updated_at = ?
     WHERE id = ?`).run(
     next.lane,
     next.pipeline,
@@ -554,6 +638,11 @@ export function saveQueueItem(item) {
     next.publishStartedAt ?? null,
     next.publishError || null,
     next.publishedAt ?? null,
+    next.measurementBaselineAt ?? null,
+    next.measurementBaselineFollowers ?? null,
+    next.experimentVariantId ?? null,
+    next.experimentAssignedAt ?? null,
+    JSON.stringify(next.experimentAssignment || {}),
     Date.now(),
     current.id,
   );
@@ -861,8 +950,9 @@ export function getPreferenceProfile() {
   return { savedCount: rows.length, tags, keywords };
 }
 
-export function replaceAudienceSnapshot({ followers = [], following = [] } = {}) {
-  const now = Date.now();
+export function replaceAudienceSnapshot({ followers = [], following = [], observedAt = Date.now() } = {}) {
+  const now = Number(observedAt);
+  if (!Number.isFinite(now) || now <= 0) throw new Error('Audience snapshot observedAt must be a positive timestamp.');
   const merged = new Map();
   for (const profile of followers) merged.set(profile.username, { ...profile, followsYou: true, youFollow: false });
   for (const profile of following) {
@@ -873,8 +963,8 @@ export function replaceAudienceSnapshot({ followers = [], following = [] } = {})
   db.exec('BEGIN');
   try {
     const upsert = db.prepare(`INSERT INTO audience_profiles(
-      username, display_name, bio, follows_you, you_follow, relevance_score, niche_tags, matched_keywords, last_seen_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      username, display_name, bio, follows_you, you_follow, relevance_score, niche_tags, matched_keywords, first_seen_at, last_seen_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(username) DO UPDATE SET
       display_name = excluded.display_name,
       bio = excluded.bio,
@@ -895,6 +985,7 @@ export function replaceAudienceSnapshot({ followers = [], following = [] } = {})
         Number(profile.relevanceScore || 0),
         JSON.stringify(profile.nicheTags || []),
         JSON.stringify(profile.matchedKeywords || []),
+        now,
         now,
       );
     }
@@ -917,6 +1008,7 @@ function decodeAudience(row) {
     relevanceScore: Number(row.relevance_score || 0),
     nicheTags: json(row.niche_tags, []),
     matchedKeywords: json(row.matched_keywords, []),
+    firstSeenAt: Number(row.first_seen_at || row.last_seen_at || 0),
     lastSeenAt: Number(row.last_seen_at || 0),
   };
 }
@@ -945,6 +1037,28 @@ export function getAudienceSummary() {
     SUM(CASE WHEN you_follow = 1 AND follows_you = 0 AND relevance_score >= 12 THEN 1 ELSE 0 END) AS target_accounts
     FROM audience_profiles`).get();
   return Object.fromEntries(Object.entries(row || {}).map(([key, value]) => [key, Number(value || 0)]));
+}
+
+export function getNewFollowerQuality({ since = 0, until = Date.now(), minScore = 12 } = {}) {
+  const from = Number(since || 0);
+  const to = Number(until);
+  const threshold = Number(minScore);
+  if (!Number.isFinite(from) || from < 0 || !Number.isFinite(to) || to < from) throw new Error('Invalid new-follower observation window.');
+  if (!Number.isFinite(threshold)) throw new Error('New-follower minScore must be numeric.');
+  const profiles = db.prepare(`SELECT * FROM audience_profiles
+    WHERE follows_you = 1 AND first_seen_at > ? AND first_seen_at <= ?
+    ORDER BY first_seen_at ASC, username ASC`).all(from, to).map(decodeAudience);
+  const nicheAligned = profiles.filter((profile) => profile.relevanceScore >= threshold);
+  return {
+    since: from,
+    until: to,
+    newlyObservedFollowers: profiles.length,
+    nicheAlignedNewFollowers: nicheAligned.length,
+    alignmentRate: profiles.length ? nicheAligned.length / profiles.length : null,
+    minRelevanceScore: threshold,
+    profiles: profiles.map((profile) => ({ ...profile, nicheAligned: profile.relevanceScore >= threshold })),
+    attribution: 'period_association_only',
+  };
 }
 
 function decodeRelationshipProfile(row) {
@@ -1169,6 +1283,7 @@ export function refreshRelationshipFromAudience(audienceProfile) {
     relevanceScore: Number(audienceProfile.relevanceScore || 0),
     followsYou: Boolean(audienceProfile.followsYou),
     youFollow: Boolean(audienceProfile.youFollow),
+    firstSeenAt: Number(audienceProfile.firstSeenAt || current.firstSeenAt || audienceProfile.lastSeenAt || Date.now()),
     lastSeenAt: Number(audienceProfile.lastSeenAt || current.lastSeenAt || Date.now()),
   };
   return upsertRelationshipProfile(refreshRelationshipProfile(input, { events }));
@@ -1440,6 +1555,430 @@ export function getAccountHealthSummary({ now = Date.now() } = {}) {
   };
 }
 
+function decodePublicationMeasurement(row) {
+  if (!row) return null;
+  const metadata = json(row.metadata_json, {});
+  return {
+    id: Number(row.id),
+    queueItemId: Number(row.queue_item_id),
+    tweetId: row.tweet_id,
+    windowMinutes: Number(row.window_minutes),
+    baselineAt: Number(row.baseline_at),
+    baselineFollowers: Number(row.baseline_followers),
+    capturedAt: Number(row.captured_at),
+    views: Number(row.views || 0),
+    likes: Number(row.likes || 0),
+    reposts: Number(row.reposts || 0),
+    replies: Number(row.replies || 0),
+    followers: Number(row.followers || 0),
+    followerDelta: Number(row.follower_delta || 0),
+    associatedFollowsPer1000Views: row.follows_per_1000_views == null ? null : Number(row.follows_per_1000_views),
+    repliesPer1000Views: row.replies_per_1000_views == null ? null : Number(row.replies_per_1000_views),
+    repostsPer1000Views: row.reposts_per_1000_views == null ? null : Number(row.reposts_per_1000_views),
+    visibleEngagementPer1000Views: row.visible_engagement_per_1000_views == null ? null : Number(row.visible_engagement_per_1000_views),
+    viewsPerHour: row.views_per_hour == null ? null : Number(row.views_per_hour),
+    attributionConfidence: row.attribution_confidence || 'unknown',
+    attribution: metadata.attributionInput || {},
+    metadata,
+  };
+}
+
+export function getPublicationMeasurements(queueItemId) {
+  return db.prepare('SELECT * FROM publication_measurements WHERE queue_item_id = ? ORDER BY window_minutes ASC')
+    .all(Number(queueItemId)).map(decodePublicationMeasurement);
+}
+
+export function listPublicationMeasurements({ windowMinutes = null, limit = 200 } = {}) {
+  const bounded = Math.max(1, Math.min(2000, Number(limit || 200)));
+  if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
+    throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+  }
+  const rows = windowMinutes == null
+    ? db.prepare('SELECT * FROM publication_measurements ORDER BY captured_at DESC, id DESC LIMIT ?').all(bounded)
+    : db.prepare('SELECT * FROM publication_measurements WHERE window_minutes = ? ORDER BY captured_at DESC, id DESC LIMIT ?').all(Number(windowMinutes), bounded);
+  return rows.map(decodePublicationMeasurement);
+}
+
+function countOverlappingMainFeedPublications(queueItemId, baselineAt, capturedAt) {
+  return Number(db.prepare(`SELECT COUNT(*) AS count FROM queue_items
+    WHERE id <> ? AND lane IN ('main', 'main_feed') AND status = 'published'
+      AND published_at > ? AND published_at <= ?`).get(Number(queueItemId), Number(baselineAt), Number(capturedAt)).count || 0);
+}
+
+export function recordPublicationFollowerBaseline(queueItemId, { followers, capturedAt = Date.now() } = {}) {
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem || !['main', 'main_feed'].includes(queueItem.lane) || queueItem.status !== 'published' || !queueItem.publishedAt) {
+    throw new Error('Publication follower baseline requires a published main-feed queue item.');
+  }
+  if (queueItem.measurementBaselineAt != null && queueItem.measurementBaselineFollowers != null) return queueItem;
+  const timestamp = Number(capturedAt);
+  const count = Number(followers);
+  if (!Number.isFinite(timestamp) || timestamp <= 0 || !Number.isFinite(count) || count < 0) {
+    throw new Error('Publication follower baseline requires a positive capture timestamp and non-negative follower count.');
+  }
+  return saveQueueItem({ ...queueItem, measurementBaselineAt: timestamp, measurementBaselineFollowers: count });
+}
+
+export function getPublicationFollowerBaseline(queueItemId, { fallbackFollowers = null, fallbackAt = null } = {}) {
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem?.publishedAt) throw new Error(`Published queue item not found: ${queueItemId}`);
+  if (queueItem.measurementBaselineAt != null && queueItem.measurementBaselineFollowers != null) {
+    return {
+      capturedAt: queueItem.measurementBaselineAt,
+      followers: queueItem.measurementBaselineFollowers,
+      source: 'queue_publication_baseline',
+      delayMinutes: Math.max(0, (queueItem.measurementBaselineAt - queueItem.publishedAt) / 60_000),
+    };
+  }
+  const existing = db.prepare(`SELECT baseline_at, baseline_followers FROM publication_measurements
+    WHERE queue_item_id = ? ORDER BY window_minutes ASC LIMIT 1`).get(Number(queueItemId));
+  if (existing) {
+    return {
+      capturedAt: Number(existing.baseline_at),
+      followers: Number(existing.baseline_followers),
+      source: 'publication_measurement',
+      delayMinutes: Math.max(0, (Number(existing.baseline_at) - queueItem.publishedAt) / 60_000),
+    };
+  }
+  const prior = db.prepare(`SELECT captured_at, followers FROM account_metrics
+    WHERE captured_at <= ? ORDER BY captured_at DESC LIMIT 1`).get(queueItem.publishedAt);
+  if (prior) return { capturedAt: Number(prior.captured_at), followers: Number(prior.followers), source: 'account_metrics_before_publish', delayMinutes: 0 };
+  const after = db.prepare(`SELECT captured_at, followers FROM account_metrics
+    WHERE captured_at > ? ORDER BY captured_at ASC LIMIT 1`).get(queueItem.publishedAt);
+  if (after) {
+    return {
+      capturedAt: Number(after.captured_at),
+      followers: Number(after.followers),
+      source: 'account_metrics_after_publish',
+      delayMinutes: Math.max(0, (Number(after.captured_at) - queueItem.publishedAt) / 60_000),
+    };
+  }
+  const followers = Number(fallbackFollowers);
+  const capturedAt = Number(fallbackAt);
+  if (!Number.isFinite(followers) || !Number.isFinite(capturedAt)) throw new Error(`Follower baseline unavailable for queue item ${queueItemId}.`);
+  return {
+    capturedAt,
+    followers,
+    source: 'capture_fallback',
+    delayMinutes: Math.max(0, (capturedAt - queueItem.publishedAt) / 60_000),
+  };
+}
+
+export function recordPublicationMeasurement(measurement = {}) {
+  const queueItem = getQueueItem(Number(measurement.queueItemId));
+  if (!queueItem || !['main', 'main_feed'].includes(queueItem.lane) || queueItem.status !== 'published' || !queueItem.publishedAt) {
+    throw new Error('Publication measurements require a published main-feed queue item.');
+  }
+  const windowMinutes = Number(measurement.windowMinutes);
+  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(windowMinutes)) throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+  const capturedAt = Number(measurement.capturedAt);
+  const baselineAt = Number(measurement.baselineAt);
+  const baselineFollowers = Number(measurement.baselineFollowers);
+  const followers = Number(measurement.followers);
+  if (![capturedAt, baselineAt, baselineFollowers, followers].every(Number.isFinite)) throw new Error('Publication measurement timestamps/follower counts must be numeric.');
+  if (baselineAt > capturedAt) throw new Error('Publication follower baseline cannot be after capture.');
+  if (baselineFollowers < 0 || followers < 0) throw new Error('Publication follower counts cannot be negative.');
+  if (capturedAt < queueItem.publishedAt + windowMinutes * 60_000) throw new Error('Publication measurement capture is earlier than its target window.');
+  const tweetId = String(measurement.tweetId || queueItem.outputTweetId || '').trim();
+  if (!tweetId) throw new Error('Publication measurement requires a tweet ID.');
+  if (queueItem.outputTweetId && tweetId !== String(queueItem.outputTweetId)) throw new Error('Publication measurement tweet ID does not match the published queue item.');
+  const attributionInput = {
+    overlappingMainFeedPublications: countOverlappingMainFeedPublications(queueItem.id, baselineAt, capturedAt),
+    ...(measurement.attribution || {}),
+  };
+  const followerDelta = followers - baselineFollowers;
+  const normalized = normalizeContentMeasurement({
+    views: Number(measurement.views || 0), likes: Number(measurement.likes || 0),
+    reposts: Number(measurement.reposts || 0), replies: Number(measurement.replies || 0),
+    followerDelta, capturedAt, publishedAt: queueItem.publishedAt, attribution: attributionInput,
+  });
+  const metadata = { ...(measurement.metadata || {}), attributionInput, associatedFollowerDelta: true, causalClaimAllowed: false };
+  db.prepare(`INSERT OR IGNORE INTO publication_measurements(
+    queue_item_id, tweet_id, window_minutes, baseline_at, baseline_followers, captured_at,
+    views, likes, reposts, replies, followers, follower_delta, follows_per_1000_views,
+    replies_per_1000_views, reposts_per_1000_views, visible_engagement_per_1000_views,
+    views_per_hour, attribution_confidence, metadata_json
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    queueItem.id, tweetId, windowMinutes, baselineAt, baselineFollowers, capturedAt,
+    normalized.raw.views, normalized.raw.likes, normalized.raw.reposts, normalized.raw.replies,
+    followers, followerDelta, normalized.metrics.associated_follows_per_1000_views,
+    normalized.metrics.replies_per_1000_views, normalized.metrics.reposts_per_1000_views,
+    normalized.metrics.visible_engagement_per_1000_views, normalized.metrics.views_per_hour,
+    normalized.attribution.confidence || 'unknown', JSON.stringify(metadata),
+  );
+  return decodePublicationMeasurement(db.prepare(`SELECT * FROM publication_measurements
+    WHERE queue_item_id = ? AND window_minutes = ?`).get(queueItem.id, windowMinutes));
+}
+
+export function listDueMeasurementWindows(now = Date.now()) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Measurement due-window timestamp must be numeric.');
+  const published = db.prepare(`SELECT * FROM queue_items
+    WHERE lane IN ('main', 'main_feed') AND status = 'published'
+      AND published_at IS NOT NULL AND output_tweet_id IS NOT NULL
+    ORDER BY published_at ASC, id ASC`).all().map(decodeQueueItem);
+  const due = [];
+  for (const queueItem of published) {
+    const recorded = new Set(getPublicationMeasurements(queueItem.id).map((measurement) => measurement.windowMinutes));
+    for (const windowMinutes of PUBLICATION_MEASUREMENT_WINDOWS) {
+      const dueAt = queueItem.publishedAt + windowMinutes * 60_000;
+      if (timestamp >= dueAt && !recorded.has(windowMinutes)) due.push({ queueItem, queueItemId: queueItem.id, tweetId: queueItem.outputTweetId, windowMinutes, dueAt });
+    }
+  }
+  return due;
+}
+
+export function listPublicationMeasurementSeries({ limit = 30 } = {}) {
+  const queueItems = db.prepare(`SELECT * FROM queue_items
+    WHERE lane IN ('main', 'main_feed') AND status = 'published' AND published_at IS NOT NULL
+    ORDER BY published_at DESC LIMIT ?`).all(Math.max(1, Math.min(200, Number(limit || 30)))).map(decodeQueueItem);
+  return queueItems.map((queueItem) => ({
+    queueItem,
+    candidate: getCandidate(queueItem.candidateKey),
+    measurements: getPublicationMeasurements(queueItem.id).map((measurement) => ({
+      ...measurement,
+      newFollowerQuality: getNewFollowerQuality({ since: measurement.baselineAt, until: measurement.capturedAt }),
+    })),
+  }));
+}
+
+const EXPERIMENT_STATUSES = new Set(['draft', 'active', 'completed']);
+const NETWORK_EXPERIMENT_DIMENSIONS = new Set([
+  'target_class', 'target_score_bucket', 'target_size_bucket', 'reply_age_bucket',
+  'conversation_saturation_bucket', 'reply_archetype', 'relationship_stage',
+  'interaction_volume_bucket', 'target_concentration_bucket', 'archetype_repetition_bucket',
+]);
+
+function decodeExperiment(row) {
+  if (!row) return null;
+  const variants = db.prepare('SELECT * FROM experiment_variants WHERE experiment_id = ? ORDER BY id ASC').all(Number(row.id)).map((variant) => ({
+    id: Number(variant.id), experimentId: Number(variant.experiment_id), label: variant.label, config: json(variant.config_json, {}),
+  }));
+  return {
+    id: Number(row.id), name: row.name, hypothesis: row.hypothesis, dimension: row.dimension,
+    population: json(row.population_json, {}), primaryMetric: row.primary_metric,
+    secondaryMetrics: json(row.secondary_metrics_json, []), minimumCompletedPerVariant: Number(row.minimum_completed_per_variant),
+    status: row.status, createdAt: Number(row.created_at), startedAt: row.started_at == null ? null : Number(row.started_at),
+    endedAt: row.ended_at == null ? null : Number(row.ended_at), variants,
+  };
+}
+
+export function getExperiment(id) {
+  return decodeExperiment(db.prepare('SELECT * FROM experiments WHERE id = ?').get(Number(id)));
+}
+
+export function listExperiments({ status = null, limit = 100 } = {}) {
+  if (status && !EXPERIMENT_STATUSES.has(status)) throw new Error(`Invalid experiment status: ${status}`);
+  const bounded = Math.max(1, Math.min(500, Number(limit || 100)));
+  const rows = status
+    ? db.prepare('SELECT * FROM experiments WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(status, bounded)
+    : db.prepare('SELECT * FROM experiments ORDER BY created_at DESC, id DESC LIMIT ?').all(bounded);
+  return rows.map(decodeExperiment);
+}
+
+export function createExperiment(definition = {}) {
+  const validation = validateExperimentDefinition(definition);
+  if (!validation.valid) throw new Error(`Invalid experiment: ${validation.errors.map((error) => error.message).join(' ')}`);
+  const status = String(definition.status || 'draft');
+  if (!EXPERIMENT_STATUSES.has(status)) throw new Error(`Invalid experiment status: ${status}`);
+  const now = Date.now();
+  db.exec('BEGIN');
+  try {
+    const inserted = db.prepare(`INSERT INTO experiments(
+      name, hypothesis, dimension, population_json, primary_metric, secondary_metrics_json,
+      minimum_completed_per_variant, status, created_at, started_at, ended_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      validation.experiment.name, validation.experiment.hypothesis, validation.experiment.dimension,
+      JSON.stringify(validation.experiment.population), validation.experiment.primaryMetric,
+      JSON.stringify(validation.experiment.secondaryMetrics), validation.experiment.minimumCompletedPerVariant,
+      status, now, status === 'active' ? now : null, status === 'completed' ? now : null,
+    );
+    const experimentId = Number(inserted.lastInsertRowid);
+    const insertVariant = db.prepare('INSERT INTO experiment_variants(experiment_id, label, config_json) VALUES (?, ?, ?)');
+    for (const variant of validation.experiment.variants) insertVariant.run(experimentId, variant.label, JSON.stringify(variant.config || {}));
+    db.exec('COMMIT');
+    return getExperiment(experimentId);
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function setExperimentStatus(id, status) {
+  const normalized = String(status || '');
+  if (!EXPERIMENT_STATUSES.has(normalized)) throw new Error(`Invalid experiment status: ${normalized || 'missing'}`);
+  if (!getExperiment(id)) throw new Error(`Experiment not found: ${id}`);
+  const now = Date.now();
+  db.prepare(`UPDATE experiments SET status = ?, started_at = CASE WHEN ? = 'active' THEN COALESCE(started_at, ?) ELSE started_at END,
+    ended_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END WHERE id = ?`)
+    .run(normalized, normalized, now, normalized, now, Number(id));
+  return getExperiment(id);
+}
+
+function experimentDefinition(experiment) {
+  return {
+    name: experiment.name, hypothesis: experiment.hypothesis, dimension: experiment.dimension,
+    population: experiment.population, primaryMetric: experiment.primaryMetric,
+    secondaryMetrics: experiment.secondaryMetrics, minimumCompletedPerVariant: experiment.minimumCompletedPerVariant,
+    variants: experiment.variants.map((variant) => ({ label: variant.label, config: variant.config })), status: experiment.status,
+  };
+}
+
+function compactHealthContext(now) {
+  const summary = getAccountHealthSummary({ now });
+  const components = summary.networkQuality?.components || {};
+  return {
+    health: {
+      state: summary.health.state,
+      reasons: (summary.health.reasons || []).map((reason) => ({ code: reason.code, level: reason.level, evidence: reason.evidence })),
+      generatedAt: summary.generatedAt,
+    },
+    networkContext: {
+      targetDiversity: components.targetDiversity?.uniqueTargets ?? 0,
+      classDiversity: components.classDiversity?.uniqueClasses ?? 0,
+      topicDiversity: components.topicDiversity?.uniqueTopics ?? 0,
+      topTargetConcentration: components.topTargetConcentration?.rate ?? null,
+      interactionYield: summary.interactionYield?.value ?? null,
+      interactionYieldComponents: summary.interactionYield?.components || {},
+    },
+  };
+}
+
+function assignmentItem(queueItem, context = {}) {
+  const candidate = getCandidate(queueItem.candidateKey);
+  const draft = queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey);
+  const relationship = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
+  return {
+    ...queueItem,
+    format: queueItem.pipeline,
+    mediaType: draft?.editor?.media?.type || 'none',
+    topicTags: [...new Set([...(candidate?.niche?.tags || []), ...(draft?.editor?.semanticAnchors || []), ...(relationship?.primaryTopics || [])])],
+    targetClass: relationship?.classes || [],
+    relationshipStage: relationship?.relationshipStage || '',
+    relationshipStageBefore: relationship?.relationshipStage || '',
+    replyArchetype: queueItem.replyArchetype || '',
+    targetUsername: queueItem.targetUsername || '',
+    candidate, draft, relationship, ...context,
+  };
+}
+
+export function assignExperimentVariant(candidateKey, experimentId, variantLabel, { context = {}, timingHistorySufficient = false, assignedAt = Date.now() } = {}) {
+  const queueItem = getQueueItemByCandidate(candidateKey);
+  if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+  if (['publishing', 'published', 'failed', 'ignored', 'expired'].includes(queueItem.status)) throw new Error('Experiment assignment requires a future/non-terminal queue item.');
+  const experiment = getExperiment(experimentId);
+  if (!experiment) throw new Error(`Experiment not found: ${experimentId}`);
+  if (experiment.status === 'completed') throw new Error('Completed experiments cannot receive new assignments.');
+  const timestamp = Number(assignedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Experiment assignedAt must be a positive timestamp.');
+  const profile = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
+  const assignmentContext = {
+    relationshipStageBefore: profile?.relationshipStage || '',
+    followsYouBefore: Boolean(profile?.followsYou),
+    mutualBefore: Boolean(profile?.mutual),
+    targetClass: profile?.classes || [],
+    ...context,
+  };
+  const validation = validateVariantAssignment(experimentDefinition(experiment), variantLabel, assignmentItem(queueItem, assignmentContext), {
+    ...assignmentContext, timingHistorySufficient: timingHistorySufficient === true,
+  });
+  if (!validation.valid) throw new Error(`Experiment assignment rejected: ${validation.errors.map((error) => error.message).join(' ')}`);
+  const variant = experiment.variants.find((entry) => entry.label === variantLabel);
+  return saveQueueItem({
+    ...queueItem,
+    experimentVariantId: variant.id,
+    experimentAssignedAt: timestamp,
+    experimentAssignment: {
+      experimentId: experiment.id, variantLabel: variant.label, assignedAt: timestamp,
+      assignmentPolicy: 'caller_selected', randomized: false, duplicatePairingRequired: false,
+      context: assignmentContext, population: validation.population, ...compactHealthContext(timestamp),
+    },
+  });
+}
+
+export function listExperimentAssignments(experimentId) {
+  return db.prepare(`SELECT q.*, v.label AS variant_label FROM queue_items q
+    JOIN experiment_variants v ON v.id = q.experiment_variant_id
+    WHERE v.experiment_id = ? ORDER BY q.experiment_assigned_at ASC, q.id ASC`).all(Number(experimentId)).map((row) => ({
+    queueItem: decodeQueueItem(row), variantLabel: row.variant_label,
+  }));
+}
+
+function contentObservationForAssignment(queueItem, variantLabel, windowMinutes) {
+  const assignment = queueItem.experimentAssignment || {};
+  const measurement = getPublicationMeasurements(queueItem.id).find((entry) => entry.windowMinutes === windowMinutes) || null;
+  return {
+    variantLabel, completed: Boolean(measurement), item: assignmentItem(queueItem, assignment.context || {}),
+    context: assignment.context || {},
+    measurement: measurement ? { ...measurement, publishedAt: queueItem.publishedAt } : null,
+    health: measurement?.metadata?.health || assignment.health || null,
+    networkContext: measurement?.metadata?.networkContext || assignment.networkContext || {},
+    confounders: assignment.context || {},
+  };
+}
+
+function networkObservationForAssignment(queueItem, variantLabel) {
+  const assignment = queueItem.experimentAssignment || {};
+  const context = assignment.context || {};
+  const targetUsername = queueItem.targetUsername;
+  const profile = targetUsername ? getRelationshipProfile(targetUsername) : null;
+  const events = targetUsername ? allRelationshipEvents(targetUsername).filter((event) => event.occurredAt >= Number(queueItem.experimentAssignedAt || 0)) : [];
+  const responses = queueItem.outputTweetId
+    ? events.filter((event) => ['target_reply', 'target_quote', 'target_repost'].includes(event.eventType) && String(event.ourTweetId || '') === String(queueItem.outputTweetId))
+    : [];
+  const continued = events.some((event) => event.eventType === 'conversation_continued'
+    || (event.eventType === 'our_reply' && event.metadata?.engagementKind === 'follow_up'));
+  const beforeStage = String(context.relationshipStageBefore || '');
+  const afterStage = String(profile?.relationshipStage || beforeStage);
+  const beforeIndex = RELATIONSHIP_STAGES.indexOf(beforeStage);
+  const afterIndex = RELATIONSHIP_STAGES.indexOf(afterStage);
+  const completed = queueItem.status === 'published';
+  return {
+    variantLabel, completed, item: assignmentItem(queueItem, context), context,
+    health: assignment.health || null, networkContext: assignment.networkContext || {}, confounders: context,
+    network: {
+      targetUsername, targetClass: context.targetClass || profile?.classes || [],
+      topic: context.topic || getCandidate(queueItem.candidateKey)?.niche?.tags?.[0] || null,
+      topicTags: context.topicTags || getCandidate(queueItem.candidateKey)?.niche?.tags || [],
+      relationshipStageBefore: beforeStage,
+      meaningfulInitialReplies: completed && queueItem.pipeline === 'reply' && queueItem.engagementKind === 'initial_reply' ? 1 : 0,
+      authorResponses: responses.length ? 1 : 0,
+      continuedConversations: continued ? 1 : 0,
+      relationshipStageProgressions: beforeIndex >= 0 && afterIndex > beforeIndex ? 1 : 0,
+      connectedTargetConversions: !['connected', 'mutual'].includes(beforeStage) && ['connected', 'mutual'].includes(afterStage) ? 1 : 0,
+      newRecurringRelationships: beforeStage !== 'recurring' && afterStage === 'recurring' ? 1 : 0,
+      relevantTargetFollows: context.followsYouBefore !== true && profile?.followsYou === true ? 1 : 0,
+      newMutualConnections: context.mutualBefore !== true && profile?.mutual === true ? 1 : 0,
+      meaningfulInteractions: completed ? 1 : 0,
+      ...context,
+    },
+  };
+}
+
+export function getExperimentSummary(id, { windowMinutes = null } = {}) {
+  const experiment = getExperiment(id);
+  if (!experiment) throw new Error(`Experiment not found: ${id}`);
+  const definition = experimentDefinition(experiment);
+  const assignments = listExperimentAssignments(experiment.id);
+  if (NETWORK_EXPERIMENT_DIMENSIONS.has(experiment.dimension)) {
+    return {
+      experiment, kind: 'network',
+      summary: summarizeExperiment(definition, assignments.map(({ queueItem, variantLabel }) => networkObservationForAssignment(queueItem, variantLabel))),
+    };
+  }
+  const summarizeWindow = (value) => summarizeExperiment(definition,
+    assignments.map(({ queueItem, variantLabel }) => contentObservationForAssignment(queueItem, variantLabel, value)));
+  if (windowMinutes != null) {
+    const value = Number(windowMinutes);
+    if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(value)) throw new Error(`Unsupported experiment summary window: ${windowMinutes}.`);
+    return { experiment, kind: 'content', windowMinutes: value, summary: summarizeWindow(value) };
+  }
+  return {
+    experiment, kind: 'content',
+    byWindow: Object.fromEntries(PUBLICATION_MEASUREMENT_WINDOWS.map((value) => [value, summarizeWindow(value)])),
+  };
+}
+
 function decodeDraft(row) {
   if (!row) return null;
   return {
@@ -1553,14 +2092,15 @@ export function getAppState(key, fallback = null) {
   return db.prepare('SELECT value FROM app_state WHERE key = ?').get(key)?.value ?? fallback;
 }
 
-export function recordPerformanceSnapshot({ profile, posts = [] }) {
-  const capturedAt = Date.now();
+export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Date.now() }) {
+  const timestamp = Number(capturedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Performance snapshot capturedAt must be a positive timestamp.');
   db.exec('BEGIN');
   try {
     if (profile) {
       db.prepare(`INSERT OR REPLACE INTO account_metrics(captured_at, followers, following, posts, likes)
         VALUES (?, ?, ?, ?, ?)`).run(
-        capturedAt,
+        timestamp,
         Number(profile.followersCount || 0),
         Number(profile.followingCount || 0),
         Number(profile.tweetCount || 0),
@@ -1573,7 +2113,7 @@ export function recordPerformanceSnapshot({ profile, posts = [] }) {
     for (const post of posts) {
       if (!post.id) continue;
       insert.run(
-        String(post.id), capturedAt, post.text || '', Number(post.timestamp || 0) || null,
+        String(post.id), timestamp, post.text || '', Number(post.timestamp || 0) || null,
         Number(post.views || 0), Number(post.likes || 0), Number(post.retweets || 0), Number(post.replies || 0),
       );
     }
@@ -1582,7 +2122,7 @@ export function recordPerformanceSnapshot({ profile, posts = [] }) {
     db.exec('ROLLBACK');
     throw error;
   }
-  return capturedAt;
+  return timestamp;
 }
 
 export function getPerformanceSnapshot(limit = 30) {

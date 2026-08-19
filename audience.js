@@ -2,7 +2,9 @@ import 'dotenv/config';
 import { Scraper, createBrowser, createPage } from 'xactions';
 import { classifyNiche } from './strategy.js';
 import {
+  getAppState,
   getAudienceProfile,
+  getNewFollowerQuality,
   getRelationshipProfile,
   refreshRelationshipFromAudience,
   replaceAudienceSnapshot,
@@ -89,7 +91,9 @@ export async function syncAudience(username = 'ham_zax') {
 
     const followers = await scrapeRelationship(page, `https://x.com/${username}/followers`, Math.max(profile.followersCount, 1), 'Follows you');
     const following = await scrapeRelationship(page, `https://x.com/${username}/following`, Math.max(profile.followingCount, 1), 'Following');
-    const summary = replaceAudienceSnapshot({ followers, following });
+    const capturedAt = Date.now();
+    const previousSyncAt = Number(getAppState('audience_last_sync_at', 0) || 0);
+    const summary = replaceAudienceSnapshot({ followers, following, observedAt: capturedAt });
     const relationshipRefresh = refreshAudienceRelationships([
       ...followers.map((profile) => profile.username),
       ...following.map((profile) => profile.username),
@@ -102,10 +106,18 @@ export async function syncAudience(username = 'ham_zax') {
       followingCount: profile.followingCount,
       tweetCount: profile.tweetCount,
       likesCount: profile.likesCount,
-      capturedAt: Date.now(),
+      capturedAt,
     };
     setAppState('account_profile', JSON.stringify(account));
-    return { account, summary, followers: followers.length, following: following.length, relationshipRefresh };
+    setAppState('audience_last_sync_at', capturedAt);
+    return {
+      account,
+      summary,
+      followers: followers.length,
+      following: following.length,
+      relationshipRefresh,
+      newFollowerQuality: getNewFollowerQuality({ since: previousSyncAt, until: capturedAt }),
+    };
   } finally {
     await browser.close();
   }

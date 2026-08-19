@@ -47,6 +47,11 @@ npm run agent -- route
 npm run agent -- workflow
 npm run agent -- research
 npm run agent -- performance
+npm run agent -- measurements
+npm run agent -- experiments
+npm run agent -- experiment-create
+npm run agent -- experiment-assign
+npm run agent -- experiment-summary
 npm run agent -- decide
 npm run agent -- record-action
 npm run agent -- relationship-targets
@@ -77,7 +82,8 @@ When a user manually supplies an X post or URL:
 12. for Engage Next, let `engage-draft` create/update reviewable reply text but never self-approve; only the dashboard human action may snapshot the exact approved reply, and `engage-resolve` may send only that already-approved text;
 13. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path;
 14. use `schedule-next` / `schedule-inspect` for read-only main-feed timing decisions; these commands cannot approve, claim, or publish;
-15. let `automation.js` refresh Engage Next and consume the human-approved main-feed queue through `scheduler.js`; `AUTO_POST=false` must stop before claim/transport, and the daemon must never send engagement replies.
+15. use `measurements`, `experiments`, and `experiment-summary` for Phase-4 reads; `experiment-create` and `experiment-assign` require explicit confirmation and assignment remains caller-selected rather than randomized;
+16. let `automation.js` capture due read-only measurement windows, refresh Engage Next, and consume the human-approved main-feed queue through `scheduler.js`; `AUTO_POST=false` must still stop before publication claim/transport, and the daemon must never send engagement replies.
 
 A human-approved main-feed text draft requires >=40/50 and a passing Phase-2 hard-gate result. Compatibility `draft.status=ready` is retained for approved-content integrity but is no longer publication selection authority; the approved main-feed queue row plus scheduler owns automatic publication selection. Factuality is always an explicit human confirmation; evidence confirmation is required when the gate detects evidence-dependent claims. Required media remains unschedulable until a real attachment/upload readiness path exists.
 
@@ -101,7 +107,8 @@ A human-approved main-feed text draft requires >=40/50 and a passing Phase-2 har
 - Phase 3 main-feed distribution is current: `scheduler.js` owns pure timing decisions; `schedule-next` / `schedule-inspect` are read-only; queue timing overrides are explicit human metadata independent of approval; enabled automation must atomically claim one approved Original/Quote/Thread row before transport. Repost remains manual, scheduler spacing is `EMPIRICAL_VARIABLE`, and failed sends remain inspectable rather than silently retried.
 - Engagement replies are never eligible for the main-feed scheduler or daemon publication. Editing or rerouting an approved reply invalidates approval; a successful explicit send records the reply once in candidate action history and relationship history.
 - Phase 1D Account Health is current: use `account-health` for structured diagnostics, `health-observe` only for explicit provenance-backed observations, and `health-under-the-hood` for the bounded authenticated visibility report. An unavailable Under-the-Hood read is not health evidence; WATCH remains advisory, while CONSTRAINED requires supported observed hard evidence or an explicit provenance-backed project/platform constraint.
-- Do not impose arbitrary reply quotas, human-looking delay/jitter rules, hidden risk/reputation scores, or a hard target-saturation ban. Saturation, repetition, concentration, and InteractionYield thresholds remain transparent `EMPIRICAL_VARIABLE` diagnostics rather than platform laws.
+- Phase 4 measurement/experiments is current: published main-feed rows own fixed 15m/1h/6h/24h measurement identity; actual capture time is preserved; follower deltas are associated and carry attribution confidence; audience `first_seen_at` supports period-level new-follower quality; experiment assignment is explicit/non-random and never creates duplicate/near-duplicate A/B posts; cohort summaries retain sample/confounder/health-network context and cannot self-promote a permanent strategy rule.
+- Do not impose arbitrary reply quotas, human-looking delay/jitter rules, hidden risk/reputation scores, or a hard target-saturation ban. Saturation, repetition, concentration, interaction volume, and InteractionYield remain transparent `EMPIRICAL_VARIABLE` diagnostics/cohort variables rather than platform laws.
 
 ## Coding changes
 

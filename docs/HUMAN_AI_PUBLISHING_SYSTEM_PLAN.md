@@ -179,9 +179,9 @@ Alternative terminal states:
 
 AI-controlled transitions stop at `needs_review`. Only a human approval action can move a queued main-feed item to `approved`. Phase 3 keeps scheduler timing advisory while the row remains `approved`; `scheduled_at` is an optional explicit human override, not a separate authorization state. When automatic publication is enabled, the publisher atomically claims the exact approved item as `publishing`; transport success becomes `published`, while a transport failure becomes `failed` and is not silently retried in the same cycle.
 
-## Data Model: current workflow plus later measurement fields
+## Data Model: current workflow plus later learning fields
 
-`queue_items` owns workflow/approval and now also carries Phase-3 main-feed scheduling/publication metadata. `drafts` remains the content owner. Phase-1C engagement's numeric `priority`/`urgency` fields remain lane-specific; Phase 3 deliberately uses a separate textual `schedule_urgency` so main-feed timing does not reinterpret EngagePriority freshness.
+`queue_items` owns workflow/approval, Phase-3 main-feed scheduling/publication metadata, and Phase-4 publication-baseline/experiment-assignment metadata. `drafts` remains the content owner. Phase-1C engagement's numeric `priority`/`urgency` fields remain lane-specific; Phase 3 deliberately uses a separate textual `schedule_urgency` so main-feed timing does not reinterpret EngagePriority freshness.
 
 Current/forward fields:
 
@@ -206,6 +206,8 @@ target_tweet_id
 target_score
 relationship_stage
 experiment_variant_id
+experiment_assigned_at
+experiment_assignment_json
 media_plan_json
 expires_at
 human_approved_at
@@ -215,6 +217,8 @@ schedule_source
 publish_started_at
 publish_error
 published_at
+measurement_baseline_at
+measurement_baseline_followers
 output_tweet_id
 output_url
 created_at
@@ -225,9 +229,9 @@ Responsibilities remain separate:
 
 - `candidates`: discovered/manual source material and preference state;
 - `drafts`: text composition and quality score;
-- `queue_items`: workflow, lane, approval, opportunity scores, engagement priority/freshness, main-feed schedule override/urgency, publication claim/outcome, and later experiment assignment;
+- `queue_items`: workflow, lane, approval, opportunity scores, engagement priority/freshness, main-feed schedule override/urgency, publication claim/outcome, first publication follower baseline, and explicit experiment assignment;
 - `candidate_actions`: historical candidate-based actions actually performed;
-- `audience_profiles`: raw follower/following observations and current niche relevance;
+- `audience_profiles`: raw follower/following observations, preserved `first_seen_at`, and current niche relevance used for period-level new-follower quality;
 - `relationship_profiles`: strategic target classes, TargetScore components, relationship stage, and materialized interaction counters;
 - `relationship_events`: append-only network/conversation history;
 - `account_health_observations`: append-only visibility/enforcement observations with provenance; soft saturation/repetition/network-health diagnostics remain derived;
@@ -244,6 +248,10 @@ id
 name
 hypothesis
 dimension
+population_json
+primary_metric
+secondary_metrics_json
+minimum_completed_per_variant
 status
 created_at
 started_at
@@ -265,13 +273,20 @@ Extend the existing outcome persistence so fixed measurement windows can be asso
 
 ```text
 measurement_window_minutes
+baseline_at
+baseline_followers
+actual_captured_at
 followers_at_capture
-follower_delta_since_publish
-follows_per_1000_views
+associated_follower_delta
+views_per_hour
+replies_per_1000_views
+reposts_per_1000_views
+visible_engagement_per_1000_views
+associated_follows_per_1000_views
 attribution_confidence
 ```
 
-`follower_delta_since_publish` is an associated account-level change, not proof that one post caused every follow. `attribution_confidence` should be lower when multiple main-feed posts overlap the same measurement window.
+`associated_follower_delta` is an account-level change observed across the stored baseline/capture interval, not proof that one post caused every follow. `attribution_confidence` is lower when other main-feed publications overlap that interval and may be downgraded further for supplied external-referral, materially-late-baseline, or profile-change context.
 
 ## Opportunity Scoring Model
 
@@ -446,7 +461,7 @@ The scheduler/account-health layer must not convert any of these observations in
 
 ## File Responsibility Map
 
-### New files planned
+### Domain-owner files
 
 - `pipeline.js` — pipeline definitions, route requirements, queue-state transition rules, and hard-gate requirements by format.
 - `scheduler.js` — priority, urgency, expiry, serialization, timing recommendation, and next-slot selection.
@@ -454,12 +469,12 @@ The scheduler/account-health layer must not convert any of these observations in
 - `relationship.js` — target classes, TargetScore, relationship-stage derivation, and event-to-profile aggregation.
 - `engagement.js` — discovery/ranking of initial/follow-up reply opportunities from relationship targets, own-post conversations, and reply-suitable research candidates.
 - `health.js` — advisory account-health state, observed visibility evidence, target saturation, reply repetition, Network Quality, and InteractionYield.
-- `experiments.js` — content/network/timing experiment definitions, variant assignment, active-experiment rules, and cohort summaries.
-- `learning.js` — evidence-backed bounded learned recommendations after enough account-specific outcomes accumulate.
+- `experiments.js` — implemented pure content/network/timing experiment validation, attribution semantics, normalized cohort summaries, and evidence states.
+- `learning.js` — Phase-5 owner for evidence-backed bounded learned recommendations after enough account-specific outcomes accumulate; Phase 4 does not apply learned rules.
 - `docs/POST_GENERATION_PROMPT.md` — canonical writer/editor prompt and structured output contract.
 - `docs/RESEARCH_AGENDA.md` — deep research areas that produce original account IP.
 
-### Existing files planned for modification
+### Integration-owner files
 
 - `store.js` — `queue_items`, relationship profiles/events, account-health observations, experiment persistence, learned-rule persistence, fixed-window follower/outcome fields, and queue queries.
 - `dashboard.js` — Save-to-triage behavior, route controls, Relationships/Engage/Account Health/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
@@ -803,16 +818,16 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: experiment/variant assignments, cohort summaries, and evidence for future targeting/reply/content/format/timing recommendations.
 
 **Steps:**
-- [ ] Add `experiments` and `experiment_variants` persistence plus one nullable `experiment_variant_id` assignment on `queue_items`.
-- [ ] Support content dimensions `style`, `hook_type`, `media_type`, `format`; network dimensions `target_class`, `target_score_bucket`, `target_size_bucket`, `reply_age_bucket`, `conversation_saturation_bucket`, `reply_archetype`, `relationship_stage`; and later `timing_bucket` once enough timing history exists.
-- [ ] Record a plain-language hypothesis before assigning variants, for example: `result-led hooks convert more AI/dev followers than question-led hooks for coding-agent originals`.
-- [ ] Assign at most one primary experiment dimension to a publication when practical so the result remains interpretable.
-- [ ] Never create duplicate or near-duplicate posts solely to form an A/B pair; compare naturally different future posts that satisfy the same experiment definition.
-- [ ] Apply the assigned variant before final drafting/media selection when it affects the output, while allowing the human to decline or override the assignment.
-- [ ] Show active experiments and each item's assignment in the dashboard before approval.
-- [ ] Summarize normalized metrics by variant only after the relevant measurement window completes.
-- [ ] Do not label a variant a winner until each compared variant has at least five completed 24-hour observations; before that, show `insufficient evidence` and raw cohort summaries.
-- [ ] Never automatically change the account identity or permanent writing rules from one experiment; promote a finding only after repeated evidence and human acceptance.
+- [x] Add `experiments` and `experiment_variants` persistence plus one nullable `experiment_variant_id` assignment on `queue_items`.
+- [x] Support content dimensions `style`, `hook_type`, `media_type`, `format`; timing `timing_bucket` only with caller-confirmed sufficient history; and network dimensions including target/reply/relationship/saturation/volume/concentration/repetition cohorts.
+- [x] Require a plain-language hypothesis, supported primary metric, variants, population, and declared minimum observations before persistence.
+- [x] Store at most one experiment variant assignment on a queue item at a time so the primary comparison remains inspectable.
+- [x] Never create duplicate or near-duplicate posts solely to form an A/B pair; compare naturally different future items.
+- [x] Keep assignment explicit/caller-selected and non-random. When a dimension affects output, the operator must attach it before execution/finalization; assignment itself never mutates drafting, approval, scheduling, or publication.
+- [x] Show declared experiments, existing item assignments, variants, sample sizes, primary metrics, confounders/context, and evidence state in the dashboard.
+- [x] Summarize normalized content metrics only after the requested fixed measurement window exists; summarize completed network assignments from relationship outcomes.
+- [x] Use `insufficient -> preliminary -> directional -> repeated` evidence states: the experiment's declared minimum gates directional comparison and 20 completed observations per variant is the repeated-evidence boundary. No state produces an automatic winner or causal claim.
+- [x] Never automatically change account identity or permanent writing rules from an experiment; Phase-5 learning remains a separate human-governed owner.
 
 **Acceptance criteria:**
 - The system can run declared non-duplicate content or network experiments, attach variants before execution, collect comparable normalized outcomes, and show a cautious evidence summary without self-authorizing a permanent strategy change.
@@ -832,16 +847,16 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: associated follower delta, follows/1k views, attribution confidence, newly observed follower quality, author-response/conversation-continuation/recurring-relationship outcomes, and grouped content/network conversion summaries.
 
 **Steps:**
-- [ ] Capture follower count at publication baseline and at the 15m/1h/6h/24h measurement windows alongside post metrics.
-- [ ] Compute `associated_follower_delta` and `follows_per_1000_views` for each window without claiming direct causal attribution.
-- [ ] Mark attribution confidence `high` when no other main-feed publication occurred between baseline and capture, `medium` when exactly one other publication overlaps, and `low` when two or more overlap.
-- [ ] Add/preserve `first_seen_at` for audience profiles so newly observed followers can be distinguished from the legacy follower set.
-- [ ] When a new follower is observed, run the existing niche/audience classifier and record whether the follower appears aligned with the AI/developer/builder target audience.
-- [ ] Show reach metrics and conversion metrics side-by-side so a large low-conversion post cannot automatically outrank a smaller high-quality recruiting post.
-- [ ] Compute network metrics from relationship events: author response rate, conversation continuation rate, recurring relationship conversion, connected-target conversion, and mutual relationship count.
-- [ ] Group content conversion by niche, format, style, hook, media, semantic anchors, timing bucket, and experiment variant.
-- [ ] Group network conversion by target class, target-score bucket, target-size bucket, reply-age bucket, reply archetype, topic, and relationship stage before interaction.
-- [ ] Feed content/network conversion summaries into experiment evaluation and learned strategy as evidence, while keeping the human able to override recommendations.
+- [x] Capture follower count from a preserved publication baseline and at first-available 15m/1h/6h/24h measurement windows alongside post metrics, storing actual capture time.
+- [x] Compute associated follower delta and follows/1k views for each window without claiming direct causal attribution.
+- [x] Mark attribution confidence `high` with no overlapping main-feed publication, `medium` with exactly one, and `low` with two or more; known external referral/profile-change/materially-late-baseline facts downgrade confidence when supplied. No numeric `materially late` threshold is invented.
+- [x] Add/preserve audience `first_seen_at` so newly observed followers can be distinguished from the legacy observed set.
+- [x] Reuse the existing audience relevance classifier and expose period-level niche-aligned new-follower quality while preserving raw follow/profile state.
+- [x] Show reach and associated conversion side-by-side in Performance, including attribution confidence and contemporaneous health context.
+- [x] Compute network cohort metrics from relationship/profile outcomes through `experiments.js`: author response, continuation, relationship progression/conversion, connected/mutual outcomes, InteractionYield raw components, diversity, and concentration.
+- [x] Expose content confounders/population context such as topic, format, media, timing and caller-supplied style/hook/semantic metadata without inventing missing bucket definitions.
+- [x] Expose network target class/topic/relationship context plus caller-supplied target-score/size/reply-age/saturation/volume/concentration/repetition buckets; undefined bucket boundaries remain explicit inputs rather than hard-coded rules.
+- [x] Feed completed content/network observations into experiment summaries as evidence only. Phase 4 does not apply learned-strategy adjustments.
 
 **Acceptance criteria:**
 - The dashboard can identify posts that produced strong reach but weak follower recruitment, interactions that produced views but no relationship progression, interactions associated with target responses/recurring relationships, and whether newly observed followers are increasingly aligned with the target niche, with attribution confidence visible.
@@ -954,15 +969,17 @@ Implemented:
 - viral pre-emption without burst dumping, while Repost and engagement replies remain outside autonomous main-feed transport;
 - required media remains blocked because actual attachment/upload readiness is not implemented.
 
-### Phase 4 — Measurement + content/network experiments
+### Phase 4 — Measurement + content/network experiments — IMPLEMENTED
 
 Plan: `plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`
 
-- fixed 15m/1h/6h/24h publication outcomes;
-- associated follower conversion with attribution confidence;
-- new-follower quality;
-- author-response/conversation-continuation/relationship-conversion metrics;
-- content experiments and network experiments under one experiment owner.
+- idempotent first-available 15m/1h/6h/24h publication outcomes with actual capture timestamps;
+- associated follower conversion with overlap/downgrade attribution confidence;
+- preserved audience first-seen state and period-level new-follower quality;
+- normalized content metrics plus author-response/conversation-continuation/relationship-conversion/InteractionYield/diversity outcomes;
+- one shared content/timing/network experiment owner with explicit non-random assignment, visible confounders/context, and cautious evidence states;
+- Performance + Experiments dashboard and `measurements` / `experiments` / explicit create/assign / summary bridge commands;
+- no automatic learned-rule application or empirical-variable promotion.
 
 ### Phase 5 — Learned strategy
 

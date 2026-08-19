@@ -1,6 +1,6 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, tracks account performance, and can publish approved queued drafts through authenticated HTTP GraphQL. The network-first architecture now includes human-reviewed engagement and account-health observability before measurement and learned targeting/content/timing.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, and can publish approved queued drafts through authenticated HTTP GraphQL.
 
 ## Components
 
@@ -10,12 +10,13 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, authenticated Under-the-Hood visibility observations, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, candidate action history, raw audience profiles, strategic relationship profiles/events, append-only health observations, current health/network diagnostics, format-aware drafts/editor/gate metadata, main/engagement queue state, Phase-3 schedule/claim/publication metadata, and performance snapshots.
+- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, and experiment/variant assignments.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for ingest/research/workflow, relationship reads, Account Health observation/inspection, Engage Next inspection/drafting/resolution, `writer-packet`, `apply-writer-output`, and read-only `schedule-next` / `schedule-inspect`; it cannot approve or publish main-feed content.
-- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next/Active Conversations, format-aware draft editing, hard-gate review, scheduler reasoning/override controls, publication state, Relationships, Audience, and Performance.
-- `automation.js` — research plus engagement-opportunity refresh, followed by scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
+- `experiments.js` — pure experiment definition/population validation, attribution-confidence semantics, normalized content/network cohorts, InteractionYield context, and cautious evidence states.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for workflow/health/relationship reads plus Phase-4 `measurements`, `experiments`, explicit experiment create/assign, and experiment summaries; it cannot approve or publish main-feed content.
+- `dashboard.js` — Bootstrap research/workflow workbench with Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, and explicit observational Experiments.
+- `automation.js` — captures due publication measurement windows, refreshes research/Engage Next, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
 
 ## Operating standards
 
@@ -47,13 +48,15 @@ Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, no
 
 Phase 1D Account Health is implemented: append-only observed health/visibility evidence retains provenance; `health.js` derives HEALTHY/WATCH/CONSTRAINED plus SaturationPressure, reply repetition, Network Quality, and InteractionYield; the dashboard/bridge expose the structured diagnostics; Under the Hood is recorded only when observable; WATCH changes warnings/priority only, while supported hard evidence blocks explicit engagement send.
 
+Phase 4 Measurement & Experiments is implemented: published main-feed items accumulate first-available 15m/1h/6h/24h snapshots with actual capture time; follower deltas retain overlap/downgrade attribution confidence and remain associated rather than causal; audience first-seen state supports new-follower quality; declared content/timing/network experiments use explicit non-random assignments and normalized cohort summaries with sample/confounder/health-network context and `insufficient -> preliminary -> directional -> repeated` evidence states.
+
 The remaining network-first architecture is:
 
-**media attachment readiness -> follower/relationship/health experiments -> learned strategy.**
+**media attachment readiness -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-Actual media upload/attachment readiness, full experiment measurement/capture integration, and learned strategy remain planned until their matching phases are implemented.
+Actual media upload/attachment readiness and Phase-5 learned-strategy integration remain planned until their matching phases are implemented.
 
 ## Setup
 
@@ -112,7 +115,7 @@ POLL_MINUTES=30
 AUTO_POST=false
 ```
 
-The automation refreshes X niche discovery, X viral discovery, GitHub, Hacker News, and Engage Next opportunities. Engage refresh checks observed responses before cold target posts and persists/refreshes queue state only; it never calls the reply-send path. Main-feed publication then ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before claim or transport and only previews/explains the next recommendation. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item per cycle, but only after an atomic `approved -> publishing` claim; success becomes `published`, while transport failure becomes inspectable `failed` and is not silently retried in that cycle. Scheduler spacing is a coverage heuristic, not an anti-detection cooldown. Repost remains manual. Required media remains blocked until real attachment readiness exists.
+Before research/publication work, automation checks for missing due 15m/1h/6h/24h measurements and, only when needed, batches one existing account/post performance read. It records the first available snapshot after each due window idempotently. After a successful publication it also attempts one read-only follower-baseline snapshot; baseline/measurement read failures never change the persisted publication result or authorize another send. It then refreshes X niche discovery, viral discovery, GitHub, Hacker News, and Engage Next opportunities. Main-feed publication still ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before publication claim/transport and only previews the recommendation; Phase-4 measurement reads do not change that authority. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item after the existing atomic claim. Repost remains manual and required media remains blocked until real attachment readiness exists.
 
 ## Web preview
 
@@ -133,7 +136,8 @@ Dashboard views:
 - **Opportunities** — technical jobs/career, builders/SaaS, and productization signals.
 - **Relationships** — read-only strategic target classes, TargetScore/component evidence, follow state, stages, interaction counts, and class/stage filters.
 - **Audience** — raw follower/following niche map that feeds Relationship Intelligence without being replaced by it.
-- **Performance** — snapshots of `@ham_zax` followers and recent original-post metrics.
+- **Performance** — raw account/post snapshots plus fixed 15m/1h/6h/24h normalized publication outcomes, associated follower deltas with attribution confidence, health context, and recent new-follower quality.
+- **Experiments** — declared observational content/timing/network experiments, explicit assignment controls, per-variant samples/metrics/confounders/context, and cautious evidence states with no automatic winner.
 - **GitHub / Hacker News / All** — secondary discovery sources.
 
 Use **Save** to train the preference profile and **Create draft** to move a source into the drafting workflow.
@@ -147,6 +151,9 @@ npm run agent -- research <<<'{"source":"x","limit":10}'
 npm run agent -- queue <<<'{"minScore":40}'
 npm run agent -- schedule-next <<<'{}'
 npm run agent -- schedule-inspect <<<'{"key":"https://x.com/example/status/123"}'
+npm run agent -- measurements <<<'{"limit":20}'
+npm run agent -- experiments <<<'{}'
+npm run agent -- experiment-summary <<<'{"id":1,"windowMinutes":60}'
 npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'

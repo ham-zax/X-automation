@@ -32,7 +32,9 @@ import {
 } from './pipeline.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
+  assignExperimentVariant,
   candidateKey,
+  createExperiment,
   countQueueItems,
   countSavedCandidates,
   getAccountHealthSummary,
@@ -40,7 +42,9 @@ import {
   getCandidate,
   getDraft,
   getDraftByCandidate,
+  getExperimentSummary,
   getMainFeedScheduleItem,
+  getNewFollowerQuality,
   getPerformanceSnapshot,
   getPreferenceProfile,
   getQueueItemByCandidate,
@@ -51,7 +55,10 @@ import {
   listCandidates,
   listDrafts,
   listEngagementItems,
+  listExperimentAssignments,
+  listExperiments,
   listApprovedMainFeedItems,
+  listPublicationMeasurementSeries,
   listQueueItems,
   listRecentMainFeedPublications,
   listRelationshipProfiles,
@@ -377,7 +384,15 @@ function performanceView(snapshot, error) {
       </div>
     </div></div>`;
   }).join('');
-  return summary + (posts || '<div class="alert alert-secondary">No recent post metrics.</div>');
+  const series = listPublicationMeasurementSeries({ limit: 20 });
+  const measurementCards = series.map(({ queueItem, candidate, measurements }) => {
+    if (!measurements.length) return '';
+    const rows = measurements.map((measurement) => `<tr><td>${measurement.windowMinutes}m</td><td>${escapeHtml(new Date(measurement.capturedAt).toLocaleString())}</td><td>${formatNumber(measurement.views)}</td><td>${measurement.viewsPerHour == null ? 'n/a' : escapeHtml(measurement.viewsPerHour)}</td><td>${measurement.repliesPer1000Views == null ? 'n/a' : escapeHtml(measurement.repliesPer1000Views)}</td><td>${measurement.repostsPer1000Views == null ? 'n/a' : escapeHtml(measurement.repostsPer1000Views)}</td><td>${measurement.associatedFollowsPer1000Views == null ? 'n/a' : escapeHtml(measurement.associatedFollowsPer1000Views)}</td><td>${measurement.followerDelta >= 0 ? '+' : ''}${escapeHtml(measurement.followerDelta)}</td><td>${escapeHtml(measurement.attributionConfidence)}</td><td>${escapeHtml(measurement.metadata?.health?.state || 'unknown')}</td></tr>`).join('');
+    return `<div class="card border-0 shadow-sm mb-3"><div class="card-body"><div class="fw-semibold">${escapeHtml(candidate?.title || queueItem.candidateKey)}</div><div class="small text-secondary mb-2">${escapeHtml(queueItem.pipeline)} · published ${escapeHtml(new Date(queueItem.publishedAt).toLocaleString())}</div><div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>Window</th><th>Captured</th><th>Views</th><th>Views/h</th><th>Replies/1k</th><th>Reposts/1k</th><th>Assoc follows/1k</th><th>Assoc Δ followers</th><th>Confidence</th><th>Health context</th></tr></thead><tbody>${rows}</tbody></table></div></div></div>`;
+  }).join('');
+  const followerQuality = getNewFollowerQuality({ since: Date.now() - 24 * 3_600_000 });
+  const phase4 = `<h2 class="h5 mt-4">Fixed-window publication measurements</h2><p class="small text-secondary">15m / 1h / 6h / 24h snapshots use actual capture time. Follower deltas are associated with the measurement period and carry attribution confidence; they are not causal post attribution.</p>${measurementCards || '<div class="alert alert-secondary">No fixed-window publication measurements yet.</div>'}<div class="card border-0 shadow-sm mt-4"><div class="card-body"><h2 class="h5">New-follower quality · observed last 24h</h2><div class="fs-4 fw-semibold">${followerQuality.nicheAlignedNewFollowers} / ${followerQuality.newlyObservedFollowers}</div><div class="small text-secondary">Niche-aligned newly observed followers · period association only, not one-to-one post attribution.</div></div></div>`;
+  return summary + (posts || '<div class="alert alert-secondary">No recent post metrics.</div>') + phase4;
 }
 
 function audienceView(error = null) {
@@ -398,6 +413,33 @@ function audienceView(error = null) {
   return stats
     + profileCards(targets, 'Observed followed accounts', 'Raw audience observations for relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships.')
     + profileCards(relevantFollowers, 'Niche-aligned followers', 'Current followers already close to the AI/developer/builder audience we want more of.');
+}
+
+function experimentSummaryCard(result, label) {
+  const summary = result?.summary;
+  if (!summary) return '';
+  const primary = Object.entries(summary.primaryMetricValues || {}).map(([variant, value]) => `${variant}: ${value == null ? 'n/a' : value}`).join(' · ');
+  const confounders = Object.fromEntries(Object.entries(summary.cohorts || {}).map(([variant, cohort]) => [variant, cohort.confounders || {}]));
+  const contexts = Object.fromEntries(Object.entries(summary.cohorts || {}).map(([variant, cohort]) => [variant, cohort.context || {}]));
+  return `<div class="border rounded p-3 mb-2"><div class="d-flex justify-content-between gap-2 flex-wrap"><strong>${escapeHtml(label)}</strong><span class="badge text-bg-${summary.evidence?.state === 'repeated' ? 'success' : summary.evidence?.state === 'directional' ? 'primary' : 'secondary'}">${escapeHtml(summary.evidence?.state || 'insufficient')}</span></div><div class="small mt-1">${escapeHtml(summary.primaryMetric)} · ${escapeHtml(primary || 'no completed observations')}</div><div class="small text-secondary">Samples: ${escapeHtml(JSON.stringify(summary.completedByVariant || {}))}. No automatic winner/causal label.</div><details class="mt-2"><summary class="small">Confounders &amp; health/network context</summary><pre class="small text-wrap mt-2 mb-0">${escapeHtml(JSON.stringify({ confounders, contexts }, null, 2))}</pre></details></div>`;
+}
+
+function experimentsView() {
+  const experiments = listExperiments({ limit: 100 });
+  const cards = experiments.map((experiment) => {
+    const result = getExperimentSummary(experiment.id);
+    const summaries = result.kind === 'network'
+      ? experimentSummaryCard(result, 'Network cohort')
+      : Object.entries(result.byWindow || {}).map(([window, summary]) => experimentSummaryCard({ summary }, `${window}m`)).join('');
+    const assignedItems = listExperimentAssignments(experiment.id);
+    const assignedHtml = assignedItems.length
+      ? `<div class="table-responsive mt-3"><table class="table table-sm"><thead><tr><th>Candidate</th><th>Variant</th><th>Lane / pipeline</th><th>Status</th><th>Assigned</th></tr></thead><tbody>${assignedItems.map(({ queueItem, variantLabel }) => `<tr><td>${escapeHtml(queueItem.candidateKey)}</td><td>${escapeHtml(variantLabel)}</td><td>${escapeHtml(queueItem.lane)} / ${escapeHtml(queueItem.pipeline)}</td><td>${escapeHtml(queueItem.status)}</td><td>${queueItem.experimentAssignedAt ? escapeHtml(new Date(queueItem.experimentAssignedAt).toLocaleString()) : 'n/a'}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="small text-secondary mt-3">No items assigned yet.</div>';
+    const assignment = `<form method="post" action="/experiment/assign" class="row g-2 align-items-end mt-3"><input type="hidden" name="experimentId" value="${experiment.id}"><div class="col-md-4"><label class="form-label small">Queue candidate key</label><input class="form-control form-control-sm" name="key" required></div><div class="col-md-3"><label class="form-label small">Variant</label><select class="form-select form-select-sm" name="variant">${experiment.variants.map((variant) => `<option value="${escapeHtml(variant.label)}">${escapeHtml(variant.label)}</option>`).join('')}</select></div><div class="col-md-3"><label class="form-label small">Context JSON</label><input class="form-control form-control-sm" name="contextJson" value="{}"></div><div class="col-md-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Assign explicitly</button></div>${experiment.dimension === 'timing_bucket' ? '<div class="col-12"><label class="small"><input class="form-check-input me-1" type="checkbox" name="timingHistorySufficient" value="1"> I confirm sufficient schedule history for this timing experiment.</label></div>' : ''}</form>`;
+    return `<article class="card border-0 shadow-sm mb-4"><div class="card-body"><div class="d-flex justify-content-between gap-2 flex-wrap"><div><h2 class="h5 mb-1">${escapeHtml(experiment.name)}</h2><div class="small text-secondary">${escapeHtml(experiment.dimension)} · primary ${escapeHtml(experiment.primaryMetric)}</div></div><span class="badge text-bg-light border">${escapeHtml(experiment.status)}</span></div><p class="mt-2 mb-2">${escapeHtml(experiment.hypothesis)}</p><div class="small mb-3">Population: ${escapeHtml(JSON.stringify(experiment.population))} · variants: ${escapeHtml(experiment.variants.map((variant) => variant.label).join(', '))} · minimum ${experiment.minimumCompletedPerVariant}/variant</div>${summaries}${assignedHtml}${assignment}</div></article>`;
+  }).join('');
+  const create = `<form method="post" action="/experiment/create" class="card border-0 shadow-sm mb-4"><div class="card-body"><h2 class="h5">Create experiment</h2><div class="row g-2"><div class="col-md-4"><label class="form-label small">Name</label><input class="form-control form-control-sm" name="name" required></div><div class="col-md-4"><label class="form-label small">Dimension</label><input class="form-control form-control-sm" name="dimension" placeholder="format or reply_archetype" required></div><div class="col-md-4"><label class="form-label small">Primary metric</label><input class="form-control form-control-sm" name="primaryMetric" required></div><div class="col-12"><label class="form-label small">Hypothesis</label><input class="form-control form-control-sm" name="hypothesis" required></div><div class="col-md-6"><label class="form-label small">Population JSON</label><input class="form-control form-control-sm" name="populationJson" value="{}"></div><div class="col-md-6"><label class="form-label small">Variants (comma-separated)</label><input class="form-control form-control-sm" name="variants" required></div><div class="col-md-6"><label class="form-label small">Secondary metrics (comma-separated)</label><input class="form-control form-control-sm" name="secondaryMetrics"></div><div class="col-md-3"><label class="form-label small">Minimum / variant</label><input class="form-control form-control-sm" type="number" min="1" name="minimumCompletedPerVariant" value="5"></div><div class="col-md-3"><label class="form-label small">Status</label><select class="form-select form-select-sm" name="status"><option>draft</option><option>active</option></select></div></div><button class="btn btn-dark btn-sm mt-3" type="submit">Create declared experiment</button><div class="small text-secondary mt-2">Creation and assignment are explicit. The system does not randomize variants or create duplicate/near-duplicate A/B posts.</div></div></form>`;
+  return create + (cards || '<div class="alert alert-secondary">No experiments declared yet.</div>');
 }
 
 function relationshipLabel(value) {
@@ -694,7 +736,8 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     decision = engagementError ? `Engage refresh failed: ${engagementError}` : `${activeCount} active conversations · ${engagementItems.length - activeCount} new opportunities.`;
   }
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
-  else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot and recent post outcomes.`;
+  else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot, fixed-window outcomes, and associated follower conversion.`;
+  else if (activeSource === 'experiments') decision = `${listExperiments({ limit: 500 }).length} declared experiments · assignment remains explicit and observational.`;
   else if (activeSource === 'audience') {
     const summary = getAudienceSummary();
     decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are raw audience observations.`;
@@ -723,6 +766,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
     ['health', `Account Health${accountHealth ? ` · ${accountHealth.health.state.toUpperCase()}` : ''}`],
     ['audience', 'Audience'],
     ['performance', 'Performance'],
+    ['experiments', `Experiments (${listExperiments({ limit: 500 }).length})`],
     ['github', 'GitHub'],
     ['hn', 'Hacker News'],
     ['all', 'All'],
@@ -733,6 +777,7 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'engage') content = engageView(engagementError);
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
+  else if (activeSource === 'experiments') content = experimentsView();
   else if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
   else if (activeSource === 'health') content = accountHealthView();
   else if (activeSource === 'audience') content = audienceView(audienceError);
@@ -872,6 +917,35 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: '/?source=queue' }); res.end(); return;
     }
 
+    if (req.method === 'POST' && requestUrl.pathname === '/experiment/create') {
+      const form = await readForm(req);
+      const population = JSON.parse(String(form.get('populationJson') || '{}'));
+      if (!population || typeof population !== 'object' || Array.isArray(population)) throw new Error('Experiment population JSON must be an object.');
+      createExperiment({
+        name: form.get('name'),
+        hypothesis: form.get('hypothesis'),
+        dimension: form.get('dimension'),
+        population,
+        primaryMetric: form.get('primaryMetric'),
+        secondaryMetrics: String(form.get('secondaryMetrics') || '').split(',').map((value) => value.trim()).filter(Boolean),
+        variants: String(form.get('variants') || '').split(',').map((value) => value.trim()).filter(Boolean),
+        minimumCompletedPerVariant: Number(form.get('minimumCompletedPerVariant')),
+        status: form.get('status') || 'draft',
+      });
+      res.writeHead(303, { location: '/?source=experiments' }); res.end(); return;
+    }
+
+    if (req.method === 'POST' && requestUrl.pathname === '/experiment/assign') {
+      const form = await readForm(req);
+      const context = JSON.parse(String(form.get('contextJson') || '{}'));
+      if (!context || typeof context !== 'object' || Array.isArray(context)) throw new Error('Experiment assignment context JSON must be an object.');
+      assignExperimentVariant(form.get('key'), Number(form.get('experimentId')), form.get('variant'), {
+        context,
+        timingHistorySufficient: form.get('timingHistorySufficient') === '1',
+      });
+      res.writeHead(303, { location: '/?source=experiments' }); res.end(); return;
+    }
+
     if (req.method === 'POST' && requestUrl.pathname === '/queue/schedule') {
       const form = await readForm(req);
       const scheduledRaw = form.get('scheduledAt');
@@ -973,7 +1047,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'github', 'hn', 'all'];
+    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'github', 'hn', 'all'];
     const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';

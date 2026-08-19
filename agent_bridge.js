@@ -15,14 +15,20 @@ import {
 } from './pipeline.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
+  assignExperimentVariant,
   candidateKey,
+  createExperiment,
   getAccountHealthSummary,
   getAudienceSummary,
   getCandidate,
   getDraft,
   getDraftByCandidate,
+  getExperiment,
+  getExperimentSummary,
   getNextReadyDraft,
   getMainFeedScheduleItem,
+  getNewFollowerQuality,
+  getPublicationMeasurements,
   getPerformanceSnapshot,
   getRelationshipProfile,
   hasCandidateAction,
@@ -31,7 +37,10 @@ import {
   listCandidates,
   listDrafts,
   listEngagementItems,
+  listExperimentAssignments,
+  listExperiments,
   listApprovedMainFeedItems,
+  listPublicationMeasurementSeries,
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
@@ -319,6 +328,61 @@ async function main() {
     return;
   }
 
+  if (command === 'measurements') {
+    if (payload.queueItemId != null) {
+      result({ queueItemId: Number(payload.queueItemId), measurements: getPublicationMeasurements(Number(payload.queueItemId)) });
+      return;
+    }
+    const since = Number(payload.since || 0);
+    const until = payload.until == null ? Date.now() : Number(payload.until);
+    result({
+      series: listPublicationMeasurementSeries({ limit: Number(payload.limit || 30) }),
+      newFollowerQuality: getNewFollowerQuality({ since, until, minScore: Number(payload.minScore ?? 12) }),
+    });
+    return;
+  }
+
+  if (command === 'experiments') {
+    if (payload.id != null) {
+      const experiment = getExperiment(Number(payload.id));
+      if (!experiment) throw new Error(`Experiment not found: ${payload.id}`);
+      result({ experiment, assignments: listExperimentAssignments(experiment.id), readOnly: true });
+      return;
+    }
+    result({ experiments: listExperiments({ status: payload.status || null, limit: Number(payload.limit || 100) }), readOnly: true });
+    return;
+  }
+
+  if (command === 'experiment-create') {
+    if (payload.confirmCreate !== true) throw new Error('experiment-create requires confirmCreate=true for the explicit write action.');
+    const definition = payload.experiment || payload.definition;
+    if (!definition || typeof definition !== 'object' || Array.isArray(definition)) throw new Error('experiment-create requires an experiment definition object.');
+    result({ experiment: createExperiment(definition), assignmentPolicy: 'caller_selected', randomized: false });
+    return;
+  }
+
+  if (command === 'experiment-assign') {
+    if (payload.confirmAssign !== true) throw new Error('experiment-assign requires confirmAssign=true for the explicit write action.');
+    if (!payload.key) throw new Error('experiment-assign requires key.');
+    const context = payload.context == null ? {} : payload.context;
+    if (!context || typeof context !== 'object' || Array.isArray(context)) throw new Error('experiment-assign context must be an object.');
+    result({
+      queueItem: assignExperimentVariant(payload.key, Number(payload.experimentId), payload.variant, {
+        context,
+        timingHistorySufficient: payload.timingHistorySufficient === true,
+      }),
+      assignmentPolicy: 'caller_selected',
+      randomized: false,
+    });
+    return;
+  }
+
+  if (command === 'experiment-summary') {
+    if (payload.id == null) throw new Error('experiment-summary requires id.');
+    result(getExperimentSummary(Number(payload.id), { windowMinutes: payload.windowMinutes == null ? null : Number(payload.windowMinutes) }));
+    return;
+  }
+
   if (command === 'decide') {
     const candidate = requireCandidate(payload.key);
     const existingActions = listCandidateActions(candidate.key);
@@ -526,7 +590,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {

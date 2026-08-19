@@ -162,9 +162,9 @@ BETTER TARGETS + BETTER CONTENT + BETTER TIMING
 
 Phase 1A currently owns persistent Save -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
 
-Phase 1C Engage Next is current: bounded target timelines and observed replies/quotes feed `queue_items(lane=engagement, pipeline=reply)`; active conversations are refreshed before cold opportunities; every actionable item carries a concrete proposed contribution plus transparent EngagePriority/expiry state; Phase-2 reply gates own draft quality; and only an explicit human approval/send path may issue one reply. Successful replies become candidate-action and relationship-event history. Automation refreshes engagement state but cannot send from this lane, and approved engagement drafts are excluded from its main-feed ready selector.
+Phase 1C Engage Next is current: bounded target timelines and observed replies/quotes feed `queue_items(lane=engagement, pipeline=reply)`; active conversations are refreshed before cold opportunities; every actionable item carries a concrete proposed contribution plus transparent EngagePriority/expiry state; Phase-2 reply gates own draft quality; and only an explicit human approval/send path may issue one reply. Successful replies become candidate-action and relationship-event history. Automation refreshes engagement state but cannot send from this lane, and approved engagement drafts are excluded from main-feed scheduling.
 
-Account Health/Under the Hood, later scheduler changes, experiments, and learned strategy remain planned.
+Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase-5 learned strategy remains a later layer; Phase-4 evidence does not automatically rewrite production rules.
 
 ---
 
@@ -728,7 +728,9 @@ Example hypotheses:
 
 > Customer-density targets produce fewer raw impressions but more relevant followers.
 
-These are empirical questions. The system should collect enough observations before promoting a rule.
+These are empirical questions. The current experiment owner persists a plain-language hypothesis and variants, validates population eligibility, and requires explicit caller/operator assignment before execution; it does not randomize assignments or create duplicate/near-duplicate A/B posts. Cohorts retain normalized outcomes, sample size, target/topic/class distributions, Account Health/Network Quality context, and InteractionYield raw components. Evidence progresses `insufficient -> preliminary -> directional -> repeated`; even `repeated` remains observational rather than causal, and Phase 4 never self-promotes a permanent rule.
+
+Saturation, interaction-volume, target-concentration, and archetype-repetition buckets are valid cohort dimensions but never hard activity limits. High-volume reciprocal conversations remain analyzable as healthy network behavior.
 
 ---
 
