@@ -11,6 +11,11 @@ import {
   setAppState,
 } from './store.js';
 
+function containsProfileTerm(text, term) {
+  const escaped = String(term).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+  return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(String(text || ''));
+}
+
 function normalizeCell(row) {
   const lines = String(row.text || '').split('\n').map((line) => line.trim()).filter(Boolean);
   const username = String(row.username || '').replace(/^@/, '');
@@ -19,8 +24,15 @@ function normalizeCell(row) {
   const profileText = `${displayName} ${bio}`.toLowerCase();
   const niche = classifyNiche(profileText);
   const legacyCrypto = ['crypto', 'blockchain', 'defi', 'nft', 'memecoin', 'solana', 'bitcoin', 'on-chain', 'trader'].some((term) => profileText.includes(term));
-  const strongDevSignal = ['developer', 'software', 'engineer', 'coding', 'code ', 'llm', 'model', 'open source', 'mcp', 'api', 'sdk', 'cli', 'github', 'devtool'].some((term) => profileText.includes(term));
-  const relevanceScore = legacyCrypto && !strongDevSignal ? Math.max(0, niche.score - 18) : niche.score;
+  const strongDevSignal = [
+    'ai', 'machine learning', 'developer', 'devs', 'software', 'engineer', 'programmer', 'coding', 'code ',
+    'llm', 'model', 'open source', 'mcp', 'api', 'sdk', 'cli', 'github', 'devtool', 'devops', 'cybersecurity',
+    'typescript', 'javascript', 'python', 'react', 'node.js', 'full stack', 'web dev', 'cloud',
+  ].some((term) => containsProfileTerm(profileText, term));
+  const technicalFloor = strongDevSignal ? 12 : 0;
+  const relevanceScore = legacyCrypto && !strongDevSignal
+    ? Math.max(0, niche.score - 18)
+    : Math.max(niche.score, technicalFloor);
   return {
     username,
     displayName,
