@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { Scraper, createBrowser, createPage } from 'xactions';
+import { TwitterHttpClient, unfollowUser as unfollowUserHttp } from 'xactions/scrapers/twitter/http';
 import { classifyNiche } from './strategy.js';
 import {
   getAppState,
@@ -99,20 +100,25 @@ export async function unfollowAudienceUser(username) {
   try {
     browser = await createBrowser({ headless: true });
     const page = await createPage(browser);
-    const cookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true }];
-    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
-    await page.setCookie(...cookies);
+    const browserCookies = [{ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true }];
+    if (process.env.CT0) browserCookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
+    await page.setCookie(...browserCookies);
     await page.goto(`https://x.com/${encodeURIComponent(normalized)}`, { waitUntil: 'domcontentloaded', timeout: 45_000 });
 
-    const unfollowSelector = '[data-testid$="-unfollow"]';
-    const confirmSelector = '[data-testid="confirmationSheetConfirm"]';
-    await page.waitForSelector(unfollowSelector, { timeout: 12_000 });
-    await page.click(unfollowSelector);
-    await page.waitForSelector(confirmSelector, { timeout: 6_000 });
-    await page.click(confirmSelector);
-    await page.waitForSelector('[data-testid$="-follow"]', { timeout: 12_000 });
+    const button = await page.waitForSelector('[data-testid$="-unfollow"]', { timeout: 12_000 });
+    const testId = await page.evaluate((element) => element.getAttribute('data-testid') || '', button);
+    const userId = testId.match(/^(\d+)-unfollow$/)?.[1];
+    if (!userId) throw new Error('Could not resolve the current X user ID from the profile.');
+
+    const cookieString = [
+      `auth_token=${process.env.AUTH_TOKEN}`,
+      process.env.CT0 ? `ct0=${process.env.CT0}` : '',
+    ].filter(Boolean).join('; ');
+    const client = new TwitterHttpClient({ cookies: cookieString, maxRetries: 0 });
+    const result = await unfollowUserHttp(client, userId);
+    if (result?.success !== true) throw new Error('X did not return a successful unfollow response.');
   } catch (error) {
-    throw new Error(`X did not confirm the unfollow for @${normalized}: ${error.message}`);
+    throw new Error(`X did not complete the unfollow for @${normalized}: ${error.message}`);
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
