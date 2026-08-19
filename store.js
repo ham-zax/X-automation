@@ -979,7 +979,13 @@ export function getPreferenceProfile() {
   return { savedCount: rows.length, tags, keywords };
 }
 
-export function replaceAudienceSnapshot({ followers = [], following = [], observedAt = Date.now() } = {}) {
+export function replaceAudienceSnapshot({
+  followers = [],
+  following = [],
+  observedAt = Date.now(),
+  followersComplete = false,
+  followingComplete = false,
+} = {}) {
   const now = Number(observedAt);
   if (!Number.isFinite(now) || now <= 0) throw new Error('Audience snapshot observedAt must be a positive timestamp.');
   const merged = new Map();
@@ -991,14 +997,16 @@ export function replaceAudienceSnapshot({ followers = [], following = [], observ
 
   db.exec('BEGIN');
   try {
+    if (followersComplete) db.prepare('UPDATE audience_profiles SET follows_you = 0').run();
+    if (followingComplete) db.prepare('UPDATE audience_profiles SET you_follow = 0').run();
     const upsert = db.prepare(`INSERT INTO audience_profiles(
       username, display_name, bio, follows_you, you_follow, relevance_score, niche_tags, matched_keywords, first_seen_at, last_seen_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(username) DO UPDATE SET
       display_name = excluded.display_name,
       bio = excluded.bio,
-      follows_you = MAX(audience_profiles.follows_you, excluded.follows_you),
-      you_follow = MAX(audience_profiles.you_follow, excluded.you_follow),
+      follows_you = ${followersComplete ? 'excluded.follows_you' : 'MAX(audience_profiles.follows_you, excluded.follows_you)'},
+      you_follow = ${followingComplete ? 'excluded.you_follow' : 'MAX(audience_profiles.you_follow, excluded.you_follow)'},
       relevance_score = excluded.relevance_score,
       niche_tags = excluded.niche_tags,
       matched_keywords = excluded.matched_keywords,

@@ -124,7 +124,13 @@ export async function syncAudience(username = 'ham_zax') {
     const following = await scrapeRelationship(page, `https://x.com/${username}/following`, Math.max(profile.followingCount, 1), 'Following');
     const capturedAt = Date.now();
     const previousSyncAt = Number(getAppState('audience_last_sync_at', 0) || 0);
-    const summary = replaceAudienceSnapshot({ followers, following, observedAt: capturedAt });
+    const summary = replaceAudienceSnapshot({
+      followers,
+      following,
+      observedAt: capturedAt,
+      followersComplete: followers.length >= Number(profile.followersCount || 0),
+      followingComplete: following.length >= Number(profile.followingCount || 0),
+    });
     const relationshipRefresh = refreshAudienceRelationships([
       ...followers.map((profile) => profile.username),
       ...following.map((profile) => profile.username),

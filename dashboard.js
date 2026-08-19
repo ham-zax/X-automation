@@ -460,8 +460,8 @@ function candidateCard(candidate, index, returnTo) {
 
 function confirmationFields() {
   return `<div class="my-3 grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
-    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="factualityConfirmed" value="1"> <span><strong>Facts checked</strong><br><span class="text-xs text-slate-500">I reviewed the final wording against the source/context.</span></span></label>
-    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="evidenceConfirmed" value="1"> <span><strong>Evidence checked</strong><br><span class="text-xs text-slate-500">Any benchmark/result/capability claim is actually supported.</span></span></label>
+    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="factualityConfirmed" value="1"> <span><strong>I checked the facts</strong><br><span class="text-xs text-slate-500">The final wording matches the source and context I reviewed.</span></span></label>
+    <label class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"><input class="mt-0.5" type="checkbox" name="evidenceConfirmed" value="1"> <span><strong>I checked the supporting proof</strong><br><span class="text-xs text-slate-500">Any benchmark, result, or capability claim has real support.</span></span></label>
   </div>`;
 }
 
@@ -473,9 +473,32 @@ function gatePanel(gates = {}, { live = false } = {}) {
   const humanConfirmations = allFailures.filter((item) => humanCodes.has(item.code));
   const failures = writingFailures.map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
   const warnings = (gates.warnings || []).map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
-  const technical = [...allFailures, ...(gates.warnings || [])].map((item) => `${item.code}: ${item.message}`).join('\n');
   const ready = writingFailures.length === 0;
-  return `<div class="editor-checks ${ready ? 'editor-checks-ok' : 'editor-checks-warn'}" ${live ? 'data-live-checks' : ''}><strong>${ready ? 'Draft checks look good' : 'Fix before approval'}</strong>${failures ? `<ul class="mt-2 mb-0">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Worth checking</div><ul class="mb-0">${warnings}</ul>` : ''}${humanConfirmations.length ? '<div class="mt-2 text-sm text-sky-800">Factuality/evidence confirmation is a human approval step, not text you need to fill in.</div>' : ''}${technical ? `<details class="small mt-2"><summary>Technical check details</summary><pre class="text-wrap mb-0 mt-2">${escapeHtml(technical)}</pre></details>` : ''}</div>`;
+  return `<div class="editor-checks ${ready ? 'editor-checks-ok' : 'editor-checks-warn'}" ${live ? 'data-live-checks' : ''}><strong>${ready ? 'Writing checks passed' : 'Fix before approval'}</strong>${failures ? `<ul class="mt-2 mb-0">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Worth checking</div><ul class="mb-0">${warnings}</ul>` : ''}${humanConfirmations.length ? '<div class="mt-2 text-sm text-sky-800">Before you approve, review the finished post and tick the two confirmation boxes below. You do not need to add any extra text.</div>' : ''}</div>`;
+}
+
+const QUALITY_SIGNAL_LABELS = {
+  niche: ['Topic fit', 10, 'How closely this matches your AI/dev/builder focus.'],
+  hook: ['Opening', 8, 'Whether the first line quickly gives someone a reason to keep reading.'],
+  insight: ['Useful insight', 10, 'Whether the post adds a concrete implication instead of repeating the source.'],
+  evidence: ['Support', 10, 'Whether claims are backed by source material, data, steps, or observed results.'],
+  action: ['Takeaway', 7, 'Whether the reader leaves with a useful next step, decision, or question.'],
+  originality: ['Original angle', 5, 'Whether the wording adds something distinct from the source.'],
+};
+
+function qualityBreakdownHtml(breakdown = {}) {
+  return Object.entries(QUALITY_SIGNAL_LABELS).map(([key, [label, max, description]]) => `<div class="editor-score-item"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(breakdown[key] ?? 0)}<span class="text-xs font-medium text-slate-400">/${max}</span></dd><div class="mt-1 text-xs text-slate-500">${escapeHtml(description)}</div></div>`).join('');
+}
+
+function mediaTypeOptions(selected = 'none') {
+  const labels = {
+    none: 'No visual',
+    screenshot: 'Screenshot',
+    chart: 'Chart',
+    code: 'Code sample',
+    diagram: 'Diagram',
+  };
+  return MEDIA_TYPES.map((type) => `<option value="${type}" ${selected === type ? 'selected' : ''}>${escapeHtml(labels[type] || type)}</option>`).join('');
 }
 
 function mediaLabel(media = {}) {
@@ -544,12 +567,15 @@ function draftCard(draft) {
   const approvedMainFeed = !engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt);
   const editor = draft.editor || {};
   const threadParts = pipeline === 'thread' ? (draft.threadParts?.length ? draft.threadParts : ['', '']) : [];
+  const hasDraftContent = pipeline === 'thread'
+    ? threadParts.some((part) => String(part || '').trim())
+    : Boolean(String(draft.body || '').trim());
   const qualityClass = analysis.score >= 40 && analysis.gates?.failures?.filter((item) => !['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED'].includes(item.code)).length === 0
     ? 'quality-good'
     : analysis.score >= 30 ? 'quality-warn' : 'quality-low';
   const publishEditor = pipeline === 'thread'
     ? threadParts.map((part, index) => `<div class="mb-5"><label class="editor-label">Thread part ${index + 1}<span class="text-xs font-medium text-slate-400">${weightedPostLength(part)}/280</span></label><textarea class="editor-textarea editor-textarea-thread" rows="4" name="threadPart">${escapeHtml(part)}</textarea></div>`).join('')
-    : `<div class="mb-5"><label class="editor-label">Final ${escapeHtml(pipelineLabel(pipeline))} text <span class="text-xs font-medium text-slate-400" data-live-weighted-length>${weightedPostLength(draft.body)}/280</span></label><textarea class="editor-textarea" rows="7" name="body" placeholder="Generate a draft or edit the final text here.">${escapeHtml(draft.body)}</textarea></div>`;
+    : `<div class="mb-5"><label class="editor-label">${engagementReply ? 'Reply text' : 'Post text'} <span class="text-xs font-medium text-slate-400" data-live-weighted-length>${weightedPostLength(draft.body)}/280</span></label><textarea class="editor-textarea" rows="7" name="body" placeholder="Generate a draft or edit the final text here.">${escapeHtml(draft.body)}</textarea></div>`;
   const workflowAction = canApproveSend
     ? `<form method="post" action="/engage/approve-send">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">Approve &amp; send exact reply</button></form>`
     : canSendApproved
@@ -559,7 +585,7 @@ function draftCard(draft) {
         : approvedMainFeed
           ? '<a class="editor-btn editor-btn-primary" href="/?source=queue">Review publishing plan</a>'
           : canReview
-            ? `<form method="post" action="/queue/review">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">${queueItem.status === 'needs_review' ? 'Recheck approval' : 'Check for approval'}</button></form>`
+            ? `<form method="post" action="/queue/review">${confirmationFields()}<input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="editor-btn editor-btn-primary" type="submit">${queueItem.status === 'needs_review' ? 'Review readiness again' : 'Review readiness'}</button><div class="mt-2 text-xs text-slate-500">This checks whether the current draft is ready for human approval. It does not publish anything.</div></form>`
             : '';
   const aiNote = editor.decision === 'DO_NOT_POST'
     ? `<div class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><strong>AI recommends not posting this source.</strong><div class="mt-1">${escapeHtml((editor.riskFlags || []).join(' · ') || 'There is not enough verified additive value in the current packet.')}</div><div class="mt-2 text-xs text-amber-800">You do not need to fill a scaffold. Add stronger evidence/source context, or move on.</div></div>`
@@ -574,13 +600,13 @@ function draftCard(draft) {
     <div class="editor-body">
       <div class="mb-5">
         ${gatePanel(analysis.gates, { live: true })}
-        <div class="human-confirm mt-3"><strong>What you still own:</strong> read the final text, then confirm factuality and supplied evidence when you approve. The AI writes; approval remains human.</div>
+        <div class="human-confirm mt-3"><strong>Your final step:</strong> read the finished text, check the facts and supporting proof, then approve when you are satisfied. The AI writes the draft; you make the publishing decision.</div>
       </div>
       <form method="post" action="/draft/save" data-live-draft-editor>
         <input type="hidden" name="id" value="${draft.id}">
         ${publishEditor}
-        <div class="mb-5"><div class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Live quality signals</div><dl class="editor-score-grid" data-live-breakdown>${Object.entries(analysis.breakdown).map(([key, value]) => `<div class="editor-score-item"><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('')}</dl><div class="mt-2 text-xs text-slate-500">These are editorial heuristics recalculated from the exact text as you type. Approval checks still decide whether publishing is allowed.</div></div>
-        ${engagementReply ? '<input type="hidden" name="mediaType" value="none">' : `<details class="muted-panel mb-5"><summary class="font-semibold text-slate-700">Media &amp; advanced draft details</summary><div class="mt-4"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="mediaRequired" value="1" ${media.required ? 'checked' : ''}> This post requires media</label><div class="mt-3 grid gap-3 md:grid-cols-2"><label class="text-sm text-slate-600">Type<select class="form-select mt-1" name="mediaType">${MEDIA_TYPES.map((type) => `<option value="${type}" ${media.type === type ? 'selected' : ''}>${type}</option>`).join('')}</select></label><label class="text-sm text-slate-600">Reason<input class="form-control mt-1" name="mediaReason" value="${escapeHtml(media.reason || '')}"></label><label class="text-sm text-slate-600">Media source<input class="form-control mt-1" name="mediaSource" value="${escapeHtml(media.source || '')}"></label><label class="text-sm text-slate-600">Alt text<input class="form-control mt-1" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></label></div><div class="mt-4 text-xs text-slate-500">Semantic anchors: ${escapeHtml((editor.semanticAnchors || []).join(', ') || '—')} · Evidence used: ${escapeHtml((editor.evidenceUsed || []).join('; ') || '—')}</div></div></details>`}
+        <div class="mb-5"><div class="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality</div>${hasDraftContent ? `<dl class="editor-score-grid" data-live-breakdown>${qualityBreakdownHtml(analysis.breakdown)}</dl>` : '<div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600" data-live-breakdown>Quality feedback will appear after AI writes a draft or you start typing.</div>'}<div class="mt-2 text-xs text-slate-500">This feedback updates from the exact text you are editing. It helps improve the draft; the approval checks above decide whether it is ready.</div></div>
+        ${engagementReply ? '<input type="hidden" name="mediaType" value="none">' : `<details class="muted-panel mb-5"><summary class="font-semibold text-slate-700">Add a visual or see AI context</summary><div class="mt-4"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="mediaRequired" value="1" ${media.required ? 'checked' : ''}> This post needs a visual before publishing</label><div class="mt-3 grid gap-3 md:grid-cols-2"><label class="text-sm text-slate-600">Visual type<select class="form-select mt-1" name="mediaType">${mediaTypeOptions(media.type)}</select></label><label class="text-sm text-slate-600">Why add it?<input class="form-control mt-1" name="mediaReason" value="${escapeHtml(media.reason || '')}"></label><label class="text-sm text-slate-600">Source or file reference<input class="form-control mt-1" name="mediaSource" value="${escapeHtml(media.source || '')}"></label><label class="text-sm text-slate-600">Description for accessibility<input class="form-control mt-1" name="mediaAltText" value="${escapeHtml(media.altText || '')}"></label></div><details class="mt-4 text-xs text-slate-500"><summary>How AI built this draft</summary><div class="mt-2"><strong>Key topics:</strong> ${escapeHtml((editor.semanticAnchors || []).join(', ') || 'None recorded')}</div><div class="mt-1"><strong>Source material used:</strong> ${escapeHtml((editor.evidenceUsed || []).join('; ') || 'None recorded')}</div></details></div></details>`}
         <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5"><div class="max-w-2xl text-sm text-slate-500">${engagementReply ? 'This exact reply sends only after explicit approval. It is never scheduled.' : 'Saving does not publish. Approval and the publishing plan remain separate decisions.'}</div><div class="editor-toolbar"><button class="editor-btn editor-btn-secondary" type="submit">Save changes</button></div></div>
       </form>
       ${pipeline === 'thread' ? `<div class="editor-toolbar mt-4"><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="add"><button class="editor-btn editor-btn-secondary" type="submit" ${threadParts.length >= 6 ? 'disabled' : ''}>Add part</button></form><form method="post" action="/draft/thread-parts"><input type="hidden" name="id" value="${draft.id}"><input type="hidden" name="op" value="remove"><button class="editor-btn editor-btn-secondary" type="submit" ${threadParts.length <= 2 ? 'disabled' : ''}>Remove last</button></form></div>` : ''}

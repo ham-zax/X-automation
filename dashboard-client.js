@@ -13,14 +13,15 @@ if (editor) {
   function renderBreakdown(breakdown = {}) {
     if (!breakdownEl) return;
     const labels = [
-      ['Niche', breakdown.niche, 10],
-      ['Hook', breakdown.hook, 8],
-      ['Insight', breakdown.insight, 10],
-      ['Evidence', breakdown.evidence, 10],
-      ['Action', breakdown.action, 7],
-      ['Originality', breakdown.originality, 5],
+      ['Topic fit', breakdown.niche, 10, 'How closely this matches your AI/dev/builder focus.'],
+      ['Opening', breakdown.hook, 8, 'Whether the first line quickly gives someone a reason to keep reading.'],
+      ['Useful insight', breakdown.insight, 10, 'Whether the post adds a concrete implication instead of repeating the source.'],
+      ['Support', breakdown.evidence, 10, 'Whether claims are backed by source material, data, steps, or observed results.'],
+      ['Takeaway', breakdown.action, 7, 'Whether the reader leaves with a useful next step, decision, or question.'],
+      ['Original angle', breakdown.originality, 5, 'Whether the wording adds something distinct from the source.'],
     ];
-    breakdownEl.innerHTML = labels.map(([label, value, max]) => `<div class="editor-score-item"><dt>${label}</dt><dd>${value ?? 0}<span class="text-xs font-medium text-slate-400">/${max}</span></dd></div>`).join('');
+    breakdownEl.className = 'editor-score-grid';
+    breakdownEl.innerHTML = labels.map(([label, value, max, description]) => `<div class="editor-score-item"><dt>${label}</dt><dd>${value ?? 0}<span class="text-xs font-medium text-slate-400">/${max}</span></dd><div class="mt-1 text-xs text-slate-500">${description}</div></div>`).join('');
   }
 
   function renderChecks(gates = {}) {
@@ -30,11 +31,11 @@ if (editor) {
     const warnings = gates.warnings || [];
     if (!failures.length && !warnings.length) {
       checksEl.className = 'editor-checks editor-checks-ok';
-      checksEl.innerHTML = '<div class="font-semibold text-emerald-900">Draft checks look good.</div><div class="mt-1 text-sm text-emerald-800">You still make the final factuality/evidence confirmation before approval.</div>';
+      checksEl.innerHTML = '<div class="font-semibold text-emerald-900">Writing checks passed.</div><div class="mt-1 text-sm text-emerald-800">Before approval, read the finished post and confirm the facts and supporting proof.</div>';
       return;
     }
     checksEl.className = 'editor-checks editor-checks-warn';
-    checksEl.innerHTML = `<div class="font-semibold text-amber-950">${failures.length ? 'Fix before approval' : 'Worth reviewing'}</div>${[...failures, ...warnings].length ? `<ul class="mt-2 mb-0 space-y-1 text-sm text-amber-900">${[...failures, ...warnings].map((item) => `<li>${item.message}</li>`).join('')}</ul>` : ''}${confirmations.length ? '<div class="mt-2 text-xs text-sky-800">Factuality/evidence confirmation is a human approval step, not writing work.</div>' : ''}`;
+    checksEl.innerHTML = `<div class="font-semibold text-amber-950">${failures.length ? 'Fix before approval' : 'Worth reviewing'}</div>${[...failures, ...warnings].length ? `<ul class="mt-2 mb-0 space-y-1 text-sm text-amber-900">${[...failures, ...warnings].map((item) => `<li>${item.message}</li>`).join('')}</ul>` : ''}${confirmations.length ? '<div class="mt-2 text-xs text-sky-800">Before you approve, review the finished post and tick the two confirmation boxes. You do not need to add extra text.</div>' : ''}`;
   }
 
   async function refreshPreview() {
