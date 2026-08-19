@@ -10,7 +10,7 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A — Relationship Intelligence | executable/mixed | active / awaiting return | now | `/home/hamza/repo/x_test-w1-relationship` | concurrent writer; owns persistence/audience/dashboard/bridge relationship vertical | none; Phase 1A is landed |
+| Agent A — Relationship Intelligence | executable/mixed | complete + integrated (`0784943`) | complete | `/home/hamza/repo/x_test-w1-relationship` | isolated writer; Phase 1B commit verified and integrated | none |
 | Agent B — Content Quality Core | executable | complete + integrated (`fa1a6a1`) | complete | `/home/hamza/repo/x_test-w1-content` | isolated writer; content-core commit verified as drafting-only | none |
 
 ## Dependency map
@@ -103,4 +103,5 @@ Executable missions should use the smallest direct evidence capable of disprovin
 ## Status log
 
 - `2026-08-19` — Phase 1A landed at `7ccdb7c`; Wave 1 coordination package materialized for Relationship Intelligence + isolated Content Quality Core.
-- `2026-08-19` — Agent B returned `3d0f09d`; verified as a clean one-file `drafting.js` change and integrated on `main` as `fa1a6a1`. Agent A remains the active blocker for the next integration frontier.
+- `2026-08-19` — Agent B returned `3d0f09d`; verified as a clean one-file `drafting.js` change and integrated on `main` as `fa1a6a1`.
+- `2026-08-19` — Agent A branch `c001298` was verified against the Phase-1B success conditions and integrated on `main` as `0784943`. Wave 1 is complete; Wave 2 can fan out from the combined Relationship Intelligence + Content Core state.
