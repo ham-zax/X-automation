@@ -166,18 +166,15 @@ function nicheBadges(candidate) {
   const matches = (candidate.niche?.matches || [])
     .map((term) => `<span class="badge rounded-pill text-bg-light border">${escapeHtml(term)}</span>`)
     .join(' ');
-  return `${tags ? `<div class="d-flex flex-wrap gap-2 mb-2">${tags}<span class="badge text-bg-success">fit ${candidate.niche.score}/50</span></div>` : ''}${matches ? `<div class="d-flex flex-wrap gap-1 mb-3">${matches}</div>` : ''}`;
+  return `${tags ? `<div class="d-flex flex-wrap gap-2 mb-2">${tags}</div>` : ''}${(matches || candidate.niche?.score != null) ? `<details class="small mb-3"><summary class="text-secondary">Why it matches</summary><div class="d-flex flex-wrap gap-1 mt-2">${matches}<span class="badge text-bg-light border">Internal topic fit ${escapeHtml(candidate.niche?.score ?? 'n/a')}/50</span></div></details>` : ''}`;
 }
 
 function viralBadges(candidate) {
   if (!candidate.viral) return '';
   const tierClass = candidate.viral.tier === 'breakout' ? 'text-bg-danger' : candidate.viral.tier === 'viral' ? 'text-bg-warning' : 'text-bg-info';
-  return `<div class="d-flex flex-wrap gap-2 mb-3">
-    <span class="badge ${tierClass}">${escapeHtml(candidate.viral.tier.toUpperCase())}</span>
-    <span class="badge text-bg-light border">${candidate.viral.ageHours.toFixed(1)}h old</span>
-    <span class="badge text-bg-light border">${formatNumber(Math.round(candidate.viral.viewsPerHour))} views/h</span>
-    <span class="badge text-bg-light border">${candidate.viral.engagementsPerHour.toFixed(1)} engagement/h</span>
-  </div>`;
+  const tierLabel = candidate.viral.tier === 'breakout' ? 'Breaking out' : candidate.viral.tier === 'viral' ? 'Widely discussed' : 'Picking up';
+  return `<div class="d-flex flex-wrap gap-2 mb-3"><span class="badge ${tierClass}">${escapeHtml(tierLabel)}</span><span class="badge text-bg-light border">${candidate.viral.ageHours.toFixed(1)}h old</span></div>
+    <details class="small mb-3"><summary class="text-secondary">Trend details</summary><div class="d-flex flex-wrap gap-2 mt-2"><span class="badge text-bg-light border">${formatNumber(Math.round(candidate.viral.viewsPerHour))} views/h</span><span class="badge text-bg-light border">${candidate.viral.engagementsPerHour.toFixed(1)} engagement/h</span><span class="badge text-bg-light border">Internal signal ${Math.round(candidate.viral.score)}/100</span></div></details>`;
 }
 
 const ROUTE_OPTIONS = [
@@ -185,16 +182,84 @@ const ROUTE_OPTIONS = [
   ['repost', 'Repost'], ['research', 'Research only'], ['watch', 'Watch'], ['ignore', 'Ignore'],
 ];
 
+const PRIMARY_NAV = [
+  ['today', 'today', 'Today'],
+  ['discover', 'x', 'Discover'],
+  ['conversations', 'engage', 'Conversations'],
+  ['create', 'queue', 'Create'],
+  ['results', 'performance', 'Results'],
+  ['improve', 'experiments', 'Improve'],
+  ['advanced', 'advanced', 'Advanced'],
+];
+
+const SOURCE_GROUPS = Object.freeze({
+  today: 'today',
+  x: 'discover', viral: 'discover', interesting: 'discover', opportunities: 'discover', github: 'discover', hn: 'discover', all: 'discover',
+  engage: 'conversations', relationships: 'conversations', audience: 'conversations',
+  queue: 'create', drafts: 'create',
+  performance: 'results', health: 'results',
+  experiments: 'improve', learning: 'improve',
+  advanced: 'advanced',
+});
+
+const STATUS_LABELS = Object.freeze({
+  triage: 'Needs a decision',
+  researching: 'Researching',
+  drafting: 'In progress',
+  needs_review: 'Needs review',
+  approved: 'Approved — waiting',
+  publishing: 'Publishing now',
+  published: 'Published',
+  watching: 'Saved for later',
+  ignored: 'Ignored',
+  expired: 'Expired',
+  failed: 'Needs attention',
+});
+
+const PIPELINE_LABELS = Object.freeze({
+  triage: 'Not chosen',
+  original: 'Original post',
+  quote: 'Quote post',
+  thread: 'Thread',
+  reply: 'Reply',
+  repost: 'Repost',
+  research: 'Research only',
+  watch: 'Save for later',
+  ignore: 'Ignore',
+});
+
+function statusLabel(value) {
+  return STATUS_LABELS[value] || relationshipLabel(value || 'unknown');
+}
+
+function pipelineLabel(value) {
+  return PIPELINE_LABELS[value] || relationshipLabel(value || 'unknown');
+}
+
+function sourceGroup(source) {
+  return SOURCE_GROUPS[source] || 'discover';
+}
+
+function opportunityLabel(score) {
+  const value = Number(score || 0);
+  if (value >= 80) return 'Strong';
+  if (value >= 60) return 'Worth considering';
+  if (value >= 40) return 'Possible';
+  return 'Low priority';
+}
+
 function workflowBadges(queueItem) {
   if (!queueItem) return '';
   return `<div class="d-flex gap-1 flex-wrap mt-2">
+    <span class="badge text-bg-secondary">${escapeHtml(pipelineLabel(queueItem.pipeline))}</span>
+    <span class="badge text-bg-light border">${escapeHtml(statusLabel(queueItem.status))}</span>
+  </div>
+  <details class="small mt-2"><summary class="text-secondary">Recommendation details</summary><div class="d-flex gap-1 flex-wrap mt-2">
     <span class="badge text-bg-light border">Reach ${Math.round(queueItem.reachPotential)}</span>
     <span class="badge text-bg-light border">Follow ${Math.round(queueItem.followPotential)}</span>
     <span class="badge text-bg-light border">Conversation ${Math.round(queueItem.conversationPotential)}</span>
     <span class="badge text-bg-light border">Relationship ${Math.round(queueItem.relationshipPotential)}</span>
-    <span class="badge text-bg-secondary">${escapeHtml(queueItem.pipeline)}</span>
-    <span class="badge text-bg-light border">${escapeHtml(queueItem.status)}</span>
-  </div>`;
+  </div></details>`;
 }
 
 function routeForm(queueItem, key, returnTo) {
@@ -204,8 +269,9 @@ function routeForm(queueItem, key, returnTo) {
   return `<form method="post" action="/queue/route" class="d-flex gap-2 align-items-center flex-wrap mt-3">
     <input type="hidden" name="key" value="${escapeHtml(key)}">
     <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
+    <span class="small fw-semibold">Use this as</span>
     <select class="form-select form-select-sm" style="width:auto" name="pipeline">${options}</select>
-    <button class="btn btn-outline-dark btn-sm" type="submit">Route</button>
+    <button class="btn btn-outline-dark btn-sm" type="submit">Apply choice</button>
   </form>`;
 }
 
@@ -226,8 +292,11 @@ function candidateCard(candidate, index, returnTo) {
       ? `${formatNumber(metrics.stars)} stars · ~${formatNumber(metrics.starsPerDay)} stars/day`
       : `${formatNumber(metrics.points)} points · ${formatNumber(metrics.comments)} comments`;
   const recommendation = queueItem?.recommendedPipeline
-    ? `<div class="small mt-2"><strong>Recommended:</strong> ${escapeHtml(queueItem.recommendedPipeline)} · <span class="text-secondary">${escapeHtml(queueItem.routingReason)}</span></div>`
+    ? `<div class="small mt-2"><strong>Suggested use:</strong> ${escapeHtml(pipelineLabel(queueItem.recommendedPipeline))} <span class="text-secondary">— ${escapeHtml(queueItem.routingReason)}</span></div>`
     : '';
+  const primaryAction = draft
+    ? `<a class="btn btn-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Continue draft</a>`
+    : `<form method="post" action="/draft/create" class="m-0"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-primary btn-sm" type="submit">Create something</button></form>`;
 
   return `<article class="card shadow-sm border-0 mb-3">
     <div class="card-body p-4">
@@ -236,7 +305,7 @@ function candidateCard(candidate, index, returnTo) {
           <div class="fw-semibold fs-5">#${index + 1} ${escapeHtml(candidate.title)}</div>
           <div class="text-secondary small">${escapeHtml(candidate.source.toUpperCase())}${candidate.timestamp ? ` · ${escapeHtml(new Date(candidate.timestamp).toLocaleString())}` : ''}</div>
         </div>
-        <span class="badge text-bg-dark fs-6">${candidate.viral ? 'viral ' : ''}${Math.round(candidate.viral?.score ?? candidate.score)}/100</span>
+        <span class="badge text-bg-dark fs-6">${candidate.viral ? 'Trending signal' : isX ? 'Relevant signal' : 'Research signal'}</span>
       </div>
       ${isX ? nicheBadges(candidate) : ''}
       ${viralBadges(candidate)}
@@ -252,15 +321,12 @@ function candidateCard(candidate, index, returnTo) {
           ${draft ? `<span class="badge text-bg-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</span>` : ''}
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
+          ${primaryAction}
           <form method="post" action="/candidate/save" class="m-0">
             <input type="hidden" name="key" value="${escapeHtml(candidate.key)}">
             <input type="hidden" name="saved" value="${candidate.saved ? '0' : '1'}">
             <input type="hidden" name="returnTo" value="${escapeHtml(returnTo)}">
-            <button class="btn ${candidate.saved ? 'btn-outline-success' : 'btn-dark'} btn-sm" type="submit">${candidate.saved ? 'Unsave' : 'Save'}</button>
-          </form>
-          <form method="post" action="/draft/create" class="m-0">
-            <input type="hidden" name="key" value="${escapeHtml(candidate.key)}">
-            <button class="btn btn-outline-primary btn-sm" type="submit">${draft ? 'Open draft' : 'Create draft'}</button>
+            <button class="btn ${candidate.saved ? 'btn-outline-success' : 'btn-outline-secondary'} btn-sm" type="submit">${candidate.saved ? 'Saved' : 'Save for later'}</button>
           </form>
           <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(candidate.url)}" target="_blank" rel="noreferrer">Open source ↗</a>
         </div>
@@ -277,10 +343,12 @@ function confirmationFields() {
 }
 
 function gatePanel(gates = {}) {
-  if (!Object.keys(gates).length) return '<div class="alert alert-secondary py-2">Hard gates have not been reviewed for the current edit.</div>';
-  const failures = (gates.failures || []).map((item) => `<li><strong>${escapeHtml(item.code)}</strong> — ${escapeHtml(item.message)}</li>`).join('');
-  const warnings = (gates.warnings || []).map((item) => `<li><strong>${escapeHtml(item.code)}</strong> — ${escapeHtml(item.message)}</li>`).join('');
-  return `<div class="alert ${gates.passed ? 'alert-success' : 'alert-warning'} py-2 mb-3"><strong>Hard gates: ${gates.passed ? 'pass' : 'blocked'}</strong>${failures ? `<ul class="mb-1 mt-2">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Warnings</div><ul class="mb-0">${warnings}</ul>` : ''}</div>`;
+  if (!Object.keys(gates).length) return '<div class="alert alert-secondary py-2">Checks have not been run for this version yet.</div>';
+  const failures = (gates.failures || []).map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
+  const warnings = (gates.warnings || []).map((item) => `<li>${escapeHtml(item.message)}</li>`).join('');
+  const technical = [...(gates.failures || []), ...(gates.warnings || [])]
+    .map((item) => `${item.code}: ${item.message}`).join('\n');
+  return `<div class="alert ${gates.passed ? 'alert-success' : 'alert-warning'} py-2 mb-3"><strong>${gates.passed ? 'Ready for approval' : 'Fix before approval'}</strong>${failures ? `<ul class="mb-1 mt-2">${failures}</ul>` : ''}${warnings ? `<div class="small mt-2">Worth checking</div><ul class="mb-0">${warnings}</ul>` : ''}${technical ? `<details class="small mt-2"><summary>Technical check details</summary><pre class="text-wrap mb-0 mt-2">${escapeHtml(technical)}</pre></details>` : ''}</div>`;
 }
 
 function mediaLabel(media = {}) {
@@ -309,24 +377,26 @@ function schedulePanel(queueItem, context) {
   const item = getMainFeedScheduleItem(queueItem.candidateKey);
   if (!item) return '';
   const decision = recommendMainFeedSchedule(item, context);
-  const recommended = decision.recommendedAt == null ? 'blocked' : new Date(decision.recommendedAt).toLocaleString();
+  const recommended = decision.recommendedAt == null
+    ? 'Not ready to publish yet'
+    : decision.recommendedAt <= Number(context.now)
+      ? 'Publish when you are ready'
+      : `Around ${new Date(decision.recommendedAt).toLocaleString()}`;
   const manualOnly = queueItem.pipeline === 'repost'
-    ? '<div class="alert alert-secondary py-2 mb-2">Repost is scheduler-visible but remains manual; daemon transport is not enabled for repost.</div>'
+    ? '<div class="alert alert-secondary py-2 mb-2">Reposts remain manual.</div>'
     : '';
   return `<div class="card bg-light border-0 mt-3"><div class="card-body">
-    <div class="d-flex justify-content-between gap-2 flex-wrap mb-2"><div><strong>Scheduler</strong> · ${escapeHtml(recommended)}</div><span class="badge ${decision.eligible ? 'text-bg-primary' : 'text-bg-warning'}">priority ${escapeHtml(decision.priority)}</span></div>
-    <div class="small mb-2">${escapeHtml(decision.reason)}</div>
-    ${scheduleIssueList(decision.blockers)}${scheduleIssueList(decision.warnings)}${scheduleIssueList(decision.conflicts)}
-    <div class="small text-secondary mb-2">Timing assumptions are <strong>EMPIRICAL_VARIABLE</strong> coverage heuristics, not X platform enforcement rules.</div>
+    <div class="d-flex justify-content-between gap-2 flex-wrap mb-2"><div><strong>Publishing plan</strong><div class="small text-secondary">${escapeHtml(recommended)}</div></div><span class="badge ${decision.eligible ? 'text-bg-success' : 'text-bg-warning'}">${decision.eligible ? 'Ready' : 'Needs attention'}</span></div>
     ${manualOnly}
     <form method="post" action="/queue/schedule" class="row g-2 align-items-end">
       <input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">
-      <div class="col-md-3"><label class="form-label small">Urgency</label><select class="form-select" name="scheduleUrgency">${['evergreen', 'timely', 'viral'].map((value) => `<option value="${value}" ${queueItem.scheduleUrgency === value ? 'selected' : ''}>${value}</option>`).join('')}</select></div>
-      <div class="col-md-3"><label class="form-label small">Expiry</label><input class="form-control" type="datetime-local" name="expiresAt" value="${escapeHtml(formatDateTime(queueItem.expiresAt))}"></div>
-      <div class="col-md-4"><label class="form-label small">Human schedule override</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(queueItem.scheduledAt))}"></div>
-      <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">Save timing</button></div>
-      <div class="col-12 small text-secondary">${queueItem.scheduleSource === 'human' ? 'Explicit human override stored. Clear the time to return timing to the scheduler.' : 'No human time override; scheduler recommendation is advisory.'}</div>
+      <div class="col-md-3"><label class="form-label small">How urgent is this?</label><select class="form-select" name="scheduleUrgency">${['evergreen', 'timely', 'viral'].map((value) => `<option value="${value}" ${queueItem.scheduleUrgency === value ? 'selected' : ''}>${value === 'evergreen' ? 'Can wait' : value === 'timely' ? 'Timely' : 'Time-sensitive'}</option>`).join('')}</select></div>
+      <div class="col-md-3"><label class="form-label small">Useful until</label><input class="form-control" type="datetime-local" name="expiresAt" value="${escapeHtml(formatDateTime(queueItem.expiresAt))}"></div>
+      <div class="col-md-4"><label class="form-label small">Choose a different time</label><input class="form-control" type="datetime-local" name="scheduledAt" value="${escapeHtml(formatDateTime(queueItem.scheduledAt))}"></div>
+      <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">Save plan</button></div>
+      <div class="col-12 small text-secondary">${queueItem.scheduleSource === 'human' ? 'You chose the publishing time. Clear it to return to the recommendation.' : 'The recommended time is advisory and does not approve or publish the post.'}</div>
     </form>
+    <details class="small mt-3"><summary>Why this time?</summary><div class="mt-2">${escapeHtml(decision.reason)}</div>${scheduleIssueList(decision.blockers)}${scheduleIssueList(decision.warnings)}${scheduleIssueList(decision.conflicts)}<div class="text-secondary">Internal scheduler priority ${escapeHtml(decision.priority)}. Timing is an editorial coverage heuristic, not an X platform rule.</div></details>
   </div></div>`;
 }
 
@@ -350,7 +420,7 @@ function draftCard(draft) {
     : `<div class="mb-3"><label class="form-label fw-semibold">Final ${escapeHtml(pipeline)} text <span class="text-secondary fw-normal">${weightedPostLength(draft.body)}/280</span></label><textarea class="form-control" rows="5" name="body">${escapeHtml(draft.body)}</textarea></div>`;
   return `<article class="card shadow-sm border-0 mb-4">
     <div class="card-body p-4">
-      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3"><div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">Pipeline: <strong>${escapeHtml(pipeline)}</strong></div>${workflowBadges(queueItem)}</div><div class="d-flex gap-2 align-items-start"><span class="badge ${draft.qualityScore >= 40 && gatesPassed ? 'text-bg-success' : draft.qualityScore >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">${escapeHtml(analysis.quality)} ${draft.qualityScore}/50</span><span class="badge text-bg-light border">Draft ${escapeHtml(draft.status)}</span></div></div>
+      <div class="d-flex justify-content-between gap-3 flex-wrap mb-3"><div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">Content type: <strong>${escapeHtml(pipelineLabel(pipeline))}</strong></div>${workflowBadges(queueItem)}</div><div class="d-flex gap-2 align-items-start"><span class="badge ${draft.qualityScore >= 40 && gatesPassed ? 'text-bg-success' : draft.qualityScore >= 30 ? 'text-bg-warning' : 'text-bg-secondary'} fs-6">Quality ${draft.qualityScore}/50</span><span class="badge text-bg-light border">${escapeHtml(statusLabel(queueItem?.status || draft.status))}</span></div></div>
       ${gatePanel(draft.gates)}
       <form method="post" action="/draft/save">
         <input type="hidden" name="id" value="${draft.id}">
@@ -618,9 +688,12 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   const hardHealthWarning = currentConstrained
     ? `<div class="alert alert-danger py-2 mt-3 mb-0">Current Account Health is CONSTRAINED from supported observed evidence. Drafting/review may continue, but approval/send is unavailable until the hard evidence is cleared/resolved.</div>`
     : '';
-  const relationshipBadges = profile
+  const relationshipSummary = profile
+    ? `<div class="small text-secondary mt-2">${escapeHtml(opportunityLabel(profile.targetScore))} relationship fit · ${escapeHtml(relationshipLabel(profile.relationshipStage))}</div>`
+    : '<div class="small text-secondary mt-2">Relationship context is still limited.</div>';
+  const relationshipTechnical = profile
     ? `<div class="d-flex gap-1 flex-wrap mt-2">${(profile.classes || []).map((value) => `<span class="badge text-bg-primary text-capitalize">${escapeHtml(relationshipLabel(value))}</span>`).join('')}<span class="badge text-bg-secondary text-capitalize">${escapeHtml(relationshipLabel(profile.relationshipStage))}</span><span class="badge text-bg-light border">TargetScore ${Math.round(profile.targetScore)}</span></div>`
-    : '<div class="small text-secondary mt-2">Relationship profile unavailable.</div>';
+    : '';
   const canReview = draft && ['drafting', 'needs_review', 'failed'].includes(queueItem.status);
   const canApproveSend = !currentConstrained && queueItem.status === 'needs_review' && draft?.qualityScore >= 40 && draft?.gates?.passed === true;
   const approved = !currentConstrained && queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText);
@@ -630,30 +703,35 @@ function engagementCard(queueItem, accountHealth = getAccountHealthSummary()) {
   const learnedPriority = score.learnedAdjustment || score.explanation?.learning || null;
   const learnedPriorityLine = Number(learnedPriority?.learnedAdjustment || 0) !== 0
     ? `<div class="small text-primary mt-2"><strong>Accepted learned contribution:</strong> EngagePriority ${escapeHtml(score.preLearnedPriority ?? score.basePriority ?? 0)} → ${escapeHtml(score.engagePriority ?? queueItem.priority)} (${Number(learnedPriority.learnedAdjustment) >= 0 ? '+' : ''}${escapeHtml(learnedPriority.learnedAdjustment)}).</div>`
-    : '<div class="small text-secondary mt-2">EngagePriority currently has no accepted learned adjustment.</div>';
+    : '<div class="small text-secondary mt-2">No accepted learned adjustment matched this conversation.</div>';
+  const editReplyAction = `<form method="post" action="/engage/draft"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-primary btn-sm" type="submit">${draft ? 'Edit reply' : 'Review reply'}</button></form>`;
+  const primaryReplyAction = approved
+    ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>`
+    : canApproveSend
+      ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>`
+      : editReplyAction;
+  const secondaryEdit = (approved || canApproveSend) ? editReplyAction : '';
 
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
-    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(relationshipLabel(queueItem.engagementKind || 'initial_reply'))}</div><div class="small text-secondary">${escapeHtml(ageLabel)} · expires ${escapeHtml(expiryLabel)}${activeOverride ? ' · active conversation override' : ''} · ${escapeHtml(queueItem.status)}</div></div><div class="text-end"><div class="fs-4 fw-semibold">${Math.round(queueItem.priority)}</div><div class="small text-secondary">EngagePriority</div></div></div>
-    ${relationshipBadges}
-    <div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span></div>
-    ${learnedPriorityLine}
-    <div class="mt-3"><strong>Contribution:</strong> <span class="badge text-bg-info">${escapeHtml(relationshipLabel(archetype))}</span> ${escapeHtml(contribution || 'No contribution stored.')}</div>
+    <div class="d-flex justify-content-between gap-3 flex-wrap"><div><div class="fw-semibold fs-5">@${escapeHtml(queueItem.targetUsername || profile?.username || 'unknown')} · ${escapeHtml(queueItem.engagementKind === 'initial_reply' ? 'New conversation' : 'Continue conversation')}</div><div class="small text-secondary">${escapeHtml(ageLabel)}${activeOverride ? ' · active conversation' : ''} · ${escapeHtml(statusLabel(queueItem.status))}</div></div><div class="text-end"><div class="fw-semibold">${escapeHtml(opportunityLabel(queueItem.priority))}</div><div class="small text-secondary">Reply priority</div></div></div>
+    ${relationshipSummary}
+    <div class="mt-3"><strong>What you can add:</strong> ${escapeHtml(contribution || 'Review the source and decide whether you have a concrete contribution.')}</div>
     <div class="card bg-light border-0 mt-3"><div class="card-body"><div class="small text-secondary mb-1">Exact source</div><div class="text-break">${escapeHtml(candidate.text)}</div></div></div>
     ${draft ? `<div class="mt-3">${gatePanel(draft.gates)}<div class="small text-secondary">Draft ${draft.qualityScore}/50 · ${escapeHtml(draft.status)}</div><div class="mt-2 text-break">${escapeHtml(draft.body || '')}</div></div>` : ''}
     ${pressureWarning}
     ${repetitionWarning}
     ${hardHealthWarning}
-    ${(score.rejectionReasons || []).length ? `<div class="alert alert-danger py-2 mt-3 mb-0">${escapeHtml(score.rejectionReasons.map((item) => item.code || item.reason).join(', '))}</div>` : ''}
-    <div class="d-flex gap-2 flex-wrap mt-3 align-items-end">
-      <form method="post" action="/engage/draft"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-primary btn-sm" type="submit">${draft ? 'Edit reply' : 'Draft reply'}</button></form>
-      ${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck review gates' : 'Request review'}</button></form>` : ''}
-      ${canApproveSend ? `<form method="post" action="/engage/approve-send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve &amp; send exact reply</button></form>` : ''}
-      ${approved ? `<form method="post" action="/engage/send"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-success btn-sm" type="submit">Send approved reply</button></form>` : ''}
-      ${queueItem.engagementKind === 'initial_reply' ? `<form method="post" action="/engage/quote"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-secondary btn-sm" type="submit">Quote instead</button></form>` : ''}
-      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="ignore"><button class="btn btn-outline-secondary btn-sm" type="submit">Ignore</button></form>
-      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="expire"><button class="btn btn-outline-secondary btn-sm" type="submit">Expire</button></form>
-      <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a>
-    </div>
+    ${(score.rejectionReasons || []).length ? `<div class="alert alert-danger py-2 mt-3 mb-0">This opportunity is currently unavailable. <details class="small mt-2"><summary>Why?</summary>${escapeHtml(score.rejectionReasons.map((item) => item.code || item.reason).join(', '))}</details></div>` : ''}
+    <details class="small mt-3"><summary>Why this recommendation?</summary><div class="mt-2">${relationshipTechnical}<div class="d-flex gap-1 flex-wrap mt-2"><span class="badge text-bg-light border">Conversation ${Math.round(Number(queueItem.conversationPotential || components.conversationPotential || 0))}</span><span class="badge text-bg-light border">Relationship ${Math.round(Number(queueItem.relationshipPotential || components.relationshipPotential || 0))}</span><span class="badge text-bg-light border">Freshness ${Math.round(Number(components.freshness || 0))}</span><span class="badge text-bg-light border">Visibility ${Math.round(Number(components.replyVisibility || 0))}</span><span class="badge text-bg-light border">Contribution ${Math.round(Number(components.contributionStrength || 0))}</span><span class="badge text-bg-light border">Internal priority ${Math.round(queueItem.priority)}</span></div>${learnedPriorityLine}<div class="text-secondary mt-2">Useful until ${escapeHtml(expiryLabel)}.</div></div></details>
+    <div class="mt-3">${primaryReplyAction}</div>
+    <details class="small mt-3"><summary>More actions</summary><div class="d-flex gap-2 flex-wrap mt-2 align-items-end">
+      ${secondaryEdit}
+      ${canReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck approval checks' : 'Run approval checks'}</button></form>` : ''}
+      ${queueItem.engagementKind === 'initial_reply' ? `<form method="post" action="/engage/quote"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><button class="btn btn-outline-secondary btn-sm" type="submit">Make a quote post instead</button></form>` : ''}
+      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="ignore"><button class="btn btn-outline-secondary btn-sm" type="submit">Not now</button></form>
+      <form method="post" action="/engage/resolve"><input type="hidden" name="key" value="${escapeHtml(queueItem.candidateKey)}"><input type="hidden" name="action" value="expire"><button class="btn btn-outline-secondary btn-sm" type="submit">No longer useful</button></form>
+      <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(candidate.url)}" target="_blank">Open source ↗</a>
+    </div></details>
   </div></article>`;
 }
 
@@ -665,9 +743,9 @@ function engageView(error = null) {
   const warning = error ? `<div class="alert alert-warning">Engage refresh failed: ${escapeHtml(error)}</div>` : '';
   const group = (title, note, rows) => `<h2 class="h5 mt-4">${escapeHtml(title)} <span class="badge text-bg-light border">${rows.length}</span></h2><p class="small text-secondary">${escapeHtml(note)}</p>${rows.map((item) => engagementCard(item, accountHealth)).join('') || '<div class="alert alert-secondary">No items in this group.</div>'}`;
   const healthBanner = accountHealth.health.state === 'constrained'
-    ? '<div class="alert alert-danger">Account Health is CONSTRAINED from supported observed evidence. New opportunities may be rejected and approval/send controls are disabled.</div>'
+    ? '<div class="alert alert-danger"><strong>Some actions are temporarily limited.</strong> Supported account evidence is blocking reply approval/sending until it is resolved. <a href="/?source=health" class="alert-link">Review account status</a>.</div>'
     : accountHealth.health.state === 'watch'
-      ? '<div class="alert alert-warning">Account Health is WATCH. These are advisory efficiency/concentration/repetition diagnostics; useful human-reviewed actions remain available.</div>'
+      ? '<div class="alert alert-warning"><strong>Something deserves attention.</strong> You can keep working normally; the warning is advisory. <a href="/?source=health" class="alert-link">See why</a>.</div>'
       : '';
   return warning + healthBanner
     + group('Active conversations', 'Observed replies/quotes to our existing posts or replies are shown before cold opportunities.', active)
@@ -688,28 +766,33 @@ function queueCard(queueItem, scheduleContextValue) {
   const breakdown = snapshot.scores.breakdown;
   const returnTo = '/?source=queue';
   const publicationState = queueItem.publishStartedAt || queueItem.publishedAt || queueItem.publishError
-    ? `<div class="small mt-2"><strong>Publication:</strong> ${queueItem.publishStartedAt ? `started ${escapeHtml(new Date(queueItem.publishStartedAt).toLocaleString())}` : 'not started'}${queueItem.publishedAt ? ` · published ${escapeHtml(new Date(queueItem.publishedAt).toLocaleString())}` : ''}${queueItem.outputTweetId ? ` · tweet ${escapeHtml(queueItem.outputTweetId)}` : ''}${queueItem.publishError ? ` · <span class="text-danger">${escapeHtml(queueItem.publishError)}</span>` : ''}${queueItem.outputUrl ? ` · <a href="${escapeHtml(queueItem.outputUrl)}" target="_blank">output ↗</a>` : ''}</div>`
+    ? `<div class="small mt-2"><strong>Publishing:</strong> ${queueItem.publishStartedAt ? `started ${escapeHtml(new Date(queueItem.publishStartedAt).toLocaleString())}` : 'not started'}${queueItem.publishedAt ? ` · published ${escapeHtml(new Date(queueItem.publishedAt).toLocaleString())}` : ''}${queueItem.publishError ? ` · <span class="text-danger">${escapeHtml(queueItem.publishError)}</span>` : ''}${queueItem.outputUrl ? ` · <a href="${escapeHtml(queueItem.outputUrl)}" target="_blank">view post ↗</a>` : ''}</div>`
     : '';
+  const draftAction = draft ? `<a class="btn btn-primary btn-sm" href="/?source=drafts&draft=${draft.id}">${queueItem.status === 'drafting' ? 'Continue draft' : 'Review draft'}</a>` : '';
+  const reviewAction = canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck approval checks' : 'Run approval checks'}</button></form>` : '';
+  const approveAction = canApprove && queueItem.pipeline !== 'repost'
+    ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>`
+    : canApprove
+      ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve repost</button></form>`
+      : '';
+  const primaryQueueAction = canApprove ? approveAction : canRequestReview ? reviewAction : draftAction;
+  const secondaryDraftAction = (canApprove || canRequestReview) && draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Edit draft</a>` : '';
   return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
     <div class="d-flex justify-content-between gap-3 flex-wrap">
-      <div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">${escapeHtml(candidate.source.toUpperCase())} · ${escapeHtml(queueItem.pipeline)} · ${escapeHtml(queueItem.status)}</div></div>
+      <div><div class="fw-semibold fs-5">${escapeHtml(candidate.title)}</div><div class="small text-secondary">${escapeHtml(candidate.source.toUpperCase())} · ${escapeHtml(pipelineLabel(queueItem.pipeline))} · ${escapeHtml(statusLabel(queueItem.status))}</div></div>
       <a class="btn btn-outline-secondary btn-sm align-self-start" href="${escapeHtml(candidate.url)}" target="_blank">Source ↗</a>
     </div>
     <p class="mt-3 mb-2 text-break">${escapeHtml(candidate.text)}</p>
     ${workflowBadges(queueItem)}
-    <div class="small mt-2"><strong>AI recommendation:</strong> ${escapeHtml(queueItem.recommendedPipeline || 'none')} · <span class="text-secondary">${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
-    <div class="small text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div>
+    <div class="small mt-2"><strong>Suggested use:</strong> ${escapeHtml(pipelineLabel(queueItem.recommendedPipeline || 'triage'))} <span class="text-secondary">— ${escapeHtml(queueItem.routingReason || 'No recommendation stored.')}</span></div>
     ${publicationState}
     ${routeForm(queueItem, candidate.key, returnTo)}
     ${draft ? gatePanel(draft.gates) : ''}
     ${schedulePanel(queueItem, scheduleContextValue)}
-    <div class="d-flex gap-3 flex-wrap mt-3 align-items-end">
-      ${draft ? `<a class="btn btn-outline-primary btn-sm" href="/?source=drafts&draft=${draft.id}">Draft ${draft.qualityScore}/50</a>` : ''}
-      ${canRequestReview ? `<form method="post" action="/queue/review"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-outline-primary btn-sm" type="submit">${queueItem.status === 'needs_review' ? 'Recheck hard gates' : 'Request review'}</button></form>` : ''}
-      ${canApprove && queueItem.pipeline !== 'repost' ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}">${confirmationFields()}<button class="btn btn-success btn-sm" type="submit">Approve for publishing</button></form>` : ''}
-      ${canApprove && queueItem.pipeline === 'repost' ? `<form method="post" action="/queue/approve"><input type="hidden" name="key" value="${escapeHtml(candidate.key)}"><button class="btn btn-success btn-sm" type="submit">Approve repost</button></form>` : ''}
-    </div>
-    ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Approval blocked: ${draft ? `draft ${draft.qualityScore}/50 or saved hard gates do not pass` : 'a draft is required'}.</div>` : ''}
+    ${primaryQueueAction ? `<div class="mt-3">${primaryQueueAction}</div>` : ''}
+    <details class="small mt-3"><summary>Why this recommendation?</summary><div class="text-secondary mt-2">Reach: freshness ${breakdown.reach.freshness}, momentum ${breakdown.reach.momentum}, traction ${breakdown.reach.traction}, breadth ${breakdown.reach.breadth} · Follow: niche ${breakdown.follow.niche}, preference ${breakdown.follow.preference}, specificity ${breakdown.follow.specificity}, utility ${breakdown.follow.utility}, identity ${breakdown.follow.identity} · Conversation: discussion ${breakdown.conversation.discussion}, tradeoff ${breakdown.conversation.questionTradeoff}, freshness ${breakdown.conversation.freshness}, specificity ${breakdown.conversation.specificity} · Relationship: ${breakdown.relationship.available ? `relevance ${breakdown.relationship.relevance}, follows ${breakdown.relationship.followsYou}, following ${breakdown.relationship.youFollow}, mutual ${breakdown.relationship.mutual}, topic ${breakdown.relationship.topicOverlap}` : 'no observed relationship context'}</div></details>
+    ${secondaryDraftAction ? `<details class="small mt-3"><summary>More actions</summary><div class="mt-2">${secondaryDraftAction}</div></details>` : ''}
+    ${mainFeedReview && !canApprove ? `<div class="alert alert-warning py-2 mt-3 mb-0">Not ready for approval yet. ${draft ? 'Open the draft to fix the checks or complete the required confirmations.' : 'Create a draft first.'}</div>` : ''}
   </div></article>`;
 }
 
@@ -719,11 +802,154 @@ function queueView() {
   return QUEUE_GROUPS.map((status) => {
     const group = items.filter((item) => item.status === status);
     if (!group.length) return '';
-    return `<h2 class="h5 mt-4 text-capitalize">${escapeHtml(status.replace('_', ' '))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map((item) => queueCard(item, context)).join('')}`;
+    return `<h2 class="h5 mt-4">${escapeHtml(statusLabel(status))} <span class="badge text-bg-light border">${group.length}</span></h2>${group.map((item) => queueCard(item, context)).join('')}`;
   }).join('') || '<div class="alert alert-secondary">No active workflow items.</div>';
 }
 
-async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = false, relationshipClass = '', relationshipStage = '') {
+function todayActionCard({ eyebrow, title, body, note = '', href, action, tone = 'primary' }) {
+  return `<article class="card border-0 shadow-sm mb-3"><div class="card-body p-4">
+    <div class="small text-secondary text-uppercase fw-semibold mb-1">${escapeHtml(eyebrow)}</div>
+    <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start">
+      <div class="flex-grow-1"><h2 class="h5 mb-2">${escapeHtml(title)}</h2><p class="mb-1">${escapeHtml(body)}</p>${note ? `<div class="small text-secondary">${escapeHtml(note)}</div>` : ''}</div>
+      <a class="btn btn-${tone} btn-sm" href="${escapeHtml(href)}">${escapeHtml(action)}</a>
+    </div>
+  </div></article>`;
+}
+
+function todayView({ now = Date.now(), nextScheduled = null, accountHealth = getAccountHealthSummary() } = {}) {
+  const engagementItems = listEngagementItems({ limit: 100 });
+  const activeConversations = engagementItems.filter((item) => item.engagementKind !== 'initial_reply');
+  const newOpportunities = engagementItems.filter((item) => item.engagementKind === 'initial_reply');
+  const reviewItems = listQueueItems({ lane: 'main', status: 'needs_review', limit: 20 });
+  const followerQuality = getNewFollowerQuality({ since: Number(now) - 24 * 3_600_000 });
+  const actions = [];
+
+  if (accountHealth.health.state === 'constrained') {
+    actions.push(todayActionCard({
+      eyebrow: 'Needs attention',
+      title: 'Some actions are temporarily limited',
+      body: accountHealth.health.explanation || 'Observed account evidence is limiting some actions until it is resolved.',
+      href: '/?source=health', action: 'Review account status', tone: 'danger',
+    }));
+  }
+
+  const conversation = activeConversations[0];
+  if (conversation) {
+    const candidate = getCandidate(conversation.candidateKey);
+    const profile = conversation.targetUsername ? getRelationshipProfile(conversation.targetUsername) : null;
+    const contribution = conversation.contributionSummary || conversation.engagement?.contribution?.summary || 'Review the conversation and decide whether you have something useful to add.';
+    actions.push(todayActionCard({
+      eyebrow: 'Continue a conversation',
+      title: `@${conversation.targetUsername || profile?.username || 'conversation'} has new activity`,
+      body: contribution,
+      note: candidate?.text ? `Source: ${candidate.text.slice(0, 140)}${candidate.text.length > 140 ? '…' : ''}` : '',
+      href: '/?source=engage', action: 'Review reply', tone: 'primary',
+    }));
+  }
+
+  const reviewItem = reviewItems[0];
+  if (reviewItem) {
+    const draft = getDraftByCandidate(reviewItem.candidateKey);
+    const candidate = getCandidate(reviewItem.candidateKey);
+    const ready = Boolean(draft && draft.qualityScore >= 40 && draft.gates?.passed === true);
+    actions.push(todayActionCard({
+      eyebrow: 'Review a post',
+      title: candidate?.title || 'A draft needs your decision',
+      body: ready ? 'The draft passed its checks and is ready for your approval.' : 'The draft still needs a fix or confirmation before it can be approved.',
+      note: draft ? `Quality ${draft.qualityScore}/50 · ${pipelineLabel(reviewItem.pipeline)}` : pipelineLabel(reviewItem.pipeline),
+      href: draft ? `/?source=drafts&draft=${draft.id}` : '/?source=queue',
+      action: 'Review draft', tone: ready ? 'success' : 'warning',
+    }));
+  }
+
+  if (nextScheduled?.item) {
+    const candidate = nextScheduled.item.candidate || getCandidate(nextScheduled.item.candidateKey);
+    const dueNow = Number(nextScheduled.recommendedAt) <= Number(now);
+    actions.push(todayActionCard({
+      eyebrow: 'Next post',
+      title: candidate?.title || 'An approved post is ready',
+      body: dueNow ? 'Approved and ready to publish when your publishing mode allows it.' : `Approved and recommended for around ${new Date(nextScheduled.recommendedAt).toLocaleString()}.`,
+      note: AUTO_POST ? 'Main-feed automation is enabled.' : 'Main-feed automation is off. Nothing is auto-published from this recommendation.',
+      href: '/?source=queue', action: 'View publishing plan', tone: 'primary',
+    }));
+  }
+
+  if (!activeConversations.length && newOpportunities[0]) {
+    const item = newOpportunities[0];
+    actions.push(todayActionCard({
+      eyebrow: 'Worth considering',
+      title: `A conversation with @${item.targetUsername || 'this account'} looks useful`,
+      body: item.contributionSummary || 'There is a fresh conversation opportunity with a concrete contribution available.',
+      href: '/?source=engage', action: 'See conversation', tone: 'outline-primary',
+    }));
+  }
+
+  const healthCopy = accountHealth.health.state === 'healthy'
+    ? 'Everything looks normal.'
+    : accountHealth.health.state === 'watch'
+      ? 'Something deserves attention, but normal human-reviewed work can continue.'
+      : 'Some actions are temporarily limited by observed evidence.';
+  const taskCount = actions.length;
+  const summary = `<div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-4"><div><h1 class="h3 mb-1">Today</h1><div class="text-secondary">${taskCount ? `${taskCount} thing${taskCount === 1 ? '' : 's'} worth looking at.` : 'You are caught up. Nothing requires a decision right now.'}</div></div><a class="btn btn-outline-primary btn-sm" href="/?source=x&refresh=1">Find new signals</a></div>`;
+  const stats = `<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Active conversations</div><div class="fs-3 fw-semibold">${activeConversations.length}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Waiting for review</div><div class="fs-3 fw-semibold">${reviewItems.length}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">Useful interactions · 7d</div><div class="fs-3 fw-semibold">${accountHealth.interactionCounts.meaningfulInteractions7d}</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="card border-0 shadow-sm h-100"><div class="card-body"><div class="small text-secondary">New relevant followers · 24h</div><div class="fs-3 fw-semibold">${followerQuality.nicheAlignedNewFollowers}</div><div class="small text-secondary">of ${followerQuality.newlyObservedFollowers} newly observed</div></div></div></div>
+  </div>`;
+  const actionSection = actions.length
+    ? `<h2 class="h5 mb-3">Needs your attention</h2>${actions.join('')}`
+    : '<div class="alert alert-success">No immediate decisions are waiting. Discover a new signal or check recent results when you are ready.</div>';
+  const status = `<div class="card border-0 shadow-sm mt-4"><div class="card-body d-flex justify-content-between gap-3 flex-wrap align-items-center"><div><div class="small text-secondary">Account status</div><div class="fw-semibold">${escapeHtml(healthCopy)}</div></div><a class="btn btn-outline-secondary btn-sm" href="/?source=health">Details</a></div></div>`;
+  return summary + stats + actionSection + status;
+}
+
+function sectionMeta(source) {
+  const group = sourceGroup(source);
+  return {
+    today: ['Today', 'What deserves your attention right now.'],
+    discover: ['Discover', 'Find useful things worth talking about.'],
+    conversations: ['Conversations', 'Continue useful discussions and find the next worthwhile reply.'],
+    create: ['Create', 'Turn ideas into reviewed, approved content.'],
+    results: ['Results', 'Understand what happened and whether anything needs attention.'],
+    improve: ['Improve', 'Run simple tests and decide what the system should learn.'],
+    advanced: ['Advanced', 'Detailed system views and diagnostics for when you need them.'],
+  }[group];
+}
+
+function primaryNavigation(activeSource) {
+  const activeGroup = sourceGroup(activeSource);
+  return PRIMARY_NAV.map(([group, source, label]) => `<a class="btn btn-sm ${activeGroup === group ? 'btn-dark' : 'btn-outline-secondary'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
+}
+
+function secondaryNavigation(activeSource, savedCount) {
+  const group = sourceGroup(activeSource);
+  const items = {
+    discover: [['x', 'For you'], ['viral', 'Trending'], ['interesting', `Saved (${savedCount})`], ['opportunities', 'Opportunities'], ['github', 'GitHub'], ['hn', 'Hacker News'], ['all', 'All sources']],
+    conversations: [['engage', 'What needs a reply'], ['relationships', 'People & relationships'], ['audience', 'Audience']],
+    create: [['queue', 'To review'], ['drafts', 'Drafts']],
+    results: [['performance', 'Performance'], ['health', 'Account status']],
+    improve: [['experiments', 'Tests'], ['learning', "What we've learned"]],
+  }[group] || [];
+  if (!items.length) return '';
+  return `<div class="d-flex gap-2 flex-wrap mt-2">${items.map(([source, label]) => `<a class="btn btn-sm ${activeSource === source ? 'btn-primary' : 'btn-outline-primary'}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('')}</div>`;
+}
+
+function advancedView() {
+  const links = [
+    ['relationships', 'Relationships', 'Strategic relationship profiles, stages, and TargetScore detail.'],
+    ['audience', 'Audience', 'Raw follower/following observations and niche alignment.'],
+    ['health', 'Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],
+    ['performance', 'Performance', 'Raw fixed-window post and account measurements.'],
+    ['experiments', 'Tests', 'Experiment definitions, assignments, cohorts, and confounders.'],
+    ['learning', "What we've learned", 'Learned-rule evidence, match context, adjustments, and retirement controls.'],
+    ['all', 'All research sources', 'Combined raw research feed across connected discovery sources.'],
+  ];
+  return `<div class="alert alert-light border mb-4">Most daily work should start from Today, Discover, Conversations, Create, Results, or Improve. These detailed views remain available for inspection and advanced operation.</div>
+    <div class="row g-3">${links.map(([source, title, body]) => `<div class="col-md-6"><a class="card border-0 shadow-sm h-100 text-decoration-none text-dark" href="/?source=${source}"><div class="card-body"><div class="fw-semibold mb-1">${escapeHtml(title)}</div><div class="small text-secondary">${escapeHtml(body)}</div></div></a></div>`).join('')}</div>`;
+}
+
+async function renderPage(activeSource = 'today', activeTag = '', forceRefresh = false, relationshipClass = '', relationshipStage = '') {
   let refreshError = null;
   const researchEmpty = activeSource === 'x'
     ? listCandidates({ source: 'x', withinHours: 72, limit: 1 }).length === 0
@@ -783,61 +1009,53 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
 
   const drafts = activeSource === 'drafts' ? listDrafts({ limit: 100 }) : [];
   const performance = activeSource === 'performance' ? getPerformanceSnapshot(30) : null;
-  const accountHealth = activeSource === 'health' || activeSource === 'engage' ? getAccountHealthSummary() : null;
+  const accountHealth = ['today', 'health', 'engage'].includes(activeSource) ? getAccountHealthSummary() : null;
   const learningOverview = activeSource === 'learning' ? getLearningOverview() : null;
 
   let decision;
   if (refreshError) decision = `Research refresh failed: ${refreshError}`;
+  else if (activeSource === 'today') decision = 'Your most important human decisions, in one place.';
   else if (activeSource === 'viral') decision = `${visible.length} viral/rising developer signals from the rolling last 24 hours.`;
   else if (activeSource === 'interesting') decision = `${visible.length} saved signals in your persistent research memory.`;
-  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} items need routing · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review · ${countQueueItems({ status: 'approved', lane: 'main' })} approved for scheduler inspection.`;
-  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} human-approved compatibility-ready.`;
+  else if (activeSource === 'queue') decision = `${countQueueItems({ status: 'triage', lane: 'main' })} need a content choice · ${countQueueItems({ status: 'needs_review', lane: 'main' })} need review · ${countQueueItems({ status: 'approved', lane: 'main' })} approved.`;
+  else if (activeSource === 'drafts') decision = `${drafts.length} drafts · ${drafts.filter((draft) => draft.status === 'ready').length} approved.`;
   else if (activeSource === 'engage') {
     const engagementItems = listEngagementItems({ limit: 200 });
     const activeCount = engagementItems.filter((item) => item.engagementKind !== 'initial_reply').length;
     decision = engagementError ? `Engage refresh failed: ${engagementError}` : `${activeCount} active conversations · ${engagementItems.length - activeCount} new opportunities.`;
   }
   else if (activeSource === 'opportunities') decision = `${visible.length} job, builder, SaaS, and productization opportunities from recent research.`;
-  else if (activeSource === 'performance') decision = `Latest @${ACCOUNT} performance snapshot, fixed-window outcomes, and associated follower conversion.`;
-  else if (activeSource === 'experiments') decision = `${listExperiments({ limit: 500 }).length} declared experiments · assignment remains explicit and observational.`;
-  else if (activeSource === 'learning') decision = `${learningOverview.suggested} suggested · ${learningOverview.accepted} accepted · ${learningOverview.retired} retired learned rules; only accepted bounded rules affect recommendations.`;
+  else if (activeSource === 'performance') decision = `Recent account and post results for @${ACCOUNT}.`;
+  else if (activeSource === 'experiments') decision = `${listExperiments({ limit: 500 }).length} tests · nothing is randomly assigned or posted just for a test.`;
+  else if (activeSource === 'learning') decision = `${learningOverview.suggested} suggested changes · ${learningOverview.accepted} accepted · ${learningOverview.retired} retired. Only accepted changes affect future recommendations.`;
   else if (activeSource === 'audience') {
     const summary = getAudienceSummary();
     decision = audienceError ? `Audience refresh failed: ${audienceError}` : `${summary.relevant_followers}/${summary.followers} observed followers are niche-aligned; ${summary.target_accounts} relevant followed accounts are raw audience observations.`;
   }
   else if (activeSource === 'relationships') {
     const shownCount = listRelationshipProfiles({ className: relationshipClass || undefined, stage: relationshipStage || undefined, limit: 100 }).length;
-    decision = `Showing ${shownCount} top strategic relationship profiles for the current filters; Relationship Intelligence remains read-only in Phase 1B.`;
+    decision = `Showing ${shownCount} people for the current filters.`;
   }
-  else if (activeSource === 'health') decision = `Account Health ${accountHealth.health.state.toUpperCase()} · ${accountHealth.interactionCounts.meaningfulInteractions7d} meaningful interactions in 7d · ${accountHealth.saturation.distribution.high} high-saturation target(s).`;
-  else decision = `${visible.length} persisted candidates for this research view.`;
+  else if (activeSource === 'health') {
+    const stateCopy = accountHealth.health.state === 'healthy' ? 'Everything looks normal.' : accountHealth.health.state === 'watch' ? 'Something deserves attention.' : 'Some actions are temporarily limited.';
+    decision = `${stateCopy} ${accountHealth.interactionCounts.meaningfulInteractions7d} useful interactions in the last 7 days.`;
+  }
+  else if (activeSource === 'advanced') decision = 'Detailed system views and diagnostics.';
+  else decision = `${visible.length} items in this view.`;
 
   const relationshipQuery = activeSource === 'relationships'
     ? `${relationshipClass ? `&class=${encodeURIComponent(relationshipClass)}` : ''}${relationshipStage ? `&stage=${encodeURIComponent(relationshipStage)}` : ''}`
     : '';
   const returnTo = `/?source=${encodeURIComponent(activeSource)}${activeTag ? `&tag=${encodeURIComponent(activeTag)}` : ''}${relationshipQuery}`;
   const filtersEnabled = ['x', 'viral', 'interesting', 'opportunities'].includes(activeSource);
-  const nav = [
-    ['x', 'X posts'],
-    ['viral', 'Viral · 24h'],
-    ['interesting', `Saved (${savedCount})`],
-    ['queue', `Queue (${countQueueItems({ status: 'triage', lane: 'main' })})`],
-    ['engage', `Engage Next (${listEngagementItems({ limit: 200 }).length})`],
-    ['drafts', 'Drafts'],
-    ['opportunities', 'Opportunities'],
-    ['relationships', 'Relationships'],
-    ['health', `Account Health${accountHealth ? ` · ${accountHealth.health.state.toUpperCase()}` : ''}`],
-    ['audience', 'Audience'],
-    ['performance', 'Performance'],
-    ['experiments', `Experiments (${listExperiments({ limit: 500 }).length})`],
-    ['learning', `Learned Strategy (${listAcceptedLearnedRules({ includeSuspended: true, limit: 500 }).length})`],
-    ['github', 'GitHub'],
-    ['hn', 'Hacker News'],
-    ['all', 'All'],
-  ].map(([source, label]) => `<a class="btn btn-sm ${activeSource === source ? (source === 'viral' ? 'btn-danger' : 'btn-dark') : (source === 'viral' ? 'btn-outline-danger' : 'btn-outline-secondary')}" href="/?source=${source}">${escapeHtml(label)}</a>`).join('');
+  const nav = primaryNavigation(activeSource);
+  const secondaryNav = secondaryNavigation(activeSource, savedCount);
+  const [sectionTitle, sectionDescription] = sectionMeta(activeSource);
 
   let content;
-  if (activeSource === 'queue') content = queueView();
+  if (activeSource === 'today') content = todayView({ now: scheduleNow, nextScheduled, accountHealth });
+  else if (activeSource === 'advanced') content = advancedView();
+  else if (activeSource === 'queue') content = queueView();
   else if (activeSource === 'engage') content = engageView(engagementError);
   else if (activeSource === 'drafts') content = drafts.map(draftCard).join('') || '<div class="alert alert-secondary">No drafts yet. Route a saved source to Original, Quote, Thread, or Reply.</div>';
   else if (activeSource === 'performance') content = performanceView(performance, performanceError);
@@ -848,17 +1066,21 @@ async function renderPage(activeSource = 'x', activeTag = '', forceRefresh = fal
   else if (activeSource === 'audience') content = audienceView(audienceError);
   else content = visible.slice(0, 50).map((item, index) => candidateCard(item, index, returnTo)).join('') || '<div class="alert alert-secondary">No candidates found for this view.</div>';
 
+  const refreshControl = activeSource === 'today'
+    ? ''
+    : `<a class="btn btn-outline-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a>`;
   return `<!doctype html><html lang="en"><head>
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>X Research System</title><link rel="stylesheet" href="/assets/bootstrap.min.css">
+    <title>${escapeHtml(sectionTitle)} · Growth workspace</title><link rel="stylesheet" href="/assets/bootstrap.min.css">
   </head><body class="bg-body-tertiary">
     <div class="sticky-top bg-body-tertiary border-bottom shadow-sm"><div class="container py-3">
       <div class="d-flex justify-content-between gap-3 flex-wrap align-items-start mb-2">
-        <div><h1 class="h4 mb-1">X research & publishing system</h1><div class="text-secondary small">${escapeHtml(decision)}</div></div>
-        <div class="d-flex gap-2 align-items-center flex-wrap"><a class="btn btn-dark btn-sm" href="${escapeHtml(returnTo)}${returnTo.includes('?') ? '&' : '?'}refresh=1">Refresh</a><span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">AUTO_POST ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextScheduled ? `<span class="badge text-bg-success">main feed ${nextScheduled.recommendedAt <= scheduleNow ? 'due now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
+        <div><div class="small text-secondary">Growth workspace</div><div class="fw-semibold">${escapeHtml(sectionTitle)}</div><div class="text-secondary small">${escapeHtml(sectionDescription)} ${escapeHtml(decision)}</div></div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">${refreshControl}<span class="badge ${AUTO_POST ? 'text-bg-danger' : 'text-bg-secondary'}">Main-feed automation ${AUTO_POST ? 'ON' : 'OFF'}</span>${nextScheduled ? `<span class="badge text-bg-success">Next post ${nextScheduled.recommendedAt <= scheduleNow ? 'ready now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
       </div>
-      <div class="d-flex gap-2 flex-wrap mb-2">${nav}</div>
-      ${filtersEnabled ? `<div class="d-flex gap-2 flex-wrap"><a class="badge rounded-pill ${!activeTag ? 'text-bg-dark' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}">All niches</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="badge rounded-pill ${activeTag === tag ? 'text-bg-primary' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
+      <nav aria-label="Primary" class="d-flex gap-2 flex-wrap">${nav}</nav>
+      ${secondaryNav ? `<nav aria-label="Section" class="border-top pt-2 mt-2">${secondaryNav}</nav>` : ''}
+      ${filtersEnabled ? `<div class="d-flex gap-2 flex-wrap mt-2"><a class="badge rounded-pill ${!activeTag ? 'text-bg-dark' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}">All topics</a>${Object.entries(NICHE_LABELS).map(([tag, label]) => `<a class="badge rounded-pill ${activeTag === tag ? 'text-bg-primary' : 'text-bg-light border text-dark'} text-decoration-none" href="/?source=${escapeHtml(activeSource)}&tag=${encodeURIComponent(tag)}">${escapeHtml(label)}</a>`).join('')}</div>` : ''}
     </div></div>
     <main class="container py-4">${content}</main>
     <script src="/assets/bootstrap.bundle.min.js"></script>
@@ -1136,8 +1358,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(303, { location: `/?source=drafts&draft=${saved.id}` }); res.end(); return;
     }
 
-    const allowedSources = ['x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'learning', 'github', 'hn', 'all'];
-    const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'x';
+    const allowedSources = ['today', 'x', 'viral', 'interesting', 'queue', 'engage', 'drafts', 'opportunities', 'relationships', 'health', 'audience', 'performance', 'experiments', 'learning', 'github', 'hn', 'all', 'advanced'];
+    const source = allowedSources.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'today';
     const tag = Object.hasOwn(NICHE_LABELS, requestUrl.searchParams.get('tag')) ? requestUrl.searchParams.get('tag') : '';
     const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';
     const relationshipStage = RELATIONSHIP_STAGES.includes(requestUrl.searchParams.get('stage')) ? requestUrl.searchParams.get('stage') : '';
