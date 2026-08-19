@@ -1,7 +1,7 @@
 # Network Growth System — Wave 3 Agent Coordination
 
 **Repository:** `/home/hamza/repo/x_test`
-**Coordination base:** `d38a068` (Phase 1A + Phase 1B + full Phase 1C + full Phase 2 + Scheduler Core)
+**Current integration base:** `f0c4b9b` (Phase 1A + Phase 1B + full Phase 1C + full Phase 2 + Scheduler Core + Account Health Core)
 **Source of truth:** `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`, `docs/plans/PHASE_1D_ACCOUNT_HEALTH.md`, `docs/plans/PHASE_3_DISTRIBUTION_SCHEDULER.md`
 **Execution shape:** parallel isolated slices with central integration
 **Current wave:** 3
@@ -10,19 +10,20 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A4 — Account Health Core | executable | ready after worktree setup | now | `/home/hamza/repo/x_test-w2-engagement` | pure new `health.js` owner; no shared persistence/UI writes | Phase 1C complete |
-| Agent B3 — Phase 3 Distribution Integration | executable/mixed | ready after worktree setup | now | `/home/hamza/repo/x_test-w2-content-integration` | owns scheduler persistence/orchestration/transport/UI surfaces while Agent A4 owns only `health.js` | Phase 2 + Scheduler Core complete |
+| Agent A4 — Account Health Core | executable | complete + integrated (`f0c4b9b`) | complete | `/home/hamza/repo/x_test-w2-engagement` | verified one-file pure health core | none |
+| Agent A5 — Under the Hood Reader | executable | ready after branch reset to current base | now | `/home/hamza/repo/x_test-w2-engagement` | sequential reuse of Agent A worktree; owns only `tech_news.js` visibility read adapter | Account Health Core integrated |
+| Agent B3 — Phase 3 Distribution Integration | executable/mixed | active | now | `/home/hamza/repo/x_test-w2-content-integration` | owns scheduler persistence/orchestration/transport/UI surfaces while Agent A5 owns only `tech_news.js` | Phase 2 + Scheduler Core complete |
 
 ## Dependency map
 
 ```text
-d38a068 full Phase 1C + Phase 2 + Scheduler Core
+f0c4b9b full Phase 1C + Phase 2 + Scheduler Core + Health Core
         |
         +-------------------------------+
         |                               |
         v                               v
-Agent A4: Account Health Core     Agent B3: Phase 3 Integration
-health.js only                    store/automation/x_http/UI/bridge
+Agent A5: Under the Hood Read     Agent B3: Phase 3 Integration
+tech_news.js only                 store/automation/x_http/UI/bridge
         |                               |
         +---------------+---------------+
                         |
@@ -50,7 +51,8 @@ store/UI/bridge/engagement      main-feed publishing metadata
 - `engagement.js` plus Phase-1C persistence own human-reviewed one-at-a-time engagement replies. Engagement replies remain outside the main-feed scheduler.
 - `drafting.js` owns content composition and hard content gates.
 - `scheduler.js` is integrated and owns pure main-feed scheduling decisions.
-- **Agent A4 owns only new `health.js`.** It must not modify persistence, engagement, dashboard, bridge, read paths, docs, scheduler, automation, or transport.
+- Account Health Core is integrated as `f0c4b9b`; `health.js` is a stable input to later Phase-1D integration.
+- **Agent A5 owns only `tech_news.js`** for the bounded authenticated Under-the-Hood observation adapter. It must not modify persistence, health derivation, engagement, dashboard, bridge, scheduler, automation, transport, or docs.
 - **Agent B3 owns Phase-3 integration surfaces:** `store.js`, `automation.js`, `x_http.js`, `dashboard.js`, `agent_bridge.js`, and Phase-3 operating docs. `pipeline.js` may be changed only if a concrete Phase-3 contract defect requires a small compatibility-preserving adjustment.
 - Agent B3 must not modify `health.js`, `engagement.js`, `relationship.js`, or Account Health behavior.
 - Phase-3 publication must preserve `AUTO_POST=false` as preview-only by default.
@@ -65,7 +67,7 @@ store/UI/bridge/engagement      main-feed publishing metadata
 
 The main checkout remains the single integration writer. Agents commit only to their assigned branches. The orchestrator verifies each branch against its mission, integrates centrally, and materializes only the next newly ready frontier.
 
-Agent A4 and Agent B3 have disjoint writable ownership and may run concurrently from the same coordination base. After both return, Phase-1D persistence/UI/bridge integration becomes the next shared-file mission. Phase 4 remains blocked until Phase 1D diagnostics and Phase-3 published queue metadata are both integrated.
+Agent A4 is landed. Agent A5 and Agent B3 have disjoint writable ownership and may run concurrently: A5 owns only `tech_news.js`, while B3 owns Phase-3 persistence/orchestration/transport/UI surfaces. After both return, Phase-1D persistence/UI/bridge/Engage integration becomes the next shared-file mission. Phase 4 remains blocked until Phase 1D diagnostics and Phase-3 published queue metadata are both integrated.
 
 ## Execution lifetime policy
 
@@ -85,7 +87,8 @@ Do not use live X writes merely to prove the implementation. Do not mutate live 
 
 ## Future / blocked work
 
-- Phase 1D persistence + Account Health UI/bridge + soft Engage modifiers — blocked by Agent A4 `health.js` contract.
+- Phase 1D Under-the-Hood read adapter — Agent A5 ready now.
+- Phase 1D persistence + Account Health UI/bridge + soft Engage modifiers — Health Core is ready; intentionally sequenced after Agent B3 because the remaining integration surfaces overlap.
 - Phase 4 Measurement/Experiments — blocked by completed Phase 1D plus Phase-3 published queue metadata.
 - Phase 5 Learned Strategy — blocked by Phase 4 evidence and Phase-1D health contract.
 
@@ -93,3 +96,4 @@ Do not use live X writes merely to prove the implementation. Do not mutate live 
 
 - `2026-08-19` — Phase 1C Engage Next `426ec4d` verified and integrated on main as `d38a068`; Phase 1C is complete.
 - `2026-08-19` — Wave 3 prepared as pure Account Health Core in parallel with full Phase-3 Distribution Integration.
+- `2026-08-19` — Agent A4 Account Health Core `0d843fe` verified as one-file `health.js` and integrated on main as `f0c4b9b`; Agent A5 Under-the-Hood reader is the next collision-free Phase-1D slice while Agent B3 continues.
