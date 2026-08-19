@@ -26,6 +26,7 @@ Strategic sources of truth:
 
 - `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`
 - `docs/RELATIONSHIP_INTELLIGENCE.md`
+- `docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`
 - `docs/ALGORITHM_EVIDENCE_LEDGER.md`
 - `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`
 - `docs/plans/`
@@ -78,6 +79,8 @@ A ready single-post draft requires >=40/50, no scaffold placeholders, and <=280 
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
 - `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` describes planned behavior. Do not pretend its future triage/route/scheduler interfaces exist until implemented.
 - `docs/RELATIONSHIP_INTELLIGENCE.md` and the Phase 1B/1C plans describe planned relationship/Engage Next behavior. Do not invent those bridge commands or SQLite tables before implementation.
+- `docs/ACCOUNT_HEALTH_AND_VISIBILITY.md` and Phase 1D describe planned account-health/visibility behavior. Do not invent `account-health`, `health-observe`, or `health-under-the-hood` before implementation.
+- Do not impose arbitrary reply quotas, human-looking delay/jitter rules, or a hard target-saturation ban. Until Phase 1D exists, treat those as editorial/empirical judgments rather than platform laws.
 
 ## Coding changes
 

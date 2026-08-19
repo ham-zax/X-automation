@@ -182,10 +182,13 @@ Starting heuristic:
 
 ```text
 base = profile.replyVisibility
-- saturation penalty
+- bounded saturation modifier
 - age penalty
 + active-author-response boost
++ active-bidirectional-conversation boost
 ```
+
+Saturation is `EMPIRICAL_VARIABLE` and advisory. It must not independently reject an opportunity. Phase 1D replaces the simple modifier with explainable `SaturationPressure` and active-conversation overrides.
 
 Return component explanation.
 
@@ -201,6 +204,8 @@ comparison
 correction
 informed_question
 synthesis
+reproduction
+personal_experience
 ```
 
 Starting score:
@@ -239,10 +244,14 @@ direct question to us       +15
 target replied to us        +15
 active recurring thread     +10
 own post substantive reply  +8
-already acted same source   reject
+soft saturation/repetition  bounded negative modifier
+already acted same source with no new value reject
 no contribution             reject
-expired                     reject
+exact/near-duplicate reply  reject
+expired with no active conversation reject
 ```
+
+There is no fixed daily reply cap. A burst of substantive replies inside an active bidirectional conversation remains eligible. Phase 1D supplies richer health/repetition modifiers after this phase lands.
 
 Final score is clamped `0..100`.
 
@@ -266,12 +275,14 @@ Return:
 Initial reply opportunity expiry:
 
 ```text
-high-velocity viral source     2h
-normal launch/news source      6h
-slow technical discussion     24h
+high-velocity viral source     2h advisory freshness target
+normal launch/news source      6h advisory freshness target
+slow technical discussion     24h advisory freshness target
 follow-up direct response      24h or while thread active
 own-post substantive response 48h unless clearly stale
 ```
+
+An active conversation may extend the effective window; the timestamps above are queue-management defaults, not automatic conversation cutoffs.
 
 Expiry is a queue-management heuristic, not an X law.
 
@@ -301,7 +312,8 @@ Draft requirements:
 - one concrete contribution;
 - no generic praise prefix required;
 - no invented testing/results;
-- no near-copy of another reply;
+- no exact/near-copy of another reply;
+- repeated archetype or sentence structure should create an editorial warning rather than fail unless the text is genuinely near-duplicate;
 - no forced question when a statement is stronger;
 - short enough to scan in a thread;
 - preserve enough technical specificity to demonstrate competence.
@@ -355,10 +367,11 @@ Do not create multiple follow-up items for the same target response.
 
 **Steps:**
 - [ ] Implement freshness heuristic with evidence label `EMPIRICAL_VARIABLE`.
-- [ ] Implement per-post ReplyVisibility adjustment.
+- [ ] Implement per-post ReplyVisibility adjustment with saturation kept as a bounded soft modifier.
 - [ ] Implement contribution archetype/strength qualification from supplied context.
 - [ ] Implement EngagePriority formula/modifiers.
-- [ ] Reject already-used/no-contribution/expired opportunities.
+- [ ] Reject no-contribution, exact/near-duplicate, exhausted same-source, or truly expired/no-active-conversation opportunities.
+- [ ] Do not add a daily reply quota; allow active bidirectional conversation to offset ordinary age/saturation pressure.
 - [ ] Return transparent explanation.
 
 **Acceptance criteria:**
@@ -416,6 +429,7 @@ Do not create multiple follow-up items for the same target response.
 - [ ] Add `Engage Next` navigation.
 - [ ] Separate `Active conversations` from `New opportunities`.
 - [ ] Show target classes, TargetScore, relationship stage, Conversation/Relationship Potential, age, expiry, and EngagePriority.
+- [ ] Show soft saturation/repetition warnings without removing the human approve path unless a true hard stop exists.
 - [ ] Show exact source post and contribution summary.
 - [ ] Add actions: `Draft reply`, `Quote instead`, `Ignore`.
 - [ ] When draft exists, show editable reply text and explicit `Approve & send` control.

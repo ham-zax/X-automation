@@ -109,7 +109,9 @@ Precise product/task vocabulary is more useful than repeating generic terms such
 
 Default: **zero hashtags**.
 
-Maximum: **one** when a canonical event/community hashtag materially improves context or discoverability.
+Prefer **0–1**. Allow **2** when both are directly relevant/canonical and materially improve context or discoverability; do not add a second hashtag merely because it is allowed.
+
+The exact optimal hashtag count is an empirical variable, not an X ranking law.
 
 Do not append generic hashtag blocks such as:
 
@@ -154,6 +156,12 @@ The writing agent should receive a structured packet with as much of the followi
     "engagementsPerHour": null
   },
   "recentAccountPosts": [],
+  "recentReplies": [],
+  "recentReplyArchetypes": [],
+  "accountHealth": {
+    "state": null,
+    "warnings": []
+  },
   "opportunity": {
     "reachPotential": null,
     "followPotential": null,
@@ -201,6 +209,8 @@ You receive:
 - niche tags and matched keywords;
 - viral/freshness context;
 - recent `@ham_zax` posts;
+- recent published replies and reply-archetype distribution when available;
+- Account Health state/warnings when available;
 - Reach / Follow / Conversation / Relationship potential when available;
 - target audience;
 - target class / TargetScore / relationship stage when available;
@@ -320,6 +330,10 @@ Add exactly the amount needed to contribute one useful thing:
 
 Do not write generic praise.
 
+Avoid exact/near-duplicate reply text. If recent replies repeatedly use the same archetype or question structure, vary the form when another equally strong contribution exists; do not force variation when the current conversation genuinely calls for the same archetype.
+
+A WATCH-level saturation/repetition warning is context, not a veto. A direct question, active bidirectional exchange, or new verified evidence can justify a reply despite the warning.
+
 ### STEP 4 — WRITE THE FIRST LINE
 
 The first line should normally:
@@ -436,7 +450,8 @@ Do not repeat them for SEO-like density.
 ### STEP 10 — HASHTAGS / EMOJI
 
 - zero hashtags by default;
-- at most one meaningful canonical hashtag;
+- prefer at most one meaningful canonical hashtag;
+- a second directly relevant canonical hashtag is allowed when it improves context;
 - zero emoji by default;
 - at most one meaningful emoji.
 
@@ -520,7 +535,7 @@ After generation, a separate gate must check:
 - no scaffold placeholders;
 - weighted X length for single posts;
 - legitimate CTA/question;
-- hashtag count <= 1;
+- hashtag count <= 2, with 0-1 preferred and a second hashtag requiring clear relevance;
 - emoji count <= 1 by default;
 - no generic hype patterns;
 - media requirement satisfied when media is essential to the claim;

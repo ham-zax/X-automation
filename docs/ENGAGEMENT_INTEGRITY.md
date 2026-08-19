@@ -204,18 +204,22 @@ Primary algorithm references:
 
 ## 10. Automation posture
 
-The system may automate research, ranking, drafting, scheduling assistance, and low-frequency publishing workflows, but it must not attempt to disguise automation as human behavior or bypass X anti-abuse controls.
+The system may automate research, ranking, drafting, scheduling assistance, and serialized coverage-aware publishing workflows, but it must not attempt to disguise automation as human behavior or bypass X anti-abuse controls.
 
 Preferred operating model:
 
-- low frequency over volume;
-- high relevance over broad reach;
+- quality and relationship yield over arbitrary action volume;
+- no fixed daily reply quota when there are many genuinely useful human-reviewed conversations;
+- active bidirectional conversation bursts are allowed and should not be slowed merely to look human;
+- high relevance over broad indiscriminate reach;
 - human review for replies, quotes, and sensitive interactions;
-- explicit cooldowns and duplicate prevention;
+- duplicate prevention and explicit main-feed serialization where self-cannibalization is a concern;
 - no timing jitter or browser tricks whose purpose is to evade detection;
 - no synthetic social graph construction;
 - no coordinated engagement exchange;
 - no automated action whose primary purpose is to imitate a person rather than provide genuine value.
+
+`ACCOUNT_HEALTH_AND_VISIBILITY.md` owns the softer advisory layer: target saturation, repeated reply archetypes, target concentration, InteractionYield, and observable visibility state. Those signals should warn or reprioritize before they block anything.
 
 The objective is human-quality behavior, not hidden automation.
 
@@ -262,7 +266,7 @@ The preferred networking loop is:
 7. **Measure** which topics create follows, substantive replies, shares, bookmarks, and repeat interactions.
 8. **Do more of the useful topic**, not more mechanical engagement actions.
 
-Automation should help with discovery, research, prioritization, drafting, and measurement. It should not impersonate a giant artificial social life.
+Automation should help with discovery, research, prioritization, drafting, and measurement. Human-reviewed conversation can be frequent when the opportunities are genuinely strong; the system should not manufacture volume merely because capacity exists.
 
 ---
 

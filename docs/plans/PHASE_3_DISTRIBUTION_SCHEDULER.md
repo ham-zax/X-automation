@@ -116,20 +116,25 @@ Urgency is a project classification, not a hidden X label.
 Tag these `EMPIRICAL_VARIABLE`.
 
 ```text
-ordinary minimum gap        3h
+ordinary separation target  ~3h
 evergreen preferred gap     4-6h
-viral emergency floor       90m
+viral hard floor             none inferred from public evidence
 ```
 
-Do not publish merely because the minimum gap passed.
+These are coverage defaults, not enforcement thresholds.
 
-The scheduler must also consider:
+For ordinary/evergreen items, the scheduler should normally preserve spacing to reduce self-cannibalization. For an approved viral item whose shelf-life is short, the scheduler may recommend immediate publication even when the previous main-feed item is recent, provided writes remain serialized and the operator sees the overlap warning.
+
+The scheduler must consider:
 
 - source expiry;
 - semantic similarity to the last post;
 - current item strength;
-- whether previous post is still accelerating when this is observable;
+- whether the previous post is still accelerating when observable;
+- time since the last main-feed write as a coverage signal, not a bot-risk threshold;
 - explicit human schedule override.
+
+Do not add random delay/jitter or a fake minimum interval whose purpose is to look human.
 
 ---
 
@@ -281,7 +286,7 @@ Use the existing explicit repost path only if already supported reliably; otherw
 
 **Steps:**
 - [ ] Implement eligibility rules.
-- [ ] Implement initial spacing/urgency/expiry logic.
+- [ ] Implement advisory spacing plus urgency/expiry logic; do not encode the old 90-minute viral floor as a hard eligibility condition.
 - [ ] Implement priority formula and transparent explanation.
 - [ ] Implement semantic-conflict check using existing text/topic metadata.
 - [ ] Return one next recommendation rather than mutating publication state itself.
@@ -360,8 +365,8 @@ These commands inspect/recommend; they do not bypass human approval.
 
 1. approved queue state, not draft FIFO, owns publication;
 2. main-feed writes are serialized;
-3. viral/timely expiry can pre-empt evergreen order;
-4. scheduler explanations separate code-backed mechanisms from empirical spacing heuristics;
+3. viral/timely expiry can pre-empt evergreen order and may recommend immediate serialized publication when shelf-life outweighs self-cannibalization risk;
+4. scheduler explanations separate code-backed mechanisms from empirical spacing heuristics and never present a posting gap as an anti-flag rule;
 5. original/quote/thread publish through one transport owner;
 6. duplicate claims are prevented;
 7. failed sends remain inspectable/recoverable;

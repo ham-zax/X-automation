@@ -253,10 +253,10 @@ Profile baseline in Phase 1B only:
 ```text
 author response behavior
 usual thread depth
-usual saturation
+usual saturation context
 ```
 
-Per-post freshness/saturation override is added in Phase 1C.
+Per-post freshness/saturation handling is added in Phase 1C and becomes an explicit **soft** `SaturationPressure` diagnostic in Phase 1D. Saturation must not become a hard target filter in Phase 1B.
 
 ### RelationshipPotential
 

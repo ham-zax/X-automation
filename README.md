@@ -24,6 +24,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
 - [`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`](docs/NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategic source of truth for conversation insertion, relationship conversion, owned-content conversion, target classes, network metrics, and the two-lane operating model.
 - [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — planned target scoring, relationship profiles/events, stages, Engage Next inputs, and network analytics.
+- [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — planned HEALTHY/WATCH/CONSTRAINED observability, Under the Hood snapshots, soft saturation/repetition diagnostics, network quality, and InteractionYield.
 - [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — separates current code-backed X mechanisms, official product/policy claims, empirical variables, and retired folklore.
 - [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical English writing/editing contract, semantic anchors, scannability rules, media decision, and final structured output.
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
@@ -34,11 +35,11 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 
 The current app has Saved candidates, drafts, an approved-draft queue, audience data, action history, and performance snapshots. The next architecture is network-first:
 
-**Save/Triage -> Relationship Intelligence -> Engage Next -> four-dimensional opportunity scoring (Reach/Follow/Conversation/Relationship) -> research/writing/media -> human approval -> serialized main-feed scheduler -> follower/relationship experiments -> learned strategy.**
+**Save/Triage + four-dimensional opportunity scoring (Reach/Follow/Conversation/Relationship) -> Relationship Intelligence -> Engage Next -> Account Health/visibility observability -> research/writing/media -> human approval -> serialized coverage-aware main-feed scheduler -> follower/relationship/health experiments -> learned strategy.**
 
 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system architecture. `docs/plans/` owns implementation order and exact file/interface changes.
 
-This paragraph describes **planned** behavior. Do not assume the triage queue, relationship profiles, Engage Next, route-after-Save UI, media planner, experiment engine, or learned scheduler exist until the matching phase plan has been implemented.
+This paragraph describes **planned** behavior. Do not assume the triage queue, relationship profiles, Engage Next, Account Health/Under the Hood capture, route-after-Save UI, media planner, experiment engine, or learned scheduler exist until the matching phase plan has been implemented.
 
 ## Setup
 

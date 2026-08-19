@@ -2,7 +2,7 @@
 
 **Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where every saved signal enters triage, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
 
-**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; add one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. AI may discover, classify, research, recommend, draft, score, surface target/conversation opportunities, propose experiments, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
+**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; add one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. AI may discover, classify, research, recommend, draft, score, surface target/conversation opportunities, propose experiments, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
 
 **Tech Stack:** Node.js 24, built-in `node:sqlite`, Bootstrap dashboard, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`.
 
@@ -24,6 +24,9 @@
 - Opportunity scoring must keep **Reach Potential**, **Follow Potential**, **Conversation Potential**, and **Relationship Potential** separate. These are transparent internal heuristics, not simulations of X's Phoenix score.
 - Target selection must use relationship intelligence (TopicFit, AudienceOverlap, ConversationQuality, ReplyVisibility, RelationshipPotential) with follower count only as a bounded secondary reach modifier.
 - Conversation follow-ups should generally outrank endless cold insertion when a substantive response is warranted.
+- Account-health behavior is advisory-first: target saturation, reply volume, repeated archetype, and conversation density are soft modifiers/experiment variables, not automatic bans.
+- Genuine active-conversation bursts are healthy by default when the interaction is bidirectional and substantive.
+- A hard account-level constraint requires observed visibility/enforcement evidence or an explicit platform/project boundary; do not invent hidden bot/reputation thresholds.
 - Algorithm/tactic assumptions must be classified through `ALGORITHM_EVIDENCE_LEDGER.md` as CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Experiments must compare independent future posts/cohorts; do not publish duplicate or near-duplicate A/B variants of the same content to manufacture a clean test.
 - Engagement opportunities may be discovered and drafted automatically, but replies remain human-approved and must add concrete value.
@@ -67,6 +70,7 @@
 - learned timing and format recommendations from account outcomes;
 - relationship profiles/events, target classes, TargetScore, and relationship-stage derivation;
 - a dedicated Engagement Queue for relevant, time-sensitive reply and follow-up opportunities;
+- Account Health / visibility observability with HEALTHY/WATCH/CONSTRAINED state, Under the Hood snapshots when observable, soft saturation/repetition diagnostics, Network Quality, and InteractionYield;
 - an Experiment Engine for controlled content/network/timing hypotheses without duplicate posting;
 - four-dimensional candidate scoring: Reach Potential, Follow Potential, Conversation Potential, and Relationship Potential;
 - follower-conversion plus relationship-conversion analytics that prioritize recruiting and connecting with the target AI/developer/builder network over vanity reach;
@@ -231,6 +235,7 @@ Responsibilities remain separate:
 - `audience_profiles`: raw follower/following observations and current niche relevance;
 - `relationship_profiles`: strategic target classes, TargetScore components, relationship stage, and materialized interaction counters;
 - `relationship_events`: append-only network/conversation history;
+- `account_health_observations`: append-only visibility/enforcement observations with provenance; soft saturation/repetition/network-health diagnostics remain derived;
 - `post_metrics` / `account_metrics`: raw outcomes;
 - `publication_measurements`: fixed-window publication/follower-normalized outcomes;
 - `learned_rules`: human-accepted bounded strategy adjustments after enough evidence.
@@ -410,7 +415,7 @@ Initial editorial defaults:
 
 - serialize all original/quote/thread/repost publications;
 - preferred evergreen spacing: roughly 4-6 hours;
-- ordinary minimum spacing target: roughly 3 hours;
+- ordinary separation target: roughly 3 hours, advisory rather than a hard floor;
 - do not post merely because a slot exists;
 - if two queued items are semantically similar, prefer the stronger one and delay/expire the weaker one.
 
@@ -421,10 +426,11 @@ These are project defaults, not claims about hidden X enforcement.
 - may pre-empt a normal evergreen item;
 - target the earliest reasonable coverage slot after human approval;
 - freshness and expected shelf-life should outweigh ordinary FIFO order;
-- do not publish several viral items simultaneously;
-- if the item will be stale before the next viable main-feed slot, route to `reply`, `research`, or `ignore` instead of publishing stale commentary.
+- do not publish several viral items simultaneously; writes remain serialized;
+- an approved viral item may be recommended for immediate publication when shelf-life outweighs self-cannibalization risk, even if the previous main-feed item is recent;
+- if the item will be stale before any worthwhile publication opportunity, route to `reply`, `research`, or `ignore` instead of publishing stale commentary.
 
-The exact minimum emergency gap should remain configurable and should later be learned from account outcomes rather than treated as an anti-flag trick.
+Do not define a universal viral emergency floor from public evidence. Time since last post is a coverage signal, not an anti-flag threshold, and can later be learned from account outcomes.
 
 ## Algorithm-Aware Design Assumptions
 
@@ -436,9 +442,12 @@ The implementation should preserve these principles from the current public X re
 - semantic diversity/DPP makes near-identical trend summaries weak relative to distinctive analysis;
 - out-of-network distribution begins at a disadvantage, so clear niche fit and utility matter;
 - cold-start exploration exists for low-follower/low-impression authors but is not guaranteed distribution;
-- negative user feedback matters enough that ragebait and misleading hooks are strategically bad even if they create activity.
+- negative user feedback matters enough that ragebait and misleading hooks are strategically bad even if they create activity;
+- ranking and visibility filtering are separate layers in the August 2026 public tree;
+- public labeling/account-scoring/enforcement components exist, while some anti-abuse rules are intentionally not published;
+- Under the Hood provides stronger observable visibility evidence when available than guessed risk derived from activity volume/timing.
 
-The scheduler must not convert any of these observations into fake raw engagement-point arithmetic.
+The scheduler/account-health layer must not convert any of these observations into fake raw engagement-point arithmetic, hidden bot scores, or arbitrary action quotas.
 
 ## File Responsibility Map
 
@@ -449,6 +458,7 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - `opportunity.js` — Reach/Follow/Conversation/Relationship scoring and score explanations used by triage, routing, and dashboard views.
 - `relationship.js` — target classes, TargetScore, relationship-stage derivation, and event-to-profile aggregation.
 - `engagement.js` — discovery/ranking of initial/follow-up reply opportunities from relationship targets, own-post conversations, and reply-suitable research candidates.
+- `health.js` — advisory account-health state, observed visibility evidence, target saturation, reply repetition, Network Quality, and InteractionYield.
 - `experiments.js` — content/network/timing experiment definitions, variant assignment, active-experiment rules, and cohort summaries.
 - `learning.js` — evidence-backed bounded learned recommendations after enough account-specific outcomes accumulate.
 - `docs/POST_GENERATION_PROMPT.md` — canonical writer/editor prompt and structured output contract.
@@ -456,8 +466,8 @@ The scheduler must not convert any of these observations into fake raw engagemen
 
 ### Existing files planned for modification
 
-- `store.js` — `queue_items`, relationship profiles/events, experiment persistence, learned-rule persistence, fixed-window follower/outcome fields, and queue queries.
-- `dashboard.js` — Save-to-triage behavior, route controls, Relationships/Engage/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
+- `store.js` — `queue_items`, relationship profiles/events, account-health observations, experiment persistence, learned-rule persistence, fixed-window follower/outcome fields, and queue queries.
+- `dashboard.js` — Save-to-triage behavior, route controls, Relationships/Engage/Account Health/Queue/Experiments/Learning views, approval UI, timing/media visibility, opportunity scores, and follower/relationship-conversion summaries.
 - `strategy.js` — extend recommendation from five-way distribution action into pipeline recommendation inputs and urgency/expiry signals; consume opportunity/relationship scores rather than owning their formulas.
 - `audience.js` — preserve raw follower/following observations and feed strategic relationship/follower-quality layers without owning target scoring.
 - `drafting.js` — format-aware drafting and hard gates.
@@ -624,8 +634,8 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - [ ] Define urgency classes `evergreen`, `timely`, `viral`.
 - [ ] Estimate `expires_at` for time-sensitive items.
 - [ ] Serialize main-feed items so only one publication occupies a given slot.
-- [ ] Use ordinary 3-hour minimum / 4-6-hour preferred spacing as initial editorial defaults for non-urgent main-feed items.
-- [ ] Allow viral items to pre-empt evergreen order and choose the earliest reasonable coverage slot after approval.
+- [ ] Use an ordinary ~3-hour separation target / 4-6-hour evergreen preference as advisory editorial defaults for non-urgent main-feed items, not hard eligibility floors.
+- [ ] Allow viral items to pre-empt evergreen order and recommend immediate serialized publication after approval when shelf-life outweighs overlap risk.
 - [ ] Expire or reroute viral commentary that will be stale before its next viable slot.
 - [ ] Keep timing parameters explicitly framed as coverage heuristics that can later be learned from account data.
 
@@ -842,6 +852,35 @@ The scheduler must not convert any of these observations into fake raw engagemen
 - The dashboard can identify posts that produced strong reach but weak follower recruitment, interactions that produced views but no relationship progression, interactions associated with target responses/recurring relationships, and whether newly observed followers are increasingly aligned with the target niche, with attribution confidence visible.
 - Detailed execution contract: `plans/PHASE_4_MEASUREMENT_EXPERIMENTS.md`.
 
+### Task 17: Add Account Health, visibility observability, and lenient engagement diagnostics
+
+**Files:**
+- Create: `health.js`
+- Modify: `store.js`
+- Modify: `relationship.js`
+- Modify: `engagement.js`
+- Modify: `dashboard.js`
+- Modify: `agent_bridge.js`
+- Modify: authenticated X read owner only if Under the Hood can reuse the existing session path.
+
+**Interfaces:**
+- Consumes: relationship events, recent reply/action text, observed platform/visibility events, and target interaction history.
+- Produces: HEALTHY/WATCH/CONSTRAINED state, `SaturationPressure`, reply-repetition warnings, Network Quality components, InteractionYield, and provenance-backed visibility observations.
+
+**Steps:**
+- [ ] Persist append-only account-health observations with provenance; do not store guessed bot/reputation scores as evidence.
+- [ ] Implement advisory `SaturationPressure` and reply-archetype/text-repetition diagnostics using local/native facilities.
+- [ ] Hard-stop only actual duplicate/near-duplicate, no-contribution, exhausted same-source, expired/no-active-conversation, or observed platform/project constraint conditions.
+- [ ] Keep daily reply volume, target saturation, repeated archetype, target concentration, and conversation density as soft modifiers/experiment variables.
+- [ ] Treat active bidirectional conversation, direct target questions, and new verified evidence as valid soft-penalty overrides.
+- [ ] Show Network Quality components and InteractionYield with raw numerator components.
+- [ ] Record Under the Hood visibility snapshots only when actually observable; return unavailable cleanly otherwise.
+- [ ] Add Account Health dashboard/bridge surfaces without pretending to expose an X bot/reputation score.
+
+**Acceptance criteria:**
+- High-volume reciprocal conversation can remain HEALTHY; one-sided repetitive activity can become WATCH without being automatically blocked; CONSTRAINED requires observed hard evidence or another explicit boundary.
+- Detailed execution contract: `plans/PHASE_1D_ACCOUNT_HEALTH.md`.
+
 ## Rollout Order
 
 Phase-specific plans in `docs/plans/` are authoritative for implementation detail. The master tasks above remain the cross-system map.
@@ -881,6 +920,18 @@ Plan: `plans/PHASE_1C_ENGAGE_NEXT.md`
 - reviewable initial/follow-up replies;
 - one-by-one human send/ignore decisions;
 - relationship-event updates after interactions.
+
+### Phase 1D — Account Health + visibility observability
+
+Plan: `plans/PHASE_1D_ACCOUNT_HEALTH.md`
+
+- HEALTHY / WATCH / CONSTRAINED with explicit evidence;
+- observable visibility/enforcement snapshots with provenance;
+- optional Under the Hood capture when available;
+- target saturation as a soft EngagePriority modifier;
+- reply archetype/repetition diagnostics with hard duplicate vs soft repetition distinction;
+- Network Quality components and InteractionYield;
+- no arbitrary reply quota or human-timing imitation.
 
 ### Phase 2 — Content quality + profile proof
 
@@ -925,8 +976,10 @@ Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 
 - X private web endpoints are not a stable public API contract. Publication transport may break independently of queue correctness.
 - Current X automation rules restrict several forms of automated engagement; this architecture intentionally keeps likes, follow churn, mass replies, and unsolicited engagement outside the autonomous loop.
-- The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait.
-- Reach/Follow/Conversation/Relationship scores, TargetScore, and EngagePriority are internal prioritization heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.
+- The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait; if there are many genuinely useful conversations, a fixed daily cap must not suppress them.
+- Target saturation, repeated archetype, target concentration, and weak recent InteractionYield are advisory signals by default; they lower priority or warn rather than hard-blocking a useful human-approved interaction.
+- Active bidirectional conversation, a direct target question, or new verified evidence may offset soft health penalties.
+- Reach/Follow/Conversation/Relationship scores, TargetScore, EngagePriority, SaturationPressure, NetworkQualityScore, and InteractionYield are internal prioritization/diagnostic heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.
 - No scheduler can guarantee virality. The system optimizes prerequisites: topic fit, distinctiveness, evidence, usefulness, freshness, readability, media value, timing, and follower-conversion value.
 - `associated_follower_delta` is not direct causal attribution. Overlapping publications, profile changes, external mentions, or prior posts can contribute; attribution confidence must remain visible.
 - Content experiments are observational cohort comparisons, not laboratory-isolated tests. Topic/source differences remain confounders, so the system must not overstate small-sample results.
@@ -951,17 +1004,20 @@ The program is complete when a user can:
 9. Review target context, freshness/expiry, contribution archetype, and the concrete technical contribution the system thinks we can make.
 10. Review and explicitly send/ignore each outbound reply rather than having a daemon spray replies.
 11. See successful replies/responses become relationship events and influence future relationship/target scoring.
-12. See research/evidence and a format-aware main-feed draft that reinforces profile proof for the topics the account is entering publicly.
-13. Optionally attach main-feed or engagement items to declared content/network experiments and see the assigned variant before execution.
-14. See deterministic hard gates plus quality score.
-15. Review media recommendation.
-16. Approve the exact final main-feed content.
-17. See the scheduler choose and explain a coverage slot.
-18. See viral approved items pre-empt normal items without burst-posting.
-19. See the correct X action published and persisted once.
-20. See 15m/1h/6h/24h outcomes with reach and associated follower-conversion metrics side-by-side.
-21. See author-response, conversation-continuation, recurring-relationship, connected-target, and mutual-network outcomes.
-22. See attribution confidence and, when observable, whether newly observed followers are increasingly niche-aligned.
-23. See experiment cohort summaries that refuse to declare a winner before the minimum evidence threshold.
-24. See evidence-backed learned strategy suggestions remain inert until human acceptance, then apply only bounded transparent adjustments.
-25. See algorithm/tactic claims remain traceable to CODE_BACKED / OFFICIAL_PRODUCT_OR_POLICY / EMPIRICAL_VARIABLE / RETIRED evidence classes.
+12. See Account Health distinguish actual observed visibility/enforcement evidence from soft saturation/repetition/efficiency warnings.
+13. See genuine active-conversation bursts remain actionable while one-sided repetitive activity receives advisory pressure.
+14. See Network Quality and InteractionYield with raw component counts.
+15. See research/evidence and a format-aware main-feed draft that reinforces profile proof for the topics the account is entering publicly.
+16. Optionally attach main-feed or engagement items to declared content/network experiments and see the assigned variant before execution.
+17. See deterministic hard gates plus quality score.
+18. Review media recommendation.
+19. Approve the exact final main-feed content.
+20. See the scheduler choose and explain a coverage slot.
+21. See viral approved items pre-empt normal items without burst-posting.
+22. See the correct X action published and persisted once.
+23. See 15m/1h/6h/24h outcomes with reach and associated follower-conversion metrics side-by-side.
+24. See author-response, conversation-continuation, recurring-relationship, connected-target, and mutual-network outcomes.
+25. See attribution confidence and, when observable, whether newly observed followers are increasingly niche-aligned.
+26. See experiment cohort summaries that refuse to declare a winner before the minimum evidence threshold.
+27. See evidence-backed learned strategy suggestions remain inert until human acceptance, then apply only bounded transparent adjustments.
+28. See algorithm/tactic claims remain traceable to CODE_BACKED / OFFICIAL_PRODUCT_OR_POLICY / EMPIRICAL_VARIABLE / RETIRED evidence classes.

@@ -75,8 +75,17 @@ Key files:
 - `vm-ranker/`
 - `thunder/`
 - `simclusters/`
+- `visibility-filtering/`
+- `scarecrow/`
+- `botmaker/` and `botmaker-rules/`
+- `agatha/`
+- `bdsm/`
+- `user-cred-v2/`
+- `abuse-enforcement-service/`
+- `safety-label-user-agg/`
+- `under-the-hood/`
 
-The August 2026 repository README explicitly describes the current tree as the core For You feed code and the Phoenix release as production implementation rather than the earlier Grok-derived sample.
+The August 2026 repository README explicitly describes the current tree as the core For You feed code and the Phoenix release as production implementation rather than the earlier Grok-derived sample. The August 13 release also exposes substantially more of the account/post labeling and visibility-filtering path.
 
 ---
 
@@ -190,11 +199,16 @@ ShareViaDmWeight                  5.0
 ShareViaCopyLinkWeight           20.0
 QuoteWeight                       5.0
 FollowAuthorWeight                4.0
+NotInterestedWeight             -43.2
+BlockAuthorWeight               -31.2
+MuteAuthorWeight                -58.8
+ReportWeight                   -234.0
+NotDwelledWeight                -0.02
 ```
 
 These are useful to understand which predicted actions the scorer is capable of valuing and the relative scale of current defaults.
 
-They are **not** permission to state count equivalences.
+They are **not** permission to state count equivalences. In particular, older figures such as report `-369` or block `~-74` are not the current defaults in this August 2026 source snapshot.
 
 They can also be changed through feature switches/experiments.
 
@@ -329,6 +343,59 @@ Those remain empirical variables.
 
 ---
 
+### 3.11 Ranking and visibility filtering are separate layers
+
+**Status:** `CODE_BACKED`
+
+The August 2026 repository architecture explicitly separates ranking/selection from `visibility-filtering/`, which can allow, interstitial, or drop content based on viewer state and labels attached to accounts/posts.
+
+**Strategic implication:**
+
+Do not treat reach changes as proof that the ranker alone changed. Account/post visibility state is a separate observable dimension when the platform exposes evidence for it.
+
+**System implication:**
+
+Account Health should preserve actual visibility/enforcement observations with provenance rather than estimating a hidden "shadowban" score from impressions.
+
+---
+
+### 3.12 Public labeling/account-scoring/enforcement components exist
+
+**Status:** `CODE_BACKED`
+
+The August 2026 public tree includes components documented for:
+
+- event/rule labeling through `scarecrow/` + `botmaker/`;
+- inauthentic/account-quality scoring through systems including `bdsm/`, `agatha/`, and `user-cred-v2/`;
+- account/post aggregation through `safety-label-user-agg/`;
+- enforcement/challenge/suspension actions through `abuse-enforcement-service/`.
+
+The repository also states that some BotMaker rules are intentionally not published to reduce gaming/circumvention.
+
+**Strategic implication:**
+
+Build around stable positive mechanisms and observable outcomes, not guessed detector thresholds or evasion parameters.
+
+---
+
+### 3.13 Under the Hood exposes aggregate visibility-impacting label information
+
+**Status:** `CODE_BACKED`
+
+The August 2026 repository documents `under-the-hood/` jobs/serving code and an X surface that reports aggregate statistics about visibility-impacting labels on an account and its posts when available.
+
+**Strategic implication:**
+
+Observed Under the Hood state is stronger account-health evidence than inferred "bot risk" from posting volume or timing.
+
+**Do not infer:**
+
+- that the surface exposes every internal label/rule;
+- that absence of a visible label proves zero enforcement risk;
+- that one label transition identifies a single causal action without further evidence.
+
+---
+
 ## 4. OFFICIAL_PRODUCT_OR_POLICY ledger
 
 ### 4.1 Premium reply prioritization
@@ -424,7 +491,31 @@ Follower count is a minor target-scoring input.
 
 Do not turn `10-15`, `15-20`, or another quota into a requirement.
 
-The correct volume is the number of high-quality opportunities that pass contribution/review thresholds.
+The correct volume is the number of high-quality opportunities that pass contribution/review thresholds. A burst of substantive replies in an active bidirectional conversation is not equivalent to bulk cold insertion.
+
+### Target saturation / interaction concentration
+
+Treat target interaction count, consecutive unanswered interactions, thread crowding, and top-target concentration as empirical modifiers.
+
+Measure:
+
+- author response rate;
+- conversation continuation;
+- InteractionYield;
+- relationship progression;
+- target/class/topic diversity.
+
+Do not create an automatic ban from a fixed number of unanswered interactions.
+
+### Reply archetype / semantic repetition
+
+Exact and near-duplicate replies are a content-quality/spam problem.
+
+Repeated archetypes, question structures, or similar technical moves are weaker evidence and should begin as advisory diagnostics. Measure whether they reduce target response/continuation before turning them into stronger rules.
+
+### Human-looking timing / jitter
+
+Do not model circadian gaps, random jitter, typing delays, or browser timing patterns as growth requirements. They are not part of the account's coverage optimization objective.
 
 ### First 30-60 minutes
 
@@ -459,6 +550,21 @@ Current repository explicitly states that weights scale predicted probabilities/
 Reason:
 
 Author-diversity attenuation and time freshness are separate mechanisms. A decay value of `0.5` is not evidence that a post loses 50% every six hours.
+
+### Fixed negative-action count equivalences
+
+Examples:
+
+```text
+1 report cancels 468 likes
+1 block cancels N likes
+```
+
+**Status:** `RETIRED`
+
+Reason:
+
+Current repository comments explicitly explain that these weights multiply viewer-specific predicted probabilities, not raw global action counts. Current default values can also change independently of older screenshots/docs.
 
 ### Large accounts are always best reply targets
 
@@ -495,6 +601,10 @@ relevant viewer history / topical retrieval
 ```
 
 Therefore the system should optimize **network topology + content utility + predicted multi-action plausibility**, not a single engagement counter.
+
+The August 2026 labeling/visibility release adds one more operating rule:
+
+> **Use observable account/post visibility evidence for hard account-health constraints; keep reply volume, saturation, repetition, target size, and timing as empirical variables unless evidence graduates them.**
 
 ---
 

@@ -126,6 +126,22 @@ Every Engage Next item must explain target relationship context, Conversation Po
 
 The agent may eventually draft these items, but outbound replies remain explicit human decisions. See `plans/PHASE_1C_ENGAGE_NEXT.md`.
 
+### Planned Account Health upgrade — not implemented yet
+
+Phase 1D adds an advisory account-health/visibility layer. It must distinguish actual platform/visibility evidence from internal efficiency warnings.
+
+Planned states:
+
+- `HEALTHY` — no material observed concern;
+- `WATCH` — soft saturation/repetition/concentration/InteractionYield warning;
+- `CONSTRAINED` — observed visibility/enforcement evidence or another explicit hard boundary.
+
+Target saturation, daily reply count, repeated reply archetype, and crowded conversations are **not** automatic bans. A direct target question, active bidirectional exchange, or new verified evidence can justify engaging despite a WATCH-level warning.
+
+There is no fixed daily reply quota and no human-looking jitter/circadian timing requirement. Exact/near-duplicate replies remain hard failures; repeated archetypes/structures are advisory unless the text is genuinely near-duplicate.
+
+Future commands are specified in `plans/PHASE_1D_ACCOUNT_HEALTH.md`. Until implemented, do not invent `account-health`, `health-observe`, or `health-under-the-hood` behavior.
+
 ## When the user manually gives the agent an X post
 
 ### 1. Inspect the source first
@@ -306,6 +322,8 @@ Use persisted candidates with tags `jobs/career`, `builders`, or `business`, the
 - Never manipulate SQLite directly from an agent when the bridge command exists.
 - Never silently enable `AUTO_POST`.
 - Never use automated likes, follow churn, or mass unsolicited replies as part of this workflow.
+- Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
+- Treat target saturation/repeated archetype/concentration as advisory until Phase 1D evidence says otherwise; exact/near-duplicate replies remain a hard stop.
 - Replies and quote-posts should add a specific technical contribution, not generic praise or engagement bait.
 - Record successful candidate-based direct/quote/repost/reply actions through `record-action` so the same source is not accidentally recycled.
 - Preserve the content and engagement standards in `CONTENT_OPERATING_STANDARD.md`, `ENGAGEMENT_INTEGRITY.md`, and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.

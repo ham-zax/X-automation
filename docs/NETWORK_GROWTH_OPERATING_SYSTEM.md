@@ -330,6 +330,8 @@ Inputs may include:
 - whether the author responds to replies;
 - whether the thread has already become too crowded.
 
+Saturation is an **empirical visibility/context modifier**, not a prohibition. An active bidirectional technical conversation can remain high-value even when reply count or interaction frequency is high.
+
 **RelationshipPotential**
 
 Whether a useful repeated interaction is realistically possible.
@@ -504,14 +506,17 @@ Share our task-ledger observation and ask whether their eval preserves tool cont
 
 Sort primarily by:
 
-1. time-sensitive opportunity quality;
-2. relationship potential;
-3. conversation potential;
-4. topic fit;
-5. target score;
-6. source velocity.
+1. active conversation/direct response value;
+2. time-sensitive opportunity quality;
+3. relationship potential;
+4. conversation potential;
+5. topic fit;
+6. target score;
+7. source velocity.
 
-Do not sort by follower count alone.
+Apply target saturation, reply-archetype repetition, and target concentration as **soft warnings/modifiers**. They must not automatically block a useful human-approved interaction. A direct question, active bidirectional exchange, or new verified evidence can offset those soft penalties.
+
+Do not sort by follower count alone and do not impose a fixed daily reply quota.
 
 ---
 
@@ -621,6 +626,11 @@ relationship_conversion_rate
 connected_target_count
 mutual_target_count
 recurring_relationship_count
+interaction_yield
+target_diversity
+class_diversity
+topic_diversity
+top_target_concentration
 ```
 
 ### Tier 2 — audience conversion
@@ -652,7 +662,38 @@ Raw counters are useful diagnostics but should not override stronger network/fol
 
 ---
 
-## 15. Network experiments
+## 15. Account health and leniency
+
+Account health is an observability/efficiency layer, not a hidden bot-score simulator.
+
+Use `ACCOUNT_HEALTH_AND_VISIBILITY.md` as the source of truth.
+
+Operator-facing states:
+
+```text
+HEALTHY
+WATCH
+CONSTRAINED
+```
+
+Most behavior signals remain `WATCH`-level advice:
+
+- target saturation;
+- repeated reply archetype;
+- high target concentration;
+- weak recent InteractionYield;
+- crowded conversations;
+- repeated thesis/structure.
+
+A hard constraint requires actual visibility/enforcement evidence, an explicit platform/project boundary, or an item-level factuality/duplicate failure.
+
+There is no arbitrary daily reply quota. Genuine active-conversation bursts are healthy by default when the conversation remains substantive and bidirectional.
+
+When available, X Under the Hood snapshots should be preserved as actual visibility evidence rather than inferring account state from reach changes.
+
+---
+
+## 16. Network experiments
 
 Experiments should test network strategy as well as writing style.
 
@@ -683,7 +724,7 @@ These are empirical questions. The system should collect enough observations bef
 
 ---
 
-## 16. Algorithm evidence discipline
+## 17. Algorithm evidence discipline
 
 All strategic claims must be categorized using `ALGORITHM_EVIDENCE_LEDGER.md`.
 
@@ -707,7 +748,7 @@ Likewise, do not ignore a code-backed mechanism merely because an older strategy
 
 ---
 
-## 17. Performance-first operating boundary
+## 18. Performance-first operating boundary
 
 Growth documents should focus on distribution, conversion, network construction, and measurement.
 
@@ -721,7 +762,7 @@ The growth strategy should not duplicate long moral/ethical commentary. It shoul
 
 ---
 
-## 18. The strategic moat
+## 19. The strategic moat
 
 The defensible advantage is not posting frequency.
 

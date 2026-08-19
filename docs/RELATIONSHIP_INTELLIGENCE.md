@@ -387,11 +387,12 @@ Fetch recent posts from top relationship/distribution/authority targets.
 Filter:
 
 - target score above configured floor;
-- post inside freshness window;
+- post inside freshness window or still actively conversational;
 - topic fit above threshold;
-- not already acted on;
-- conversation not saturated beyond useful visibility;
+- not already acted on in a way that exhausts the source;
 - potential contribution exists.
+
+Conversation saturation is **not** a hard filter. Phase 1D supplies `SaturationPressure` as a soft EngagePriority modifier. Active bidirectional conversation, a direct question, or new verified evidence may fully offset that pressure.
 
 ### B. Responses to us
 
@@ -425,15 +426,21 @@ EngagePriority =
 + 0.10 * ContributionStrength
 ```
 
-Then apply event boosts:
+Then apply event boosts and health context:
 
 ```text
 target replied to us        +15
 direct question to us       +15
 active recurring thread     +10
-already acted on same source reject
+soft saturation/repetition  bounded negative modifier
+active-conversation override may offset soft modifier
+already acted on same source with no new value reject
 no concrete contribution    reject
+exact/near-duplicate reply  reject
+observed hard constraint    reject
 ```
+
+Do not reject solely because reply volume, target interaction count, or conversation density is high.
 
 Clamp to 0-100 after boosts.
 
@@ -508,6 +515,25 @@ Group by:
 
 Track as a relationship outcome, not a quota.
 
+### InteractionYield
+
+Track the transparent internal diagnostic defined in `ACCOUNT_HEALTH_AND_VISIBILITY.md` alongside its raw components:
+
+```text
+(author responses
+ + 2 * continued conversations
+ + 3 * new recurring relationships
+ + 3 * relevant target follows
+ + 4 * new mutual connections)
+/ meaningful interactions
+```
+
+Use it comparatively by target class/archetype/topic rather than as a universal threshold.
+
+### Network quality
+
+Also expose target diversity, target-class diversity, topic diversity, and top-target concentration. A larger network is not necessarily a healthier network if most effort depends on one account or one conversation cluster.
+
 ---
 
 ## 15. Reply archetypes for analytics
@@ -522,6 +548,8 @@ comparison
 correction
 informed_question
 synthesis
+reproduction
+personal_experience
 ```
 
 This enables experiments such as:
@@ -642,7 +670,7 @@ Relationship intelligence is a strategic layer built on:
 - current public algorithm mechanisms documented in `ALGORITHM_EVIDENCE_LEDGER.md`;
 - empirical scores that remain transparent and tunable.
 
-TargetScore and EngagePriority are **our models**. They must never be described as X's internal score.
+TargetScore and EngagePriority are **our models**. Phase 1D `SaturationPressure`, `NetworkQualityScore`, and `InteractionYield` are also our advisory/diagnostic models. None may be described as X's internal score, bot score, or reputation score.
 
 ---
 

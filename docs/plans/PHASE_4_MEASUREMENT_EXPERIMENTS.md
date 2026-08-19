@@ -1,15 +1,15 @@
 # Phase 4 Measurement & Experiments Implementation Plan
 
-**Goal:** Measure content, follower, conversation, and relationship outcomes at fixed windows; attach experiments to naturally different future items; and compare normalized cohorts without confusing correlation with direct attribution.
+**Goal:** Measure content, follower, conversation, relationship, and account-health outcomes at fixed windows; attach experiments to naturally different future items; and compare normalized cohorts without confusing correlation with direct attribution.
 
-**Architecture:** Extend existing performance snapshots rather than adding a separate analytics service. `experiments.js` owns experiment definitions/variant assignment/cohort summaries. `relationship_events` supplies network outcomes. `post_metrics`/`account_metrics` remain raw observations; add explicit publication measurement records that connect queue metadata to fixed windows.
+**Architecture:** Extend existing performance snapshots rather than adding a separate analytics service. `experiments.js` owns experiment definitions/variant assignment/cohort summaries. `relationship_events` supplies network outcomes and Phase 1D `health.js`/health observations supply account-health context. `post_metrics`/`account_metrics` remain raw observations; add explicit publication measurement records that connect queue metadata to fixed windows.
 
 **Tech Stack:** Node.js 24, built-in SQLite, existing performance reads, queue/action history, relationship profiles/events, Bootstrap dashboard.
 
 ## Global Constraints
 
-- Requires published queue metadata from Phase 3 and relationship events from Phase 1B/1C.
-- Measure reach and follower/network conversion side by side.
+- Requires published queue metadata from Phase 3, relationship events from Phase 1B/1C, and Phase 1D health/network diagnostics.
+- Measure reach, follower/network conversion, and account-health context side by side.
 - Associated follower deltas are not automatically causal attribution.
 - Experiments compare naturally different future posts; do not duplicate/near-duplicate content to create A/B pairs.
 - One primary experimental dimension per item when practical.
@@ -27,6 +27,7 @@
 - `store.js` — experiments/variants/publication measurement persistence and new-follower first-seen state.
 - `automation.js` — due measurement-window capture.
 - `audience.js` — first-seen follower observations / relationship profile refresh.
+- `health.js` — expose historical health/network summaries and observed visibility context for cohort analysis; Phase 4 does not own health-state rules.
 - `dashboard.js` — Performance + Experiments views.
 - `scheduler.js` — consume learned summaries only in Phase 5; in this phase store context only.
 - `agent_bridge.js` — experiment/measurement inspection commands.
@@ -122,7 +123,7 @@ Group around measurement periods rather than claiming one-to-one post attributio
 
 ## Relationship Outcome Metrics
 
-From `relationship_events`:
+From `relationship_events` plus Phase 1D health/network summaries:
 
 ```text
 author_response_rate
@@ -130,9 +131,14 @@ conversation_continuation_rate
 recurring_relationship_conversion
 connected_target_conversion
 mutual_relationship_count
+interaction_yield
+target_diversity
+class_diversity
+topic_diversity
+top_target_concentration
 ```
 
-Normalize by unique targets/interactions rather than raw event count.
+Normalize by unique targets/interactions rather than raw event count. `InteractionYield` must always be shown with its raw response/continuation/relationship/follow/mutual components rather than as a standalone magic number.
 
 Example:
 
@@ -210,7 +216,12 @@ reply_age_bucket
 conversation_saturation_bucket
 reply_archetype
 relationship_stage
+interaction_volume_bucket
+target_concentration_bucket
+archetype_repetition_bucket
 ```
+
+These are empirical cohort variables, not platform thresholds. A high-volume cohort may be healthy when it consists of active reciprocal conversations.
 
 ---
 
@@ -301,6 +312,11 @@ conversation_continuation_rate
 relationship_stage_progression
 connected_target_conversion
 recurring_relationship_conversion
+interaction_yield
+target_diversity
+class_diversity
+topic_diversity
+top_target_concentration
 ```
 
 Analyze by:
@@ -312,7 +328,13 @@ reply_age_bucket
 reply_archetype
 topic
 relationship_stage_before
+conversation_saturation_bucket
+interaction_volume_bucket
+target_concentration_bucket
+archetype_repetition_bucket
 ```
+
+Also retain Phase 1D health state/visibility observations around the same period as context. Do not infer that a reach change caused a visibility label or vice versa.
 
 ---
 
@@ -390,6 +412,8 @@ relationship_stage_before
 **Steps:**
 - [ ] Aggregate publication metrics by content variant.
 - [ ] Aggregate relationship-event outcomes by network variant.
+- [ ] Include InteractionYield raw components plus target/class/topic diversity and top-target concentration.
+- [ ] Compare saturation, interaction-volume, and archetype-repetition cohorts without promoting them into hard limits.
 - [ ] Normalize relevant rates.
 - [ ] Include sample size and confounder distributions.
 - [ ] Return `insufficient/preliminary/directional/repeated` state.
@@ -406,6 +430,7 @@ relationship_stage_before
 - [ ] Extend Performance with fixed-window curves and follower-conversion columns.
 - [ ] Show attribution confidence.
 - [ ] Show new-follower niche alignment.
+- [ ] Add Network Quality / InteractionYield panels and show Phase 1D HEALTHY/WATCH/CONSTRAINED observations as contextual annotations, not causal explanations.
 - [ ] Add Experiments view: active/draft/completed experiments, variants, sample sizes, primary metric, evidence state.
 - [ ] Show network experiments separately from content experiments when useful.
 
@@ -445,7 +470,7 @@ Write commands require explicit user intent; read commands are safe inspection.
 1. every published main-feed item can accumulate fixed-window metrics;
 2. follower delta is shown with attribution confidence;
 3. new follower quality is measurable;
-4. relationship outcomes are normalized by targets/interactions;
+4. relationship outcomes are normalized by targets/interactions, including InteractionYield raw components and network-diversity/concentration context;
 5. content and network experiments share one experiment owner;
 6. duplicate/near-duplicate posts are not required for experiments;
 7. cohort evidence states prevent premature winners;

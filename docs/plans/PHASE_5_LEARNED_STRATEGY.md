@@ -1,6 +1,6 @@
 # Phase 5 Learned Strategy Implementation Plan
 
-**Goal:** Use accumulated content, follower, relationship, and experiment outcomes to produce explainable recommendations for target selection, conversation strategy, content format, and publishing time without letting one noisy result rewrite the account strategy.
+**Goal:** Use accumulated content, follower, relationship, account-health, and experiment outcomes to produce explainable recommendations for target selection, conversation strategy, content format, publishing time, and soft health thresholds without letting one noisy result rewrite the account strategy.
 
 **Architecture:** Keep learned recommendations as summaries over existing persisted outcomes. Do not add a separate ML service initially. `learning.js` computes evidence-backed recommendations from measurement and relationship history; `scheduler.js`, `relationship.js`, and `strategy.js` consume bounded adjustments while retaining transparent base scores and human override.
 
@@ -8,13 +8,14 @@
 
 ## Global Constraints
 
-- Requires Phase 4 measurement/experiment data.
+- Requires Phase 4 measurement/experiment data and the Phase 1D health/visibility contract.
 - Do not train a new ML model until the volume of data makes deterministic cohort/statistical summaries inadequate.
 - Learned strategy must preserve the account's core niche identity.
 - One viral outlier cannot permanently change target classes, content mix, or writing voice.
 - Recommendations must state the supporting observation count and evidence state.
 - Base formulas remain visible; learned adjustments are bounded.
-- Human override remains available for targeting, route, content, and schedule decisions.
+- Human override remains available for targeting, route, content, schedule, and WATCH-level account-health decisions.
+- `CONSTRAINED` cannot be learned from low reach alone; it requires observed hard evidence or another explicit platform/project rule.
 - No tests are authorized by this plan.
 
 ## File Responsibility Map
@@ -27,6 +28,7 @@
 
 - `relationship.js` — consume bounded target-component adjustments.
 - `engagement.js` — consume learned reply-age/archetype/target-class evidence.
+- `health.js` — consume accepted bounded saturation/repetition/network-quality adjustments while preserving observed hard constraints.
 - `strategy.js` / `opportunity.js` — consume learned content/topic adjustments.
 - `scheduler.js` — consume learned time/format outcomes.
 - `dashboard.js` — Learned Strategy view with evidence.
@@ -66,6 +68,7 @@ Allowed `scope`:
 ```text
 targeting
 engagement
+health
 content
 timing
 format
@@ -122,12 +125,14 @@ Suggested bounds:
 ```text
 TargetScore component adjustment          +/-10
 EngagePriority adjustment                 +/-10
+SaturationPressure adjustment             +/-10
+health WATCH modifier                     +/-8
 Follow/Reach/Conversation potential       +/-8
 scheduler timing preference               +/-15 priority points
 content/format preference                 +/-10
 ```
 
-No learned rule can override hard gates, explicit expiry, human approval, or a direct manual route choice.
+No learned rule can override hard gates, explicit expiry, human approval, or a direct manual route choice. A learned saturation/repetition/volume rule remains advisory and cannot create a new hard stop without independent observed platform/policy evidence.
 
 ---
 
@@ -163,6 +168,9 @@ Questions:
 - Which reply archetypes generate responses?
 - Which relationship stages justify follow-ups?
 - How does conversation saturation affect outcome?
+- When does high interaction volume represent productive active conversation rather than low-yield repetition?
+- Which levels of target concentration reduce InteractionYield?
+- Does archetype repetition matter after controlling for topic/target/context?
 
 Example:
 
@@ -171,6 +179,35 @@ scope: engagement
 key: reply_age:viral:5-15m
 finding: higher response/continuation rate than 15-60m in 26 observations
 recommendation: +8 EngagePriority inside this bucket
+```
+
+---
+
+## Account-Health Learning
+
+Questions:
+
+- Which soft saturation bands actually correspond to lower author-response/continuation rates for this account?
+- Do high-volume active conversations maintain or improve InteractionYield?
+- Which reply-archetype repetition patterns feel formulaic without being near-duplicate?
+- What target/class/topic diversity is associated with stronger recurring-network growth?
+- Do observed Under the Hood/visibility changes coincide with any repeatable account behavior pattern?
+
+Rules:
+
+- `HEALTHY`/`WATCH` thresholds may be tuned from repeated account evidence;
+- `CONSTRAINED` must continue to require observed hard evidence or an explicit platform/project rule;
+- reach changes alone must never be used to infer a hidden visibility label;
+- no learned rule may introduce human-timing imitation or a fixed daily reply cap.
+
+Example:
+
+```text
+scope: health
+key: target_saturation:relationship_targets
+finding: pressure 50-74 reduced InteractionYield in 31 one-sided interactions, but not in 18 active bidirectional threads
+recommendation: -6 EngagePriority only when no recent target response exists
+state: directional
 ```
 
 ---

@@ -16,6 +16,9 @@ Phase 1B  Relationship Intelligence
 Phase 1C  Engage Next + conversation follow-up
    |
    v
+Phase 1D  Account Health + visibility observability
+   |
+   v
 Phase 2   Content quality + profile proof + media plan
    |
    v
@@ -81,6 +84,29 @@ Depends on:
 - Phase 1A queue;
 - Phase 1B relationship intelligence.
 
+## Phase 1D
+
+[`PHASE_1D_ACCOUNT_HEALTH.md`](PHASE_1D_ACCOUNT_HEALTH.md)
+
+Owns:
+
+- `health.js`;
+- HEALTHY / WATCH / CONSTRAINED account-health state;
+- observed visibility/enforcement evidence with provenance;
+- optional Under the Hood snapshots when observable;
+- soft target saturation pressure;
+- reply archetype/repetition diagnostics;
+- network-quality summaries;
+- InteractionYield;
+- health warnings/modifiers consumed by Engage Next.
+
+Depends on:
+
+- Phase 1B relationship history;
+- Phase 1C engagement items/actions.
+
+Most Phase 1D signals are advisory. Target saturation, reply volume, repeated archetype, and conversation density do not independently hard-block a human-reviewed useful interaction.
+
 ## Phase 2
 
 [`PHASE_2_CONTENT_QUALITY.md`](PHASE_2_CONTENT_QUALITY.md)
@@ -99,7 +125,8 @@ Owns:
 Depends on:
 
 - Phase 1A workflow;
-- consumes Phase 1B/1C relationship context when available.
+- consumes Phase 1B/1C relationship context when available;
+- consumes Phase 1D repetition/health context when available.
 
 ## Phase 3
 
@@ -137,6 +164,7 @@ Owns:
 Depends on:
 
 - Phase 1B/1C relationship events;
+- Phase 1D health/network diagnostics;
 - Phase 3 published queue metadata.
 
 ## Phase 5
@@ -153,12 +181,14 @@ Owns:
 
 Depends on:
 
-- Phase 4 measurements/experiments.
+- Phase 4 measurements/experiments;
+- Phase 1D account-health/visibility contract.
 
 ## Cross-cutting source-of-truth docs
 
 - [`../NETWORK_GROWTH_OPERATING_SYSTEM.md`](../NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategy and operating model.
 - [`../RELATIONSHIP_INTELLIGENCE.md`](../RELATIONSHIP_INTELLIGENCE.md) — target/relationship domain contract.
+- [`../ACCOUNT_HEALTH_AND_VISIBILITY.md`](../ACCOUNT_HEALTH_AND_VISIBILITY.md) — lenient account-health, visibility-observation, saturation/repetition, and network-quality contract.
 - [`../ALGORITHM_EVIDENCE_LEDGER.md`](../ALGORITHM_EVIDENCE_LEDGER.md) — evidence classification.
 - [`../HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](../HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — cross-system master architecture.
 - [`../POST_GENERATION_PROMPT.md`](../POST_GENERATION_PROMPT.md) — canonical writing/editor prompt.

@@ -68,8 +68,9 @@ These apply to original posts, replies, quote posts, and threads.
 8. **Do not publish substantially duplicate posts.**
    - If the same story is revisited, the second post must have a materially new angle, result, experiment, or update.
 
-9. **Avoid spam-like bursts.**
-   - A new item should be worth occupying another slot in a follower's feed.
+9. **Avoid redundant main-feed bursts.**
+   - A new main-feed item should be worth occupying another slot in a follower's feed.
+   - This does not apply as a blanket slowdown to an active reply conversation; several substantive back-and-forth replies can be appropriate when the conversation is genuinely progressing.
    - Do not dump several weak posts because multiple feeds produced candidates at once.
 
 10. **Use links honestly.**

@@ -157,13 +157,13 @@ The account should be aggressive about **useful presence**, not mechanical engag
 
 Starting operating target:
 
-- **2 strong original posts/day**, usually separated by roughly 4–6 hours;
-- **0–1 quote post/day**, only when the source passes the quote gate;
-- **5–8 high-signal replies/day** across relevant builders, maintainers, researchers, and developer conversations;
+- **2 strong original posts/day** is a useful baseline, not a quota; evergreen items are usually separated by roughly 4–6 hours;
+- **0–1 quote post/day** is a useful baseline, but a second genuinely high-value quote is allowed when the opportunity is distinct and timely;
+- **replies have no fixed daily quota**: engage with every genuinely strong human-reviewed conversation that has concrete value, while letting Account Health warn on one-sided saturation/repetition/concentration;
 - **plain reposts: exceptional**, not a daily quota;
 - continuously research viral/niche signals, but do not publish simply to hit a number.
 
-If quality drops, reduce volume.
+If quality or InteractionYield drops, reduce low-value volume rather than throttling healthy active conversations.
 
 ## 6. Relationship recruitment loop
 
@@ -296,11 +296,12 @@ Saving should mean two things once the plan is implemented:
 
 The AI should explain its recommended route, but the human decides or overrides the route. AI may prepare an item through research, drafting, scoring, and `needs_review`; the main-feed approval boundary remains human.
 
-For ordinary main-feed content, optimize spacing for coverage and semantic diversity rather than attempting to mimic a human. For viral/time-sensitive signals, urgency may pre-empt an evergreen queue item, but publication remains serialized rather than dumping multiple posts together.
+For ordinary main-feed content, optimize spacing for coverage and semantic diversity rather than attempting to mimic a human. For viral/time-sensitive signals, urgency may pre-empt an evergreen queue item and may justify immediate serialized publication when shelf-life is short; there is no evidence-backed universal viral minimum gap.
 
 Canonical design:
 
 - `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` — queue, route, approval, scheduler, media, publication, and learning architecture;
+- `ACCOUNT_HEALTH_AND_VISIBILITY.md` — advisory account health, visibility observations, saturation/repetition, Network Quality, and InteractionYield;
 - `POST_GENERATION_PROMPT.md` — final writing/scannability contract;
 - `RESEARCH_AGENDA.md` — topics deep enough to create original account-level intellectual property.
 
@@ -405,7 +406,7 @@ Evidence classes:
 - `EMPIRICAL_VARIABLE` — our experiment/tactic hypothesis;
 - `RETIRED` — superseded/contradicted claim.
 
-Current strategy treats mutual-follow original-post reply boosting, multi-action predicted scoring, author diversity, in-/out-of-network mechanics, and Phoenix/Thunder retrieval as code-backed mechanisms. Exact reply timing, posting gaps, hashtag counts, media frequency, link placement, reply quotas, and target-size ranges remain empirical variables until account evidence supports a stronger rule.
+Current strategy treats mutual-follow original-post reply boosting, multi-action predicted scoring, author diversity, in-/out-of-network mechanics, Phoenix/Thunder retrieval, and the separate labeling/visibility-filtering path as code-backed mechanisms. Exact reply timing, posting gaps, hashtag counts, media frequency, link placement, reply quotas, target saturation thresholds, archetype-repetition thresholds, and target-size ranges remain empirical variables until account evidence supports a stronger rule.
 
 ## 18. Performance-first documentation boundary
 

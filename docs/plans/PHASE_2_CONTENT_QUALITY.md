@@ -12,7 +12,7 @@
 - Default language is clear global English.
 - Single-post content should express one central thesis.
 - Use 1-3 precise semantic anchors naturally when relevant.
-- Default to zero hashtags; maximum one canonical/relevant hashtag.
+- Default to zero hashtags; prefer 0-1, allow 2 when both are directly relevant/canonical, and treat the exact optimum as empirical.
 - Default to zero emoji; maximum one when it materially improves tone/clarity.
 - Never invent benchmarks, experiments, quotes, usage, metrics, or source facts.
 - Do not claim `I tested`, `I measured`, `I used`, or similar first-person evidence unless the input packet explicitly marks that evidence as ours and verified.
@@ -189,6 +189,12 @@ Rules:
   relationship,
   evidence,
   recentPosts,
+  recentReplies: [],
+  recentReplyArchetypes: [],
+  health: {
+    state: 'healthy' | 'watch' | 'constrained',
+    warnings: [],
+  },
   profileProof: {
     topic,
     coverage: 'none' | 'weak' | 'medium' | 'strong',
@@ -198,7 +204,8 @@ Rules:
   currentDraft,
   constraints: {
     singlePostWeightedLimit: 280,
-    hashtagsMax: 1,
+    hashtagsPreferredMax: 1,
+    hashtagsHardMax: 2,
     emojiMax: 1,
     semanticAnchorsTarget: [1, 3],
   },
@@ -241,9 +248,12 @@ Use pipeline-specific checks plus source similarity; deterministic checks may em
 ### Originality / recent duplicate
 
 - preserve current source-similarity gate.
-- compare final text against the most recent 20 published/approved main-feed bodies using the existing token-set/Jaccard style similarity helper.
-- fail at similarity >= 0.70.
+- compare main-feed final text against the most recent 20 published/approved main-feed bodies using the existing token-set/Jaccard style similarity helper.
+- for replies, also compare against recent published replies globally and for the same target/topic when Phase 1D context exists.
+- fail only on exact/near-duplicate text or similarity >= 0.70.
 - warn at 0.50-0.69.
+- repeated reply archetype or sentence structure is a warning, not a hard failure, unless the text itself is near-duplicate.
+- an active conversation may legitimately use the same archetype repeatedly when each reply addresses new information.
 - thread compares Post 1 to recent main-feed bodies and each part against adjacent parts to catch repeated filler.
 
 ### Scannability
@@ -290,8 +300,11 @@ Warnings, not automatic failures, for a final `follow for more`-style CTA; human
 
 Count hashtag tokens that are not inside URLs/code-like tokens.
 
-- 0-1: pass.
-- >1: fail.
+- 0-1: pass/preferred.
+- 2: pass with warning unless both are clearly relevant/canonical.
+- >2: fail by default as an editorial anti-clutter rule, not an X ranking threshold.
+
+Keep the exact hashtag optimum tagged `EMPIRICAL_VARIABLE`; a human may revise the text rather than treating `2` as inherently harmful.
 
 ### Emoji
 
@@ -364,6 +377,7 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 **Steps:**
 - [ ] Implement `buildWriterPacket()` exactly from the contract above; do not include secrets/cookies/database internals.
 - [ ] Add `writer-packet` command accepting `{ key }`; return candidate, workflow/queue metadata, draft, recent published/approved post bodies, and prompt-document path.
+- [ ] When Phase 1D is available, include recent published replies, recent reply archetypes, and account-health warnings so the writer can avoid formulaic repetition without treating every repeated archetype as forbidden.
 - [ ] Implement `applyWriterOutput(draft, output)` with explicit field allow-listing and valid `decision/pipeline/media.type` enums.
 - [ ] Add `apply-writer-output` command accepting `{ id, output }`; save editor metadata and thread/single text but do not request approval automatically.
 - [ ] If output decision is `DO_NOT_POST`, keep the draft but return a recommendation to route to Research/Watch/Ignore; do not silently discard evidence/history.
@@ -385,6 +399,7 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 - [ ] Reuse/extract current token-set similarity helper rather than adding a new similarity dependency.
 - [ ] Implement pipeline-specific additive-value checks.
 - [ ] Implement recent-duplicate similarity against up to 20 recent approved/published main-feed bodies passed by caller.
+- [ ] For replies, reuse the same local similarity helper against recent replies and hard-fail only exact/near-duplicate text; repeated archetype/construction remains a warning.
 - [ ] Implement scannability, placeholder, weighted-length, CTA-integrity, hashtag, and emoji checks from the contract above.
 - [ ] Require explicit `factualityConfirmed`; require `evidenceConfirmed` when claim type warrants it.
 - [ ] Validate first-person experiment/test claims against structured evidence metadata rather than assuming truth from text.
@@ -489,7 +504,7 @@ Phase 2 is complete when:
 3. The system stores final single text or explicit thread parts plus inspectable editor metadata.
 4. The 50-point score is still visible but cannot override hard-gate failures.
 5. Factuality and evidence confirmation are explicit human/editor inputs, not inferred from confident prose.
-6. Duplicate, bait, hashtag, emoji, scannability, placeholder, and weighted-length checks are deterministic and visible.
+6. Exact/near-duplicate, bait, hashtag, emoji, scannability, placeholder, and weighted-length checks are deterministic and visible; reply-archetype repetition remains advisory unless it is also near-duplicate.
 7. Human approval always recomputes current gates.
 8. Required media blocks approval until the later upload/attachment path exists or the human legitimately revises the media plan.
 9. No LLM provider, media uploader, scheduler, experiment engine, or autonomous reply sender is added in this phase.
