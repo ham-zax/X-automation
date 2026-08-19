@@ -10,8 +10,8 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A — Relationship Intelligence | executable/mixed | ready after worktree setup | now | `/home/hamza/repo/x_test-w1-relationship` | concurrent writer; owns persistence/audience/dashboard/bridge relationship vertical | none; Phase 1A is landed |
-| Agent B — Content Quality Core | executable | ready after worktree setup | now | `/home/hamza/repo/x_test-w1-content` | concurrent writer; owns isolated drafting/content core while Agent A owns shared persistence/UI surfaces | none; Phase 1A is landed |
+| Agent A — Relationship Intelligence | executable/mixed | active / awaiting return | now | `/home/hamza/repo/x_test-w1-relationship` | concurrent writer; owns persistence/audience/dashboard/bridge relationship vertical | none; Phase 1A is landed |
+| Agent B — Content Quality Core | executable | complete + integrated (`fa1a6a1`) | complete | `/home/hamza/repo/x_test-w1-content` | isolated writer; content-core commit verified as drafting-only | none |
 
 ## Dependency map
 
@@ -74,7 +74,7 @@ Agents must not merge, rebase, reset, switch another branch, or modify the main 
 
 The main checkout `/home/hamza/repo/x_test` remains the integration workspace owned by the orchestrating session. Agents commit only to their assigned branches. When reports return, the orchestrator verifies the commits, integrates them centrally, resolves contract drift, runs the narrow final non-test checks invalidated by integration, and then materializes only the newly ready frontier.
 
-Do not merge Agent B's content core directly into workflow approval until its pure interfaces have been reconciled with the relationship branch and the Phase-2 persistence/bridge/UI integration mission.
+Agent B's pure content core is integrated on `main` at `fa1a6a1`. Do not wire those gates into workflow approval yet; Phase-2 persistence/bridge/UI integration remains blocked until Agent A's relationship/shared-surface changes are integrated. The Phase-2 integration mission must also reconcile the prompt-side media names (`source-screenshot`, `terminal-code`, `image`, `video`) with the authoritative editor enum (`none|screenshot|chart|code|diagram`) before bridge exposure.
 
 ## Execution lifetime policy
 
@@ -95,7 +95,7 @@ Executable missions should use the smallest direct evidence capable of disprovin
 
 - Phase 1C Engage Next — blocked by integrated Phase 1B Relationship Intelligence.
 - Phase 1D Account Health — blocked by integrated Phase 1C plus relationship-event history.
-- Phase 2 persistence/bridge/UI/human-approval integration — blocked by Agent B content-core result and integration with Agent A shared surfaces.
+- Phase 2 persistence/bridge/UI/human-approval integration — Content Core is integrated; still blocked by integration of Agent A shared `store.js`/dashboard/bridge surfaces and the media-enum normalization decision.
 - Phase 3 scheduler/distribution — blocked by completed Phase 2 gates/final content contract.
 - Phase 4 measurement/experiments — blocked by publication metadata from Phase 3 and network events.
 - Phase 5 learned strategy — blocked by Phase 4 evidence.
@@ -103,3 +103,4 @@ Executable missions should use the smallest direct evidence capable of disprovin
 ## Status log
 
 - `2026-08-19` — Phase 1A landed at `7ccdb7c`; Wave 1 coordination package materialized for Relationship Intelligence + isolated Content Quality Core.
+- `2026-08-19` — Agent B returned `3d0f09d`; verified as a clean one-file `drafting.js` change and integrated on `main` as `fa1a6a1`. Agent A remains the active blocker for the next integration frontier.
