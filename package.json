@@ -13,7 +13,7 @@
     "audience:sync": "node audience.js",
     "automation": "node automation.js",
     "automation:once": "node automation.js --once",
-    "ui:build": "tailwindcss -i ./dashboard.tailwind.css -o ./dashboard.tailwind.generated.css --minify"
+    "ui:build": "cd ui && npm run build && cd .. && tailwindcss -i ./dashboard.tailwind.css -o ./dashboard.tailwind.generated.css --minify"
   },
   "keywords": [],
   "type": "module",
