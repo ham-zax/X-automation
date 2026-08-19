@@ -74,7 +74,11 @@ function traction(candidate) {
     return round(logScale(signal, 20, 1_000_000));
   }
   if (candidate?.source === 'github') {
-    const signal = Number(metrics.stars || 0) + Number(metrics.starsPerDay || 0) * 7;
+    const legacy = metrics.kind === 'github_legacy'
+      || candidate?.kind === 'github_legacy'
+      || (metrics.starsToday == null && metrics.starsPerDay != null);
+    const currentMomentum = legacy ? metrics.starsPerDay : metrics.starsToday;
+    const signal = Number(metrics.stars || 0) + Number(currentMomentum || 0) * 7;
     return round(logScale(signal, 20, 10_000));
   }
   if (candidate?.source === 'hn') {
