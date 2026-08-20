@@ -699,7 +699,7 @@ Exit:
 Deliverables:
 - `docs/ux/PRODUCT_LANGUAGE.md`
 - `docs/ux/STATUS_LANGUAGE.md`
-- `docs/ux/HUMAN_AI_PATTERNS.md`
+- `docs/ux/HUMAN_AI_INTERACTION.md` — reuse/upgrade the existing repository owner rather than creating a duplicate Human-AI patterns document
 
 Define reusable patterns for:
 - recommendation;

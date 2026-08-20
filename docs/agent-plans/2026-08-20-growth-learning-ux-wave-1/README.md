@@ -4,15 +4,15 @@
 **Authoritative source plan:** `docs/plans/UX_HCI_DEEP_RESEARCH_PROGRAM.md`
 **Source-plan base:** `01cc68f`
 **Current execution baseline:** `d99ed94` — includes the latest editable niche-settings surface that Wave 1 must study
-**Execution shape:** two parallel documentation/research missions, then planner integration and contract freeze before any React/backend implementation
-**Current wave:** 1 — UX evidence foundation
+**Execution shape:** two parallel documentation/research missions, then planner integration and evidence-backed synthesis before any React/backend implementation
+**Current wave:** 1 — UX evidence foundation (complete + integrated)
 
 ## Current frontier
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A1 — Current-State UX Forensic Audit | documentation/research | ready | immediately | `/home/hamza/repo/x_test-w7-ux-audit` | concurrent writer; owns audit/walkthrough artifacts only | none |
-| Agent B1 — Task, Journey, and IA Research Package | documentation/research | ready | immediately | `/home/hamza/repo/x_test-w7-ux-research` | concurrent writer; owns task/journey/IA research artifacts only | none |
+| Agent A1 — Current-State UX Forensic Audit | documentation/research | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-audit` | concurrent writer; owned audit/walkthrough artifacts only | none |
+| Agent B1 — Task, Journey, and IA Research Package | documentation/research | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-research` | concurrent writer; owned task/journey/IA research artifacts only | none |
 
 ## Dependency map
 
@@ -29,14 +29,13 @@ Reviewed UX/HCI plan at 01cc68f
        planner integration
              |
              v
-  freeze three implementation contracts
-  - IA contract
-  - product-language contract
-  - interaction/consequence contract
+     Wave 1 synthesis
+  - freeze authority/consequence/lifecycle/recovery invariants
+  - preserve IA/language as falsifiable hypotheses
              |
              v
-      Wave 2 React implementation
-      (intentionally not materialized yet)
+ Wave 2 prototype + content-design documentation
+ (React implementation remains blocked on participant evidence or an explicit later decision to proceed provisionally)
 ```
 
 ## Shared product thesis
@@ -97,13 +96,11 @@ If either mission discovers that it needs to edit the other mission's owned file
 
 The planner/main session integrates both returned documentation commits after reviewing them against the authoritative plan and current React implementation. The two missions intentionally own disjoint files, so integration should be commit-based rather than manual copy/paste.
 
-After integration, the planner freezes three contracts before materializing Wave 2:
+After integration, `docs/ux/WAVE1_SYNTHESIS.md` freezes only the contracts supported without participant preference data: authority separation, consequence clarity, lifecycle visibility, recovery semantics, learning-evidence provenance, writing-strategy behavior semantics, and qualified-growth purpose.
 
-1. **IA contract** — validated navigation/grouping hypothesis and migration constraints;
-2. **product-language contract** — plain-language labels for goals, lifecycle, evidence, learning, and consequential actions;
-3. **interaction contract** — every consequential surface answers `What / Why now / What can I do / What happens next`, with recommendation/selection/approval/publication visually distinct.
+Wave 1 does **not** validate the final IA or final user-facing terminology. Agent B1's research package explicitly leaves H1 vs H2 and labels such as `Learn`, `Current winning styles`, and `Off/Suggest/Apply` falsifiable. Wave 2 therefore remains documentation/prototyping work rather than React implementation.
 
-Wave 2, strategy synthesis, Writer integration, outcome attribution, and business-opportunity persistence remain intentionally unmaterialized until this evidence frontier returns.
+Strategy synthesis, Writer integration, outcome attribution, business-opportunity persistence, and production navigation changes remain intentionally unmaterialized until the relevant research/prototype frontier is complete.
 
 ## Validation policy
 
@@ -130,3 +127,6 @@ Low-resolution only; do not implement in Wave 1:
 
 - `2026-08-20` — authoritative UX/HCI growth-learning plan committed as `01cc68f`.
 - `2026-08-20` — Wave 1 materialized as two parallel evidence-producing documentation missions; no product implementation authorized yet.
+- `2026-08-20` — Agent A1 completed `f827b70`; integrated on main as `7e6c8b6`.
+- `2026-08-20` — Agent B1 completed `08bfce9`; integrated on main as `407e6a8`.
+- `2026-08-20` — Wave 1 synthesis recorded in `docs/ux/WAVE1_SYNTHESIS.md`; final IA/language remain unvalidated without real participant evidence.
