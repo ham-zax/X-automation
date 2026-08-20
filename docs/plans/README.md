@@ -257,6 +257,22 @@ Owns:
 
 The subsystem does not automatically change Editorial Director ordering, writer prompts, learned rules, approval, or publication authority. Any later promotion of an observed style into product guidance requires repeated evidence and explicit review.
 
+### Viral Style Retrospective Analysis — implemented
+
+[`VIRAL_STYLE_RETROSPECTIVE_ANALYSIS.md`](VIRAL_STYLE_RETROSPECTIVE_ANALYSIS.md)
+
+Owns the offline 14-day/30-day study over the already-collected dataset:
+
+- mature-post filtering without new X reads;
+- current-taxonomy hook/style/feature extraction from stored text;
+- same-author/same-age normalized lift when comparable peers exist;
+- follower-cohort/age matched percentile evidence;
+- 90% Wilson intervals for directional win/breakout rates;
+- explicit `INSUFFICIENT`, `DIRECTIONAL`, `REPEATED_ASSOCIATION`, and `STRONG_REPEATED_ASSOCIATION` evidence classes;
+- gitignored post/group CSV plus JSON/Markdown retrospective reports.
+
+The confidence intervals describe observed association strength inside the collected sample; they are not future-post virality accuracy.
+
 ## Cross-cutting source-of-truth docs
 
 - [`../PRODUCT_ARCHITECTURE.md`](../PRODUCT_ARCHITECTURE.md) — canonical end-to-end product map, current/planned phase state, final Discover -> Research -> Editorial AI -> Human -> Writer -> Human -> Publish -> Measure -> Learn loop, and AI/human authority boundaries.
