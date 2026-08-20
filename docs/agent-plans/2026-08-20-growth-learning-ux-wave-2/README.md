@@ -5,7 +5,7 @@
 **Wave-1 synthesis:** `docs/ux/WAVE1_SYNTHESIS.md`
 **Integrated evidence base:** `407e6a8` plus the Wave-1 synthesis/coordination update in the materialization commit containing this file
 **Execution shape:** two parallel documentation/prototype missions, then planner integration; no React/backend implementation in this wave
-**Current wave:** 2 — task/user flows, low-fi wireflows, product language, and Human-AI interaction patterns
+**Current wave:** 2 — task/user flows, low-fi wireflows, product language, and Human-AI interaction patterns (complete + integrated)
 
 ## Why Wave 2 remains non-executable
 
@@ -17,8 +17,8 @@ Therefore Wave 2 converts the frozen interaction invariants into testable protot
 
 | Mission | Type | Status | Can start | Workspace | Branch | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|---|
-| Agent A2 — Task/User Flows + Low-Fi Wireflows | documentation/prototype | ready | immediately | `/home/hamza/repo/x_test-w7-ux-audit` | `agent/w7-ux-wireflows` | concurrent writer; owns flow/wireflow artifacts only | none |
-| Agent B2 — Product Language + Human-AI Interaction System | documentation/content design | ready | immediately | `/home/hamza/repo/x_test-w7-ux-research` | `agent/w7-ux-language` | concurrent writer; owns language/Human-AI artifacts only | none |
+| Agent A2 — Task/User Flows + Low-Fi Wireflows | documentation/prototype | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-audit` | `agent/w7-ux-wireflows` | concurrent writer; owns flow/wireflow artifacts only | none |
+| Agent B2 — Product Language + Human-AI Interaction System | documentation/content design | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-research` | `agent/w7-ux-language` | concurrent writer; owns language/Human-AI artifacts only | none |
 
 ## Dependency map
 
@@ -142,3 +142,6 @@ Low resolution only; do not implement in Wave 2:
 - `2026-08-20` — Wave 1 A1/B1 evidence integrated on main as `7e6c8b6` and `407e6a8`.
 - `2026-08-20` — `docs/ux/WAVE1_SYNTHESIS.md` freezes evidence-backed interaction semantics while leaving IA/language hypotheses open.
 - `2026-08-20` — Wave 2 materialized as two parallel documentation/prototype missions; production mutation remains intentionally blocked.
+- `2026-08-20` — Agent A2 completed `a85744f`; integrated on main as `e198331`.
+- `2026-08-20` — Agent B2 completed `1c82291`; integrated on main as `d2a4e33`.
+- `2026-08-20` — Wave 2 complete; expert prototype review and participant-research preparation are the newly ready frontier.
