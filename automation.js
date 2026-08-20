@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
 import { refreshAllSourceSnapshots } from './source_refresh.js';
+import { refreshEditorialPlan } from './editorial.js';
 import { publishMainFeedHttp } from './x_http.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { rankMainFeedItems } from './scheduler.js';
@@ -25,6 +26,7 @@ import {
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
+export const AUTO_EDITORIAL_PLAN_REFRESH = String(process.env.AUTO_EDITORIAL_PLAN_REFRESH || 'false').toLowerCase() === 'true';
 
 function compactMeasurementContext(summary) {
   const components = summary.networkQuality?.components || {};
@@ -153,6 +155,25 @@ async function refreshResearch() {
   };
 }
 
+export async function refreshBackgroundEditorialPlan({
+  enabled = AUTO_EDITORIAL_PLAN_REFRESH,
+  planner = refreshEditorialPlan,
+} = {}) {
+  if (!enabled) return { enabled: false, refreshed: false, planId: null, recommendationCount: 0, error: null };
+  try {
+    const plan = await planner({ objective: 'qualified_growth', refreshSources: false });
+    return {
+      enabled: true,
+      refreshed: true,
+      planId: plan?.run?.id ?? null,
+      recommendationCount: Array.isArray(plan?.recommendations) ? plan.recommendations.length : 0,
+      error: null,
+    };
+  } catch (error) {
+    return { enabled: true, refreshed: false, planId: null, recommendationCount: 0, error: error.message };
+  }
+}
+
 function publicationAction(pipeline) {
   return pipeline === 'quote' ? 'quote' : 'direct';
 }
@@ -272,6 +293,12 @@ export async function runCycle() {
     console.log(`[automation] Measurement capture failed: ${error.message}`);
   }
   const research = await refreshResearch();
+  const editorialPlanRefresh = await refreshBackgroundEditorialPlan();
+  if (editorialPlanRefresh.refreshed) {
+    console.log(`[automation] Editorial plan ${editorialPlanRefresh.planId ?? 'unknown'}: ${editorialPlanRefresh.recommendationCount} recommendation(s).`);
+  } else if (editorialPlanRefresh.error) {
+    console.log(`[automation] Editorial plan refresh failed: ${editorialPlanRefresh.error}`);
+  }
   const top = [...research.viral, ...research.ranked].sort((a, b) => b.score - a.score)[0] || null;
   if (top) {
     console.log(`[automation] Research leader: ${top.score}/100 ${top.source} ${top.title}`);
@@ -328,7 +355,15 @@ export async function runCycle() {
   } else {
     console.log('[automation] No approved automated main-feed items this cycle.');
   }
-  return { ...mainFeed, top, engagement, measurements, publicationBaseline, errors: [...research.errors, ...engagement.errors, ...(measurements.error ? [measurements.error] : [])] };
+  return {
+    ...mainFeed,
+    top,
+    engagement,
+    measurements,
+    publicationBaseline,
+    editorialPlanRefresh,
+    errors: [...research.errors, ...engagement.errors, ...(measurements.error ? [measurements.error] : [])],
+  };
 }
 
 async function main() {

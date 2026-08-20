@@ -17,6 +17,7 @@ import {
 } from './health.js';
 import {
   normalizeContentMeasurement,
+  summarizeContentCohort,
   summarizeExperiment,
   validateExperimentDefinition,
   validateVariantAssignment,
@@ -1984,6 +1985,105 @@ export function getPublicationMeasurements(queueItemId) {
     .all(Number(queueItemId)).map(decodePublicationMeasurement);
 }
 
+function numericOrNull(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function editorialEvidenceSummary(recommendation) {
+  const requestedIds = [...new Set((recommendation?.evidenceIds || []).map((value) => Number(value)).filter(Number.isFinite))];
+  const rows = requestedIds
+    .map((id) => getResearchEvidence(id))
+    .filter((row) => row
+      && row.editorialRunId === recommendation.editorialRunId
+      && row.storyKey === recommendation.storyKey);
+  const statusCounts = {};
+  for (const row of rows) statusCounts[row.status] = (statusCounts[row.status] || 0) + 1;
+  return {
+    evidenceIds: requestedIds,
+    resolvedEvidenceIds: rows.map((row) => row.id),
+    statuses: Object.keys(statusCounts).sort(),
+    statusCounts,
+    sourceFamilies: [...new Set(rows.map((row) => row.sourceFamily).filter(Boolean))].sort(),
+    claimTypes: [...new Set(rows.map((row) => row.claimType).filter(Boolean))].sort(),
+  };
+}
+
+function editorialMechanismTags(recommendation) {
+  return [...new Set((recommendation?.algorithmEvidence || []).map((entry) => (
+    typeof entry === 'string' ? entry : entry?.tag
+  )).map((value) => String(value || '').trim()).filter(Boolean))].sort();
+}
+
+function editorialLearningContext(provenance) {
+  if (!provenance) return {};
+  return {
+    editorialObjective: provenance.objective || '',
+    editorialStoryKey: provenance.storyKey || '',
+    recommendedFormat: provenance.recommendedPipeline || '',
+    selectedFormat: provenance.selectedPipeline || '',
+    finalPublishedFormat: provenance.finalPublishedPipeline || '',
+    editorialTopic: provenance.profileProof?.topic || '',
+  };
+}
+
+export function getEditorialSelectionInForceAtPublication(queueItemId) {
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem?.publishedAt) return null;
+  return decodeEditorialSelection(db.prepare(`SELECT * FROM editorial_selections
+    WHERE queue_item_id = ? AND selected_at <= ?
+    ORDER BY selected_at DESC, id DESC LIMIT 1`).get(queueItem.id, queueItem.publishedAt));
+}
+
+export function getPublicationEditorialProvenance(queueItemId) {
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem?.publishedAt) return null;
+  const selection = getEditorialSelectionInForceAtPublication(queueItem.id);
+  if (!selection) return null;
+  const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
+  if (!recommendation) {
+    return {
+      selectionId: selection.id,
+      recommendationId: selection.editorialRecommendationId,
+      selectedAt: selection.selectedAt,
+      recommendedPipeline: null,
+      selectedPipeline: selection.selectedPipeline,
+      finalPublishedPipeline: queueItem.pipeline,
+      unavailable: 'recommendation_missing',
+      learningContext: {},
+    };
+  }
+  const potentials = recommendation.potentials || {};
+  const authority = recommendation.authority || {};
+  const profileProof = recommendation.profileProof || {};
+  const provenance = {
+    selectionId: selection.id,
+    recommendationId: recommendation.id,
+    selectedAt: selection.selectedAt,
+    objective: recommendation.objective,
+    storyKey: recommendation.storyKey,
+    recommendedPipeline: recommendation.pipeline,
+    selectedPipeline: selection.selectedPipeline,
+    finalPublishedPipeline: queueItem.pipeline,
+    objectiveFit: numericOrNull(potentials.objectiveFit),
+    storyPreResearchFit: numericOrNull(potentials.storyPreResearchFit),
+    objectiveFitComponents: {
+      reachPotential: numericOrNull(potentials.reachPotential),
+      followPotential: numericOrNull(potentials.followPotential),
+      conversationPotential: numericOrNull(potentials.conversationPotential),
+      relationshipPotential: numericOrNull(potentials.relationshipPotential),
+      authorityValue: numericOrNull(authority.value),
+    },
+    authority,
+    profileProof,
+    evidence: editorialEvidenceSummary(recommendation),
+    algorithmEvidence: recommendation.algorithmEvidence || [],
+    algorithmMechanismTags: editorialMechanismTags(recommendation),
+  };
+  return { ...provenance, learningContext: editorialLearningContext(provenance) };
+}
+
 export function listPublicationMeasurements({ windowMinutes = null, limit = 200 } = {}) {
   const bounded = Math.max(1, Math.min(2000, Number(limit || 200)));
   if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
@@ -2088,7 +2188,16 @@ export function recordPublicationMeasurement(measurement = {}) {
     reposts: Number(measurement.reposts || 0), replies: Number(measurement.replies || 0),
     followerDelta, capturedAt, publishedAt: queueItem.publishedAt, attribution: attributionInput,
   });
-  const metadata = { ...(measurement.metadata || {}), attributionInput, associatedFollowerDelta: true, causalClaimAllowed: false };
+  const suppliedMetadata = { ...(measurement.metadata || {}) };
+  delete suppliedMetadata.editorial;
+  const editorial = getPublicationEditorialProvenance(queueItem.id);
+  const metadata = {
+    ...suppliedMetadata,
+    attributionInput,
+    associatedFollowerDelta: true,
+    causalClaimAllowed: false,
+    ...(editorial ? { editorial } : {}),
+  };
   db.prepare(`INSERT OR IGNORE INTO publication_measurements(
     queue_item_id, tweet_id, window_minutes, baseline_at, baseline_followers, captured_at,
     views, likes, reposts, replies, followers, follower_delta, follows_per_1000_views,
@@ -2136,6 +2245,57 @@ export function listPublicationMeasurementSeries({ limit = 30 } = {}) {
       newFollowerQuality: getNewFollowerQuality({ since: measurement.baselineAt, until: measurement.capturedAt }),
     })),
   }));
+}
+
+function editorialOutcomeObservation(measurement) {
+  const provenance = measurement?.metadata?.editorial;
+  if (!provenance) return null;
+  const queueItem = getQueueItem(measurement.queueItemId);
+  if (!queueItem?.publishedAt) return null;
+  const context = provenance.learningContext || editorialLearningContext(provenance);
+  return {
+    measurement: { ...measurement, publishedAt: queueItem.publishedAt },
+    item: {
+      ...context,
+      format: provenance.finalPublishedPipeline || queueItem.pipeline || '',
+      topic: context.editorialTopic || '',
+      topicTags: context.editorialTopic ? [context.editorialTopic] : [],
+    },
+    context,
+    confounders: context,
+  };
+}
+
+function summarizeEditorialGroups(observations, key) {
+  const groups = new Map();
+  for (const observation of observations) {
+    const label = String(observation?.context?.[key] || '').trim();
+    if (!label) continue;
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(observation);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([value, rows]) => ({ value, summary: summarizeContentCohort(rows) }));
+}
+
+export function getEditorialOutcomeSummary({ windowMinutes = 1440, limit = 200 } = {}) {
+  const window = Number(windowMinutes);
+  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new Error(`Unsupported editorial outcome window: ${windowMinutes}.`);
+  const observations = listPublicationMeasurements({ windowMinutes: window, limit })
+    .map(editorialOutcomeObservation)
+    .filter(Boolean);
+  if (!observations.length) return null;
+  return {
+    windowMinutes: window,
+    observationCount: observations.length,
+    byObjective: summarizeEditorialGroups(observations, 'editorialObjective'),
+    byRecommendedPipeline: summarizeEditorialGroups(observations, 'recommendedFormat'),
+    bySelectedPipeline: summarizeEditorialGroups(observations, 'selectedFormat'),
+    byFinalPublishedPipeline: summarizeEditorialGroups(observations, 'finalPublishedFormat'),
+    byTopic: summarizeEditorialGroups(observations, 'editorialTopic'),
+    causalClaimAllowed: false,
+  };
 }
 
 const EXPERIMENT_STATUSES = new Set(['draft', 'active', 'completed']);
@@ -2249,17 +2409,24 @@ function assignmentItem(queueItem, context = {}) {
   const candidate = getCandidate(queueItem.candidateKey);
   const draft = queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey);
   const relationship = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
+  const editorial = queueItem.publishedAt ? getPublicationEditorialProvenance(queueItem.id) : null;
+  const editorialContext = editorial?.learningContext || {};
   return {
     ...queueItem,
     format: queueItem.pipeline,
     mediaType: draft?.editor?.media?.type || 'none',
-    topicTags: [...new Set([...(candidate?.niche?.tags || []), ...(draft?.editor?.semanticAnchors || []), ...(relationship?.primaryTopics || [])])],
+    topicTags: [...new Set([
+      ...(candidate?.niche?.tags || []),
+      ...(draft?.editor?.semanticAnchors || []),
+      ...(relationship?.primaryTopics || []),
+      ...(editorialContext.editorialTopic ? [editorialContext.editorialTopic] : []),
+    ])],
     targetClass: relationship?.classes || [],
     relationshipStage: relationship?.relationshipStage || '',
     relationshipStageBefore: relationship?.relationshipStage || '',
     replyArchetype: queueItem.replyArchetype || '',
     targetUsername: queueItem.targetUsername || '',
-    candidate, draft, relationship, ...context,
+    candidate, draft, relationship, editorial, ...context, ...editorialContext,
   };
 }
 
@@ -2315,19 +2482,22 @@ export function listExperimentAssignments(experimentId) {
 function contentObservationForAssignment(queueItem, variantLabel, windowMinutes) {
   const assignment = queueItem.experimentAssignment || {};
   const measurement = getPublicationMeasurements(queueItem.id).find((entry) => entry.windowMinutes === windowMinutes) || null;
+  const editorialContext = measurement?.metadata?.editorial?.learningContext || {};
+  const context = { ...(assignment.context || {}), ...editorialContext };
   return {
-    variantLabel, completed: Boolean(measurement), item: assignmentItem(queueItem, assignment.context || {}),
-    context: assignment.context || {},
+    variantLabel, completed: Boolean(measurement), item: assignmentItem(queueItem, context),
+    context,
     measurement: measurement ? { ...measurement, publishedAt: queueItem.publishedAt } : null,
     health: measurement?.metadata?.health || assignment.health || null,
     networkContext: measurement?.metadata?.networkContext || assignment.networkContext || {},
-    confounders: assignment.context || {},
+    confounders: context,
   };
 }
 
 function networkObservationForAssignment(queueItem, variantLabel) {
   const assignment = queueItem.experimentAssignment || {};
-  const context = assignment.context || {};
+  const editorialContext = getPublicationEditorialProvenance(queueItem.id)?.learningContext || {};
+  const context = { ...(assignment.context || {}), ...editorialContext };
   const targetUsername = queueItem.targetUsername;
   const profile = targetUsername ? getRelationshipProfile(targetUsername) : null;
   const events = targetUsername ? allRelationshipEvents(targetUsername).filter((event) => event.occurredAt >= Number(queueItem.experimentAssignedAt || 0)) : [];
