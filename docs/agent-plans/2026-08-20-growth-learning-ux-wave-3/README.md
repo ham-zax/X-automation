@@ -5,14 +5,15 @@
 **Wave-1 synthesis:** `docs/ux/WAVE1_SYNTHESIS.md`
 **Integrated Wave-2 base:** `d2a4e33` plus the coordination materialization commit containing this file
 **Execution shape:** two parallel documentation/research-preparation missions, then planner integration; actual participant findings and production React/backend work remain blocked
-**Current wave:** 3 — expert prototype review and execution-ready participant-research preparation
+**Current wave:** 3 — expert prototype review and execution-ready participant-research preparation (complete + integrated)
 
 ## Current frontier
 
 | Mission | Type | Status | Can start | Workspace | Branch | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|---|
-| Agent A3 — Expert Prototype Review + Repair | documentation/prototype | ready | immediately | `/home/hamza/repo/x_test-w7-ux-audit` | `agent/w7-ux-prototype-review` | concurrent writer; owns expert review and any P0/P1 prototype/content repairs | none |
-| Agent B3 — Usability / IA / Language Research Runbook | documentation/research preparation | ready | immediately | `/home/hamza/repo/x_test-w7-ux-research` | `agent/w7-ux-usability-guide` | concurrent writer; owns only the participant-session runbook | none |
+| Agent A3 — Expert Prototype Review + Repair | documentation/prototype | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-audit` | `agent/w7-ux-prototype-review` | concurrent writer; owned expert review and P0/P1 prototype/content repairs | none |
+| Agent B3 — Usability / IA / Language Research Runbook | documentation/research preparation | complete + integrated | completed | `/home/hamza/repo/x_test-w7-ux-research` | `agent/w7-ux-usability-guide` | concurrent writer; owned only the participant-session runbook | none |
+| Real participant sessions | human research | blocked on participant access | after participants are scheduled | outside repository agent work | not an AI-agent mission; requires actual humans | real participants |
 
 ## Dependency map
 
@@ -112,7 +113,8 @@ The planner integrates both commits after verifying scope. If A3 repairs prototy
 
 After Wave 3 integration:
 
-- actual participant sessions become the next required evidence step;
+- actual participant sessions are the next required evidence step and are not delegated to AI agents;
+- the integrated prototype review reports no remaining expert-detectable P0/P1 blocker to moderated sessions;
 - `docs/ux/USABILITY_FINDINGS.md` must not exist until real session observations exist;
 - `docs/ux/UX_STORY_MAP.md` remains blocked until findings determine the validated IA/language and remaining implementation priorities;
 - production React/backend implementation remains blocked unless the user explicitly chooses a reversible provisional implementation despite the evidence gap.
@@ -133,3 +135,6 @@ After Wave 3 integration:
 - `2026-08-20` — Wave 2 Agent A2 integrated as `e198331`.
 - `2026-08-20` — Wave 2 Agent B2 integrated as `d2a4e33`.
 - `2026-08-20` — Wave 3 materialized as expert prototype review plus participant-research preparation; no participant findings or production implementation authorized.
+- `2026-08-20` — Agent A3 completed `081abb6`; integrated on main as `cba283d`; five expert-detectable P1 prototype/content issues repaired, no P0 remained.
+- `2026-08-20` — Agent B3 completed `fc385ff`; integrated on main as `97b9664`; execution-ready moderated usability/IA/language runbook landed without fabricated findings.
+- `2026-08-20` — Wave 3 complete. The current frontier is real participant research; no further AI-agent implementation mission is materialized until participant evidence returns or the user explicitly authorizes a provisional implementation.
