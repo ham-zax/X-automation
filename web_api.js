@@ -28,7 +28,7 @@ import {
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { AUDIENCE_NICHE_LABELS, NICHE_LABELS, isOpportunityCandidate } from './strategy.js';
+import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, isOpportunityCandidate } from './strategy.js';
 import { syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
@@ -98,6 +98,9 @@ import {
 } from './store.js';
 import { getAiSecretStatus, removeAiSecret, setAiSecret } from './ai_secrets.js';
 import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability, testAiProfile } from './ai_runtime.js';
+import { runViralSweep, VIRAL_SWEEP_THRESHOLDS } from './viral_style_sweep.js';
+import { viralStyleIntent } from './viral_style_intent.js';
+import { analyzeStoredDataset, writeStoredAnalysis } from './viral_style_analyze.js';
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
@@ -109,6 +112,258 @@ const DISCOVER_FEEDS = new Set(['for-you', 'x', 'trending', 'opportunities', 'gi
 const DISCOVER_SOURCE_KINDS = Object.freeze({ x: 'x_latest', trending: 'x_momentum', github: 'github_trending', hn: 'hn_top' });
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
+const VIRAL_RESEARCH_WINDOWS = new Set([14, 21, 30]);
+const VIRAL_RESEARCH_RUNTIME_TYPES = new Set(['codex', 'opencode', 'agy']);
+let VIRAL_RESEARCH_JOB = null;
+
+function setViralResearchCheckpoint(job, checkpoint, message, details = {}, progressPercent = null) {
+  job.checkpoint = checkpoint;
+  if (progressPercent != null && Number.isFinite(Number(progressPercent))) {
+    job.progressPercent = Math.max(Number(job.progressPercent || 0), Math.min(100, Math.max(0, Math.round(Number(progressPercent)))));
+  }
+  const event = {
+    at: Date.now(),
+    checkpoint,
+    message: String(message || ''),
+    details: details && typeof details === 'object' && !Array.isArray(details) ? details : {},
+  };
+  const previous = job.events?.[job.events.length - 1];
+  if (!previous || previous.checkpoint !== event.checkpoint || previous.message !== event.message) {
+    job.events = [...(job.events || []), event].slice(-60);
+  }
+}
+
+function viralCollectionProgressPercent(progress = {}) {
+  const totalJobs = Math.max(1, Number(progress.totalJobs || 0));
+  const completedJobs = Math.max(0, Math.min(totalJobs, Number(progress.completedJobs || 0)));
+  let partial = 0;
+  const candidate = progress.currentCandidate;
+  if (candidate && Number(candidate.total) > 0) {
+    partial = Math.max(0, Math.min(0.99, Number(candidate.completed || 0) / Number(candidate.total)));
+  }
+  return Math.min(70, 70 * ((completedJobs + partial) / totalJobs));
+}
+
+function formatViralResearchJob() {
+  if (!VIRAL_RESEARCH_JOB) return null;
+  const { stopRequested, ...job } = VIRAL_RESEARCH_JOB;
+  return { ...job, stopRequested: stopRequested === true };
+}
+
+function normalizeViralResearchConfig(payload = {}) {
+  const days = Number(payload.days || 21);
+  if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw new Error('Viral research window must be 14, 21, or 30 days.');
+
+  const validNiches = new Set(NICHE_GROUPS.map((group) => group.tag));
+  const niches = [...new Set((Array.isArray(payload.niches) ? payload.niches : NICHE_GROUPS.map((group) => group.tag)).map(String))]
+    .filter((tag) => validNiches.has(tag));
+  if (!niches.length) throw new Error('Select at least one viral research niche.');
+
+  const thresholdNames = Object.keys(VIRAL_SWEEP_THRESHOLDS);
+  const thresholds = [...new Set((Array.isArray(payload.thresholds) ? payload.thresholds : ['strong']).map(String))]
+    .filter((name) => thresholdNames.includes(name));
+  if (!thresholds.length) throw new Error('Select at least one viral research discovery floor.');
+
+  const limitPerQuery = Math.max(1, Math.min(20, Number(payload.limitPerQuery || 5)));
+  const controlsPerSeed = Math.max(0, Math.min(4, Number(payload.controlsPerSeed || 0)));
+  const threads = payload.threads !== false;
+
+  const rawIntent = payload.intent && typeof payload.intent === 'object' && !Array.isArray(payload.intent) ? payload.intent : {};
+  const intent = { enabled: rawIntent.enabled === true, mode: String(rawIntent.mode || 'profile') };
+  if (intent.enabled && intent.mode === 'profile') {
+    const profile = assertAssignableAiProfile(requireAiProfile(rawIntent.profileId));
+    intent.profileId = profile.id;
+    intent.profileName = profile.name;
+    intent.runtime = profile.runtime;
+    intent.model = profile.model;
+    intent.reasoning = profile.reasoning || '';
+  } else if (intent.enabled && intent.mode === 'runtime') {
+    const runtime = String(rawIntent.runtime || '').trim();
+    const model = String(rawIntent.model || '').trim();
+    const reasoning = String(rawIntent.reasoning || '').trim();
+    if (!VIRAL_RESEARCH_RUNTIME_TYPES.has(runtime)) throw new Error('Select a supported structured runtime for viral intent analysis.');
+    if (!model) throw new Error('Select an exact model for viral intent analysis.');
+    Object.assign(intent, { runtime, model, reasoning });
+  } else if (intent.enabled) {
+    throw new Error('Viral intent mode must be profile or runtime.');
+  }
+
+  return { days, niches, thresholds, limitPerQuery, controlsPerSeed, threads, intent };
+}
+
+function viralIntentProfile(config) {
+  if (!config.intent?.enabled) return null;
+  if (config.intent.mode === 'profile') return String(config.intent.profileId);
+  return {
+    name: `Viral intent ${config.intent.runtime}/${config.intent.model}`,
+    runtime: config.intent.runtime,
+    providerKind: 'runtime_managed',
+    baseUrl: '',
+    protocol: 'runtime_native',
+    model: config.intent.model,
+    reasoning: config.intent.reasoning || '',
+    runtimeProfile: '',
+    secretRef: '',
+    settings: {},
+    enabled: true,
+  };
+}
+
+function startViralResearchJob(config) {
+  if (VIRAL_RESEARCH_JOB && ['running', 'stopping'].includes(VIRAL_RESEARCH_JOB.status)) {
+    throw new Error('A viral research run is already active.');
+  }
+  const job = {
+    id: randomUUID(),
+    status: 'running',
+    stage: 'collecting',
+    checkpoint: 'queued',
+    progressPercent: 0,
+    events: [],
+    startedAt: Date.now(),
+    completedAt: null,
+    config,
+    progress: { totalJobs: 0, completedJobs: 0, totalSeeds: 0, totalErrors: 0, current: null },
+    intentProgress: null,
+    summary: null,
+    error: null,
+    stopRequested: false,
+  };
+  setViralResearchCheckpoint(job, 'queued', 'Research run queued. Preparing read-only X discovery.', {}, 0);
+  VIRAL_RESEARCH_JOB = job;
+
+  void (async () => {
+    try {
+      const sweep = await runViralSweep({
+        days: config.days,
+        niches: config.niches,
+        thresholds: config.thresholds,
+        limitPerQuery: config.limitPerQuery,
+        controlsPerSeed: config.controlsPerSeed,
+        threads: config.threads,
+        shouldStop: () => job.stopRequested === true,
+        onProgress: (progress) => {
+          job.stage = 'collecting';
+          job.progress = { ...job.progress, ...progress };
+          const checkpoint = progress.checkpoint || 'discovering';
+          const message = progress.currentCandidate?.message
+            || (progress.current
+              ? `${progress.current.nicheLabel} · ${progress.current.threshold} · ${progress.current.since} to ${progress.current.until}`
+              : 'Preparing historical X discovery.');
+          setViralResearchCheckpoint(job, checkpoint, message, {
+            nicheTag: progress.current?.nicheTag || null,
+            nicheLabel: progress.current?.nicheLabel || null,
+            threshold: progress.current?.threshold || null,
+            since: progress.current?.since || null,
+            until: progress.current?.until || null,
+            candidateId: progress.currentCandidate?.candidateId || null,
+            completedCandidates: progress.currentCandidate?.completed ?? null,
+            totalCandidates: progress.currentCandidate?.total ?? null,
+          }, viralCollectionProgressPercent(progress));
+        },
+      });
+      job.summary = { sweep: { totalSeeds: sweep.totalSeeds, totalErrors: sweep.totalErrors, stopped: sweep.stopped } };
+      if (job.stopRequested || sweep.stopped) {
+        job.status = 'stopped';
+        job.stage = 'stopped';
+        setViralResearchCheckpoint(job, 'stopped', 'Research stopped after the current bounded collection unit.');
+        job.completedAt = Date.now();
+        return;
+      }
+
+      if (config.intent.enabled) {
+        job.stage = 'intent';
+        setViralResearchCheckpoint(job, 'intent_ai', 'Starting structured AI intent classification.', {}, 70);
+        const intentResult = await viralStyleIntent.enrich({
+          days: config.days,
+          profile: viralIntentProfile(config),
+          shouldStop: () => job.stopRequested === true,
+          onProgress: (progress) => {
+            job.stage = 'intent';
+            job.intentProgress = progress;
+            const totalBatches = Math.max(1, Number(progress.totalBatches || 0));
+            const completedBatches = Math.max(0, Math.min(totalBatches, Number(progress.completedBatches || 0)));
+            const percent = 70 + 20 * (completedBatches / totalBatches);
+            setViralResearchCheckpoint(job, 'intent_ai', `AI intent batch ${completedBatches}/${progress.totalBatches || 0}; ${progress.classified || 0} posts classified.`, {
+              completedBatches,
+              totalBatches: Number(progress.totalBatches || 0),
+              classified: Number(progress.classified || 0),
+              currentBatchSize: Number(progress.currentBatchSize || 0),
+            }, percent);
+          },
+        });
+        job.summary.intent = {
+          eligible: intentResult.eligible,
+          classified: intentResult.classified,
+          skippedCached: intentResult.skippedCached,
+          errorCount: intentResult.errors.length,
+          stopped: intentResult.stopped === true,
+        };
+        if (job.stopRequested || intentResult.stopped) {
+          job.status = 'stopped';
+          job.stage = 'stopped';
+          setViralResearchCheckpoint(job, 'stopped', 'Research stopped after the current AI intent batch.');
+          job.completedAt = Date.now();
+          return;
+        }
+      }
+
+      job.stage = 'analyzing';
+      setViralResearchCheckpoint(job, 'analyzing', 'Recomputing mature retrospective evidence.', {}, config.intent.enabled ? 92 : 75);
+      const analysis = await writeStoredAnalysis({
+        days: config.days,
+        matureHours: 24,
+        confidence: 0.90,
+        onProgress: (progress) => {
+          if (progress.checkpoint === 'exporting') {
+            job.stage = 'exporting';
+            setViralResearchCheckpoint(job, 'exporting', progress.message, {}, 97);
+          } else {
+            job.stage = 'analyzing';
+            setViralResearchCheckpoint(job, 'analyzing', progress.message, {}, config.intent.enabled ? 92 : 75);
+          }
+        },
+      });
+      job.summary.analysis = {
+        eligiblePosts: analysis.report.dataset.eligiblePosts,
+        eligibleAuthors: analysis.report.dataset.eligibleAuthors,
+        supportedGroups: analysis.report.supportedGroups.length,
+        aiIntentLabeledPosts: analysis.report.dataset.aiIntentLabeledPosts,
+      };
+      job.status = 'complete';
+      job.stage = 'complete';
+      setViralResearchCheckpoint(job, 'complete', 'Research collection, intent enrichment, analysis, and exports are complete.', {}, 100);
+      job.completedAt = Date.now();
+    } catch (error) {
+      job.status = 'failed';
+      job.stage = 'failed';
+      job.completedAt = Date.now();
+      job.error = String(error?.message || error || 'Viral research failed.');
+      setViralResearchCheckpoint(job, 'failed', job.error);
+    }
+  })();
+
+  return formatViralResearchJob();
+}
+
+async function viralResearchView(days = 21, postLimit = 200) {
+  const report = await analyzeStoredDataset({ days, matureHours: 24, confidence: 0.90 });
+  const posts = report.rows
+    .slice()
+    .sort((left, right) => Number(right.viewsPerFollower || 0) - Number(left.viewsPerFollower || 0))
+    .slice(0, postLimit);
+  const { rows, ...summary } = report;
+  return {
+    options: {
+      windows: [14, 21, 30],
+      niches: NICHE_GROUPS.map((group) => ({ tag: group.tag, label: group.label })),
+      thresholds: Object.values(VIRAL_SWEEP_THRESHOLDS),
+      runtimeTypes: [...VIRAL_RESEARCH_RUNTIME_TYPES],
+    },
+    job: formatViralResearchJob(),
+    report: { ...summary, posts },
+  };
+}
 
 function findPendingAudienceUnfollowJob(username) {
   for (const job of AUDIENCE_UNFOLLOW_JOBS.values()) {
@@ -1367,6 +1622,30 @@ export async function handleApi(req, res, requestUrl) {
       if (query.get('invocationId')) options.invocationId = query.get('invocationId');
       if (query.get('status')) options.status = query.get('status');
       return sendSuccess({ runs: listAiRuns(options).map(formatAiRun) });
+    }
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'viral-research') {
+      const days = Number(query.get('days') || 21);
+      if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw new Error('Viral research window must be 14, 21, or 30 days.');
+      const postLimit = Math.max(20, Math.min(500, Number(query.get('limit') || 200)));
+      return sendSuccess(await viralResearchView(days, postLimit));
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'viral-research' && segments[1] === 'status') {
+      return sendSuccess({ job: formatViralResearchJob() });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'viral-research' && segments[1] === 'run') {
+      const config = normalizeViralResearchConfig(await readBody());
+      return sendSuccess({ job: startViralResearchJob(config) });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'viral-research' && segments[1] === 'stop') {
+      if (VIRAL_RESEARCH_JOB && ['running', 'stopping'].includes(VIRAL_RESEARCH_JOB.status)) {
+        VIRAL_RESEARCH_JOB.stopRequested = true;
+        VIRAL_RESEARCH_JOB.status = 'stopping';
+      }
+      return sendSuccess({ job: formatViralResearchJob() });
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'editorial') {

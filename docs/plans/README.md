@@ -273,6 +273,24 @@ Owns the offline 14-day/30-day study over the already-collected dataset:
 
 The confidence intervals describe observed association strength inside the collected sample; they are not future-post virality accuracy.
 
+### Viral Styles Research UI — implemented
+
+[`VIRAL_STYLE_UI_RESEARCH_FLOW.md`](VIRAL_STYLE_UI_RESEARCH_FLOW.md)
+
+Owns the operator-facing Viral Styles workflow:
+
+- explicit 14/21/30-day historical windows;
+- selectable existing niche families and breakout/strong discovery floors;
+- configurable per-query depth, same-author controls, and thread reconstruction;
+- explicit AI semantic analysis using either a configured AI Settings profile or an installed structured runtime + exact model + reasoning level;
+- constrained AI intent/style labels with confidence, rationale, exact text evidence, and runtime/model provenance;
+- one bounded background research job with named `queued -> discovering -> enriching -> controls -> threads -> intent_ai -> analyzing -> exporting -> complete` checkpoints, monotonic progress, recent activity, and stop-between-units semantics;
+- findings views for repeated/directional evidence, AI intent, niche/timing, and per-post research provenance.
+
+Opening the tab is read-only. X collection and AI inference begin only after the operator presses **Run research**.
+
+Baseline findings before the broader sweep are recorded in [`../VIRAL_STYLE_FINDINGS_2026-08-20.md`](../VIRAL_STYLE_FINDINGS_2026-08-20.md).
+
 ## Cross-cutting source-of-truth docs
 
 - [`../PRODUCT_ARCHITECTURE.md`](../PRODUCT_ARCHITECTURE.md) — canonical end-to-end product map, current/planned phase state, final Discover -> Research -> Editorial AI -> Human -> Writer -> Human -> Publish -> Measure -> Learn loop, and AI/human authority boundaries.

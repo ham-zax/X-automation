@@ -288,6 +288,7 @@ export function buildViralStyleReportRows(posts = [], snapshots = [], threads = 
         : null
       : null;
     const thread = threadByRoot.get(tweetId) || null;
+    const styleFeatures = extractViralStyleFeatures(post);
     return {
       tweetId,
       username: String(post.username || ''),
@@ -321,9 +322,9 @@ export function buildViralStyleReportRows(posts = [], snapshots = [], threads = 
       authorAccountAgeDays: finite(snapshot.authorAccountAgeDays),
       followerDeltaFromFirstObservation: followerDelta,
       ...derived,
-      hookLabels: Array.isArray(post.styleFeatures?.hookLabels) ? post.styleFeatures.hookLabels : [],
-      styleLabels: Array.isArray(post.styleFeatures?.styleLabels) ? post.styleFeatures.styleLabels : [],
-      styleFeatures: post.styleFeatures || {},
+      hookLabels: styleFeatures.hookLabels,
+      styleLabels: styleFeatures.styleLabels,
+      styleFeatures,
     };
   });
 

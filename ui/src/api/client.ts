@@ -1146,3 +1146,228 @@ export function useAIProfileTest() {
     mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/test`),
   })
 }
+
+// ---------------------------------------------------------------------------
+// Viral Styles research
+// ---------------------------------------------------------------------------
+
+export type ViralEvidenceClass = 'INSUFFICIENT' | 'DIRECTIONAL' | 'REPEATED_ASSOCIATION' | 'STRONG_REPEATED_ASSOCIATION'
+
+export interface ViralResearchGroup {
+  groupType: string
+  label: string
+  evidenceClass: ViralEvidenceClass
+  sampleSize: number
+  uniqueAuthors: number
+  medianViewsPerFollower: number | null
+  medianEngagementsPerView: number | null
+  medianBookmarksPerView: number | null
+  medianRepostsPerView: number | null
+  medianRepliesPerView: number | null
+  medianViewsPerHour: number | null
+  authorComparableCount: number
+  authorWinCount: number
+  authorWinRate: number | null
+  authorWinRate90CiLow: number | null
+  authorWinRate90CiHigh: number | null
+  medianAuthorViewsLift: number | null
+  cohortComparableCount: number
+  cohortBreakoutCount: number
+  cohortBreakoutRate: number | null
+  cohortBreakoutRate90CiLow: number | null
+  cohortBreakoutRate90CiHigh: number | null
+}
+
+export interface ViralResearchPost {
+  tweetId: string
+  username: string
+  url: string
+  text: string
+  sampleKind: string
+  sourceQuery: string
+  createdAt: number | null
+  createdAtIso: string
+  publicationUtcHour: number | null
+  publicationUtcDay: string
+  mediaType: string
+  threadLength: number
+  threadExpectedLength: number | null
+  threadComplete: boolean | null
+  postAgeMinutes: number | null
+  views: number | null
+  likes: number | null
+  reposts: number | null
+  replies: number | null
+  bookmarks: number | null
+  authorFollowers: number | null
+  followerCohort: string
+  viewsPerFollower: number | null
+  engagementsPerView: number | null
+  bookmarksPerView: number | null
+  repostsPerView: number | null
+  repliesPerView: number | null
+  viewsPerHour: number | null
+  authorViewsLift: number | null
+  cohortPercentile: number | null
+  hookLabels: string[]
+  styleLabels: string[]
+  nicheTags: string[]
+  nicheMatches: string[]
+  aiPrimaryIntent: string | null
+  aiSecondaryIntents: string[]
+  aiSemanticStyle: string | null
+  aiAudienceGoal: string | null
+  aiReaderAction: string | null
+  aiAngle: string | null
+  aiIntentConfidence: number | null
+  aiIntentRationale: string
+  aiIntentEvidenceSpans: string[]
+  aiIntentModel: string | null
+  styleFeatures: Record<string, unknown>
+}
+
+export interface ViralResearchJob {
+  id: string
+  status: 'running' | 'stopping' | 'complete' | 'failed' | 'stopped'
+  stage: 'collecting' | 'intent' | 'analyzing' | 'exporting' | 'complete' | 'failed' | 'stopped'
+  checkpoint: 'queued' | 'discovering' | 'enriching' | 'controls' | 'threads' | 'intent_ai' | 'analyzing' | 'exporting' | 'complete' | 'stopped' | 'failed'
+  progressPercent: number
+  events: {
+    at: number
+    checkpoint: ViralResearchJob['checkpoint']
+    message: string
+    details: Record<string, unknown>
+  }[]
+  startedAt: number
+  completedAt: number | null
+  stopRequested: boolean
+  config: {
+    days: number
+    niches: string[]
+    thresholds: string[]
+    limitPerQuery: number
+    controlsPerSeed: number
+    threads: boolean
+    intent: {
+      enabled: boolean
+      mode: 'profile' | 'runtime'
+      profileId?: number
+      profileName?: string
+      runtime?: string
+      model?: string
+      reasoning?: string
+    }
+  }
+  progress: {
+    totalJobs: number
+    completedJobs: number
+    totalSeeds: number
+    totalErrors: number
+    current?: { nicheTag: string; nicheLabel: string; threshold: string; since: string; until: string } | null
+    currentCandidate?: {
+      completed: number
+      total: number | null
+      candidateId: string | null
+      collectedSeeds: number
+      message: string
+    } | null
+  }
+  intentProgress: {
+    totalBatches: number
+    completedBatches: number
+    classified: number
+    currentBatchSize?: number
+  } | null
+  summary: Record<string, unknown> | null
+  error: string | null
+}
+
+export interface ViralResearchData {
+  options: {
+    windows: number[]
+    niches: { tag: string; label: string }[]
+    thresholds: { name: string; minFaves: number; minRetweets: number; minReplies: number }[]
+    runtimeTypes: string[]
+  }
+  job: ViralResearchJob | null
+  report: {
+    generatedAt: number
+    windowDays: number
+    maturityHours: number
+    confidence: number
+    interpretation: string
+    dataset: {
+      totalStoredPosts: number
+      totalStoredSnapshots: number
+      totalStoredThreads: number
+      eligiblePosts: number
+      eligibleAuthors: number
+      eligibleBySampleKind: Record<string, number>
+      authorComparablePosts: number
+      cohortComparablePosts: number
+      aiIntentLabeledPosts: number
+    }
+    supportedGroups: ViralResearchGroup[]
+    directionalGroups: ViralResearchGroup[]
+    insufficientGroups: ViralResearchGroup[]
+    intentGroups: ViralResearchGroup[]
+    semanticStyleGroups: ViralResearchGroup[]
+    nicheGroups: ViralResearchGroup[]
+    timing: { utcHour: number; sampleSize: number; uniqueAuthors: number; medianViewsPerFollower: number | null; medianEngagementsPerView: number | null; medianBookmarksPerView: number | null; medianViewsPerHour: number | null }[]
+    threads: { sampleSize: number; evidenceClass: string; completeCount: number; partialCount: number; unknownCompletenessCount: number; medianThreadLength: number | null; medianViewsPerFollower: number | null }
+    posts: ViralResearchPost[]
+  }
+}
+
+export interface ViralResearchRunPayload {
+  days: number
+  niches: string[]
+  thresholds: string[]
+  limitPerQuery: number
+  controlsPerSeed: number
+  threads: boolean
+  intent: {
+    enabled: boolean
+    mode: 'profile' | 'runtime'
+    profileId?: number
+    runtime?: string
+    model?: string
+    reasoning?: string
+  }
+}
+
+export function useViralResearch(days = 21) {
+  return useQuery({
+    queryKey: ['viral-research', days],
+    queryFn: () => fetchApi<ViralResearchData>(`/viral-research?days=${days}`),
+    staleTime: 10_000,
+  })
+}
+
+export function useViralResearchStatus() {
+  return useQuery({
+    queryKey: ['viral-research', 'status'],
+    queryFn: () => fetchApi<{ job: ViralResearchJob | null }>('/viral-research/status'),
+    refetchInterval: 2_000,
+  })
+}
+
+export function useViralResearchRun() {
+  const queryClient = useQueryClient()
+  return useMutation<{ job: ViralResearchJob }, Error, ViralResearchRunPayload>({
+    mutationFn: (payload) => postApi('/viral-research/run', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['viral-research', 'status'] })
+    },
+  })
+}
+
+export function useViralResearchStop() {
+  const queryClient = useQueryClient()
+  return useMutation<{ job: ViralResearchJob | null }, Error, void>({
+    mutationFn: () => postApi('/viral-research/stop'),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['viral-research', 'status'] })
+    },
+  })
+}

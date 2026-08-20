@@ -354,7 +354,15 @@ async function reconstructThread(page, scraper, profileCache, state, seed) {
   return record;
 }
 
-async function collect({ query = '', limit = DEFAULT_SEED_LIMIT, controls = DEFAULT_CONTROL_LIMIT, threads = true, full = false } = {}) {
+async function collect({
+  query = '',
+  limit = DEFAULT_SEED_LIMIT,
+  controls = DEFAULT_CONTROL_LIMIT,
+  threads = true,
+  full = false,
+  onProgress = null,
+  shouldStop = null,
+} = {}) {
   const seedLimit = boundedInteger(limit, DEFAULT_SEED_LIMIT, MAX_SEED_LIMIT);
   const controlLimit = boundedInteger(controls, DEFAULT_CONTROL_LIMIT, MAX_CONTROL_LIMIT);
   const state = await loadState();
@@ -363,23 +371,65 @@ async function collect({ query = '', limit = DEFAULT_SEED_LIMIT, controls = DEFA
   let browserContext = null;
   const errors = [];
   const seeds = [];
+  let stopped = false;
   try {
+    onProgress?.({ checkpoint: 'discovering', message: 'Opening read-only X discovery.', completedCandidates: 0, totalCandidates: null });
     if (query || controlLimit > 0 || threads) browserContext = await createReadOnlyBrowser();
     const discovered = query
       ? await discoverQuerySeeds(browserContext.page, query, seedLimit)
       : await discoverDefaultSeeds(seedLimit, { full });
-    for (const candidate of discovered) {
+    onProgress?.({ checkpoint: 'discovering', message: `Discovered ${discovered.length} candidate posts.`, completedCandidates: 0, totalCandidates: discovered.length });
+    for (let index = 0; index < discovered.length; index++) {
+      if (shouldStop?.()) {
+        stopped = true;
+        break;
+      }
+      const candidate = discovered[index];
       try {
+        onProgress?.({
+          checkpoint: 'enriching',
+          message: `Reading exact post/profile ${index + 1}/${discovered.length}.`,
+          candidateId: candidate.id,
+          completedCandidates: index,
+          totalCandidates: discovered.length,
+          collectedSeeds: seeds.length,
+        });
         const enriched = await enrichTweet(scraper, candidate.id, profileCache);
         if (enriched.tweet.isRetweet || enriched.tweet.isReply) continue;
         const persisted = await persistObservation({ ...enriched, sampleKind: 'viral_seed', sourceQuery: candidate.sourceQuery }, state);
         const seed = { ...enriched, ...persisted };
         seeds.push(seed);
         if (controlLimit > 0 && browserContext) {
+          onProgress?.({
+            checkpoint: 'controls',
+            message: `Collecting up to ${controlLimit} same-author controls for @${cleanUsername(seed.tweet.username)}.`,
+            candidateId: candidate.id,
+            completedCandidates: index,
+            totalCandidates: discovered.length,
+            collectedSeeds: seeds.length,
+          });
           const control = await collectAuthorControls(browserContext.page, scraper, profileCache, state, seed, controlLimit);
           errors.push(...control.errors);
         }
-        if (threads && browserContext) await reconstructThread(browserContext.page, scraper, profileCache, state, seed);
+        if (threads && browserContext) {
+          onProgress?.({
+            checkpoint: 'threads',
+            message: `Checking thread structure for @${cleanUsername(seed.tweet.username)}.`,
+            candidateId: candidate.id,
+            completedCandidates: index,
+            totalCandidates: discovered.length,
+            collectedSeeds: seeds.length,
+          });
+          await reconstructThread(browserContext.page, scraper, profileCache, state, seed);
+        }
+        onProgress?.({
+          checkpoint: 'enriching',
+          message: `Stored candidate ${index + 1}/${discovered.length}.`,
+          candidateId: candidate.id,
+          completedCandidates: index + 1,
+          totalCandidates: discovered.length,
+          collectedSeeds: seeds.length,
+        });
       } catch (error) {
         errors.push({ tweetId: candidate.id, error: error.message });
       }
@@ -387,8 +437,9 @@ async function collect({ query = '', limit = DEFAULT_SEED_LIMIT, controls = DEFA
   } finally {
     if (browserContext) await browserContext.browser.close().catch(() => {});
   }
+  onProgress?.({ checkpoint: 'exporting', message: 'Refreshing local CSV/summary exports.', completedCandidates: seeds.length, totalCandidates: seeds.length, collectedSeeds: seeds.length });
   await exportData();
-  return { seeds: seeds.length, controlsRequestedPerSeed: controlLimit, errors, dataDir: DATA_DIR };
+  return { seeds: seeds.length, controlsRequestedPerSeed: controlLimit, errors, dataDir: DATA_DIR, stopped };
 }
 
 async function inspectTweet(url, { controls = 0, threads = true } = {}) {

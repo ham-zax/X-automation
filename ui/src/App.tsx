@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useHashRoute } from './router'
 import { Today } from './features/today/Today'
 import { Discover } from './features/discover/Discover'
+import { ViralStyles } from './features/viral/ViralStyles'
 import { Conversations } from './features/conversations/Conversations'
 import { ConversationDetail } from './features/conversations/ConversationDetail'
 import { Create } from './features/create/Create'
@@ -24,6 +25,7 @@ const queryClient = new QueryClient({
 const NAV_ITEMS = [
   { id: 'today', label: 'Today', href: '#/today' },
   { id: 'discover', label: 'Discover', href: '#/discover' },
+  { id: 'viral', label: 'Viral Styles', href: '#/viral' },
   { id: 'conversations', label: 'Conversations', href: '#/conversations' },
   { id: 'create', label: 'Posts', href: '#/create' },
   { id: 'results', label: 'Performance', href: '#/results' },
@@ -37,6 +39,7 @@ function RouteContent() {
 
   if (!first || first === 'today') return <Today />
   if (first === 'discover') return <Discover />
+  if (first === 'viral') return <ViralStyles />
   if (first === 'conversations' && second) return <ConversationDetail candidateKey={second} />
   if (first === 'conversations') return <Conversations />
   if (first === 'create') return <Create />

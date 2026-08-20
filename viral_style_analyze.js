@@ -4,11 +4,13 @@ import {
   buildViralStyleReportRows,
   extractViralStyleFeatures,
 } from './viral_style.js';
+import { classifyNiche } from './strategy.js';
 
 const DATA_DIR = path.resolve(process.env.VIRAL_STYLE_DIR || '.viral-style-research');
 const POSTS_FILE = path.join(DATA_DIR, 'posts.jsonl');
 const SNAPSHOTS_FILE = path.join(DATA_DIR, 'snapshots.jsonl');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.jsonl');
+const INTENTS_FILE = path.join(DATA_DIR, 'intent_ai.jsonl');
 
 function parseArgs(argv = process.argv.slice(2)) {
   const options = {};
@@ -57,6 +59,17 @@ async function readJsonl(file) {
     if (error?.code === 'ENOENT') return [];
     throw error;
   }
+}
+
+function latestIntentByTweet(rows = []) {
+  const map = new Map();
+  for (const row of rows) {
+    const id = String(row?.tweetId || '');
+    if (!id) continue;
+    const current = map.get(id);
+    if (!current || Number(row.analyzedAt || 0) >= Number(current.analyzedAt || 0)) map.set(id, row);
+  }
+  return map;
 }
 
 function inverseNormalCdf(probability) {
@@ -139,11 +152,13 @@ function percentileAgainst(value, peers) {
   return (lower + equal * 0.5) / values.length;
 }
 
-function currentTaxonomyRow(row, post) {
+function currentTaxonomyRow(row, post, intent = null) {
   const styleFeatures = extractViralStyleFeatures({
     ...post,
     text: row.text || post?.text || '',
   });
+  const niche = classifyNiche(row.text || post?.text || '');
+  const secondaryIntents = Array.isArray(intent?.secondaryIntents) ? intent.secondaryIntents : [];
   return {
     ...row,
     isReply: Boolean(post?.isReply),
@@ -151,6 +166,19 @@ function currentTaxonomyRow(row, post) {
     isRetweet: Boolean(post?.isRetweet),
     hookLabels: styleFeatures.hookLabels,
     styleLabels: styleFeatures.styleLabels,
+    nicheTags: niche.tags,
+    nicheMatches: niche.matches,
+    aiPrimaryIntent: intent?.primaryIntent || null,
+    aiSecondaryIntents: secondaryIntents,
+    aiIntentLabels: intent?.primaryIntent ? [intent.primaryIntent, ...secondaryIntents] : [],
+    aiSemanticStyle: intent?.semanticStyle || null,
+    aiAudienceGoal: intent?.audienceGoal || null,
+    aiReaderAction: intent?.readerAction || null,
+    aiAngle: intent?.angle || null,
+    aiIntentConfidence: finite(intent?.confidence),
+    aiIntentRationale: intent?.rationale || '',
+    aiIntentEvidenceSpans: Array.isArray(intent?.evidenceSpans) ? intent.evidenceSpans : [],
+    aiIntentModel: intent?.execution?.model || null,
     styleFeatures,
   };
 }
@@ -159,11 +187,16 @@ function makeEligibleRows(posts, snapshots, threads, {
   days,
   matureHours,
   analysisNow,
+  intentByTweet = new Map(),
 }) {
   const postById = new Map(posts.map((post) => [String(post.id || ''), post]));
   const cutoff = analysisNow - days * 86_400_000;
   return buildViralStyleReportRows(posts, snapshots, threads)
-    .map((row) => currentTaxonomyRow(row, postById.get(String(row.tweetId || ''))))
+    .map((row) => currentTaxonomyRow(
+      row,
+      postById.get(String(row.tweetId || '')),
+      intentByTweet.get(String(row.tweetId || '')) || null,
+    ))
     .filter((row) => row.createdAt != null && row.createdAt >= cutoff)
     .filter((row) => row.observedAt != null)
     .filter((row) => finite(row.postAgeMinutes) != null && Number(row.postAgeMinutes) >= matureHours * 60)
@@ -396,17 +429,23 @@ function analyzeWindow(posts, snapshots, threads, {
   matureHours,
   confidence,
   analysisNow,
+  intentRows = [],
 }) {
+  const intentByTweet = latestIntentByTweet(intentRows);
   const eligible = addComparisons(makeEligibleRows(posts, snapshots, threads, {
     days,
     matureHours,
     analysisNow,
+    intentByTweet,
   }));
 
   const styleGroups = grouped(eligible, 'style', (row) => row.styleLabels, confidence);
   const hookGroups = grouped(eligible, 'hook', (row) => row.hookLabels, confidence);
   const featureGroups = grouped(eligible, 'feature', featureLabels, confidence);
-  const groups = [...styleGroups, ...hookGroups, ...featureGroups].sort((left, right) => {
+  const intentGroups = grouped(eligible.filter((row) => row.aiPrimaryIntent && row.aiIntentConfidence >= 0.6), 'intent', (row) => [row.aiPrimaryIntent], confidence);
+  const semanticStyleGroups = grouped(eligible.filter((row) => row.aiSemanticStyle && row.aiIntentConfidence >= 0.6), 'semantic_style', (row) => [row.aiSemanticStyle], confidence);
+  const nicheGroups = grouped(eligible, 'niche', (row) => row.nicheTags, confidence);
+  const groups = [...styleGroups, ...hookGroups, ...featureGroups, ...intentGroups, ...semanticStyleGroups].sort((left, right) => {
     const strength = {
       STRONG_REPEATED_ASSOCIATION: 4,
       REPEATED_ASSOCIATION: 3,
@@ -440,6 +479,14 @@ function analyzeWindow(posts, snapshots, threads, {
       cohortPercentile: row.cohortPercentile,
       hookLabels: row.hookLabels,
       styleLabels: row.styleLabels,
+      nicheTags: row.nicheTags,
+      aiPrimaryIntent: row.aiPrimaryIntent,
+      aiSecondaryIntents: row.aiSecondaryIntents,
+      aiSemanticStyle: row.aiSemanticStyle,
+      aiAudienceGoal: row.aiAudienceGoal,
+      aiReaderAction: row.aiReaderAction,
+      aiAngle: row.aiAngle,
+      aiIntentConfidence: row.aiIntentConfidence,
     }));
 
   return {
@@ -457,6 +504,7 @@ function analyzeWindow(posts, snapshots, threads, {
       eligibleBySampleKind: Object.fromEntries([...new Set(eligible.map((row) => row.sampleKind))].sort().map((kind) => [kind, eligible.filter((row) => row.sampleKind === kind).length])),
       authorComparablePosts: eligible.filter((row) => row.authorWin != null).length,
       cohortComparablePosts: eligible.filter((row) => row.cohortBreakout != null).length,
+      aiIntentLabeledPosts: eligible.filter((row) => row.aiPrimaryIntent && row.aiIntentConfidence >= 0.6).length,
     },
     supportedGroups: groups.filter((group) => ['REPEATED_ASSOCIATION', 'STRONG_REPEATED_ASSOCIATION'].includes(group.evidenceClass)),
     directionalGroups: groups.filter((group) => group.evidenceClass === 'DIRECTIONAL'),
@@ -464,6 +512,9 @@ function analyzeWindow(posts, snapshots, threads, {
     styleGroups,
     hookGroups,
     featureGroups,
+    intentGroups,
+    semanticStyleGroups,
+    nicheGroups,
     timing: timingSummaries(eligible),
     threads: threadSummary(eligible),
     topPosts,
@@ -520,6 +571,16 @@ function postCsvRecord(row) {
     threadComplete: row.threadComplete,
     hookLabels: row.hookLabels,
     styleLabels: row.styleLabels,
+    nicheTags: row.nicheTags,
+    aiPrimaryIntent: row.aiPrimaryIntent,
+    aiSecondaryIntents: row.aiSecondaryIntents,
+    aiSemanticStyle: row.aiSemanticStyle,
+    aiAudienceGoal: row.aiAudienceGoal,
+    aiReaderAction: row.aiReaderAction,
+    aiAngle: row.aiAngle,
+    aiIntentConfidence: row.aiIntentConfidence,
+    aiIntentModel: row.aiIntentModel,
+    aiIntentEvidenceSpans: row.aiIntentEvidenceSpans,
     firstLine: row.styleFeatures?.firstLine || '',
     wordCount: row.styleFeatures?.wordCount,
     firstLineChars: row.styleFeatures?.firstLineChars,
@@ -576,11 +637,12 @@ function markdownReport(report) {
   lines.push(`- Eligible mature posts in this window: ${report.dataset.eligiblePosts} across ${report.dataset.eligibleAuthors} authors.`);
   lines.push(`- Same-author/same-age comparable posts: ${report.dataset.authorComparablePosts}.`);
   lines.push(`- Matched follower-cohort/age comparable posts: ${report.dataset.cohortComparablePosts}.`);
+  lines.push(`- AI intent-labeled mature posts (confidence >= 0.60): ${report.dataset.aiIntentLabeledPosts}.`);
   lines.push(`- Eligible sample kinds: ${Object.entries(report.dataset.eligibleBySampleKind).map(([key, value]) => `${key}=${value}`).join(', ') || 'none'}.`);
   lines.push('');
   lines.push('## What the current evidence supports');
   lines.push('');
-  if (!report.supportedGroups.length) lines.push('No hook/style/feature group currently reaches the repeated-association threshold. This is a valid result; the analyzer will not turn sparse data into a style rule.');
+  if (!report.supportedGroups.length) lines.push('No hook/style/feature/intent group currently reaches the repeated-association threshold. This is a valid result; the analyzer will not turn sparse data into a style rule.');
   else report.supportedGroups.forEach((group) => lines.push(groupLine(group)));
   lines.push('');
   lines.push('## Promising but not established');
@@ -593,10 +655,26 @@ function markdownReport(report) {
   report.insufficientGroups.slice(0, 20).forEach((group) => lines.push(`- ${group.groupType}:${group.label} — n=${group.sampleSize}, authors=${group.uniqueAuthors}.`));
   if (!report.insufficientGroups.length) lines.push('None.');
   lines.push('');
+  lines.push('## AI author-intent observations');
+  lines.push('');
+  if (!report.intentGroups.length) lines.push('No mature posts have usable AI intent labels yet.');
+  else report.intentGroups.slice(0, 12).forEach((group) => lines.push(groupLine(group)));
+  lines.push('');
+  lines.push('## Semantic presentation styles');
+  lines.push('');
+  if (!report.semanticStyleGroups.length) lines.push('No mature posts have usable AI semantic-style labels yet.');
+  else report.semanticStyleGroups.slice(0, 12).forEach((group) => lines.push(groupLine(group)));
+  lines.push('');
+  lines.push('## Niche coverage');
+  lines.push('');
+  if (!report.nicheGroups.length) lines.push('No niche tags matched the mature sample.');
+  else report.nicheGroups.slice(0, 12).forEach((group) => lines.push(groupLine(group)));
+  lines.push('');
   lines.push('## Top normalized individual performers');
   lines.push('');
   for (const post of report.topPosts) {
-    lines.push(`- @${post.username} — ${numeric(post.viewsPerFollower)} views/follower, ${post.views ?? 'n/a'} views, ${post.authorFollowers ?? 'n/a'} followers at observation; ${post.hookLabels.join(', ') || 'no hook label'}; ${post.styleLabels.join(', ') || 'no style label'} — ${post.firstLine} — ${post.url}`);
+    const intent = post.aiPrimaryIntent ? `; intent=${post.aiPrimaryIntent} (${numeric(post.aiIntentConfidence, 2)})` : '';
+    lines.push(`- @${post.username} — ${numeric(post.viewsPerFollower)} views/follower, ${post.views ?? 'n/a'} views, ${post.authorFollowers ?? 'n/a'} followers at observation; ${post.hookLabels.join(', ') || 'no hook label'}; ${post.styleLabels.join(', ') || 'no style label'}${intent} — ${post.firstLine} — ${post.url}`);
   }
   lines.push('');
   lines.push('## Timing observations');
@@ -636,23 +714,53 @@ async function writeReport(report) {
   delete jsonCopy.rows;
   await fs.writeFile(jsonFile, `${JSON.stringify(jsonCopy, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
   await fs.writeFile(postsFile, toCsv(report.rows.map(postCsvRecord)), { encoding: 'utf8', mode: 0o600 });
-  await fs.writeFile(groupsFile, toCsv([...report.styleGroups, ...report.hookGroups, ...report.featureGroups].map(groupCsvRecord)), { encoding: 'utf8', mode: 0o600 });
+  await fs.writeFile(groupsFile, toCsv([
+    ...report.styleGroups,
+    ...report.hookGroups,
+    ...report.featureGroups,
+    ...report.intentGroups,
+    ...report.semanticStyleGroups,
+    ...report.nicheGroups,
+  ].map(groupCsvRecord)), { encoding: 'utf8', mode: 0o600 });
   await fs.writeFile(markdownFile, markdownReport(report), { encoding: 'utf8', mode: 0o600 });
 
   return { jsonFile, postsFile, groupsFile, markdownFile };
 }
 
 async function loadDataset() {
-  const [posts, snapshots, threads] = await Promise.all([
+  const [posts, snapshots, threads, intents] = await Promise.all([
     readJsonl(POSTS_FILE),
     readJsonl(SNAPSHOTS_FILE),
     readJsonl(THREADS_FILE),
+    readJsonl(INTENTS_FILE),
   ]);
-  return { posts, snapshots, threads };
+  return { posts, snapshots, threads, intents };
+}
+
+export async function analyzeStoredDataset(options = {}) {
+  const dataset = await loadDataset();
+  return analyzeWindow(dataset.posts, dataset.snapshots, dataset.threads, {
+    days: Number(options.days || 30),
+    matureHours: Number(options.matureHours || 24),
+    confidence: Number(options.confidence || 0.90),
+    analysisNow: Number(options.analysisNow || Date.now()),
+    intentRows: dataset.intents,
+  });
+}
+
+export async function writeStoredAnalysis(options = {}) {
+  options.onProgress?.({ checkpoint: 'analyzing', message: 'Recomputing mature post comparisons and evidence groups.' });
+  const report = await analyzeStoredDataset(options);
+  options.onProgress?.({ checkpoint: 'exporting', message: 'Writing retrospective JSON/CSV/Markdown outputs.' });
+  const files = await writeReport(report);
+  return { report, files };
 }
 
 async function analyzeAndWrite(dataset, options) {
-  const report = analyzeWindow(dataset.posts, dataset.snapshots, dataset.threads, options);
+  const report = analyzeWindow(dataset.posts, dataset.snapshots, dataset.threads, {
+    ...options,
+    intentRows: dataset.intents,
+  });
   const files = await writeReport(report);
   return {
     windowDays: report.windowDays,
