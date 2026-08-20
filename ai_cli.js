@@ -262,7 +262,7 @@ async function withOpenCode(profile, timeoutMs, callback) {
 }
 
 async function openCodeCatalog(profile, { timeoutMs = 15_000 } = {}) {
-  return withOpenCode({ ...profile, model: profile.model && profile.model !== 'inherit' ? profile.model : 'catalog/placeholder', runtimeProfile: '' }, timeoutMs, async (client, _parsed, signal) => {
+  return withOpenCode({ ...profile, model: 'catalog/placeholder', runtimeProfile: '' }, timeoutMs, async (client, _parsed, signal) => {
     const response = await client.config.providers({ signal });
     if (response.error) throw openCodeFailure(response.error, 'OpenCode model catalog is unavailable.');
     const providers = Array.isArray(response.data?.providers) ? response.data.providers : [];
