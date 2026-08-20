@@ -10,8 +10,8 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A3 — Editorial Selection + Writer Evidence | executable | ready | now | `/home/hamza/repo/x_test-w6-editorial-selection` | owns workflow/writer/web generation files while B3 owns store/automation outcome files | none |
-| Agent B3 — Editorial Outcome Provenance + Background Refresh | executable | ready | now | `/home/hamza/repo/x_test-w6-editorial-outcomes` | owns store measurement + automation outcome seam and stays off workflow/writer/web files | none |
+| Agent A3 — Editorial Selection + Writer Evidence | executable | complete + integrated | completed | `/home/hamza/repo/x_test-w6-editorial-selection` | isolated workflow/writer/web generation ownership | none |
+| Agent B3 — Editorial Outcome Provenance + Background Refresh | executable | complete + integrated | completed | `/home/hamza/repo/x_test-w6-editorial-outcomes` | isolated store measurement + automation ownership | none |
 
 ## Dependency map
 
@@ -50,7 +50,7 @@ Both missions are concurrent writable missions with disjoint file ownership. Use
 
 ## Integration policy
 
-Main/integration owner reviews and cherry-picks both commits. Agent branches do not merge one another. Final Editorial API/Today/Discover work begins only after both Wave-3 commits are reconciled on main.
+Agent A3 is integrated on main as `1b93542`. Agent B3 is integrated on main as `ce1b062`. Wave 3 is complete; the final operator-facing Editorial surface and remaining optional runtime work may now proceed from the integrated main state.
 
 ## Validation policy
 
@@ -68,3 +68,4 @@ No test creation, modification, or execution. Use only bounded non-test syntax/b
 - `2026-08-20` — Wave 1 runtime + deterministic editorial core integrated.
 - `2026-08-20` — Wave 2 AI Settings and Phase-6 persisted backend integrated; combined non-test checks passed.
 - `2026-08-20` — Wave 3 materialized as two non-overlapping missions.
+- `2026-08-20` — Agent A3 selection/writer-evidence work integrated as `1b93542`; Agent B3 outcome/background-refresh work integrated as `ce1b062`; combined non-test checks passed. Wave 3 complete.
