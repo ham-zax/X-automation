@@ -1,19 +1,19 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
-import {
-  fetchAccountPerformance,
-  fetchGitHubTrending,
-  fetchHackerNews,
-  fetchXNichePosts,
-  fetchXViralPosts,
-  rankNews,
-  rankXViralPosts,
-} from './tech_news.js';
+import { fetchAccountPerformance } from './tech_news.js';
 import { applyWriterOutput, buildWriterPacket, scoreDraft } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { matchResearchTopics } from './research_topics.js';
+import {
+  EDITORIAL_OBJECTIVES,
+  dismissEditorialRecommendation,
+  refreshEditorialPlan,
+  selectEditorialRecommendation,
+} from './editorial.js';
+import { attachEditorialResearchSource } from './research.js';
+import { normalizeSourceKind, refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import {
   approveEngagementQueueItem,
   approveQueueItem,
@@ -28,11 +28,12 @@ import {
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { AUDIENCE_NICHE_LABELS, NICHE_LABELS, isOpportunityCandidate, personalizeCandidates } from './strategy.js';
+import { AUDIENCE_NICHE_LABELS, NICHE_LABELS, isOpportunityCandidate } from './strategy.js';
 import { syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
   AI_ROLES,
+  SOURCE_SNAPSHOT_KINDS,
   acceptLearnedRule,
   assignExperimentVariant,
   createExperiment,
@@ -48,19 +49,24 @@ import {
   getDraft,
   getDraftByCandidate,
   getEditorialRecommendation,
+  getEditorialOutcomeSummary,
+  getEditorialSelectionByRecommendation,
   getExperiment,
   getExperimentSummary,
   getLearningOverview,
   getMainFeedScheduleItem,
   getLatestEditorialSelectionForQueueItem,
-  getAppState,
+  getLatestEditorialPlan,
   getNewFollowerQuality,
   getPerformanceSnapshot,
   getPreferenceProfile,
+  getQueueItem,
   getQueueItemByCandidate,
   getRelationshipProfile,
   getAudienceSummary,
   getAccountHealthSummary,
+  getDiscoverSnapshot,
+  getSourceMomentum,
   listAcceptedLearnedRules,
   listAiProfiles,
   listAiRuns,
@@ -85,10 +91,8 @@ import {
   setAiDefaultProfile,
   setAiProfileEnabled,
   setAiRoleBinding,
-  setAppState,
   setExperimentStatus,
   setMainFeedSchedule,
-  upsertCandidates,
   updateAiProfile,
   resolveAiProfileForRole,
 } from './store.js';
@@ -97,13 +101,12 @@ import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability } fr
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
-const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
 const DISCOVER_FEEDS = new Set(['for-you', 'x', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
-const REFRESHABLE_FEEDS = new Set(['x', 'viral', 'github', 'hn', 'all']);
+const DISCOVER_SOURCE_KINDS = Object.freeze({ x: 'x_latest', trending: 'x_momentum', github: 'github_trending', hn: 'hn_top' });
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
 
@@ -347,98 +350,127 @@ export async function generateDraftCandidate(current) {
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 
-const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
-
-function persistDiscoverSnapshot(source, candidates) {
-  const snapshot = {
-    fetchedAt: Date.now(),
-    keys: [...new Set(candidates.map((candidate) => candidate?.key).filter(Boolean))],
-  };
-  setAppState(`${DISCOVER_SNAPSHOT_PREFIX}${source}`, JSON.stringify(snapshot));
-  return snapshot;
+function editorialObjective(value = 'qualified_growth') {
+  const objective = String(value || 'qualified_growth');
+  if (!EDITORIAL_OBJECTIVES.includes(objective)) throw new Error(`Unsupported editorial objective: ${objective}.`);
+  return objective;
 }
 
-function loadDiscoverSnapshot(source) {
-  try {
-    const stored = JSON.parse(getAppState(`${DISCOVER_SNAPSHOT_PREFIX}${source}`, 'null'));
-    if (!stored || !Array.isArray(stored.keys)) return { fetchedAt: null, candidates: [] };
+function sourceFreshnessView() {
+  return SOURCE_SNAPSHOT_KINDS.map((kind) => {
+    const snapshot = getDiscoverSnapshot(kind);
     return {
-      fetchedAt: Number(stored.fetchedAt || 0) || null,
-      candidates: stored.keys.map((key) => getCandidate(key)).filter(Boolean),
+      kind,
+      fetchedAt: snapshot.fetchedAt,
+      lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
+      error: snapshot.error,
+      legacyFallback: snapshot.legacyFallback,
+      candidateCount: snapshot.candidates.length,
     };
-  } catch {
-    return { fetchedAt: null, candidates: [] };
-  }
+  });
 }
 
-export async function collectResearch(source) {
-  const preference = getPreferenceProfile();
+function editorialEvidenceRows(recommendation) {
+  const storyEvidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+  if (recommendation.decision === 'RESEARCH_MORE') return storyEvidence;
+  const referenced = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
+  return storyEvidence.filter((item) => referenced.has(String(item.id)));
+}
 
-  if (source === 'x') {
-    const result = await fetchXNichePosts(Math.max(NEWS_LIMIT * 6, 48));
-    const ranked = personalizeCandidates(rankNews({ xPosts: result.posts }), preference);
-    upsertCandidates(ranked);
-    if (!result.error) {
-      const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
-      persistDiscoverSnapshot('x', result.posts.map((post) => byKey.get(post.url)).filter(Boolean));
-    }
-    return result.error;
-  }
+function formatEditorialEvidence(item) {
+  return {
+    id: String(item.id),
+    claim: item.claim,
+    claimType: item.claimType,
+    status: item.status,
+    sourceKind: item.sourceKind,
+    sourceFamily: item.sourceFamily,
+    requestedUrl: item.requestedUrl,
+    resolvedUrl: item.resolvedUrl,
+    title: item.title,
+    summary: item.summary,
+    observedAt: item.observedAt,
+  };
+}
 
-  if (source === 'viral') {
-    const result = await fetchXViralPosts(Math.max(NEWS_LIMIT * 2, 16), 1, true);
-    const ranked = personalizeCandidates(rankXViralPosts(result.posts), preference);
-    upsertCandidates(ranked);
-    if (!result.error) persistDiscoverSnapshot('viral', ranked);
-    return result.error;
-  }
+function formatEditorialRecommendationView(recommendation) {
+  const evidence = editorialEvidenceRows(recommendation);
+  const statusCounts = {};
+  for (const item of evidence) statusCounts[item.status] = (statusCounts[item.status] || 0) + 1;
+  const selection = getEditorialSelectionByRecommendation(recommendation.id);
+  const queueItem = selection ? getQueueItem(selection.queueItemId) : null;
+  return {
+    id: recommendation.id,
+    rank: recommendation.rank,
+    decision: recommendation.decision,
+    pipeline: recommendation.pipeline,
+    objective: recommendation.objective,
+    title: recommendation.title,
+    thesis: recommendation.thesis,
+    whyNow: recommendation.whyNow,
+    whyThisFormat: recommendation.whyThisFormat,
+    desiredReaderOutcome: recommendation.desiredReaderOutcome,
+    candidateKeys: recommendation.candidateKeys,
+    targetCandidateKey: recommendation.targetCandidateKey,
+    potentials: recommendation.potentials || {},
+    authority: recommendation.authority || {},
+    profileProof: recommendation.profileProof || {},
+    evidenceIds: (recommendation.evidenceIds || []).map(String),
+    evidence: evidence.map(formatEditorialEvidence),
+    evidenceState: {
+      count: evidence.length,
+      statuses: statusCounts,
+      sourceFamilies: [...new Set(evidence.map((item) => item.sourceFamily).filter(Boolean))],
+    },
+    algorithmEvidence: recommendation.algorithmEvidence || [],
+    learnedContext: recommendation.learnedContext || {},
+    aiExecution: recommendation.aiExecution || {},
+    risks: recommendation.risks || [],
+    alternatives: recommendation.alternatives || [],
+    researchQuestions: recommendation.researchQuestions || [],
+    status: recommendation.status,
+    selectedAt: recommendation.selectedAt,
+    dismissedAt: recommendation.dismissedAt,
+    createdAt: recommendation.createdAt,
+    sources: (recommendation.candidateKeys || []).map((key) => getCandidate(key)).filter(Boolean).map((candidate) => ({
+      key: candidate.key,
+      source: candidate.source,
+      title: candidate.title || '',
+      text: candidate.text || '',
+      url: candidate.url || '',
+    })),
+    selection: selection ? {
+      id: selection.id,
+      queueItemId: selection.queueItemId,
+      selectedPipeline: selection.selectedPipeline,
+      selectedAt: selection.selectedAt,
+      candidateKey: queueItem?.candidateKey || null,
+      draftId: queueItem?.draftId ?? null,
+      queueStatus: queueItem?.status || null,
+    } : null,
+  };
+}
 
-  if (source === 'github') {
-    const repos = await fetchGitHubTrending(Math.max(NEWS_LIMIT * 2, 16));
-    if (!Array.isArray(repos)) return repos?.error || 'GitHub Trending research failed.';
-    const ranked = personalizeCandidates(rankNews({ ghRepos: repos }), preference);
-    upsertCandidates(ranked);
-    const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
-    persistDiscoverSnapshot('github', repos.map((repo) => byKey.get(repo.url)).filter(Boolean));
-    return null;
-  }
-
-  if (source === 'hn') {
-    const stories = await fetchHackerNews(Math.max(NEWS_LIMIT * 2, 16));
-    if (!Array.isArray(stories)) return stories?.error || 'Hacker News research failed.';
-    const ranked = personalizeCandidates(rankNews({ hnStories: stories }), preference);
-    upsertCandidates(ranked);
-    const byKey = new Map(ranked.map((candidate) => [candidate.key, candidate]));
-    persistDiscoverSnapshot('hn', stories.map((story) => byKey.get(story.url)).filter(Boolean));
-    return null;
-  }
-
-  if (source === 'all') {
-    const [xResult, repos, stories] = await Promise.all([
-      fetchXNichePosts(Math.max(NEWS_LIMIT * 4, 32)),
-      fetchGitHubTrending(NEWS_LIMIT),
-      fetchHackerNews(NEWS_LIMIT),
-    ]);
-    const xRanked = personalizeCandidates(rankNews({ xPosts: xResult.posts }), preference);
-    const githubRanked = Array.isArray(repos) ? personalizeCandidates(rankNews({ ghRepos: repos }), preference) : [];
-    const hnRanked = Array.isArray(stories) ? personalizeCandidates(rankNews({ hnStories: stories }), preference) : [];
-    upsertCandidates([...xRanked, ...githubRanked, ...hnRanked]);
-    if (!xResult.error) {
-      const byKey = new Map(xRanked.map((candidate) => [candidate.key, candidate]));
-      persistDiscoverSnapshot('x', xResult.posts.map((post) => byKey.get(post.url)).filter(Boolean));
-    }
-    if (Array.isArray(repos)) {
-      const byKey = new Map(githubRanked.map((candidate) => [candidate.key, candidate]));
-      persistDiscoverSnapshot('github', repos.map((repo) => byKey.get(repo.url)).filter(Boolean));
-    }
-    if (Array.isArray(stories)) {
-      const byKey = new Map(hnRanked.map((candidate) => [candidate.key, candidate]));
-      persistDiscoverSnapshot('hn', stories.map((story) => byKey.get(story.url)).filter(Boolean));
-    }
-    return xResult.error || (!Array.isArray(repos) ? repos?.error : null) || (!Array.isArray(stories) ? stories?.error : null);
-  }
-
-  return null;
+function editorialPlanView(objective) {
+  const selectedObjective = editorialObjective(objective);
+  const plan = getLatestEditorialPlan(selectedObjective);
+  const recommendations = plan ? plan.recommendations.map(formatEditorialRecommendationView) : [];
+  return {
+    objective: selectedObjective,
+    hasPlan: Boolean(plan),
+    run: plan ? {
+      id: plan.run.id,
+      status: plan.run.status,
+      createdAt: plan.run.createdAt,
+      completedAt: plan.run.completedAt,
+      sourceSnapshot: plan.run.sourceSnapshot || {},
+      aiExecution: plan.run.aiExecution || {},
+    } : null,
+    sourceFreshness: sourceFreshnessView(),
+    recommendations,
+    noStrongAction: Boolean(plan && recommendations.length === 0),
+    noStrongActionReason: plan?.run?.context?.noStrongCurrentActionReason || '',
+  };
 }
 
 export function requireEngagementSendAllowed() {
@@ -452,7 +484,7 @@ export function requireEngagementSendAllowed() {
 // Payload formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatCandidate(candidate, { includeQueue = true } = {}) {
+function formatCandidate(candidate, { includeQueue = true, sourceKind = null, editorialRecommendation = null } = {}) {
   const metrics = candidate.metrics || {};
   const niche = candidate.niche || {};
   let queueItem = includeQueue ? getQueueItemByCandidate(candidate.key) : null;
@@ -470,6 +502,7 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
       }, queueItem)
     : null;
   const completion = actionViews[0] || publishedWithoutAction;
+  const sourceMomentum = sourceKind ? getSourceMomentum(candidate.key, sourceKind) : null;
   return {
     key: candidate.key,
     title: candidate.title || candidate.text?.slice(0, 80) || 'Untitled',
@@ -511,6 +544,23 @@ function formatCandidate(candidate, { includeQueue = true } = {}) {
           score: candidate.viral.score,
         }
       : null,
+    sourceMomentum: sourceMomentum?.current ? {
+      snapshotKind: sourceMomentum.snapshotKind,
+      current: sourceMomentum.current,
+      previous: sourceMomentum.previous,
+      intervalMs: sourceMomentum.intervalMs,
+      intervalHours: sourceMomentum.intervalHours,
+      deltas: sourceMomentum.deltas,
+      reason: sourceMomentum.reason,
+    } : null,
+    editorialPlan: editorialRecommendation ? {
+      recommendationId: editorialRecommendation.id,
+      rank: editorialRecommendation.rank,
+      decision: editorialRecommendation.decision,
+      pipeline: editorialRecommendation.pipeline,
+      status: editorialRecommendation.status,
+      title: editorialRecommendation.title,
+    } : null,
     queue: queueItem
       ? {
           pipeline: queueItem.pipeline,
@@ -1291,6 +1341,64 @@ export async function handleApi(req, res, requestUrl) {
       return sendSuccess({ runs: listAiRuns(options).map(formatAiRun) });
     }
 
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'editorial') {
+      return sendSuccess(editorialPlanView(query.get('objective') || 'qualified_growth'));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'editorial' && segments[1] === 'refresh') {
+      const payload = await readBody();
+      const objective = editorialObjective(payload.objective || 'qualified_growth');
+      await refreshEditorialPlan({ objective, refreshSources: payload.refreshSources === true });
+      return sendSuccess(editorialPlanView(objective));
+    }
+
+    if (method === 'GET' && segments.length === 3 && segments[0] === 'editorial' && segments[1] === 'recommendations') {
+      const recommendation = getEditorialRecommendation(Number(segments[2]));
+      if (!recommendation) return sendNotFound(`Editorial recommendation not found: ${segments[2]}`);
+      return sendSuccess({ recommendation: formatEditorialRecommendationView(recommendation) });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'editorial' && segments[1] === 'recommendations' && segments[3] === 'select') {
+      const payload = await readBody();
+      const selected = selectEditorialRecommendation(Number(segments[2]), {
+        pipelineOverride: payload.pipelineOverride == null || payload.pipelineOverride === '' ? null : String(payload.pipelineOverride),
+      });
+      return sendSuccess({
+        recommendation: formatEditorialRecommendationView(selected.recommendation),
+        selection: selected.selection,
+        queueItem: formatQueueItem(selected.queueItem),
+        candidateKey: selected.queueItem.candidateKey,
+        draftId: selected.queueItem.draftId ?? null,
+        research: selected.research || null,
+        idempotent: selected.idempotent === true,
+      });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'editorial' && segments[1] === 'recommendations' && segments[3] === 'dismiss') {
+      const recommendation = dismissEditorialRecommendation(Number(segments[2]));
+      return sendSuccess({ recommendation: formatEditorialRecommendationView(recommendation) });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'editorial' && segments[1] === 'recommendations' && segments[3] === 'research-source') {
+      const payload = await readBody();
+      const evidence = await attachEditorialResearchSource(Number(segments[2]), {
+        url: payload.url,
+        claim: payload.claim,
+        claimType: payload.claimType || 'other',
+      });
+      const recommendation = getEditorialRecommendation(Number(segments[2]));
+      return sendSuccess({ evidence: formatEditorialEvidence(evidence), recommendation: formatEditorialRecommendationView(recommendation) });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'editorial' && segments[1] === 'outcomes') {
+      return sendSuccess({
+        outcomes: getEditorialOutcomeSummary({
+          windowMinutes: Number(query.get('windowMinutes') || 1440),
+          limit: Math.max(1, Math.min(200, Number(query.get('limit') || 200))),
+        }),
+      });
+    }
+
     if (method === 'GET' && segments.length === 1 && segments[0] === 'today') {
       const now = Date.now();
       const engagementItems = listEngagementItems({ limit: 100 });
@@ -1397,34 +1505,58 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'GET' && segments.length === 1 && segments[0] === 'discover') {
       const feed = DISCOVER_FEEDS.has(query.get('feed')) ? query.get('feed') : 'for-you';
       const tag = query.get('tag') || '';
+      const objective = editorialObjective(query.get('objective') || 'qualified_growth');
+      const currentPlan = getLatestEditorialPlan(objective);
+      const editorialByCandidate = new Map();
+      for (const recommendation of currentPlan?.recommendations || []) {
+        for (const candidateKey of recommendation.candidateKeys || []) {
+          if (!editorialByCandidate.has(candidateKey)) editorialByCandidate.set(candidateKey, recommendation);
+        }
+      }
       let candidates;
       let snapshotAt = null;
+      let lastRefreshAttemptAt = null;
+      let sourceError = null;
+      let legacyFallback = false;
+      const sourceKind = DISCOVER_SOURCE_KINDS[feed] || null;
       switch (feed) {
         case 'x': {
-          const snapshot = loadDiscoverSnapshot('x');
+          const snapshot = getDiscoverSnapshot('x_latest');
           candidates = snapshot.candidates;
           snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
           break;
         }
         case 'trending': {
-          const snapshot = loadDiscoverSnapshot('viral');
+          const snapshot = getDiscoverSnapshot('x_momentum');
           candidates = snapshot.candidates;
           snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
           break;
         }
         case 'opportunities':
           candidates = listCandidates({ source: 'x', withinHours: 168, resolution: 'actionable', limit: 250 }).filter(isOpportunityCandidate);
           break;
         case 'github': {
-          const snapshot = loadDiscoverSnapshot('github');
+          const snapshot = getDiscoverSnapshot('github_trending');
           candidates = snapshot.candidates;
           snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
           break;
         }
         case 'hn': {
-          const snapshot = loadDiscoverSnapshot('hn');
+          const snapshot = getDiscoverSnapshot('hn_top');
           candidates = snapshot.candidates;
           snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
           break;
         }
         case 'all':
@@ -1442,12 +1574,20 @@ export async function handleApi(req, res, requestUrl) {
             .slice(0, 250);
       }
       if (tag) candidates = candidates.filter((item) => item.niche?.tags?.includes(tag));
-      const visible = candidates.slice(0, 60).map((candidate) => formatCandidate(candidate));
+      const visible = candidates.slice(0, 60).map((candidate) => formatCandidate(candidate, {
+        sourceKind,
+        editorialRecommendation: editorialByCandidate.get(candidate.key) || null,
+      }));
       const refreshable = feed === 'x' ? 'x' : feed === 'trending' ? 'viral' : ['github', 'hn'].includes(feed) ? feed : null;
       return sendSuccess({
         feed,
         refreshable,
+        sourceKind,
         snapshotAt,
+        lastRefreshAttemptAt,
+        sourceError,
+        legacyFallback,
+        editorialObjective: objective,
         topicFilters: Object.entries(NICHE_LABELS).map(([value, labelText]) => ({ value, label: labelText })),
         candidates: visible,
         total: candidates.length,
@@ -1457,9 +1597,9 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 2 && segments[0] === 'discover' && segments[1] === 'refresh') {
       const payload = await readBody();
       const requested = String(payload.feed || 'x');
-      if (!REFRESHABLE_FEEDS.has(requested)) throw new Error(`This feed cannot be refreshed directly: ${requested}`);
-      const error = await collectResearch(requested);
-      return sendSuccess({ error: error || null, refreshedFeed: requested });
+      const kind = normalizeSourceKind(requested);
+      const refresh = kind === 'all' ? await refreshAllSourceSnapshots() : await refreshSourceSnapshot(kind);
+      return sendSuccess({ refreshedFeed: requested, refresh });
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'discover' && segments[1] === 'triage') {
@@ -1831,6 +1971,7 @@ export async function handleApi(req, res, requestUrl) {
       const network = accountHealth?.networkQuality?.components || {};
       const measured = formatMeasurementSeries(listPublicationMeasurementSeries({ limit: 8 }), { latestOnly: true }).slice(0, 4);
       const technical = formatMeasurementSeries(listPublicationMeasurementSeries({ limit: 20 }));
+      const editorialOutcomes = getEditorialOutcomeSummary({ windowMinutes: 1440, limit: 200 });
       return sendSuccess({
         account: account
           ? {
@@ -1867,6 +2008,7 @@ export async function handleApi(req, res, requestUrl) {
         },
         measuredPosts: measured,
         technical,
+        editorialOutcomes,
       });
     }
 

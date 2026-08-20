@@ -9,6 +9,46 @@ import {
   formatNumber,
 } from '../../components/primitives'
 
+function distributionText(distribution: { values: Record<string, { count: number; share: number }> }) {
+  const entries = Object.entries(distribution.values || {})
+  return entries.length ? entries.map(([value, item]) => `${value}: ${item.count} (${Math.round(item.share * 100)}%)`).join(' · ') : 'not recorded'
+}
+
+function OutcomeGroups({ title, groups }: { title: string; groups: { value: string; summary: { sampleSize: number; metrics: Record<string, number | null>; attributionConfidence: { values: Record<string, { count: number; share: number }> }; confounders: Record<string, { values: Record<string, { count: number; share: number }> }> } }[] }) {
+  if (!groups.length) return null
+  return (
+    <div>
+      <div className="text-sm font-semibold text-slate-900">{title}</div>
+      <div className="mt-2 grid gap-3 lg:grid-cols-2">
+        {groups.map((group) => (
+          <div key={group.value} className="rounded-md border border-slate-200 bg-white p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-slate-900">{group.value.replaceAll('_', ' ')}</strong>
+              <span className="text-xs text-slate-500">n={group.summary.sampleSize}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-700">
+              <div>Views/h: <strong>{group.summary.metrics.views_per_hour ?? 'n/a'}</strong></div>
+              <div>Replies/1k: <strong>{group.summary.metrics.replies_per_1000_views ?? 'n/a'}</strong></div>
+              <div>Reposts/1k: <strong>{group.summary.metrics.reposts_per_1000_views ?? 'n/a'}</strong></div>
+              <div>Assoc. follows/1k: <strong>{group.summary.metrics.associated_follows_per_1000_views ?? 'n/a'}</strong></div>
+            </div>
+            <div className="mt-2 text-xs text-slate-500">Attribution confidence: {distributionText(group.summary.attributionConfidence)}</div>
+            {Object.keys(group.summary.confounders || {}).length > 0 && (
+              <Disclosure summary="Attribution context / confounders">
+                <div className="space-y-1 text-xs text-slate-600">
+                  {Object.entries(group.summary.confounders).map(([key, distribution]) => (
+                    <div key={key}><strong>{key.replaceAll('_', ' ')}:</strong> {distributionText(distribution)}</div>
+                  ))}
+                </div>
+              </Disclosure>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function Results() {
   const { data, isLoading, error, refetch } = useResults()
   const refresh = useRefreshPerformance()
@@ -137,6 +177,25 @@ export function Results() {
           </div>
         )}
       </section>
+
+      {data.editorialOutcomes && (
+        <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-900">Editorial outcome observations</h3>
+            <p className="mt-1 text-sm text-slate-600">
+              {data.editorialOutcomes.observationCount} real {data.editorialOutcomes.windowMinutes / 60}h publication observations. These cohorts are descriptive associations, not causal proof that a recommendation or format caused the outcome.
+            </p>
+          </div>
+          <div className="space-y-5">
+            <OutcomeGroups title="AI recommended format" groups={data.editorialOutcomes.byRecommendedPipeline} />
+            <OutcomeGroups title="Human selected format" groups={data.editorialOutcomes.bySelectedPipeline} />
+            <OutcomeGroups title="Final published format" groups={data.editorialOutcomes.byFinalPublishedPipeline} />
+            <Disclosure summary="Objective cohorts">
+              <OutcomeGroups title="Editorial objective" groups={data.editorialOutcomes.byObjective} />
+            </Disclosure>
+          </div>
+        </section>
+      )}
 
       <Disclosure summary="Technical measurements">
         <div className="space-y-4">

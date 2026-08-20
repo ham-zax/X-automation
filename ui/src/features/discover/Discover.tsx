@@ -48,6 +48,44 @@ function candidateMetricLine(candidate: DiscoveredCandidate): string {
   return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies`
 }
 
+function sourceMomentumLine(candidate: DiscoveredCandidate): string | null {
+  const momentum = candidate.sourceMomentum
+  if (!momentum?.deltas) return null
+  const interval = momentum.intervalHours == null ? 'previous observation' : `${momentum.intervalHours.toFixed(1)}h observation interval`
+  const deltas = momentum.deltas as Record<string, unknown>
+  if (momentum.snapshotKind === 'github_trending') {
+    const rank = Number(deltas.rankMovement || 0)
+    const stars = Number(deltas.stars || 0)
+    const starsToday = Number(deltas.starsToday || 0)
+    const parts = [rank ? `rank ${rank > 0 ? '+' : ''}${rank}` : '', stars ? `${stars > 0 ? '+' : ''}${stars} stars` : '', starsToday ? `${starsToday > 0 ? '+' : ''}${starsToday} stars today` : ''].filter(Boolean)
+    return parts.length ? `${parts.join(' · ')} · ${interval}` : null
+  }
+  if (momentum.snapshotKind === 'hn_top') {
+    const rank = Number(deltas.rankMovement || 0)
+    const points = Number(deltas.points || 0)
+    const comments = Number(deltas.comments || 0)
+    const parts = [rank ? `rank ${rank > 0 ? '+' : ''}${rank}` : '', points ? `${points > 0 ? '+' : ''}${points} points` : '', comments ? `${comments > 0 ? '+' : ''}${comments} comments` : ''].filter(Boolean)
+    return parts.length ? `${parts.join(' · ')} · ${interval}` : null
+  }
+  const parts = ['views', 'likes', 'reposts', 'replies'].flatMap((key) => {
+    const value = deltas[key]
+    if (!value || typeof value !== 'object') return []
+    const delta = Number((value as { delta?: number }).delta)
+    if (!Number.isFinite(delta) || delta === 0) return []
+    return `${delta > 0 ? '+' : ''}${formatNumber(delta)} ${key}`
+  })
+  return parts.length ? `${parts.join(' · ')} · ${interval}` : null
+}
+
+function editorialPlanLabel(candidate: DiscoveredCandidate) {
+  const plan = candidate.editorialPlan
+  if (!plan) return null
+  if (plan.decision === 'RESEARCH_MORE') return 'Research recommended'
+  if (plan.decision === 'SKIP') return "In today's plan · Skip"
+  const pipeline = plan.pipeline ? plan.pipeline.charAt(0).toUpperCase() + plan.pipeline.slice(1) : 'Prepare'
+  return `In today's plan · ${pipeline}`
+}
+
 function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; index: number }) {
   const triage = useDiscoverTriage()
   const pendingAction = triage.variables?.key === candidate.key && triage.isPending ? triage.variables.action : null
@@ -81,6 +119,8 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
   const queue = candidate.queue
   const completion = candidate.completion
   const skipped = queue?.status === 'ignored'
+  const movement = sourceMomentumLine(candidate)
+  const planLabel = editorialPlanLabel(candidate)
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-6">
@@ -97,6 +137,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
             ? <Badge tone="danger">Internal momentum · {candidate.viral.label}</Badge>
             : <Badge>{isGitHubTrending ? 'GitHub Trending' : isGitHub ? 'Legacy GitHub signal' : isHnTopStory ? 'HN Top Stories' : isHn ? 'Historical HN signal' : 'X search signal'}</Badge>}
           {candidate.saved && <Badge tone="success">Bookmarked</Badge>}
+          {planLabel && <Badge tone={candidate.editorialPlan?.decision === 'RESEARCH_MORE' ? 'warning' : 'info'}>{planLabel}</Badge>}
           {completion ? <Badge tone="success">Handled · {completion.label}</Badge> : queue && <Badge tone="info">{queue.statusLabel}</Badge>}
         </div>
       </div>
@@ -120,10 +161,11 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
 
       {candidate.displayText && <p className="mt-3 text-sm leading-6 text-slate-700 break-words">{candidate.displayText}</p>}
       <div className="mt-2 text-xs text-slate-500">{candidateMetricLine(candidate)}</div>
+      {movement && <div className="mt-1 text-xs font-medium text-slate-600">Source movement: {movement}</div>}
 
-      {!completion && queue?.recommendedPipeline && (
+      {!completion && !candidate.editorialPlan && queue?.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">
-          <strong>Suggested next step:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
+          <strong>Rule-based route:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
         </div>
       )}
       {!completion && queue?.draftId && (
@@ -304,6 +346,11 @@ export function Discover() {
           Refresh failed: {refresh.error.message}
         </div>
       )}
+      {data?.sourceError && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          The last source refresh had a partial error: {data.sourceError}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {FEEDS.map((item) => (
@@ -353,6 +400,8 @@ export function Discover() {
           <div className="text-sm text-slate-600">
             <div>{data.total} {data.total === 1 ? 'item' : 'items'}</div>
             {data.snapshotAt && <div className="mt-1 text-xs text-slate-500">Source snapshot updated {formatDateTime(data.snapshotAt)}. Refresh source to check upstream again.</div>}
+            {data.lastRefreshAttemptAt && data.lastRefreshAttemptAt !== data.snapshotAt && <div className="mt-1 text-xs text-slate-500">Last refresh attempt {formatDateTime(data.lastRefreshAttemptAt)}.</div>}
+            {data.legacyFallback && <div className="mt-1 text-xs text-amber-700">Showing the preserved legacy snapshot until the next successful canonical refresh.</div>}
           </div>
           <div className="space-y-4">
             {data.candidates.map((candidate, index) => (

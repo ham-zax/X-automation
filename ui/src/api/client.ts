@@ -191,6 +191,161 @@ export function useToday() {
   })
 }
 
+export type EditorialObjective = 'qualified_growth' | 'reach_momentum' | 'relationships' | 'technical_authority' | 'balanced'
+
+export interface EditorialEvidenceView {
+  id: string
+  claim: string
+  claimType: string
+  status: string
+  sourceKind: string
+  sourceFamily: string
+  requestedUrl: string
+  resolvedUrl: string
+  title: string
+  summary: string
+  observedAt: number
+}
+
+export interface EditorialRecommendationView {
+  id: number
+  rank: number
+  decision: 'PREPARE' | 'RESEARCH_MORE' | 'SKIP'
+  pipeline: string | null
+  objective: EditorialObjective
+  title: string
+  thesis: string
+  whyNow: string
+  whyThisFormat: string
+  desiredReaderOutcome: string
+  candidateKeys: string[]
+  targetCandidateKey: string | null
+  potentials: Record<string, number | string | null>
+  authority: Record<string, unknown> & { value?: number }
+  profileProof: { topic?: string; coverage?: string; supportingPostIds?: string[]; reason?: string }
+  evidenceIds: string[]
+  evidence: EditorialEvidenceView[]
+  evidenceState: { count: number; statuses: Record<string, number>; sourceFamilies: string[] }
+  algorithmEvidence: unknown[]
+  learnedContext: Record<string, unknown>
+  aiExecution: Record<string, unknown>
+  risks: unknown[]
+  alternatives: unknown[]
+  researchQuestions: string[]
+  status: string
+  selectedAt: number | null
+  dismissedAt: number | null
+  createdAt: number
+  sources: { key: string; source: string; title: string; text: string; url: string }[]
+  selection: {
+    id: number
+    queueItemId: number
+    selectedPipeline: string
+    selectedAt: number
+    candidateKey: string | null
+    draftId: number | null
+    queueStatus: string | null
+  } | null
+}
+
+export interface EditorialSourceFreshness {
+  kind: string
+  fetchedAt: number | null
+  lastRefreshAttemptAt: number | null
+  error: string | null
+  legacyFallback: boolean
+  candidateCount: number
+}
+
+export interface EditorialPlanData {
+  objective: EditorialObjective
+  hasPlan: boolean
+  run: {
+    id: number
+    status: string
+    createdAt: number
+    completedAt: number | null
+    sourceSnapshot: Record<string, unknown>
+    aiExecution: Record<string, unknown>
+  } | null
+  sourceFreshness: EditorialSourceFreshness[]
+  recommendations: EditorialRecommendationView[]
+  noStrongAction: boolean
+  noStrongActionReason: string
+}
+
+export interface EditorialSelectionResult {
+  recommendation: EditorialRecommendationView
+  selection: { id: number; editorialRecommendationId: number; queueItemId: number; selectedPipeline: string; selectedAt: number }
+  queueItem: QueueItemView
+  candidateKey: string
+  draftId: number | null
+  research: { required: boolean; state: string; label: string; questions: string[] } | null
+  idempotent: boolean
+}
+
+function invalidateEditorial(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ['editorial'] })
+  void queryClient.invalidateQueries({ queryKey: ['today'] })
+  void queryClient.invalidateQueries({ queryKey: ['discover'] })
+}
+
+export function useEditorialPlan(objective: EditorialObjective) {
+  return useQuery({
+    queryKey: ['editorial', objective],
+    queryFn: () => fetchApi<EditorialPlanData>(`/editorial?objective=${encodeURIComponent(objective)}`),
+    staleTime: 30_000,
+  })
+}
+
+export function useEditorialRecommendation(id: number | null) {
+  return useQuery({
+    queryKey: ['editorial', 'recommendation', id],
+    queryFn: () => fetchApi<{ recommendation: EditorialRecommendationView }>(`/editorial/recommendations/${id}`),
+    enabled: id != null,
+    staleTime: 30_000,
+  })
+}
+
+export function useEditorialRefresh() {
+  const queryClient = useQueryClient()
+  return useMutation<EditorialPlanData, Error, { objective: EditorialObjective; refreshSources: boolean }>({
+    mutationFn: (payload) => postApi('/editorial/refresh', payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['editorial', data.objective], data)
+      invalidateEditorial(queryClient)
+    },
+  })
+}
+
+export function useEditorialSelect() {
+  const queryClient = useQueryClient()
+  return useMutation<EditorialSelectionResult, Error, { recommendationId: number; pipelineOverride?: string | null }>({
+    mutationFn: ({ recommendationId, pipelineOverride }) => postApi(`/editorial/recommendations/${recommendationId}/select`, { pipelineOverride }),
+    onSuccess: () => {
+      invalidateEditorial(queryClient)
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    },
+  })
+}
+
+export function useEditorialDismiss() {
+  const queryClient = useQueryClient()
+  return useMutation<{ recommendation: EditorialRecommendationView }, Error, number>({
+    mutationFn: (recommendationId) => postApi(`/editorial/recommendations/${recommendationId}/dismiss`),
+    onSuccess: () => invalidateEditorial(queryClient),
+  })
+}
+
+export function useEditorialAddResearchSource() {
+  const queryClient = useQueryClient()
+  return useMutation<{ evidence: EditorialEvidenceView; recommendation: EditorialRecommendationView }, Error, { recommendationId: number; url: string; claim: string; claimType?: string }>({
+    mutationFn: ({ recommendationId, ...payload }) => postApi(`/editorial/recommendations/${recommendationId}/research-source`, payload),
+    onSuccess: () => invalidateEditorial(queryClient),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Discover
 // ---------------------------------------------------------------------------
@@ -208,6 +363,23 @@ export interface DiscoveredCandidate {
   metrics: Record<string, number | string> & { kind: string }
   niche: { tags: { tag: string; label: string }[]; matches: string[]; score: number | null }
   viral: { tier: string; label: string; ageHours: number; viewsPerHour: number; engagementsPerHour: number; score: number } | null
+  sourceMomentum: {
+    snapshotKind: string
+    current: { observedAt: number; rank: number | null; metrics: Record<string, unknown> }
+    previous: { observedAt: number; rank: number | null; metrics: Record<string, unknown> } | null
+    intervalMs: number | null
+    intervalHours: number | null
+    deltas: Record<string, unknown> | null
+    reason: string | null
+  } | null
+  editorialPlan: {
+    recommendationId: number
+    rank: number
+    decision: 'PREPARE' | 'RESEARCH_MORE' | 'SKIP'
+    pipeline: string | null
+    status: string
+    title: string
+  } | null
   queue: {
     pipeline: string
     pipelineLabel: string
@@ -227,7 +399,12 @@ export interface DiscoveredCandidate {
 export interface DiscoverData {
   feed: string
   refreshable: string | null
+  sourceKind: string | null
   snapshotAt: number | null
+  lastRefreshAttemptAt: number | null
+  sourceError: string | null
+  legacyFallback: boolean
+  editorialObjective: EditorialObjective
   topicFilters: { value: string; label: string }[]
   candidates: DiscoveredCandidate[]
   total: number
@@ -243,7 +420,7 @@ export function useDiscover(feed: string, tag: string) {
 
 export function useDiscoverRefresh() {
   const queryClient = useQueryClient()
-  return useMutation<unknown, Error, string>({
+  return useMutation<{ refreshedFeed: string; refresh: unknown }, Error, string>({
     mutationFn: (feed: string) => postApi('/discover/refresh', { feed }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['discover'] })
@@ -485,6 +662,33 @@ export interface MeasuredPost {
   }
 }
 
+export interface EditorialOutcomeDistribution {
+  total: number
+  values: Record<string, { count: number; share: number }>
+}
+
+export interface EditorialOutcomeCohort {
+  kind: 'content'
+  sampleSize: number
+  totals: Record<string, number>
+  metrics: Record<string, number | null>
+  attributionConfidence: EditorialOutcomeDistribution
+  confounders: Record<string, EditorialOutcomeDistribution>
+  context: Record<string, unknown>
+  causalClaimAllowed: false
+}
+
+export interface EditorialOutcomeSummary {
+  windowMinutes: number
+  observationCount: number
+  byObjective: { value: string; summary: EditorialOutcomeCohort }[]
+  byRecommendedPipeline: { value: string; summary: EditorialOutcomeCohort }[]
+  bySelectedPipeline: { value: string; summary: EditorialOutcomeCohort }[]
+  byFinalPublishedPipeline: { value: string; summary: EditorialOutcomeCohort }[]
+  byTopic: { value: string; summary: EditorialOutcomeCohort }[]
+  causalClaimAllowed: false
+}
+
 export interface ResultsData {
   account: {
     followers: number
@@ -501,6 +705,7 @@ export interface ResultsData {
   accountHealth: { state: string; label: string; explanation: string }
   measuredPosts: MeasuredPost[]
   technical: { title: string; pipeline: string; publishedAt: number | null; outputUrl: string | null; measurements: Record<string, unknown>[] }[]
+  editorialOutcomes: EditorialOutcomeSummary | null
 }
 
 export function useResults() {

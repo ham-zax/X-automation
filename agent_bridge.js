@@ -6,6 +6,13 @@ import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
 import {
+  EDITORIAL_OBJECTIVES,
+  dismissEditorialRecommendation,
+  refreshEditorialPlan,
+  selectEditorialRecommendation,
+} from './editorial.js';
+import { attachEditorialResearchSource } from './research.js';
+import {
   ensureCandidateWorkflow,
   inspectWorkflow,
   requestQueueReview,
@@ -17,6 +24,7 @@ import {
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
   AI_ROLES,
+  SOURCE_SNAPSHOT_KINDS,
   acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
@@ -30,14 +38,20 @@ import {
   getCandidate,
   getDraft,
   getDraftByCandidate,
+  getDiscoverSnapshot,
+  getEditorialOutcomeSummary,
+  getEditorialRecommendation,
+  getEditorialSelectionByRecommendation,
   getExperiment,
   getExperimentSummary,
   getLearningOverview,
+  getLatestEditorialPlan,
   getNextReadyDraft,
   getMainFeedScheduleItem,
   getNewFollowerQuality,
   getPublicationMeasurements,
   getPerformanceSnapshot,
+  getQueueItem,
   getRelationshipProfile,
   hasCandidateAction,
   listAudienceProfiles,
@@ -54,6 +68,7 @@ import {
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
+  listResearchEvidence,
   listRelationshipEvents,
   listRelationshipProfiles,
   recordAccountHealthObservation,
@@ -204,9 +219,122 @@ function requireAssignableAiProfile(id, { confirmUnknownCapability = false } = {
   return profile;
 }
 
+function bridgeEditorialObjective(value = 'qualified_growth') {
+  const objective = String(value || 'qualified_growth');
+  if (!EDITORIAL_OBJECTIVES.includes(objective)) throw new Error(`Unsupported editorial objective: ${objective}.`);
+  return objective;
+}
+
+function bridgeEditorialRecommendation(recommendation) {
+  if (!recommendation) return null;
+  const storyEvidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+  const referenced = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
+  const evidence = recommendation.decision === 'RESEARCH_MORE'
+    ? storyEvidence
+    : storyEvidence.filter((item) => referenced.has(String(item.id)));
+  const selection = getEditorialSelectionByRecommendation(recommendation.id);
+  const queueItem = selection ? getQueueItem(selection.queueItemId) : null;
+  return {
+    ...recommendation,
+    evidence,
+    selection: selection ? {
+      ...selection,
+      candidateKey: queueItem?.candidateKey || null,
+      draftId: queueItem?.draftId ?? null,
+      queueStatus: queueItem?.status || null,
+    } : null,
+  };
+}
+
+function bridgeEditorialPlan(objective = 'qualified_growth') {
+  const selectedObjective = bridgeEditorialObjective(objective);
+  const plan = getLatestEditorialPlan(selectedObjective);
+  return {
+    objective: selectedObjective,
+    hasPlan: Boolean(plan),
+    run: plan?.run || null,
+    sourceFreshness: SOURCE_SNAPSHOT_KINDS.map((kind) => {
+      const snapshot = getDiscoverSnapshot(kind);
+      return {
+        kind,
+        fetchedAt: snapshot.fetchedAt,
+        lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
+        error: snapshot.error,
+        legacyFallback: snapshot.legacyFallback,
+        candidateCount: snapshot.candidates.length,
+      };
+    }),
+    recommendations: (plan?.recommendations || []).map(bridgeEditorialRecommendation),
+    noStrongAction: Boolean(plan && plan.recommendations.length === 0),
+    noStrongActionReason: plan?.run?.context?.noStrongCurrentActionReason || '',
+  };
+}
+
 async function main() {
   const command = process.argv[2];
   const payload = await readInput();
+
+  if (command === 'editorial-plan') {
+    result(bridgeEditorialPlan(payload.objective || 'qualified_growth'));
+    return;
+  }
+
+  if (command === 'editorial-refresh') {
+    const objective = bridgeEditorialObjective(payload.objective || 'qualified_growth');
+    await refreshEditorialPlan({ objective, refreshSources: payload.refreshSources === true });
+    result(bridgeEditorialPlan(objective));
+    return;
+  }
+
+  if (command === 'editorial-recommendation') {
+    const recommendation = getEditorialRecommendation(Number(payload.recommendationId));
+    if (!recommendation) throw new Error(`Editorial recommendation not found: ${payload.recommendationId}`);
+    result({ recommendation: bridgeEditorialRecommendation(recommendation) });
+    return;
+  }
+
+  if (command === 'editorial-select') {
+    const selected = selectEditorialRecommendation(Number(payload.recommendationId), {
+      pipelineOverride: payload.pipelineOverride == null || payload.pipelineOverride === '' ? null : String(payload.pipelineOverride),
+    });
+    result({
+      recommendation: bridgeEditorialRecommendation(selected.recommendation),
+      selection: selected.selection,
+      queueItem: selected.queueItem,
+      candidateKey: selected.queueItem.candidateKey,
+      draftId: selected.queueItem.draftId ?? null,
+      research: selected.research || null,
+      idempotent: selected.idempotent === true,
+    });
+    return;
+  }
+
+  if (command === 'editorial-dismiss') {
+    const recommendation = dismissEditorialRecommendation(Number(payload.recommendationId));
+    result({ recommendation: bridgeEditorialRecommendation(recommendation) });
+    return;
+  }
+
+  if (command === 'editorial-add-source') {
+    const evidence = await attachEditorialResearchSource(Number(payload.recommendationId), {
+      url: payload.url,
+      claim: payload.claim,
+      claimType: payload.claimType || 'other',
+    });
+    const recommendation = getEditorialRecommendation(Number(payload.recommendationId));
+    result({ evidence, recommendation: bridgeEditorialRecommendation(recommendation) });
+    return;
+  }
+
+  if (command === 'editorial-outcomes') {
+    result({
+      outcomes: getEditorialOutcomeSummary({
+        windowMinutes: Number(payload.windowMinutes || 1440),
+        limit: Math.max(1, Math.min(200, Number(payload.limit || 200))),
+      }),
+    });
+    return;
+  }
 
   if (command === 'ai-config') {
     result(safeAiConfig());
