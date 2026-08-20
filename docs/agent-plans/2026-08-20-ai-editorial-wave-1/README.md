@@ -10,8 +10,8 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A — AI Runtime Critical Path | executable/config | ready | now | `/home/hamza/repo/x_test-w6-ai-runtime` | concurrent executable changes; Agent A owns AI persistence/runtime files | none |
-| Agent B — Deterministic Editorial Core | executable/docs | ready | now | `/home/hamza/repo/x_test-w6-editorial-core` | concurrent executable changes; Agent B is kept off shared persistence/API/UI files | none |
+| Agent A — AI Runtime Critical Path | executable/config | complete | completed | `/home/hamza/repo/x_test-w6-ai-runtime` | isolated Wave-1 AI runtime ownership | none |
+| Agent B — Deterministic Editorial Core | executable/docs | complete | completed | `/home/hamza/repo/x_test-w6-editorial-core` | isolated Wave-1 deterministic editorial ownership | none |
 
 ## Dependency map
 
@@ -85,3 +85,5 @@ The authoritative plans explicitly state that no tests are authorized. Agents mu
 
 - `2026-08-20` — architecture/provider/editorial plan set committed on main at `08132b7`.
 - `2026-08-20` — Wave 1 prepared as two isolated concurrent missions with main reserved for integration.
+- `2026-08-20` — Agent A completed `ac6e68a` and Agent B completed `edd6c3d`; both were verified and integrated onto main as `1203be4` and `32c7575`.
+- `2026-08-20` — integrated Wave-1 syntax checks and `git diff --check 9af62b1..32c7575` passed; Wave 2 unlocked.
