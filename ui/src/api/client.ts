@@ -727,6 +727,63 @@ export function useRefreshPerformance() {
 }
 
 // ---------------------------------------------------------------------------
+// Niche
+// ---------------------------------------------------------------------------
+
+export interface NicheGroup {
+  tag: string
+  label: string
+  weight: number
+  requiresTechnicalContext?: boolean
+  terms: string[]
+}
+
+export interface NicheProfile {
+  contentGroups: NicheGroup[]
+  audienceGroups: NicheGroup[]
+  deprioritizedTerms: string[]
+  exclusionTerms: string[]
+}
+
+export interface NicheSettingsData {
+  profile: NicheProfile
+  customized: boolean
+  updatedAt: number | null
+}
+
+export function useNiche() {
+  return useQuery({
+    queryKey: ['niche'],
+    queryFn: () => fetchApi<NicheSettingsData>('/niche'),
+    staleTime: 60_000,
+  })
+}
+
+export function useNicheSave() {
+  const queryClient = useQueryClient()
+  return useMutation<NicheSettingsData, Error, NicheProfile>({
+    mutationFn: (profile) => postApi<NicheSettingsData>('/niche', { profile }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['niche'] })
+      void queryClient.invalidateQueries({ queryKey: ['audience'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+    },
+  })
+}
+
+export function useNicheReset() {
+  const queryClient = useQueryClient()
+  return useMutation<NicheSettingsData, Error, void>({
+    mutationFn: () => postApi<NicheSettingsData>('/niche/reset', {}),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['niche'] })
+      void queryClient.invalidateQueries({ queryKey: ['audience'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Audience
 // ---------------------------------------------------------------------------
 

@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { Scraper, createBrowser, createPage } from 'xactions';
 import { TwitterHttpClient, unfollowUser as unfollowUserHttp } from 'xactions/scrapers/twitter/http';
-import { AUDIENCE_NICHE_LABELS, classifyAudienceProfile } from './strategy.js';
+import { classifyAudienceProfile, getActiveNicheProfile } from './strategy.js';
 import { runStructuredAI } from './ai_runtime.js';
 import {
   getAppState,
@@ -48,6 +48,7 @@ const AUDIENCE_REVIEW_SCHEMA = {
 
 function audienceReviewInput(profile) {
   const relationship = getRelationshipProfile(profile.username);
+  const audienceLabels = Object.fromEntries(getActiveNicheProfile().audienceGroups.map((group) => [group.tag, group.label]));
   return {
     username: profile.username,
     displayName: profile.displayName || profile.username,
@@ -55,7 +56,7 @@ function audienceReviewInput(profile) {
     followsYou: Boolean(profile.followsYou),
     fitBucket: profile.fitBucket || 'uncertain',
     relevanceScore: Number(profile.relevanceScore || 0),
-    nicheTags: (profile.nicheTags || []).map((tag) => AUDIENCE_NICHE_LABELS[tag] || tag),
+    nicheTags: (profile.nicheTags || []).map((tag) => audienceLabels[tag] || tag),
     matchedKeywords: (profile.matchedKeywords || []).slice(0, 12),
     exclusionMatches: (profile.exclusionMatches || []).slice(0, 8),
     deprioritizationMatches: (profile.deprioritizationMatches || []).slice(0, 8),
@@ -124,7 +125,7 @@ export async function reviewAudienceFollowing({ profile = null } = {}) {
     'Use needs_human_review instead of consider_unfollow when evidence is incomplete, the account follows the operator back, or relationship context creates a meaningful tradeoff.',
     'Never infer sensitive traits and never use protected characteristics as a reason.',
     'Return only exact usernames present in FOLLOWING. Do not invent usernames. Order suggestions from strongest removal case to weakest.',
-    `TARGET NICHE LABELS: ${JSON.stringify(Object.values(AUDIENCE_NICHE_LABELS))}`,
+    `TARGET NICHE LABELS: ${JSON.stringify(getActiveNicheProfile().audienceGroups.map((group) => group.label))}`,
     `FOLLOWING (${packet.length}): ${JSON.stringify(packet)}`,
   ].join('\n\n');
 

@@ -128,12 +128,15 @@ export function Audience() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Performance</a>
-        <h2 className="mt-2 text-2xl font-semibold text-slate-900">Audience quality</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Review observed follower/following relationships and niche alignment. Classifications are advisory; nothing is unfollowed automatically.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Performance</a>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">Audience quality</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Review observed follower/following relationships and niche alignment. Classifications are advisory; nothing is unfollowed automatically.
+          </p>
+        </div>
+        <a href="#/advanced/niche" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Edit niche</a>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -58,6 +58,7 @@ import {
   getLatestEditorialSelectionForQueueItem,
   getLatestEditorialPlan,
   getNewFollowerQuality,
+  getNicheProfile,
   getPerformanceSnapshot,
   getPreferenceProfile,
   getQueueItem,
@@ -86,8 +87,10 @@ import {
   markCandidateSaved,
   recordPerformanceSnapshot,
   refreshLearnedRuleSuggestion,
+  resetNicheProfile,
   retireLearnedRule,
   saveDraft,
+  saveNicheProfile,
   setAiDefaultProfile,
   setAiProfileEnabled,
   setAiRoleBinding,
@@ -2324,6 +2327,19 @@ export async function handleApi(req, res, requestUrl) {
       if (!result.error) recordPerformanceSnapshot(result);
       const snapshot = getPerformanceSnapshot(30);
       return sendSuccess({ error: result.error || null, account: snapshot.account || null });
+    }
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'niche') {
+      return sendSuccess(getNicheProfile());
+    }
+
+    if (method === 'POST' && segments.length === 1 && segments[0] === 'niche') {
+      const payload = await readBody();
+      return sendSuccess(saveNicheProfile(payload.profile || payload));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'niche' && segments[1] === 'reset') {
+      return sendSuccess(resetNicheProfile());
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'audience') {

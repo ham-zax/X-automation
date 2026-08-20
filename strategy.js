@@ -175,6 +175,61 @@ const AUDIENCE_EXCLUSION_SIGNALS = [
   'retweet to win', 'comment to win', 'free money', 'horoscope', 'astrology',
 ];
 
+function cloneNicheGroup(group) {
+  return {
+    tag: group.tag,
+    label: group.label,
+    weight: group.weight,
+    ...(group.requiresTechnicalContext ? { requiresTechnicalContext: true } : {}),
+    terms: [...group.terms],
+  };
+}
+
+function normalizeTerms(values, fallback) {
+  if (!Array.isArray(values)) return [...fallback];
+  return [...new Set(values.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))].slice(0, 500);
+}
+
+export function getDefaultNicheProfile() {
+  return {
+    contentGroups: NICHE_GROUPS.map(cloneNicheGroup),
+    audienceGroups: AUDIENCE_NICHE_GROUPS.map(cloneNicheGroup),
+    deprioritizedTerms: [...AUDIENCE_DEPRIORITY_SIGNALS],
+    exclusionTerms: [...AUDIENCE_EXCLUSION_SIGNALS],
+  };
+}
+
+let ACTIVE_NICHE_PROFILE = getDefaultNicheProfile();
+
+export function setActiveNicheProfile(profile = {}) {
+  const defaults = getDefaultNicheProfile();
+  const suppliedContent = new Map((profile.contentGroups || []).map((group) => [String(group?.tag || ''), group]));
+  const suppliedAudience = new Map((profile.audienceGroups || []).map((group) => [String(group?.tag || ''), group]));
+  ACTIVE_NICHE_PROFILE = {
+    contentGroups: defaults.contentGroups.map((group) => ({
+      ...group,
+      terms: normalizeTerms(suppliedContent.get(group.tag)?.terms, group.terms),
+    })),
+    audienceGroups: defaults.audienceGroups.map((group) => ({
+      ...group,
+      terms: normalizeTerms(suppliedAudience.get(group.tag)?.terms, group.terms),
+    })),
+    deprioritizedTerms: normalizeTerms(profile.deprioritizedTerms, defaults.deprioritizedTerms),
+    exclusionTerms: normalizeTerms(profile.exclusionTerms, defaults.exclusionTerms),
+  };
+  AUDIENCE_PROFILE_CLASSIFICATION_CACHE.clear();
+  return getActiveNicheProfile();
+}
+
+export function getActiveNicheProfile() {
+  return {
+    contentGroups: ACTIVE_NICHE_PROFILE.contentGroups.map(cloneNicheGroup),
+    audienceGroups: ACTIVE_NICHE_PROFILE.audienceGroups.map(cloneNicheGroup),
+    deprioritizedTerms: [...ACTIVE_NICHE_PROFILE.deprioritizedTerms],
+    exclusionTerms: [...ACTIVE_NICHE_PROFILE.exclusionTerms],
+  };
+}
+
 const AUDIENCE_PROFILE_CLASSIFICATION_CACHE = new Map();
 
 const TECHNICAL_ANCHORS = [
@@ -219,7 +274,7 @@ export function classifyNiche(text) {
   const matches = [];
   let score = 0;
 
-  for (const group of NICHE_GROUPS) {
+  for (const group of ACTIVE_NICHE_PROFILE.contentGroups) {
     const matchedTerms = group.terms.filter((term) => containsTerm(haystack, term));
     if (!matchedTerms.length) continue;
     if (group.requiresTechnicalContext && !hasTechnicalContext) continue;
@@ -263,7 +318,7 @@ export function classifyAudienceProfile(profile) {
   const matches = [];
   let score = 0;
 
-  for (const group of AUDIENCE_NICHE_GROUPS) {
+  for (const group of ACTIVE_NICHE_PROFILE.audienceGroups) {
     const groupMatches = profileMatches(group.terms);
     if (groupMatches.length) {
       tags.push(group.tag);
@@ -280,8 +335,8 @@ export function classifyAudienceProfile(profile) {
   score = Math.max(score, contentNiche.score || 0);
 
   const uniqueMatches = [...new Set(matches)];
-  const deprioritizationMatches = profileMatches(AUDIENCE_DEPRIORITY_SIGNALS);
-  const exclusionMatches = profileMatches(AUDIENCE_EXCLUSION_SIGNALS);
+  const deprioritizationMatches = profileMatches(ACTIVE_NICHE_PROFILE.deprioritizedTerms);
+  const exclusionMatches = profileMatches(ACTIVE_NICHE_PROFILE.exclusionTerms);
   const negativeMatches = [...new Set([...deprioritizationMatches, ...exclusionMatches])];
   const hasDeveloperContext = Boolean(contentNiche.tags?.length)
     || tags.some((tag) => ['devtools', 'software', 'infra'].includes(tag));

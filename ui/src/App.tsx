@@ -12,6 +12,7 @@ import { Audience } from './features/results/Audience'
 import { Improve } from './features/improve/Improve'
 import { Advanced } from './features/advanced/Advanced'
 import { AISettings } from './features/settings/AISettings'
+import { NicheSettings } from './features/settings/NicheSettings'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ function RouteContent() {
   if (first === 'results') return <Results />
   if (first === 'improve') return <Improve />
   if (first === 'advanced' && second === 'ai') return <AISettings />
+  if (first === 'advanced' && second === 'niche') return <NicheSettings />
   if (first === 'advanced') return <Advanced />
   return <Today />
 }

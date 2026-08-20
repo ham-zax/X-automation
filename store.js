@@ -30,7 +30,7 @@ import {
   reviewLearnedRules,
   transitionLearnedRule,
 } from './learning.js';
-import { classifyAudienceProfile } from './strategy.js';
+import { classifyAudienceProfile, getActiveNicheProfile, getDefaultNicheProfile, setActiveNicheProfile } from './strategy.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -583,6 +583,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_main_schedule ON queue_items(lane, status, scheduled_at, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_experiment_variant ON queue_items(experiment_variant_id, updated_at DESC);
 `);
+
+const NICHE_PROFILE_STATE_KEY = 'niche_profile:v1';
+const storedNicheProfile = db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_STATE_KEY)?.value;
+if (storedNicheProfile) {
+  try {
+    const parsed = JSON.parse(storedNicheProfile);
+    setActiveNicheProfile(parsed.profile || parsed);
+  } catch {
+    setActiveNicheProfile(getDefaultNicheProfile());
+  }
+}
 
 function json(value, fallback) {
   try {
@@ -2970,6 +2981,34 @@ export function setAppState(key, value) {
 
 export function getAppState(key, fallback = null) {
   return db.prepare('SELECT value FROM app_state WHERE key = ?').get(key)?.value ?? fallback;
+}
+
+export function getNicheProfile() {
+  const stored = db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_STATE_KEY)?.value;
+  let updatedAt = null;
+  if (stored) {
+    try { updatedAt = Number(JSON.parse(stored)?.updatedAt || 0) || null; } catch {}
+  }
+  return {
+    profile: getActiveNicheProfile(),
+    customized: Boolean(stored),
+    updatedAt,
+  };
+}
+
+export function saveNicheProfile(profile) {
+  const normalized = setActiveNicheProfile(profile || {});
+  const updatedAt = Date.now();
+  db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+    .run(NICHE_PROFILE_STATE_KEY, JSON.stringify({ profile: normalized, updatedAt }));
+  return { profile: normalized, customized: true, updatedAt };
+}
+
+export function resetNicheProfile() {
+  db.prepare('DELETE FROM app_state WHERE key = ?').run(NICHE_PROFILE_STATE_KEY);
+  const profile = setActiveNicheProfile(getDefaultNicheProfile());
+  return { profile, customized: false, updatedAt: null };
 }
 
 function requireSourceSnapshotKind(kind) {
