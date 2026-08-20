@@ -12,6 +12,8 @@ import {
 } from './tech_news.js';
 import { applyWriterOutput, buildWriterPacket, scoreDraft } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
+import { calculateProfileProofCoverage } from './profile_proof.js';
+import { matchResearchTopics } from './research_topics.js';
 import {
   approveEngagementQueueItem,
   approveQueueItem,
@@ -45,10 +47,12 @@ import {
   getCandidate,
   getDraft,
   getDraftByCandidate,
+  getEditorialRecommendation,
   getExperiment,
   getExperimentSummary,
   getLearningOverview,
   getMainFeedScheduleItem,
+  getLatestEditorialSelectionForQueueItem,
   getAppState,
   getNewFollowerQuality,
   getPerformanceSnapshot,
@@ -68,9 +72,11 @@ import {
   listExperimentAssignments,
   listExperiments,
   listPublicationMeasurementSeries,
+  listPublishedMainFeedContent,
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
+  listResearchEvidence,
   markCandidateSaved,
   recordPerformanceSnapshot,
   refreshLearnedRuleSuggestion,
@@ -268,15 +274,44 @@ export function schedulerContext(now = Date.now()) {
   };
 }
 
-export function evaluateDraftQuality(candidate, draft, pipeline) {
+export function evaluateDraftQuality(candidate, draft, pipeline, { evidence = null } = {}) {
   return scoreDraft(draft, candidate, {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
     factualityConfirmed: false,
     evidenceConfirmed: false,
+    evidence,
     mediaReady: !draft.editor?.media?.required,
   });
+}
+
+function writerEditorialContext(candidate, queueItem) {
+  const selection = queueItem ? getLatestEditorialSelectionForQueueItem(queueItem.id) : null;
+  if (selection) {
+    const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
+    if (!recommendation) throw new Error(`Editorial selection ${selection.id} references missing recommendation ${selection.editorialRecommendationId}.`);
+    const storyEvidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+    const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
+    return {
+      recommendation,
+      evidence: recommendation.decision === 'RESEARCH_MORE'
+        ? storyEvidence
+        : storyEvidence.filter((item) => linkedIds.has(String(item.id))),
+      profileProof: recommendation.profileProof || {},
+    };
+  }
+
+  const researchTopic = matchResearchTopics(candidate)[0] || null;
+  return {
+    recommendation: null,
+    evidence: [],
+    profileProof: calculateProfileProofCoverage({
+      topic: researchTopic,
+      semanticAnchors: researchTopic?.matchedAnchors || [],
+      publishedMainFeedItems: listPublishedMainFeedContent({ limit: 30 }),
+    }),
+  };
 }
 
 export async function generateDraftCandidate(current) {
@@ -287,11 +322,15 @@ export async function generateDraftCandidate(current) {
     throw new Error('Published text is historical record and cannot be regenerated.');
   }
   const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
-  const username = String(queueItem.engagementTargetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
+  const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
+  const editorialContext = writerEditorialContext(candidate, queueItem);
   const packet = buildWriterPacket({
     candidate,
     queueItem,
     draft: current,
+    evidence: editorialContext.evidence,
+    profileProof: editorialContext.profileProof,
+    editorialRecommendation: editorialContext.recommendation,
     relationship: username ? getRelationshipProfile(username) : null,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
@@ -302,7 +341,7 @@ export async function generateDraftCandidate(current) {
   if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
   const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline ? { ...current, editor: {} } : current;
   const next = applyWriterOutput(writerBase, output);
-  const analysis = evaluateDraftQuality(candidate, next, pipeline);
+  const analysis = evaluateDraftQuality(candidate, next, pipeline, { evidence: editorialContext.evidence });
   const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   routeCandidate(candidate.key, pipeline, { actor: 'agent' });
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };

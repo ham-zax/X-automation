@@ -1,16 +1,22 @@
 import { scoreOpportunity } from './opportunity.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { classifyResearchStory, matchResearchTopics } from './research_topics.js';
+import { routeCandidate } from './pipeline.js';
 import {
   SOURCE_SNAPSHOT_KINDS,
   createEditorialRun,
+  ensureEditorialCandidate,
   getAccountHealthSummary,
   getCandidate,
   getDiscoverSnapshot,
+  getEditorialRecommendation,
+  getEditorialSelectionByRecommendation,
   getPreferenceProfile,
+  getQueueItem,
   getQueueItemByCandidate,
   getRelationshipProfile,
   getSourceMomentum,
+  linkQueueSource,
   listAcceptedLearnedRules,
   listAlgorithmEvidenceEntries,
   listApprovedMainFeedItems,
@@ -18,11 +24,16 @@ import {
   listEngagementItems,
   listPublicationMeasurementSeries,
   listPublishedMainFeedContent,
+  listQueueSources,
   listRecentMainFeedPublications,
   listResearchEvidence,
+  recordEditorialSelection,
   saveEditorialRecommendation,
+  saveQueueItem,
+  setEditorialRecommendationStatus,
   supersedeSuggestedEditorialRecommendations,
   updateEditorialRun,
+  upsertCandidates,
 } from './store.js';
 
 export const EDITORIAL_OBJECTIVE_WEIGHTS = Object.freeze({
@@ -551,6 +562,187 @@ function workflowState(candidateKeyValue) {
   if (['ignore', 'ignored', 'skip', 'skipped'].includes(pipeline) || ['ignored', 'skipped'].includes(status)) return { state: 'skipped', queueItem: compactQueueItem(queueItem), actions };
   if (queueItem && status !== 'triage') return { state: 'draft_in_progress', queueItem: compactQueueItem(queueItem), actions };
   return { state: 'unresolved', queueItem: compactQueueItem(queueItem), actions };
+}
+
+function editorialCandidateRoutability(candidate) {
+  if (!candidate) return { routable: false, reason: 'candidate_missing' };
+  const queueItem = getQueueItemByCandidate(candidate.key);
+  const actions = listCandidateActions(candidate.key);
+  if ((actions || []).length) return { routable: false, reason: 'candidate_already_completed' };
+  if (queueItem && (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.outputTweetId || queueItem.publishedAt)) {
+    return { routable: false, reason: 'candidate_approved_or_completed' };
+  }
+  return { routable: true, reason: '' };
+}
+
+function xStatusId(candidate) {
+  if (candidate?.source !== 'x') return '';
+  const match = String(candidate.url || candidate.key || '').match(/\/status\/(\d+)/i);
+  return match?.[1] || '';
+}
+
+function recommendationSources(recommendation) {
+  const keys = uniqueStrings(recommendation?.candidateKeys);
+  const candidates = keys.map((key) => getCandidate(key));
+  const missing = keys.filter((_, index) => !candidates[index]);
+  if (missing.length) throw new Error(`Editorial recommendation ${recommendation.id} references missing source candidates: ${missing.join(', ')}.`);
+  if (!candidates.length) throw new Error(`Editorial recommendation ${recommendation.id} has no source candidates.`);
+  return candidates;
+}
+
+function recommendationPrimarySourceKey(recommendation, sources) {
+  const preferred = String(recommendation?.potentials?.candidateKey || '').trim();
+  if (preferred && sources.some((candidate) => candidate.key === preferred)) return preferred;
+  return sources[0]?.key || '';
+}
+
+function enrichEditorialCandidate(recommendation, candidate, sources) {
+  const nicheScore = Math.max(0, ...sources.map((source) => Number(source?.niche?.score || 0)));
+  upsertCandidates([{
+    ...candidate,
+    score: Number(recommendation?.potentials?.objectiveFit || candidate.score || 0),
+    niche: {
+      score: nicheScore,
+      tags: uniqueStrings(sources.flatMap((source) => source?.niche?.tags || [])),
+      matches: uniqueStrings(sources.flatMap((source) => source?.niche?.matches || [])),
+    },
+  }]);
+  return getCandidate(candidate.key);
+}
+
+function selectionCandidate(recommendation, selectedPipeline, sources) {
+  const primarySourceKey = recommendationPrimarySourceKey(recommendation, sources);
+  if (TARGETED_PIPELINES.has(selectedPipeline)) {
+    const target = getCandidate(recommendation.targetCandidateKey);
+    if (!target || target.source !== 'x' || !sources.some((source) => source.key === target.key)) {
+      throw new Error(`${selectedPipeline} requires recommendation targetCandidateKey to reference a real X source candidate.`);
+    }
+    if (!xStatusId(target)) throw new Error(`${selectedPipeline} requires a real X status target.`);
+    const state = editorialCandidateRoutability(target);
+    if (!state.routable) throw new Error(`Editorial ${selectedPipeline} target ${target.key} is no longer routable (${state.reason}).`);
+    return { candidate: target, primarySourceKey: target.key };
+  }
+
+  if (PRIMARY_PIPELINES.has(selectedPipeline)) {
+    const source = sources.length === 1 ? sources[0] : null;
+    if (source && editorialCandidateRoutability(source).routable) {
+      return { candidate: source, primarySourceKey: source.key };
+    }
+    return {
+      candidate: enrichEditorialCandidate(recommendation, ensureEditorialCandidate(recommendation.id), sources),
+      primarySourceKey,
+    };
+  }
+
+  if (selectedPipeline === 'research') {
+    const preferred = sources.find((source) => source.key === primarySourceKey && editorialCandidateRoutability(source).routable)
+      || sources.find((source) => editorialCandidateRoutability(source).routable);
+    if (preferred) return { candidate: preferred, primarySourceKey: preferred.key };
+    return {
+      candidate: enrichEditorialCandidate(recommendation, ensureEditorialCandidate(recommendation.id), sources),
+      primarySourceKey,
+    };
+  }
+
+  throw new Error(`Unsupported editorial selection pipeline: ${selectedPipeline}.`);
+}
+
+function linkEditorialSources(queueItem, sources, primarySourceKey) {
+  const existingPrimary = listQueueSources(queueItem.id).find((source) => source.role === 'primary');
+  if (existingPrimary && existingPrimary.candidateKey !== primarySourceKey) {
+    throw new Error(`Queue item ${queueItem.id} is already linked to primary source ${existingPrimary.candidateKey}.`);
+  }
+  linkQueueSource(queueItem.id, primarySourceKey, 'primary');
+  for (const source of sources) {
+    if (source.key !== primarySourceKey) linkQueueSource(queueItem.id, source.key, 'supporting');
+  }
+  return listQueueSources(queueItem.id);
+}
+
+function selectedEditorialResult(recommendation, selection, { idempotent = false } = {}) {
+  const queueItem = getQueueItem(selection.queueItemId);
+  if (!queueItem) throw new Error(`Editorial selection ${selection.id} references missing queue item ${selection.queueItemId}.`);
+  return {
+    recommendation,
+    selection,
+    queueItem,
+    candidate: getCandidate(queueItem.candidateKey),
+    queueSources: listQueueSources(queueItem.id),
+    research: recommendation.decision === 'RESEARCH_MORE' ? {
+      required: true,
+      state: 'manual_external_research_required',
+      label: 'Manual/external research required',
+      questions: [...recommendation.researchQuestions],
+    } : null,
+    idempotent,
+  };
+}
+
+export function selectEditorialRecommendation(id, { pipelineOverride = null } = {}) {
+  let recommendation = getEditorialRecommendation(id);
+  if (!recommendation) throw new Error(`Editorial recommendation not found: ${id}`);
+  const existing = getEditorialSelectionByRecommendation(recommendation.id);
+  if (existing) {
+    if (pipelineOverride && String(pipelineOverride) !== existing.selectedPipeline) {
+      throw new Error(`Editorial recommendation ${recommendation.id} is already selected as ${existing.selectedPipeline}.`);
+    }
+    if (recommendation.status === 'suggested') recommendation = setEditorialRecommendationStatus(recommendation.id, 'selected', { at: existing.selectedAt });
+    if (recommendation.status !== 'selected') throw new Error(`Editorial recommendation ${recommendation.id} has selection provenance but status is ${recommendation.status}.`);
+    return selectedEditorialResult(recommendation, existing, { idempotent: true });
+  }
+  if (recommendation.status !== 'suggested') throw new Error(`Editorial recommendation ${recommendation.id} is ${recommendation.status} and cannot be selected.`);
+  if (recommendation.decision === 'SKIP') throw new Error('SKIP recommendations are dismissed rather than routed into workflow.');
+
+  const selectedPipeline = String(pipelineOverride || recommendation.pipeline || '');
+  if (recommendation.decision === 'RESEARCH_MORE' && selectedPipeline !== 'research') {
+    throw new Error('RESEARCH_MORE must enter the research workflow before any later publication route is chosen.');
+  }
+  if (recommendation.decision === 'PREPARE' && !PREPARE_PIPELINES.includes(selectedPipeline)) {
+    throw new Error(`Invalid PREPARE pipeline override: ${selectedPipeline || 'missing'}.`);
+  }
+
+  const sources = recommendationSources(recommendation);
+  const selected = selectionCandidate(recommendation, selectedPipeline, sources);
+  const existingQueue = getQueueItemByCandidate(selected.candidate.key);
+  if (existingQueue) {
+    const existingPrimary = listQueueSources(existingQueue.id).find((source) => source.role === 'primary');
+    if (existingPrimary && existingPrimary.candidateKey !== selected.primarySourceKey) {
+      throw new Error(`Queue item ${existingQueue.id} is already linked to primary source ${existingPrimary.candidateKey}.`);
+    }
+  }
+
+  let queueItem = routeCandidate(selected.candidate.key, selectedPipeline, {
+    actor: 'human',
+    reason: `Human selected editorial recommendation ${recommendation.id}.`,
+  });
+  queueItem = saveQueueItem({
+    ...queueItem,
+    reachPotential: Number(recommendation.potentials?.reachPotential || 0),
+    followPotential: Number(recommendation.potentials?.followPotential || 0),
+    conversationPotential: Number(recommendation.potentials?.conversationPotential || 0),
+    relationshipPotential: Number(recommendation.potentials?.relationshipPotential || 0),
+    recommendedPipeline: recommendation.pipeline || '',
+    routingReason: recommendation.whyThisFormat || recommendation.whyNow || queueItem.routingReason || '',
+  });
+  const queueSources = linkEditorialSources(queueItem, sources, selected.primarySourceKey);
+  const selectedAt = Date.now();
+  const selection = recordEditorialSelection({
+    editorialRecommendationId: recommendation.id,
+    queueItemId: queueItem.id,
+    selectedPipeline,
+    selectedAt,
+  });
+  recommendation = setEditorialRecommendationStatus(recommendation.id, 'selected', { at: selectedAt });
+  return { ...selectedEditorialResult(recommendation, selection), queueSources };
+}
+
+export function dismissEditorialRecommendation(id) {
+  const recommendation = getEditorialRecommendation(id);
+  if (!recommendation) throw new Error(`Editorial recommendation not found: ${id}`);
+  if (getEditorialSelectionByRecommendation(recommendation.id)) {
+    throw new Error(`Editorial recommendation ${recommendation.id} is already selected and cannot be dismissed.`);
+  }
+  return setEditorialRecommendationStatus(recommendation.id, 'dismissed');
 }
 
 function xUsername(candidate) {

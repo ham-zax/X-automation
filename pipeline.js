@@ -8,11 +8,14 @@ import {
   getAudienceProfile,
   getCandidate,
   getDraftByCandidate,
+  getEditorialRecommendation,
+  getLatestEditorialSelectionForQueueItem,
   getPreferenceProfile,
   getQueueItemByCandidate,
   hasCandidateAction,
   listCandidateActions,
   listAcceptedLearnedRules,
+  listResearchEvidence,
   listRecentPublishedContent,
   listRelationshipEvents,
   markCandidateSaved,
@@ -63,6 +66,24 @@ function sourceUsername(candidate) {
   if (title.startsWith('@')) return title.slice(1).toLowerCase();
   const match = String(candidate.url || '').match(/x\.com\/([^/]+)/i);
   return match?.[1]?.toLowerCase() || '';
+}
+
+function sourceTweetId(candidate) {
+  if (candidate?.source !== 'x') return '';
+  const match = String(candidate.url || candidate.key || '').match(/\/status\/(\d+)/i);
+  return match?.[1] || '';
+}
+
+function editorialEvidenceForQueue(queueItem) {
+  if (!queueItem) return null;
+  const selection = getLatestEditorialSelectionForQueueItem(queueItem.id);
+  if (!selection) return null;
+  const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
+  if (!recommendation) return null;
+  const evidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+  if (recommendation.decision === 'RESEARCH_MORE') return evidence;
+  const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
+  return evidence.filter((item) => linkedIds.has(String(item.id)));
 }
 
 function relationshipContext(candidate) {
@@ -123,6 +144,7 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
       : [],
     factualityConfirmed: confirmations.factualityConfirmed === true,
     evidenceConfirmed: confirmations.evidenceConfirmed === true,
+    evidence: editorialEvidenceForQueue(queueItem),
     mediaReady: false,
     replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
@@ -250,6 +272,12 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
     draftId = draft.id;
   }
 
+  const replyTarget = pipeline === 'reply' ? {
+    targetUsername: previousQueueItem?.targetUsername || sourceUsername(candidate) || null,
+    targetTweetId: previousQueueItem?.targetTweetId || sourceTweetId(candidate) || null,
+    engagementKind: previousQueueItem?.engagementKind || 'initial_reply',
+  } : {};
+
   return saveQueueItem({
     candidateKey: key,
     lane: state.lane,
@@ -259,6 +287,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
     humanApprovedAt: null,
     approvedText: null,
     routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
+    ...replyTarget,
   });
 }
 

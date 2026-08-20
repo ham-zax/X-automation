@@ -119,6 +119,24 @@ function candidateAuthor(candidate) {
   return null;
 }
 
+function writerEvidenceItem(item) {
+  const id = String(item?.id ?? '').trim();
+  if (!id) return null;
+  return {
+    id,
+    claim: String(item?.claim || ''),
+    claimType: String(item?.claimType || ''),
+    status: String(item?.status || ''),
+    sourceKind: String(item?.sourceKind || ''),
+    sourceFamily: String(item?.sourceFamily || ''),
+    requestedUrl: String(item?.requestedUrl || ''),
+    resolvedUrl: String(item?.resolvedUrl || ''),
+    title: String(item?.title || ''),
+    summary: String(item?.summary || ''),
+    observedAt: item?.observedAt == null ? null : Number(item.observedAt),
+  };
+}
+
 export function buildWriterPacket({
   candidate,
   queueItem,
@@ -126,6 +144,7 @@ export function buildWriterPacket({
   recentPosts = [],
   evidence = [],
   profileProof = {},
+  editorialRecommendation = null,
   relationship = null,
   recentReplies = [],
   recentReplyArchetypes = [],
@@ -156,7 +175,13 @@ export function buildWriterPacket({
       routingReason: queueItem?.routingReason ?? '',
     },
     relationship: relationship ?? queueItem?.relationship ?? null,
-    evidence: Array.isArray(evidence) ? [...evidence] : [],
+    evidence: (Array.isArray(evidence) ? evidence : []).map(writerEvidenceItem).filter(Boolean),
+    editorial: editorialRecommendation ? {
+      recommendationId: editorialRecommendation.id ?? null,
+      thesis: editorialRecommendation.thesis ?? '',
+      desiredReaderOutcome: editorialRecommendation.desiredReaderOutcome ?? '',
+      researchQuestions: Array.isArray(editorialRecommendation.researchQuestions) ? [...editorialRecommendation.researchQuestions] : [],
+    } : null,
     recentPosts: Array.isArray(recentPosts) ? [...recentPosts] : [],
     recentReplies: Array.isArray(recentReplies) ? [...recentReplies] : [],
     recentReplyArchetypes: Array.isArray(recentReplyArchetypes) ? [...recentReplyArchetypes] : [],
@@ -248,11 +273,90 @@ function firstPersonEvidenceClaim(text) {
   return /\b(?:i|we)\s+(?:tested|measured|benchmarked|used|ran|observed|verified|found|tried)\b/i.test(String(text || ''));
 }
 
-function hasVerifiedFirstPartyEvidence(draft) {
-  return (draft?.editor?.evidenceUsed || []).some((item) => {
-    const text = String(item || '');
-    return /\bverified\b/i.test(text) && /\b(?:first[- ]party|our|ours|experiment|test|result|measurement|benchmark)\b/i.test(text);
+function evidenceId(item) {
+  return String(item?.id ?? '').trim();
+}
+
+function resolveEvidenceReferences(draft, evidence = null) {
+  const contextProvided = Array.isArray(evidence);
+  const rows = contextProvided ? evidence : [];
+  const byId = new Map(rows.map((item) => [evidenceId(item), item]).filter(([id]) => id));
+  const requested = asStringArray(draft?.editor?.evidenceUsed || []).filter(Boolean);
+  const invalidIds = contextProvided ? requested.filter((id) => !byId.has(id)) : [];
+  const resolved = requested.map((id) => byId.get(id)).filter(Boolean);
+  return { requested, resolved, invalidIds, availableCount: byId.size, contextProvided };
+}
+
+function eligibleEvidence(item) {
+  return ['primary_supported', 'source_claim'].includes(String(item?.status || ''));
+}
+
+function firstPartyEvidence(item) {
+  if (String(item?.status || '') !== 'primary_supported') return false;
+  if (item?.metadata?.firstParty === true || item?.metadata?.ownedEvidence === true) return true;
+  const identity = `${item?.sourceKind || ''} ${item?.sourceFamily || ''}`;
+  return /\b(?:first[-_ ]?party|owned|our|ham_zax|experiment|measurement)\b/i.test(identity);
+}
+
+function claimTypes(sentence) {
+  const types = [];
+  if (/\b(?:benchmark|eval(?:uation)?|score|accuracy|pass rate)\b/i.test(sentence)) types.push('benchmark');
+  if (/\b(?:performance|latency|throughput|faster|slower|speed|tokens?\s*\/\s*s|rps|req(?:uests?)?\s*\/\s*s|\d+(?:\.\d+)?\s*ms\b)/i.test(sentence)) types.push('performance');
+  if (/\b(?:supports?|allows?|adds?|ships?|includes?|handles?|works with|compatible with|can now|now has)\b/i.test(sentence)) types.push('capability');
+  return [...new Set(types)];
+}
+
+function attributedSourceClaim(sentence) {
+  return /\b(?:according to|reports?|reported|says?|said|claims?|claimed|announces?|announced|release notes?|documentation|docs|readme|maintainer|vendor|author)\b/i.test(sentence);
+}
+
+const CLAIM_SCOPE_STOP_WORDS = new Set([
+  'according', 'report', 'reports', 'reported', 'say', 'says', 'said', 'claim', 'claims', 'claimed',
+  'announce', 'announces', 'announced', 'vendor', 'author', 'maintainer', 'model', 'tool', 'system',
+  'support', 'supports', 'allow', 'allows', 'add', 'adds', 'ship', 'ships', 'include', 'includes',
+  'handle', 'handles', 'work', 'works', 'with', 'can', 'now', 'has', 'have', 'the', 'this', 'that',
+]);
+
+function claimScopeTokens(text) {
+  return new Set((String(text || '').toLowerCase().match(/[a-z0-9][a-z0-9+.#/-]{2,}/g) || [])
+    .filter((token) => !CLAIM_SCOPE_STOP_WORDS.has(token)));
+}
+
+function persistedClaimMatches(item, sentence, { requireAttribution = false } = {}) {
+  if (requireAttribution && !attributedSourceClaim(sentence)) return false;
+  const evidenceParts = [item?.claim, item?.title, item?.summary].map((value) => String(value || '')).filter(Boolean);
+  const evidenceText = evidenceParts.join(' ');
+  const numbers = String(sentence).match(/\d+(?:\.\d+)?/g) || [];
+  if (numbers.length && numbers.some((value) => !evidenceText.includes(value))) return false;
+  const requested = claimScopeTokens(sentence);
+  if (!requested.size) return false;
+  return evidenceParts.some((part) => {
+    const available = claimScopeTokens(part);
+    let overlap = 0;
+    for (const token of requested) if (available.has(token)) overlap += 1;
+    return overlap >= Math.min(2, requested.size);
   });
+}
+
+function primaryEvidenceSupportsType(item, type, sentence) {
+  const claimType = String(item?.claimType || '');
+  const compatibleType = type === 'benchmark'
+    ? claimType === 'benchmark'
+    : type === 'performance'
+      ? ['performance', 'benchmark'].includes(claimType)
+      : type === 'capability' && ['capability', 'implementation', 'compatibility'].includes(claimType);
+  return compatibleType && persistedClaimMatches(item, sentence);
+}
+
+function sourceClaimMatchesSentence(item, sentence) {
+  return persistedClaimMatches(item, sentence, { requireAttribution: true });
+}
+
+function supportsSensitiveClaim(item, type, sentence) {
+  const status = String(item?.status || '');
+  if (status === 'primary_supported') return primaryEvidenceSupportsType(item, type, sentence);
+  if (status === 'source_claim') return sourceClaimMatchesSentence(item, sentence);
+  return false;
 }
 
 function genericPraise(text) {
@@ -331,6 +435,7 @@ export function evaluateDraftGates(draft, candidate, {
   replyArchetype = '',
   factualityConfirmed = false,
   evidenceConfirmed = false,
+  evidence = null,
   mediaReady = false,
   nicheOverride = null,
   threadLengthApproved = false,
@@ -344,6 +449,8 @@ export function evaluateDraftGates(draft, candidate, {
   const checks = {
     factualityConfirmed: true,
     evidenceConfirmed: true,
+    evidenceReferences: true,
+    claimScope: true,
     niche: true,
     additiveValue: true,
     originality: true,
@@ -370,9 +477,35 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'EVIDENCE_UNCONFIRMED', 'This draft contains test, measurement, benchmark, result, or unsupported capability claims that require explicit evidence confirmation.');
   }
 
-  if (firstPersonEvidenceClaim(combinedText) && !hasVerifiedFirstPartyEvidence(draft)) {
+  const evidenceReferences = resolveEvidenceReferences(draft, evidence);
+  if (evidenceReferences.invalidIds.length) {
+    checks.evidenceReferences = false;
+    addIssue(failures, 'EVIDENCE_REFERENCE_INVALID', `Draft cites evidence IDs that were not supplied: ${evidenceReferences.invalidIds.join(', ')}.`);
+  }
+  const ineligibleEvidence = evidenceReferences.resolved.filter((item) => !eligibleEvidence(item));
+  if (ineligibleEvidence.length) {
+    checks.evidenceReferences = false;
+    addIssue(failures, 'EVIDENCE_REFERENCE_INELIGIBLE', `Draft cites unresolved or contradicted evidence IDs: ${ineligibleEvidence.map(evidenceId).join(', ')}.`);
+  }
+  const eligibleCitedEvidence = evidenceReferences.resolved.filter(eligibleEvidence);
+  if (evidenceRequired && evidenceReferences.availableCount > 0 && eligibleCitedEvidence.length === 0) {
+    checks.evidenceReferences = false;
+    addIssue(failures, 'EVIDENCE_REFERENCE_REQUIRED', 'This researched claim must cite at least one supplied eligible evidence ID.');
+  }
+
+  const sensitiveSentences = String(combinedText || '').split(/(?<=[.!?])\s+|\n+/).map((sentence) => sentence.trim()).filter(Boolean);
+  for (const sentence of sensitiveSentences) {
+    for (const type of claimTypes(sentence)) {
+      if (eligibleCitedEvidence.some((item) => supportsSensitiveClaim(item, type, sentence))) continue;
+      if (!eligibleCitedEvidence.length) continue;
+      checks.claimScope = false;
+      addIssue(failures, 'EVIDENCE_CLAIM_SCOPE_MISMATCH', `Cited evidence does not support the draft's ${type} claim at its persisted claim scope.`);
+    }
+  }
+
+  if (firstPersonEvidenceClaim(combinedText) && !eligibleCitedEvidence.some(firstPartyEvidence)) {
     checks.firstPersonEvidence = false;
-    addIssue(failures, 'FIRST_PERSON_EVIDENCE_UNVERIFIED', 'First-person test/measurement language requires a verified first-party marker in editor.evidenceUsed.');
+    addIssue(failures, 'FIRST_PERSON_EVIDENCE_UNVERIFIED', 'First-person test/measurement language requires a supplied eligible first-party evidence ID.');
   }
 
   const overrideAccepted = nicheOverride?.adjacentTechnicalTopic === true && Boolean(String(nicheOverride?.reason || '').trim());
