@@ -1,4 +1,5 @@
-const LEGACY_VIEWS = [
+const DETAIL_VIEWS = [
+  ['#/advanced/ai', 'AI Settings', 'Runtime, provider, model, role assignments, connection checks, and recent AI usage.'],
   ['/legacy?source=relationships', 'Relationships', 'Strategic relationship profiles, stages, and relationship-fit detail.'],
   ['/legacy?source=health', 'Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],
 ]
@@ -16,7 +17,7 @@ export function Advanced() {
       <section>
         <h3 className="mb-3 text-lg font-semibold text-slate-900">Detailed views</h3>
         <div className="grid gap-4 md:grid-cols-2">
-          {LEGACY_VIEWS.map(([href, title, body]) => (
+          {DETAIL_VIEWS.map(([href, title, body]) => (
             <a key={href} href={href} className="rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-400">
               <div className="font-semibold text-slate-900">{title}</div>
               <div className="mt-1 text-sm text-slate-600">{body}</div>

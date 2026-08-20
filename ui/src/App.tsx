@@ -10,6 +10,7 @@ import { Results } from './features/results/Results'
 import { Audience } from './features/results/Audience'
 import { Improve } from './features/improve/Improve'
 import { Advanced } from './features/advanced/Advanced'
+import { AISettings } from './features/settings/AISettings'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,7 @@ function RouteContent() {
   if (first === 'results' && second === 'audience') return <Audience />
   if (first === 'results') return <Results />
   if (first === 'improve') return <Improve />
+  if (first === 'advanced' && second === 'ai') return <AISettings />
   if (first === 'advanced') return <Advanced />
   return <Today />
 }

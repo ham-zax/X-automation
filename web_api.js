@@ -30,9 +30,18 @@ import { AUDIENCE_NICHE_LABELS, NICHE_LABELS, isOpportunityCandidate, personaliz
 import { syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
+  AI_ROLES,
   acceptLearnedRule,
   assignExperimentVariant,
   createExperiment,
+  createAiProfile,
+  clearAiDefaultProfile,
+  clearAiRoleBinding,
+  countAiProfilesUsingSecretRef,
+  deleteAiProfile,
+  getAiProfile,
+  getAiRuntimeSettings,
+  getAiRoleBinding,
   getCandidate,
   getDraft,
   getDraftByCandidate,
@@ -49,6 +58,8 @@ import {
   getAudienceSummary,
   getAccountHealthSummary,
   listAcceptedLearnedRules,
+  listAiProfiles,
+  listAiRuns,
   listApprovedMainFeedItems,
   listAudienceProfiles,
   listCandidateActions,
@@ -65,11 +76,18 @@ import {
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
   saveDraft,
+  setAiDefaultProfile,
+  setAiProfileEnabled,
+  setAiRoleBinding,
   setAppState,
   setExperimentStatus,
   setMainFeedSchedule,
   upsertCandidates,
+  updateAiProfile,
+  resolveAiProfileForRole,
 } from './store.js';
+import { getAiSecretStatus, removeAiSecret, setAiSecret } from './ai_secrets.js';
+import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability } from './ai_runtime.js';
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
@@ -849,6 +867,186 @@ function formatLearnedRule(rule) {
   };
 }
 
+function aiProfileCapability(profile) {
+  if (!profile) return 'unsupported';
+  if (profile.runtime === 'codex') return 'supported';
+  if (profile.runtime !== 'direct_api') return 'unsupported';
+  const configured = profile.settings?.structuredOutput;
+  if (['supported', 'compatible_fallback', 'unknown', 'unsupported'].includes(configured)) return configured;
+  return profile.providerKind === 'openai' ? 'supported' : 'compatible_fallback';
+}
+
+function aiProfileInput(payload = {}) {
+  const input = {};
+  for (const key of ['name', 'runtime', 'providerKind', 'baseUrl', 'protocol', 'model', 'reasoning', 'runtimeProfile', 'settings', 'enabled']) {
+    if (payload[key] !== undefined) input[key] = payload[key];
+  }
+  return input;
+}
+
+async function formatAiProfile(profile) {
+  if (!profile) return null;
+  const secret = await getAiSecretStatus(profile.secretRef || '');
+  return {
+    id: profile.id,
+    name: profile.name,
+    runtime: profile.runtime,
+    providerKind: profile.providerKind,
+    baseUrl: profile.baseUrl,
+    protocol: profile.protocol,
+    model: profile.model,
+    reasoning: profile.reasoning,
+    runtimeProfile: profile.runtimeProfile,
+    settings: profile.settings || {},
+    enabled: profile.enabled !== false,
+    compatibility: profile.compatibility === true,
+    capability: aiProfileCapability(profile),
+    secret: { source: secret.source, hasSecret: secret.hasSecret },
+    createdAt: profile.createdAt,
+    updatedAt: profile.updatedAt,
+  };
+}
+
+async function formatAiRole(role) {
+  const binding = getAiRoleBinding(role);
+  const resolved = resolveAiProfileForRole(role);
+  return {
+    role,
+    activity: role === 'continuous_scan' ? 'not_active' : (resolved.profile ? 'configured' : 'unconfigured'),
+    primaryProfileId: binding?.primaryProfileId ?? null,
+    fallbackProfileId: binding?.fallbackProfileId ?? null,
+    primaryProfile: binding?.primaryProfile ? await formatAiProfile(binding.primaryProfile) : null,
+    fallbackProfile: binding?.fallbackProfile ? await formatAiProfile(binding.fallbackProfile) : null,
+    resolvedProfile: resolved.profile ? await formatAiProfile(resolved.profile) : null,
+    resolutionSource: resolved.source,
+  };
+}
+
+async function aiSettingsView() {
+  const profiles = await Promise.all(listAiProfiles({ limit: 500 }).map(formatAiProfile));
+  const runtimeSettings = getAiRuntimeSettings();
+  return {
+    profiles,
+    defaultProfileId: runtimeSettings.defaultProfileId,
+    defaultProfile: runtimeSettings.defaultProfile ? await formatAiProfile(runtimeSettings.defaultProfile) : null,
+    roles: await Promise.all(AI_ROLES.map(formatAiRole)),
+  };
+}
+
+function requireAiProfile(id) {
+  const profile = getAiProfile(Number(id));
+  if (!profile) throw new Error(`AI profile not found: ${id}`);
+  return profile;
+}
+
+function assertAssignableAiProfile(profile, { confirmUnknownCapability = false } = {}) {
+  if (!profile.enabled) throw new Error(`AI profile is disabled: ${profile.id}`);
+  const capability = aiProfileCapability(profile);
+  if (capability === 'unsupported') throw new Error(`${profile.name} does not support the structured-output path required by AI roles.`);
+  if (capability === 'unknown' && confirmUnknownCapability !== true) {
+    throw new Error(`${profile.name} has unknown structured-output capability. Confirm the advanced assignment explicitly.`);
+  }
+  return profile;
+}
+
+async function cleanupUnreferencedAiSecret(secretRef) {
+  if (!String(secretRef || '').startsWith('file:')) return;
+  if (countAiProfilesUsingSecretRef(secretRef) > 0) return;
+  await removeAiSecret(secretRef);
+}
+
+async function createAiProfileFromPayload(payload) {
+  const input = aiProfileInput(payload);
+  const apiKey = String(payload.apiKey || '').trim();
+  const secretEnv = String(payload.secretEnv || '').trim();
+  if (apiKey && secretEnv) throw new Error('Choose either a local API key or an environment-variable secret, not both.');
+  if (input.runtime !== 'direct_api' && (apiKey || secretEnv)) {
+    throw new Error('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
+  }
+
+  let createdSecretRef = '';
+  if (apiKey) {
+    const secret = await setAiSecret(null, apiKey);
+    input.secretRef = secret.secretRef;
+    createdSecretRef = secret.secretRef;
+  } else if (secretEnv) {
+    input.secretRef = `env:${secretEnv}`;
+  }
+
+  try {
+    return createAiProfile(input);
+  } catch (error) {
+    if (createdSecretRef) await cleanupUnreferencedAiSecret(createdSecretRef).catch(() => {});
+    throw error;
+  }
+}
+
+async function updateAiProfileFromPayload(id, payload) {
+  const current = requireAiProfile(id);
+  const input = aiProfileInput(payload);
+  const nextRuntime = String(input.runtime ?? current.runtime);
+  const apiKey = String(payload.apiKey || '').trim();
+  const secretEnv = String(payload.secretEnv || '').trim();
+  if (apiKey && secretEnv) throw new Error('Choose either a local API key or an environment-variable secret, not both.');
+  if (nextRuntime !== 'direct_api' && (apiKey || secretEnv)) {
+    throw new Error('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
+  }
+
+  let nextSecretRef = current.secretRef;
+  let createdSecretRef = '';
+  if (nextRuntime !== 'direct_api') {
+    nextSecretRef = '';
+  } else if (apiKey) {
+    const existingFileRef = String(current.secretRef || '').startsWith('file:') ? current.secretRef : null;
+    const secret = await setAiSecret(existingFileRef, apiKey);
+    nextSecretRef = secret.secretRef;
+    if (!existingFileRef) createdSecretRef = secret.secretRef;
+  } else if (secretEnv) {
+    nextSecretRef = `env:${secretEnv}`;
+  }
+  if (nextSecretRef !== current.secretRef) input.secretRef = nextSecretRef;
+
+  let updated;
+  try {
+    updated = updateAiProfile(current.id, input);
+  } catch (error) {
+    if (createdSecretRef) await cleanupUnreferencedAiSecret(createdSecretRef).catch(() => {});
+    throw error;
+  }
+  if (current.secretRef && current.secretRef !== updated.secretRef) await cleanupUnreferencedAiSecret(current.secretRef);
+  return updated;
+}
+
+function formatAiRun(run) {
+  const profile = run.profileId == null ? null : getAiProfile(run.profileId);
+  return {
+    id: run.id,
+    invocationId: run.invocationId,
+    attempt: run.attempt,
+    attemptKind: run.attemptKind,
+    role: run.role,
+    profileId: run.profileId,
+    profileName: profile?.name || (run.metadata?.compatibilityProfile ? 'Current Codex configuration' : null),
+    profileSource: run.metadata?.profileSource || null,
+    runtime: run.runtime,
+    providerKind: run.providerKind,
+    model: run.model,
+    reasoning: run.reasoning,
+    fallbackProfileId: run.fallbackProfileId,
+    fallbackUsed: run.fallbackUsed,
+    status: run.status,
+    errorCode: run.errorCode,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+    durationMs: run.durationMs,
+    inputTokens: run.inputTokens,
+    outputTokens: run.outputTokens,
+    costUsd: run.costUsd,
+    requestCount: run.metadata?.requestCount ?? null,
+    repairAttempted: run.metadata?.repairAttempted === true,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Request helpers
 // ---------------------------------------------------------------------------
@@ -922,6 +1120,136 @@ export async function handleApi(req, res, requestUrl) {
           metricsByKind: { content: CONTENT_METRICS, network: NETWORK_METRICS },
         },
       });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'settings') {
+      return sendSuccess(await aiSettingsView());
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'profiles') {
+      return sendSuccess({ profiles: await Promise.all(listAiProfiles({ limit: 500 }).map(formatAiProfile)) });
+    }
+
+    if (method === 'GET' && segments.length === 3 && segments[0] === 'ai' && segments[1] === 'profiles') {
+      return sendSuccess({ profile: await formatAiProfile(requireAiProfile(segments[2])) });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'profiles') {
+      const profile = await createAiProfileFromPayload(await readBody());
+      return sendSuccess({ profile: await formatAiProfile(profile) });
+    }
+
+    if (method === 'POST' && segments.length === 3 && segments[0] === 'ai' && segments[1] === 'profiles') {
+      const profile = await updateAiProfileFromPayload(segments[2], await readBody());
+      return sendSuccess({ profile: await formatAiProfile(profile) });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'enabled') {
+      const payload = await readBody();
+      const profile = setAiProfileEnabled(Number(segments[2]), payload.enabled === true);
+      return sendSuccess({ profile: await formatAiProfile(profile) });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'delete') {
+      const deleted = deleteAiProfile(Number(segments[2]));
+      if (!deleted) throw new Error(`AI profile not found: ${segments[2]}`);
+      if (deleted.profile.secretRef && !deleted.secretRefStillUsed) await cleanupUnreferencedAiSecret(deleted.profile.secretRef);
+      return sendSuccess({ deletedProfileId: deleted.profile.id });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'secret') {
+      const current = requireAiProfile(segments[2]);
+      if (current.runtime !== 'direct_api') throw new Error('Runtime-managed profiles do not use product-managed API keys.');
+      const payload = await readBody();
+      const apiKey = String(payload.apiKey || '').trim();
+      if (!apiKey) throw new Error('Replace key requires a non-empty API key.');
+      const existingFileRef = String(current.secretRef || '').startsWith('file:') ? current.secretRef : null;
+      const secret = await setAiSecret(existingFileRef, apiKey);
+      const profile = secret.secretRef === current.secretRef ? current : updateAiProfile(current.id, { secretRef: secret.secretRef });
+      return sendSuccess({ profile: await formatAiProfile(profile) });
+    }
+
+    if (method === 'POST' && segments.length === 5 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'secret' && segments[4] === 'remove') {
+      const current = requireAiProfile(segments[2]);
+      if (!current.secretRef) return sendSuccess({ profile: await formatAiProfile(current) });
+      const oldSecretRef = current.secretRef;
+      const profile = updateAiProfile(current.id, { secretRef: '' });
+      await cleanupUnreferencedAiSecret(oldSecretRef);
+      return sendSuccess({ profile: await formatAiProfile(profile) });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'default') {
+      const settings = getAiRuntimeSettings();
+      return sendSuccess({
+        defaultProfileId: settings.defaultProfileId,
+        defaultProfile: settings.defaultProfile ? await formatAiProfile(settings.defaultProfile) : null,
+      });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'default') {
+      const payload = await readBody();
+      const profile = assertAssignableAiProfile(requireAiProfile(payload.profileId), {
+        confirmUnknownCapability: payload.confirmUnknownCapability === true,
+      });
+      const settings = setAiDefaultProfile(profile.id);
+      return sendSuccess({ defaultProfileId: settings.defaultProfileId, defaultProfile: await formatAiProfile(settings.defaultProfile) });
+    }
+
+    if (method === 'POST' && segments.length === 3 && segments[0] === 'ai' && segments[1] === 'default' && segments[2] === 'clear') {
+      const settings = clearAiDefaultProfile();
+      return sendSuccess({ defaultProfileId: settings.defaultProfileId, defaultProfile: null });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'roles') {
+      return sendSuccess({ roles: await Promise.all(AI_ROLES.map(formatAiRole)) });
+    }
+
+    if (method === 'POST' && segments.length === 3 && segments[0] === 'ai' && segments[1] === 'roles') {
+      const role = segments[2];
+      if (!AI_ROLES.includes(role)) throw new Error(`Invalid AI role: ${role}`);
+      const payload = await readBody();
+      const confirmUnknownCapability = payload.confirmUnknownCapability === true;
+      const primaryProfileId = payload.primaryProfileId == null || payload.primaryProfileId === '' ? null : Number(payload.primaryProfileId);
+      const fallbackProfileId = payload.fallbackProfileId == null || payload.fallbackProfileId === '' ? null : Number(payload.fallbackProfileId);
+      if (primaryProfileId != null) assertAssignableAiProfile(requireAiProfile(primaryProfileId), { confirmUnknownCapability });
+      if (fallbackProfileId != null) assertAssignableAiProfile(requireAiProfile(fallbackProfileId), { confirmUnknownCapability });
+      setAiRoleBinding(role, { primaryProfileId, fallbackProfileId });
+      return sendSuccess({ role: await formatAiRole(role) });
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'roles' && segments[3] === 'clear') {
+      const role = segments[2];
+      if (!AI_ROLES.includes(role)) throw new Error(`Invalid AI role: ${role}`);
+      clearAiRoleBinding(role);
+      return sendSuccess({ role: await formatAiRole(role) });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'runtimes') {
+      return sendSuccess({ runtimes: await listAiRuntimeAvailability() });
+    }
+
+    if (method === 'GET' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'catalog') {
+      const profile = requireAiProfile(segments[2]);
+      return sendSuccess(await listAiCatalog(profile, { refresh: query.get('refresh') === '1' || query.get('refresh') === 'true' }));
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'catalog') {
+      const profile = requireAiProfile(segments[2]);
+      return sendSuccess(await listAiCatalog(profile, { refresh: true }));
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'check') {
+      const profile = requireAiProfile(segments[2]);
+      return sendSuccess(await checkAiProfileConnection(profile));
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'runs') {
+      const options = { limit: Math.max(1, Math.min(200, Number(query.get('limit') || 50))) };
+      if (query.get('role')) options.role = query.get('role');
+      if (query.get('profileId')) options.profileId = Number(query.get('profileId'));
+      if (query.get('invocationId')) options.invocationId = query.get('invocationId');
+      if (query.get('status')) options.status = query.get('status');
+      return sendSuccess({ runs: listAiRuns(options).map(formatAiRun) });
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'today') {

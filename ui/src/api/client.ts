@@ -693,3 +693,225 @@ export function useLearningAction(action: string) {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// AI Settings
+// ---------------------------------------------------------------------------
+
+export type AICapability = 'supported' | 'compatible_fallback' | 'unknown' | 'unsupported'
+
+export interface AIProfileView {
+  id: number | null
+  name: string
+  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy'
+  providerKind: 'openai' | 'openrouter' | 'openai_compatible' | 'runtime_managed'
+  baseUrl: string
+  protocol: 'responses' | 'chat_completions' | 'runtime_native'
+  model: string
+  reasoning: string
+  runtimeProfile: string
+  settings: Record<string, string>
+  enabled: boolean
+  compatibility: boolean
+  capability: AICapability
+  secret: { source: 'file' | 'env' | null; hasSecret: boolean }
+  createdAt: number | null
+  updatedAt: number | null
+}
+
+export interface AIRoleView {
+  role: 'continuous_scan' | 'editorial_scan' | 'editorial_final' | 'writer'
+  activity: 'not_active' | 'configured' | 'unconfigured'
+  primaryProfileId: number | null
+  fallbackProfileId: number | null
+  primaryProfile: AIProfileView | null
+  fallbackProfile: AIProfileView | null
+  resolvedProfile: AIProfileView | null
+  resolutionSource: 'explicit' | 'role' | 'global' | 'compatibility' | 'unconfigured'
+}
+
+export interface AISettingsData {
+  profiles: AIProfileView[]
+  defaultProfileId: number | null
+  defaultProfile: AIProfileView | null
+  roles: AIRoleView[]
+}
+
+export interface AIRuntimeAvailability {
+  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy'
+  installed: boolean
+  version: string | null
+  structuredOutput: AICapability
+  reason: string | null
+}
+
+export interface AIModelCatalogEntry {
+  id: string
+  name: string
+  provider?: string
+  runtime?: string
+  contextLength?: number | null
+  pricing?: Record<string, string | number> | null
+  supportedParameters?: string[]
+  structuredOutput?: AICapability
+  inputModalities?: string[] | null
+  outputModalities?: string[] | null
+  defaultReasoning?: string | null
+  reasoningLevels?: string[]
+}
+
+export interface AICatalogData {
+  models: AIModelCatalogEntry[]
+  fetchedAt: number | null
+  manualModelEntry: boolean
+  capability?: AICapability
+  error?: { code: string; message?: string }
+}
+
+export interface AIConnectionCheck {
+  runtimeAvailable: boolean
+  providerReachable: boolean | null
+  authenticated: boolean | null
+  modelFound: boolean | null
+  structuredOutputPath: string
+  latencyMs: number
+  error: { code: string; httpStatus?: number | null } | null
+}
+
+export interface AIRunView {
+  id: number
+  invocationId: string
+  attempt: number
+  attemptKind: 'primary' | 'fallback'
+  role: string
+  profileId: number | null
+  profileName: string | null
+  profileSource: string | null
+  runtime: string
+  providerKind: string
+  model: string
+  reasoning: string
+  fallbackProfileId: number | null
+  fallbackUsed: boolean
+  status: 'running' | 'complete' | 'failed'
+  errorCode: string
+  startedAt: number
+  completedAt: number | null
+  durationMs: number | null
+  inputTokens: number | null
+  outputTokens: number | null
+  costUsd: number | null
+  requestCount: number | null
+  repairAttempted: boolean
+}
+
+function invalidateAI(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ['ai'] })
+}
+
+export function useAISettings() {
+  return useQuery({
+    queryKey: ['ai', 'settings'],
+    queryFn: () => fetchApi<AISettingsData>('/ai/settings'),
+    staleTime: 15_000,
+  })
+}
+
+export function useAIRuntimeAvailability() {
+  return useQuery({
+    queryKey: ['ai', 'runtimes'],
+    queryFn: () => fetchApi<{ runtimes: AIRuntimeAvailability[] }>('/ai/runtimes'),
+    staleTime: 60_000,
+  })
+}
+
+export function useAIRuns(limit = 50) {
+  return useQuery({
+    queryKey: ['ai', 'runs', limit],
+    queryFn: () => fetchApi<{ runs: AIRunView[] }>(`/ai/runs?limit=${limit}`),
+    staleTime: 15_000,
+  })
+}
+
+export function useAIProfileSave() {
+  const queryClient = useQueryClient()
+  return useMutation<{ profile: AIProfileView }, Error, { id?: number; payload: Record<string, unknown> }>({
+    mutationFn: ({ id, payload }) => postApi(id == null ? '/ai/profiles' : `/ai/profiles/${id}`, payload),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAIProfileEnabled() {
+  const queryClient = useQueryClient()
+  return useMutation<{ profile: AIProfileView }, Error, { id: number; enabled: boolean }>({
+    mutationFn: ({ id, enabled }) => postApi(`/ai/profiles/${id}/enabled`, { enabled }),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAIProfileDelete() {
+  const queryClient = useQueryClient()
+  return useMutation<{ deletedProfileId: number }, Error, number>({
+    mutationFn: (id) => postApi(`/ai/profiles/${id}/delete`),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAISecretReplace() {
+  const queryClient = useQueryClient()
+  return useMutation<{ profile: AIProfileView }, Error, { id: number; apiKey: string }>({
+    mutationFn: ({ id, apiKey }) => postApi(`/ai/profiles/${id}/secret`, { apiKey }),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAISecretRemove() {
+  const queryClient = useQueryClient()
+  return useMutation<{ profile: AIProfileView }, Error, number>({
+    mutationFn: (id) => postApi(`/ai/profiles/${id}/secret/remove`),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAIDefaultSave() {
+  const queryClient = useQueryClient()
+  return useMutation<unknown, Error, { profileId: number | null; confirmUnknownCapability?: boolean }>({
+    mutationFn: ({ profileId, confirmUnknownCapability }) => profileId == null
+      ? postApi('/ai/default/clear')
+      : postApi('/ai/default', { profileId, confirmUnknownCapability }),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAIRoleSave() {
+  const queryClient = useQueryClient()
+  return useMutation<unknown, Error, { role: string; primaryProfileId: number | null; fallbackProfileId: number | null; confirmUnknownCapability?: boolean }>({
+    mutationFn: ({ role, ...payload }) => postApi(`/ai/roles/${encodeURIComponent(role)}`, payload),
+    onSuccess: () => invalidateAI(queryClient),
+  })
+}
+
+export function useAICatalog(profileId: number | null) {
+  return useQuery({
+    queryKey: ['ai', 'catalog', profileId],
+    queryFn: () => fetchApi<AICatalogData>(`/ai/profiles/${profileId}/catalog`),
+    enabled: profileId != null,
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useAICatalogRefresh() {
+  const queryClient = useQueryClient()
+  return useMutation<AICatalogData, Error, number>({
+    mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/catalog`),
+    onSuccess: (catalog, profileId) => {
+      queryClient.setQueryData(['ai', 'catalog', profileId], catalog)
+    },
+  })
+}
+
+export function useAIConnectionCheck() {
+  return useMutation<AIConnectionCheck, Error, number>({
+    mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/check`),
+  })
+}

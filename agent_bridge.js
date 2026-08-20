@@ -16,11 +16,16 @@ import {
 } from './pipeline.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
+  AI_ROLES,
   acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
   createExperiment,
+  clearAiDefaultProfile,
+  clearAiRoleBinding,
   getAccountHealthSummary,
+  getAiProfile,
+  getAiRuntimeSettings,
   getAudienceSummary,
   getCandidate,
   getDraft,
@@ -37,6 +42,7 @@ import {
   hasCandidateAction,
   listAudienceProfiles,
   listAcceptedLearnedRules,
+  listAiProfiles,
   listCandidateActions,
   listCandidates,
   listDrafts,
@@ -56,8 +62,12 @@ import {
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
   saveDraft,
+  setAiDefaultProfile,
+  setAiRoleBinding,
   upsertCandidates,
+  resolveAiProfileForRole,
 } from './store.js';
+import { listAiRuntimeAvailability } from './ai_runtime.js';
 
 async function readInput() {
   let input = '';
@@ -131,9 +141,112 @@ function schedulerContext(now) {
   };
 }
 
+function aiProfileCapability(profile) {
+  if (!profile) return 'unsupported';
+  if (profile.runtime === 'codex') return 'supported';
+  if (profile.runtime !== 'direct_api') return 'unsupported';
+  const configured = profile.settings?.structuredOutput;
+  if (['supported', 'compatible_fallback', 'unknown', 'unsupported'].includes(configured)) return configured;
+  return profile.providerKind === 'openai' ? 'supported' : 'compatible_fallback';
+}
+
+function safeAiProfile(profile) {
+  if (!profile) return null;
+  return {
+    id: profile.id,
+    name: profile.name,
+    runtime: profile.runtime,
+    providerKind: profile.providerKind,
+    baseUrl: profile.baseUrl,
+    protocol: profile.protocol,
+    model: profile.model,
+    reasoning: profile.reasoning,
+    runtimeProfile: profile.runtimeProfile,
+    settings: profile.settings || {},
+    enabled: profile.enabled !== false,
+    compatibility: profile.compatibility === true,
+    capability: aiProfileCapability(profile),
+  };
+}
+
+function safeAiRole(role) {
+  const resolved = resolveAiProfileForRole(role);
+  return {
+    role,
+    activity: role === 'continuous_scan' ? 'not_active' : (resolved.profile ? 'configured' : 'unconfigured'),
+    primaryProfileId: resolved.binding?.primaryProfileId ?? null,
+    fallbackProfileId: resolved.binding?.fallbackProfileId ?? null,
+    resolvedProfile: safeAiProfile(resolved.profile),
+    fallbackProfile: safeAiProfile(resolved.fallbackProfile),
+    resolutionSource: resolved.source,
+  };
+}
+
+function safeAiConfig() {
+  const settings = getAiRuntimeSettings();
+  return {
+    profiles: listAiProfiles({ limit: 500 }).map(safeAiProfile),
+    defaultProfileId: settings.defaultProfileId,
+    defaultProfile: safeAiProfile(settings.defaultProfile),
+    roles: AI_ROLES.map(safeAiRole),
+  };
+}
+
+function requireAssignableAiProfile(id, { confirmUnknownCapability = false } = {}) {
+  const profile = getAiProfile(Number(id));
+  if (!profile) throw new Error(`AI profile not found: ${id}`);
+  if (!profile.enabled) throw new Error(`AI profile is disabled: ${profile.id}`);
+  const capability = aiProfileCapability(profile);
+  if (capability === 'unsupported') throw new Error(`${profile.name} does not support the structured-output path required by AI roles.`);
+  if (capability === 'unknown' && confirmUnknownCapability !== true) {
+    throw new Error(`${profile.name} has unknown structured-output capability. Confirm the advanced assignment explicitly.`);
+  }
+  return profile;
+}
+
 async function main() {
   const command = process.argv[2];
   const payload = await readInput();
+
+  if (command === 'ai-config') {
+    result(safeAiConfig());
+    return;
+  }
+
+  if (command === 'ai-runtimes') {
+    result({ runtimes: await listAiRuntimeAvailability() });
+    return;
+  }
+
+  if (command === 'ai-select-default') {
+    if (payload.clear === true || payload.profileId == null || payload.profileId === '') {
+      clearAiDefaultProfile();
+      result(safeAiConfig());
+      return;
+    }
+    const profile = requireAssignableAiProfile(payload.profileId, { confirmUnknownCapability: payload.confirmUnknownCapability === true });
+    setAiDefaultProfile(profile.id);
+    result(safeAiConfig());
+    return;
+  }
+
+  if (command === 'ai-bind-role') {
+    const role = String(payload.role || '');
+    if (!AI_ROLES.includes(role)) throw new Error(`Invalid AI role: ${role || 'missing'}`);
+    if (payload.clear === true) {
+      clearAiRoleBinding(role);
+      result({ role: safeAiRole(role) });
+      return;
+    }
+    const confirmUnknownCapability = payload.confirmUnknownCapability === true;
+    const primaryProfileId = payload.primaryProfileId == null || payload.primaryProfileId === '' ? null : Number(payload.primaryProfileId);
+    const fallbackProfileId = payload.fallbackProfileId == null || payload.fallbackProfileId === '' ? null : Number(payload.fallbackProfileId);
+    if (primaryProfileId != null) requireAssignableAiProfile(primaryProfileId, { confirmUnknownCapability });
+    if (fallbackProfileId != null) requireAssignableAiProfile(fallbackProfileId, { confirmUnknownCapability });
+    setAiRoleBinding(role, { primaryProfileId, fallbackProfileId });
+    result({ role: safeAiRole(role) });
+    return;
+  }
 
   if (command === 'ingest') {
     const candidate = manualCandidate(payload);
@@ -650,7 +763,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience> < JSON');
 }
 
 main().catch((error) => {
