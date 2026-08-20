@@ -7,6 +7,7 @@ import {
   useAIProfileDelete,
   useAIProfileEnabled,
   useAIProfileSave,
+  useAIProfileTest,
   useAIRoleSave,
   useAIRuns,
   useAIRuntimeAvailability,
@@ -228,6 +229,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
   const replaceSecret = useAISecretReplace()
   const removeSecret = useAISecretRemove()
   const connection = useAIConnectionCheck()
+  const profileTest = useAIProfileTest()
   const refreshCatalog = useAICatalogRefresh()
   const catalog = useAICatalog(profile?.id ?? null)
 
@@ -267,7 +269,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       setProviderKind('runtime_managed')
       setProtocol('runtime_native')
       setModel(next === 'codex' ? 'inherit' : '')
-      if (next === 'agy') setRuntimeProfile('')
+      if (next === 'agy' || next === 'opencode') setRuntimeProfile('')
     }
   }
 
@@ -285,7 +287,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       protocol: direct ? protocol : 'runtime_native',
       model,
       reasoning,
-      runtimeProfile: direct || runtime === 'agy' ? '' : runtimeProfile,
+      runtimeProfile: direct || runtime === 'agy' || runtime === 'opencode' ? '' : runtimeProfile,
       settings,
       enabled: profile?.enabled ?? true,
     }
@@ -353,7 +355,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
               <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={providerKind === 'openrouter' ? 'https://openrouter.ai/api/v1' : providerKind === 'openai' ? 'https://api.openai.com/v1' : 'http://localhost:11434/v1'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
             </label>
           </>
-        ) : runtime !== 'agy' ? (
+        ) : runtime !== 'agy' && runtime !== 'opencode' ? (
           <label className="text-sm text-slate-700 md:col-span-2">
             Runtime profile (optional)
             <input value={runtimeProfile} onChange={(event) => setRuntimeProfile(event.target.value)} placeholder="Use the runtime's default configuration" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
@@ -361,11 +363,11 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         ) : null}
         <label className="text-sm text-slate-700">
           Model ID
-          <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or exact Codex model' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
+          <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or exact Codex model' : runtime === 'opencode' ? 'provider/model from OpenCode catalog' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
         </label>
         <label className="text-sm text-slate-700">
           Reasoning / variant
-          <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} placeholder={runtime === 'agy' ? 'low, medium, or high' : 'medium, max, or provider/runtime value'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
+          <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} placeholder={runtime === 'agy' ? 'low, medium, or high' : runtime === 'opencode' ? 'Optional OpenCode model variant, e.g. max' : 'medium, max, or provider/runtime value'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
         </label>
         {direct && (
           <>
@@ -402,6 +404,9 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         {createSecretMissing && <p className="md:col-span-2 text-sm text-amber-700">OpenAI/OpenRouter profiles need either a local API key or an environment-variable reference.</p>}
         <div className="md:col-span-2 flex flex-wrap items-center gap-2">
           <button type="submit" disabled={save.isPending || createSecretMissing} className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">{save.isPending ? 'Saving…' : profile ? 'Save profile' : 'Create profile'}</button>
+          <button type="button" title={profile?.id != null ? 'Send one tiny structured request using this saved profile.' : 'Save the profile before testing it.'} disabled={profile?.id == null || profileTest.isPending} onClick={() => profile?.id != null && profileTest.mutate(profile.id)} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {profileTest.isPending ? 'Testing…' : 'Test profile'}
+          </button>
           {profile && profile.id != null && (
             <button type="button" disabled={enabledMutation.isPending} onClick={() => enabledMutation.mutate({ id: profile.id as number, enabled: !profile.enabled })} className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               {profile.enabled ? 'Disable' : 'Enable'}
@@ -415,7 +420,13 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
           )}
         </div>
       </form>
-      {(save.isError || enabledMutation.isError || deleteMutation.isError) && <p className="mt-3 text-sm text-red-700">{save.error?.message || enabledMutation.error?.message || deleteMutation.error?.message}</p>}
+      {(save.isError || enabledMutation.isError || deleteMutation.isError || profileTest.isError) && <p className="mt-3 text-sm text-red-700">{save.error?.message || enabledMutation.error?.message || deleteMutation.error?.message || profileTest.error?.message}</p>}
+      {profileTest.data && (
+        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          Structured test passed with {profileTest.data.runtime} · {profileTest.data.model} in {profileTest.data.latencyMs} ms.
+          <div className="mt-1 text-xs text-emerald-800">Tokens: {profileTest.data.inputTokens ?? 'unavailable'} in / {profileTest.data.outputTokens ?? 'unavailable'} out · Cost: {profileTest.data.costUsd == null ? 'unavailable' : `$${profileTest.data.costUsd}`}</div>
+        </div>
+      )}
 
       {profile && direct && profile.id != null && (
         <div className="mt-5 border-t border-slate-200 pt-5">

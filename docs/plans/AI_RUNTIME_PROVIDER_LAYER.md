@@ -1,6 +1,6 @@
 # AI Runtime & Provider Layer Implementation Plan
 
-**Implementation status (2026-08-20): Implemented on `main`.** The shared runtime, Direct API/OpenRouter/OpenAI-compatible providers, Codex, AI Settings/configuration APIs, writer migration, Phase-6 integration, and AGY structured adapter are landed. `continuous_scan` remains configuration-only/Not active, and OpenCode/OpenCode 2 remain unavailable when not installed. The checklist below is retained as the historical execution contract; this status line is authoritative for current implementation state.
+**Implementation status (2026-08-20): Implemented on `main`.** The shared runtime, Direct API/OpenRouter/OpenAI-compatible providers, Codex, OpenCode SDK/server structured output, AI Settings/configuration APIs, writer migration, Phase-6 integration, and AGY structured adapter are landed. `continuous_scan` remains configuration-only/Not active. OpenCode 2 remains separately capability-gated and unsupported until its own adapter contract is implemented. The checklist below is retained as the historical execution contract; this status line is authoritative for current implementation state.
 
 **Goal:** Let the product run its continuous scan, editorial scan, final editorial reasoning, and writer through operator-selected AI runtimes/models, including Codex with a selected model/reasoning level, OpenRouter, arbitrary OpenAI-compatible APIs, OpenCode/OpenCode 2, and AGY, without changing workflow/evidence/approval authority.
 
@@ -763,7 +763,7 @@ This is provenance, not promotional model branding.
 Codex support is on the critical path because it preserves the existing writer compatibility default. AGY, OpenCode, and OpenCode 2 are optional adapters and must not block the shared runtime, writer migration, or Phase-6 editorial work when their installed structured-output contracts are unavailable.
 
 **Acceptance criteria:**
-- Runtime availability is truthful, Codex/AGY can return schema-valid output through the shared adapter, and absent/unsupported OpenCode variants remain selectable only after their required adapter capability exists.
+- Runtime availability is truthful, Codex/AGY/OpenCode can return schema-valid output through the shared adapter, and absent/unsupported OpenCode variants remain selectable only after their required adapter capability exists.
 
 ## Task 5: Add the shared structured AI runtime
 

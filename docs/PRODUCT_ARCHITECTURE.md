@@ -97,7 +97,7 @@ Current repository state:
 
 - Phases 1A, 1B, 1C, 1D, 2, 3, 4, 5, and 6 are implemented.
 - The shared AI runtime/provider layer is implemented: Direct API/OpenRouter/OpenAI-compatible endpoints, Codex, and installed AGY use the common structured boundary; AI Settings owns profile/default/role configuration and safe secret references.
-- `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode/OpenCode 2 remain unavailable when not installed rather than being simulated through undocumented output parsing.
+- `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode uses its documented SDK/server structured-output contract when available; OpenCode 2 remains separately capability-gated rather than being simulated through undocumented output parsing.
 - Media attachment/upload readiness remains separate incomplete work; required proof media must not be treated as attached when it is not.
 
 Phase-6 editorial planning is current runtime behavior, but it remains advisory: human route selection, approval, reply send, repost completion, and publication authority stay separate.

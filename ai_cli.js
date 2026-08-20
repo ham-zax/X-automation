@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { createOpencode } from '@opencode-ai/sdk/v2';
 
 const RUNTIME_COMMANDS = Object.freeze({
   codex: 'codex',
@@ -107,6 +108,18 @@ export async function getAiCliAvailability(runtime, { timeoutMs = 5_000 } = {}) 
     const { stdout, stderr } = await runProcess(command, ['--version'], { timeoutMs });
     const version = String(stdout || stderr).trim().split(/\r?\n/)[0] || null;
     if (runtime === 'codex') return { runtime, installed: true, version, structuredOutput: 'supported', reason: null };
+    if (runtime === 'opencode') {
+      try {
+        const help = await runProcess(command, ['serve', '--help'], { timeoutMs, maxOutputChars: 64_000 });
+        const text = `${help.stdout}\n${help.stderr}`;
+        if (!/starts a headless opencode server/i.test(text)) {
+          return { runtime, installed: true, version, structuredOutput: 'unsupported', reason: 'structured_contract_unavailable' };
+        }
+        return { runtime, installed: true, version, structuredOutput: 'supported', reason: null };
+      } catch {
+        return { runtime, installed: true, version, structuredOutput: 'unknown', reason: 'capability_check_failed' };
+      }
+    }
     if (runtime === 'agy') {
       try {
         const help = await runProcess(command, ['--help'], { timeoutMs, maxOutputChars: 64_000 });
@@ -129,7 +142,7 @@ export async function getAiCliAvailability(runtime, { timeoutMs = 5_000 } = {}) 
       runtime,
       installed: true,
       version: null,
-      structuredOutput: runtime === 'codex' ? 'supported' : runtime === 'agy' ? 'unknown' : 'unsupported',
+      structuredOutput: runtime === 'codex' ? 'supported' : ['agy', 'opencode'].includes(runtime) ? 'unknown' : 'unsupported',
       reason: 'version_check_failed',
     };
   }
@@ -177,6 +190,139 @@ function resolveAgyReasoning(profile) {
   if (!requested) return '';
   if (!AGY_EFFORTS.has(requested)) throw new AiCliError('reasoning_unsupported', `Unsupported AGY reasoning effort: ${requested}.`);
   return requested;
+}
+
+
+function parseOpenCodeModel(profile) {
+  const model = String(profile.model || '').trim();
+  if (!model || model === 'inherit') {
+    throw new AiCliError('model_required', 'OpenCode profiles require an explicit provider/model ID from the runtime catalog.');
+  }
+  if (profile.runtimeProfile) {
+    throw new AiCliError('runtime_profile_unsupported', 'OpenCode SDK execution does not use the generic runtimeProfile field.');
+  }
+  const slash = model.indexOf('/');
+  if (slash <= 0 || slash === model.length - 1) {
+    throw new AiCliError('model_required', 'OpenCode model IDs must use provider/model format.');
+  }
+  return {
+    providerID: model.slice(0, slash),
+    modelID: model.slice(slash + 1),
+    variant: String(profile.reasoning || '').trim(),
+  };
+}
+
+function openCodeFailure(error, fallbackMessage = 'OpenCode SDK request failed.') {
+  const text = typeof error === 'string'
+    ? error
+    : error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : JSON.stringify(error || {});
+  const classified = classifyCliFailure(text);
+  if (classified.code !== 'runtime_error') return classified;
+  return new AiCliError('runtime_error', fallbackMessage, { fallbackEligible: true });
+}
+
+async function withOpenCode(profile, timeoutMs, callback) {
+  const parsed = parseOpenCodeModel(profile);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('OpenCode request timed out.')), timeoutMs);
+  let server = null;
+  try {
+    const instance = await createOpencode({
+      hostname: '127.0.0.1',
+      port: 0,
+      timeout: Math.min(timeoutMs, 10_000),
+      signal: controller.signal,
+      config: { permission: 'deny' },
+    });
+    server = instance.server;
+    return await callback(instance.client, parsed, controller.signal);
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new AiCliError('timeout', 'AI runtime request timed out.', { fallbackEligible: true });
+    }
+    if (error instanceof AiCliError) throw error;
+    throw openCodeFailure(error);
+  } finally {
+    clearTimeout(timer);
+    server?.close();
+  }
+}
+
+async function openCodeCatalog(profile, { timeoutMs = 15_000 } = {}) {
+  return withOpenCode({ ...profile, model: profile.model && profile.model !== 'inherit' ? profile.model : 'catalog/placeholder', runtimeProfile: '' }, timeoutMs, async (client, _parsed, signal) => {
+    const response = await client.config.providers({ signal });
+    if (response.error) throw openCodeFailure(response.error, 'OpenCode model catalog is unavailable.');
+    const providers = Array.isArray(response.data?.providers) ? response.data.providers : [];
+    const models = [];
+    for (const provider of providers) {
+      const providerID = String(provider?.id || '').trim();
+      if (!providerID || !provider?.models || typeof provider.models !== 'object') continue;
+      for (const model of Object.values(provider.models)) {
+        const modelID = String(model?.id || '').trim();
+        if (!modelID) continue;
+        models.push({
+          id: `${providerID}/${modelID}`,
+          name: String(model?.name || modelID),
+          provider: providerID,
+          runtime: 'opencode',
+          structuredOutput: 'supported',
+          defaultReasoning: null,
+          reasoningLevels: Object.keys(model?.variants || {}),
+          contextLength: finiteOrNull(model?.limit?.context),
+          pricing: model?.cost || null,
+        });
+      }
+    }
+    return models;
+  });
+}
+
+async function runOpenCodeStructuredAI(profile, { prompt, schema, timeoutMs }) {
+  return withOpenCode(profile, timeoutMs, async (client, parsed, signal) => {
+    const sessionResponse = await client.session.create({ body: { title: 'X structured AI runtime' }, signal });
+    if (sessionResponse.error || !sessionResponse.data?.id) {
+      throw openCodeFailure(sessionResponse.error, 'OpenCode could not create a structured session.');
+    }
+    const sessionID = sessionResponse.data.id;
+    try {
+      const body = {
+        model: { providerID: parsed.providerID, modelID: parsed.modelID },
+        parts: [{ type: 'text', text: prompt }],
+        format: { type: 'json_schema', schema, retryCount: 1 },
+      };
+      if (parsed.variant) body.variant = parsed.variant;
+      const response = await client.session.prompt({ path: { sessionID }, body, signal });
+      if (response.error) throw openCodeFailure(response.error);
+      const info = response.data?.info;
+      if (info?.error) throw openCodeFailure(info.error);
+      if (!info || info.structured == null) {
+        throw new AiCliError('invalid_structured_output', 'OpenCode did not produce structured JSON output.', { fallbackEligible: true });
+      }
+      return {
+        text: JSON.stringify(info.structured),
+        runtime: 'opencode',
+        provider: info.providerID || parsed.providerID,
+        model: info.modelID ? `${info.providerID || parsed.providerID}/${info.modelID}` : profile.model,
+        reasoning: info.variant || parsed.variant || '',
+        inputTokens: finiteOrNull(info.tokens?.input),
+        outputTokens: finiteOrNull(info.tokens?.output),
+        costUsd: finiteOrNull(info.cost),
+        nativeStructuredOutput: true,
+        metadata: {
+          protocol: 'runtime_native',
+          structuredOutput: 'runtime_schema',
+          sessionId: sessionID,
+          reasoningTokens: finiteOrNull(info.tokens?.reasoning),
+          cacheReadTokens: finiteOrNull(info.tokens?.cache?.read),
+          cacheWriteTokens: finiteOrNull(info.tokens?.cache?.write),
+        },
+      };
+    } finally {
+      await client.session.delete({ path: { sessionID }, signal }).catch(() => {});
+    }
+  });
 }
 
 function parseAgyJson(stdout, label) {
@@ -237,6 +383,16 @@ async function runAgyStructuredAI(profile, { prompt, schema, timeoutMs }) {
 }
 
 export async function runCliStructuredAI(profile, { prompt, schema, timeoutMs = 120_000 } = {}) {
+  if (profile.runtime === 'opencode') {
+    const availability = await getAiCliAvailability('opencode', { timeoutMs: Math.min(timeoutMs, 5_000) });
+    if (!availability.installed) {
+      throw new AiCliError('runtime_unavailable', 'AI runtime opencode is not installed.', { fallbackEligible: true });
+    }
+    if (availability.structuredOutput !== 'supported') {
+      throw new AiCliError('runtime_unsupported', 'Installed OpenCode does not expose the required SDK/server structured-output contract.');
+    }
+    return runOpenCodeStructuredAI(profile, { prompt, schema, timeoutMs });
+  }
   if (profile.runtime === 'agy') {
     const availability = await getAiCliAvailability('agy', { timeoutMs: Math.min(timeoutMs, 5_000) });
     if (!availability.installed) {
@@ -305,6 +461,28 @@ export async function listCliAiCatalog(profile, { timeoutMs = 15_000 } = {}) {
       capability: 'unsupported',
       availability,
     };
+  }
+  if (profile.runtime === 'opencode') {
+    try {
+      const models = await openCodeCatalog(profile, { timeoutMs });
+      return {
+        models,
+        fetchedAt: Date.now(),
+        manualModelEntry: false,
+        capability: 'supported',
+        availability,
+      };
+    } catch (error) {
+      const normalized = error instanceof AiCliError ? error : openCodeFailure(error, 'OpenCode model catalog is unavailable.');
+      return {
+        models: [],
+        fetchedAt: null,
+        manualModelEntry: false,
+        capability: availability.structuredOutput,
+        availability,
+        error: { code: normalized.code },
+      };
+    }
   }
   if (profile.runtime === 'agy') {
     try {
@@ -403,6 +581,30 @@ export async function checkCliAiConnection(profile, { timeoutMs = 10_000 } = {})
       structuredOutputPath: availability.structuredOutput === 'supported' ? 'runtime_schema' : 'unsupported',
       latencyMs: Date.now() - startedAt,
       error: { code: availability.reason || 'runtime_unavailable' },
+    };
+  }
+  if (profile.runtime === 'opencode') {
+    const catalog = await listCliAiCatalog(profile, { timeoutMs });
+    let profileError = null;
+    try {
+      parseOpenCodeModel(profile);
+    } catch (error) {
+      profileError = error instanceof AiCliError ? error : new AiCliError('runtime_unsupported', 'OpenCode profile is incompatible with the installed runtime.');
+    }
+    const selected = catalog.models.find((model) => model.id === profile.model) || null;
+    if (!profileError && selected && profile.reasoning && !selected.reasoningLevels.includes(profile.reasoning)) {
+      profileError = new AiCliError('reasoning_unsupported', `OpenCode model does not advertise variant ${profile.reasoning}.`);
+    }
+    const modelFound = catalog.error || !profile.model || profile.model === 'inherit' ? null : Boolean(selected);
+    const error = catalog.error || (profileError ? { code: profileError.code } : null) || (modelFound === false ? { code: 'model_not_found' } : null);
+    return {
+      runtimeAvailable: true,
+      providerReachable: catalog.error ? null : true,
+      authenticated: null,
+      modelFound,
+      structuredOutputPath: 'runtime_schema',
+      latencyMs: Date.now() - startedAt,
+      error,
     };
   }
   if (profile.runtime === 'agy') {

@@ -97,7 +97,7 @@ import {
   resolveAiProfileForRole,
 } from './store.js';
 import { getAiSecretStatus, removeAiSecret, setAiSecret } from './ai_secrets.js';
-import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability } from './ai_runtime.js';
+import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability, testAiProfile } from './ai_runtime.js';
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
@@ -958,7 +958,7 @@ function formatLearnedRule(rule) {
 
 function aiProfileCapability(profile) {
   if (!profile) return 'unsupported';
-  if (profile.runtime === 'codex' || profile.runtime === 'agy') return 'supported';
+  if (profile.runtime === 'codex' || profile.runtime === 'opencode' || profile.runtime === 'agy') return 'supported';
   if (profile.runtime !== 'direct_api') return 'unsupported';
   const configured = profile.settings?.structuredOutput;
   if (['supported', 'compatible_fallback', 'unknown', 'unsupported'].includes(configured)) return configured;
@@ -1330,6 +1330,11 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'check') {
       const profile = requireAiProfile(segments[2]);
       return sendSuccess(await checkAiProfileConnection(profile));
+    }
+
+    if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'test') {
+      const profile = requireAiProfile(segments[2]);
+      return sendSuccess(await testAiProfile(profile));
     }
 
     if (method === 'GET' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'runs') {

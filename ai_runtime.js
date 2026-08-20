@@ -519,3 +519,35 @@ export async function checkAiProfileConnection(profileOrId, { timeoutMs = 10_000
   }
   return checkCliAiConnection(profile, { timeoutMs });
 }
+
+export async function testAiProfile(profileOrId, { timeoutMs = 30_000 } = {}) {
+  const profile = profileFromInput(profileOrId);
+  if (profile.enabled === false) throw new AiRuntimeError('profile_disabled', 'Selected AI profile is disabled.');
+  const startedAt = Date.now();
+  const schema = {
+    type: 'object',
+    properties: { ok: { type: 'boolean' } },
+    required: ['ok'],
+    additionalProperties: false,
+  };
+  const result = await executeValidated(
+    profile,
+    'Return one JSON object with exactly {"ok": true}. This is a configuration test; do not call tools or add other content.',
+    schema,
+    timeoutMs,
+  );
+  if (result.output?.ok !== true) throw new AiRuntimeError('test_failed', 'AI profile test returned an unexpected structured result.');
+  return {
+    ok: true,
+    runtime: result.adapter.runtime || profile.runtime,
+    provider: result.adapter.provider || profile.providerKind,
+    model: result.adapter.model || profile.model,
+    reasoning: result.adapter.reasoning || profile.reasoning || '',
+    structuredOutputPath: result.adapter.nativeStructuredOutput ? 'runtime_schema' : 'compatible_fallback',
+    latencyMs: Date.now() - startedAt,
+    inputTokens: result.adapter.inputTokens ?? null,
+    outputTokens: result.adapter.outputTokens ?? null,
+    costUsd: result.adapter.costUsd ?? null,
+    requestCount: result.requestCount,
+  };
+}

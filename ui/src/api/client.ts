@@ -983,6 +983,20 @@ export interface AIConnectionCheck {
   error: { code: string; httpStatus?: number | null } | null
 }
 
+export interface AIProfileTestResult {
+  ok: boolean
+  runtime: string
+  provider: string
+  model: string
+  reasoning: string
+  structuredOutputPath: string
+  latencyMs: number
+  inputTokens: number | null
+  outputTokens: number | null
+  costUsd: number | null
+  requestCount: number
+}
+
 export interface AIRunView {
   id: number
   invocationId: string
@@ -1118,5 +1132,11 @@ export function useAICatalogRefresh() {
 export function useAIConnectionCheck() {
   return useMutation<AIConnectionCheck, Error, number>({
     mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/check`),
+  })
+}
+
+export function useAIProfileTest() {
+  return useMutation<AIProfileTestResult, Error, number>({
+    mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/test`),
   })
 }

@@ -61,7 +61,7 @@ Phases 1A–6 plus the shared AI runtime/provider layer are current runtime beha
 
 - **media attachment/upload readiness** — required proof media remains blocked until a real attachment path exists;
 - **continuous-scan background consumer** — the `continuous_scan` role is configurable but intentionally shown as **Not active** until a concrete background semantic consumer is implemented;
-- **optional OpenCode/OpenCode 2 execution adapters** — these remain unavailable when the corresponding runtimes are not installed; no undocumented TUI parsing is used.
+- **OpenCode structured execution** — the installed OpenCode runtime uses its documented SDK/server JSON-schema path; OpenCode 2 remains separately capability-gated and no undocumented TUI parsing is used.
 
 Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed an evidence-bounded two-pass AI Editorial Plan; code owns story/recommendation scoring and final order; the human selects or overrides a recommendation; selected work enters the existing writer/gates/approval workflow; publication measurements preserve recommendation vs selected vs final route provenance. AI runtime/provider/model choice never changes approval or publication authority.
 
@@ -147,7 +147,7 @@ The guided dashboard shell is organized around user goals instead of implementat
 
 The shell changes presentation only: the existing approval, exact-reply send, scheduler, Account Health, experiment, and learned-rule boundaries remain authoritative. Technical scores/details are progressively disclosed rather than removed.
 
-The implemented AI runtime layer supports Direct OpenAI/OpenRouter/OpenAI-compatible endpoints, Codex model/reasoning selection, and the installed AGY structured runtime contract. AI Settings exposes a global default plus per-role profiles for `continuous_scan`, `editorial_scan`, `editorial_final`, and `writer`; `continuous_scan` is configurable but explicitly **Not active** until a background consumer exists. AGY support is capability-gated against its installed CLI contract and uses exact catalog model IDs; the current adapter was verified against AGY 1.1.15. OpenCode/OpenCode 2 remain truthfully unavailable when not installed.
+The implemented AI runtime layer supports Direct OpenAI/OpenRouter/OpenAI-compatible endpoints, Codex model/reasoning selection, OpenCode through its documented SDK/server structured-output contract, and the installed AGY structured runtime contract. AI Settings exposes a global default plus per-role profiles for `continuous_scan`, `editorial_scan`, `editorial_final`, and `writer`; `continuous_scan` is configurable but explicitly **Not active** until a background consumer exists. OpenCode uses exact `provider/model` catalog IDs plus optional advertised model variants. AGY support is capability-gated against its installed CLI contract and uses exact catalog model IDs; the current adapter was verified against AGY 1.1.15. OpenCode 2 remains separately unsupported until its own adapter contract is implemented.
 
 ## Agent interface
 
