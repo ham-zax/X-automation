@@ -1,22 +1,13 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
-import {
-  fetchAccountPerformance,
-  fetchGitHubTrending,
-  fetchHackerNews,
-  fetchXNichePosts,
-  fetchXViralPosts,
-  rankNews,
-  rankXViralPosts,
-} from './tech_news.js';
+import { fetchAccountPerformance } from './tech_news.js';
+import { refreshAllSourceSnapshots } from './source_refresh.js';
 import { publishMainFeedHttp } from './x_http.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import { rankMainFeedItems } from './scheduler.js';
-import { personalizeCandidates } from './strategy.js';
 import {
   claimQueueItem,
   getAccountHealthSummary,
-  getPreferenceProfile,
   getPublicationFollowerBaseline,
   listDueMeasurementWindows,
   listAcceptedLearnedRules,
@@ -30,11 +21,9 @@ import {
   recordPublicationMeasurement,
   saveDraft,
   saveQueueItem,
-  upsertCandidates,
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
-const NEWS_LIMIT = Number(process.env.NEWS_LIMIT || 8);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 
 function compactMeasurementContext(summary) {
@@ -151,31 +140,16 @@ export async function captureDuePublicationMeasurements({
 }
 
 async function refreshResearch() {
-  const [hnStories, ghRepos] = await Promise.all([
-    fetchHackerNews(NEWS_LIMIT),
-    fetchGitHubTrending(NEWS_LIMIT),
-  ]);
-  const xResult = await fetchXNichePosts(Math.max(NEWS_LIMIT * 4, 32));
-  const viralResult = await fetchXViralPosts(Math.max(NEWS_LIMIT * 8, 64));
-
-  const preference = getPreferenceProfile();
-  const ranked = personalizeCandidates(rankNews({
-    hnStories: Array.isArray(hnStories) ? hnStories : [],
-    ghRepos: Array.isArray(ghRepos) ? ghRepos : [],
-    xPosts: xResult.posts,
-  }), preference);
-  const viral = personalizeCandidates(rankXViralPosts(viralResult.posts), preference);
-  upsertCandidates([...ranked, ...viral]);
-
+  const refreshed = await refreshAllSourceSnapshots();
+  const byKind = new Map(refreshed.results.map((result) => [result.kind, result]));
   return {
-    ranked,
-    viral,
-    errors: [
-      !Array.isArray(hnStories) ? hnStories?.error : null,
-      !Array.isArray(ghRepos) ? ghRepos?.error : null,
-      xResult.error,
-      viralResult.error,
-    ].filter(Boolean),
+    ranked: [
+      ...(byKind.get('x_latest')?.candidates || []),
+      ...(byKind.get('github_trending')?.candidates || []),
+      ...(byKind.get('hn_top')?.candidates || []),
+    ],
+    viral: byKind.get('x_momentum')?.candidates || [],
+    errors: refreshed.errors.map((item) => `${item.kind}: ${item.error}`),
   };
 }
 

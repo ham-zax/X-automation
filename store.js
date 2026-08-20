@@ -47,6 +47,7 @@ export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode'
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
 export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'writer']);
+export const SOURCE_SNAPSHOT_KINDS = Object.freeze(['x_latest', 'x_momentum', 'github_trending', 'hn_top']);
 
 const AI_RUNTIME_SET = new Set(AI_RUNTIME_TYPES);
 const AI_PROVIDER_SET = new Set(AI_PROVIDER_KINDS);
@@ -56,6 +57,15 @@ const AI_ATTEMPT_KIND_SET = new Set(['primary', 'fallback']);
 const AI_RUN_STATUS_SET = new Set(['running', 'complete', 'failed']);
 const AI_STRUCTURED_OUTPUT_STATE_SET = new Set(['supported', 'compatible_fallback', 'unknown', 'unsupported']);
 const AI_PROFILE_SETTING_KEYS = new Set(['catalogPath', 'structuredOutput', 'httpReferer', 'appTitle']);
+const SOURCE_SNAPSHOT_KIND_SET = new Set(SOURCE_SNAPSHOT_KINDS);
+const EDITORIAL_RUN_STATUS_SET = new Set(['building', 'complete', 'failed']);
+const RESEARCH_CLAIM_TYPE_SET = new Set(['announcement', 'capability', 'implementation', 'benchmark', 'performance', 'reliability', 'security', 'pricing', 'compatibility', 'other']);
+const RESEARCH_EVIDENCE_STATUS_SET = new Set(['primary_supported', 'source_claim', 'contradicted', 'unresolved']);
+const EDITORIAL_RECOMMENDATION_STATUS_SET = new Set(['suggested', 'selected', 'dismissed', 'superseded']);
+const QUEUE_SOURCE_ROLE_SET = new Set(['primary', 'supporting']);
+const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
+const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
+const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
 
 const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
@@ -374,6 +384,99 @@ db.exec(`
     FOREIGN KEY(profile_id) REFERENCES ai_profiles(id)
   );
 
+  CREATE TABLE IF NOT EXISTS source_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_key TEXT NOT NULL,
+    snapshot_kind TEXT NOT NULL,
+    observed_at INTEGER NOT NULL,
+    rank INTEGER,
+    metrics_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key),
+    UNIQUE(candidate_key, snapshot_kind, observed_at)
+  );
+
+  CREATE TABLE IF NOT EXISTS editorial_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    objective TEXT NOT NULL,
+    source_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    context_json TEXT NOT NULL DEFAULT '{}',
+    scan_json TEXT NOT NULL DEFAULT '{}',
+    ai_execution_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'building',
+    error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    completed_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS research_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    editorial_run_id INTEGER NOT NULL,
+    story_key TEXT NOT NULL,
+    candidate_key TEXT,
+    claim TEXT NOT NULL DEFAULT '',
+    claim_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    source_kind TEXT NOT NULL,
+    source_family TEXT NOT NULL,
+    requested_url TEXT NOT NULL,
+    resolved_url TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    summary TEXT NOT NULL DEFAULT '',
+    observed_at INTEGER NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY(editorial_run_id) REFERENCES editorial_runs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS editorial_recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    editorial_run_id INTEGER NOT NULL,
+    story_key TEXT NOT NULL,
+    rank INTEGER NOT NULL,
+    decision TEXT NOT NULL,
+    pipeline TEXT NOT NULL DEFAULT '',
+    objective TEXT NOT NULL,
+    title TEXT NOT NULL,
+    thesis TEXT NOT NULL DEFAULT '',
+    why_now TEXT NOT NULL DEFAULT '',
+    why_format TEXT NOT NULL DEFAULT '',
+    desired_reader_outcome TEXT NOT NULL DEFAULT '',
+    candidate_keys_json TEXT NOT NULL DEFAULT '[]',
+    potentials_json TEXT NOT NULL DEFAULT '{}',
+    authority_json TEXT NOT NULL DEFAULT '{}',
+    profile_proof_json TEXT NOT NULL DEFAULT '{}',
+    evidence_ids_json TEXT NOT NULL DEFAULT '[]',
+    algorithm_evidence_json TEXT NOT NULL DEFAULT '[]',
+    learned_context_json TEXT NOT NULL DEFAULT '{}',
+    ai_execution_json TEXT NOT NULL DEFAULT '{}',
+    risks_json TEXT NOT NULL DEFAULT '[]',
+    alternatives_json TEXT NOT NULL DEFAULT '[]',
+    research_questions_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'suggested',
+    selected_at INTEGER,
+    dismissed_at INTEGER,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(editorial_run_id) REFERENCES editorial_runs(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS queue_sources (
+    queue_item_id INTEGER NOT NULL,
+    candidate_key TEXT NOT NULL,
+    role TEXT NOT NULL,
+    PRIMARY KEY(queue_item_id, candidate_key),
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id),
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key)
+  );
+
+  CREATE TABLE IF NOT EXISTS editorial_selections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    editorial_recommendation_id INTEGER NOT NULL UNIQUE,
+    queue_item_id INTEGER NOT NULL,
+    selected_pipeline TEXT NOT NULL,
+    selected_at INTEGER NOT NULL,
+    FOREIGN KEY(editorial_recommendation_id) REFERENCES editorial_recommendations(id),
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_candidates_source_updated ON candidates(source, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_saved ON candidates(saved, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_candidates_viral ON candidates(viral_score DESC, published_at DESC);
@@ -402,6 +505,14 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_ai_runs_role_started ON ai_runs(role, started_at DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_ai_runs_profile_started ON ai_runs(profile_id, started_at DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_ai_runs_invocation_attempt ON ai_runs(invocation_id, attempt ASC);
+  CREATE INDEX IF NOT EXISTS idx_source_observations_kind_time ON source_observations(snapshot_kind, observed_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_source_observations_candidate_time ON source_observations(candidate_key, observed_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_editorial_runs_objective_time ON editorial_runs(objective, created_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_research_evidence_run_story ON research_evidence(editorial_run_id, story_key, id);
+  CREATE INDEX IF NOT EXISTS idx_editorial_recommendations_run_rank ON editorial_recommendations(editorial_run_id, rank, id);
+  CREATE INDEX IF NOT EXISTS idx_editorial_recommendations_objective_status ON editorial_recommendations(objective, status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_sources_queue_role ON queue_sources(queue_item_id, role);
+  CREATE INDEX IF NOT EXISTS idx_editorial_selections_queue_time ON editorial_selections(queue_item_id, selected_at DESC, id DESC);
 
   INSERT OR IGNORE INTO ai_runtime_settings(id, default_profile_id, updated_at) VALUES (1, NULL, 0);
 
@@ -870,6 +981,69 @@ export function listRecentMainFeedPublications({ limit = 20 } = {}) {
     seen.add(row.candidate_key);
   }
   return published.sort((a, b) => Number(b.publishedAt || 0) - Number(a.publishedAt || 0)).slice(0, bounded);
+}
+
+export function listPublishedMainFeedContent({ limit = 30 } = {}) {
+  const bounded = Math.max(1, Math.min(100, Number(limit || 30)));
+  const rows = db.prepare(`SELECT q.*, d.published_tweet_id AS draft_published_tweet_id,
+      d.status AS draft_status, d.body AS draft_body, d.thread_parts_json AS draft_thread_parts_json,
+      d.editor_json AS draft_editor_json
+    FROM queue_items q
+    LEFT JOIN drafts d ON d.id = q.draft_id OR (q.draft_id IS NULL AND d.candidate_key = q.candidate_key)
+    WHERE q.lane IN ('main', 'main_feed')
+      AND q.pipeline IN ('original', 'quote', 'thread')
+      AND q.status = 'published'
+      AND COALESCE(NULLIF(q.output_tweet_id, ''), NULLIF(d.published_tweet_id, '')) IS NOT NULL
+    ORDER BY COALESCE(q.published_at, q.updated_at) DESC
+    LIMIT ?`).all(bounded);
+  const published = rows.map((row) => {
+    const candidate = getCandidate(row.candidate_key);
+    const threadParts = json(row.draft_thread_parts_json, []);
+    const editor = json(row.draft_editor_json, {});
+    return {
+      candidateKey: row.candidate_key,
+      pipeline: row.pipeline,
+      status: 'published',
+      published: true,
+      publishedTweetId: String(row.output_tweet_id || row.draft_published_tweet_id || ''),
+      outputTweetId: row.output_tweet_id || null,
+      publishedAt: Number(row.published_at || row.updated_at || 0),
+      text: row.pipeline === 'thread' ? String(threadParts[0] || '') : String(row.draft_body || ''),
+      body: String(row.draft_body || ''),
+      threadParts: Array.isArray(threadParts) ? threadParts : [],
+      semanticAnchors: Array.isArray(editor.semanticAnchors) ? editor.semanticAnchors : [],
+      topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
+    };
+  });
+  const seen = new Set(published.map((item) => item.candidateKey));
+  const legacy = db.prepare(`SELECT d.* FROM drafts d
+    WHERE d.status = 'published' AND NULLIF(d.published_tweet_id, '') IS NOT NULL
+    ORDER BY d.updated_at DESC LIMIT ?`).all(bounded);
+  for (const row of legacy) {
+    if (seen.has(row.candidate_key)) continue;
+    const queueItem = getQueueItemByCandidate(row.candidate_key);
+    if (queueItem && (!['main', 'main_feed'].includes(queueItem.lane) || !['original', 'quote', 'thread'].includes(queueItem.pipeline))) continue;
+    const candidate = getCandidate(row.candidate_key);
+    const threadParts = json(row.thread_parts_json, []);
+    const editor = json(row.editor_json, {});
+    const pipeline = queueItem?.pipeline && ['original', 'quote', 'thread'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original';
+    published.push({
+      candidateKey: row.candidate_key,
+      pipeline,
+      status: 'published',
+      published: true,
+      publishedTweetId: String(row.published_tweet_id),
+      outputTweetId: queueItem?.outputTweetId || null,
+      publishedAt: Number(queueItem?.publishedAt || row.updated_at || 0),
+      text: pipeline === 'thread' ? String(threadParts[0] || '') : String(row.body || ''),
+      body: String(row.body || ''),
+      threadParts: Array.isArray(threadParts) ? threadParts : [],
+      semanticAnchors: Array.isArray(editor.semanticAnchors) ? editor.semanticAnchors : [],
+      topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
+    });
+    seen.add(row.candidate_key);
+  }
+  return published.sort((a, b) => b.publishedAt - a.publishedAt).slice(0, bounded);
 }
 
 export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human' } = {}) {
@@ -2626,6 +2800,400 @@ export function setAppState(key, value) {
 
 export function getAppState(key, fallback = null) {
   return db.prepare('SELECT value FROM app_state WHERE key = ?').get(key)?.value ?? fallback;
+}
+
+function requireSourceSnapshotKind(kind) {
+  const value = String(kind || '');
+  if (!SOURCE_SNAPSHOT_KIND_SET.has(value)) throw new Error(`Unsupported source snapshot kind: ${value || 'missing'}.`);
+  return value;
+}
+
+function parseAppStateJson(key, fallback) {
+  return json(getAppState(key, JSON.stringify(fallback)), fallback);
+}
+
+export function saveDiscoverSnapshot(kind, candidates = [], fetchedAt = Date.now()) {
+  const snapshotKind = requireSourceSnapshotKind(kind);
+  const timestamp = Number(fetchedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Discover snapshot fetchedAt must be a positive timestamp.');
+  const keys = [...new Set((Array.isArray(candidates) ? candidates : []).map((candidate) => candidateKey(candidate)).filter(Boolean))];
+  setAppState(`${DISCOVER_SNAPSHOT_PREFIX}${snapshotKind}`, JSON.stringify({ fetchedAt: timestamp, keys }));
+  setAppState(`${DISCOVER_REFRESH_STATUS_PREFIX}${snapshotKind}`, JSON.stringify({ attemptedAt: timestamp, error: null }));
+  return getDiscoverSnapshot(snapshotKind);
+}
+
+export function recordDiscoverSnapshotError(kind, error, attemptedAt = Date.now()) {
+  const snapshotKind = requireSourceSnapshotKind(kind);
+  const timestamp = Number(attemptedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Discover refresh attemptedAt must be a positive timestamp.');
+  const message = String(error?.message || error || 'Source refresh failed.');
+  setAppState(`${DISCOVER_REFRESH_STATUS_PREFIX}${snapshotKind}`, JSON.stringify({ attemptedAt: timestamp, error: message }));
+  return { kind: snapshotKind, attemptedAt: timestamp, error: message };
+}
+
+export function getDiscoverSnapshot(kind) {
+  const snapshotKind = requireSourceSnapshotKind(kind);
+  const canonicalKey = `${DISCOVER_SNAPSHOT_PREFIX}${snapshotKind}`;
+  let stored = parseAppStateJson(canonicalKey, null);
+  let legacy = false;
+  if (!stored || !Array.isArray(stored.keys)) {
+    const legacyKind = LEGACY_DISCOVER_KIND[snapshotKind];
+    stored = legacyKind ? parseAppStateJson(`${DISCOVER_SNAPSHOT_PREFIX}${legacyKind}`, null) : null;
+    legacy = Boolean(stored && Array.isArray(stored.keys));
+  }
+  const status = parseAppStateJson(`${DISCOVER_REFRESH_STATUS_PREFIX}${snapshotKind}`, {});
+  const keys = Array.isArray(stored?.keys) ? stored.keys : [];
+  return {
+    kind: snapshotKind,
+    fetchedAt: Number(stored?.fetchedAt || 0) || null,
+    candidates: keys.map((key) => getCandidate(key)).filter(Boolean),
+    lastRefreshAttemptAt: Number(status?.attemptedAt || 0) || null,
+    error: status?.error ? String(status.error) : null,
+    legacyFallback: legacy,
+  };
+}
+
+export function recordSourceObservations(observations = []) {
+  const values = Array.isArray(observations) ? observations : [];
+  if (!values.length) return [];
+  const statement = db.prepare(`INSERT OR IGNORE INTO source_observations(
+    candidate_key, snapshot_kind, observed_at, rank, metrics_json
+  ) VALUES (?, ?, ?, ?, ?)`);
+  const inserted = [];
+  db.exec('BEGIN');
+  try {
+    for (const observation of values) {
+      const key = String(observation?.candidateKey || '').trim();
+      if (!key) throw new Error('Source observation candidateKey is required.');
+      const snapshotKind = requireSourceSnapshotKind(observation.snapshotKind);
+      const observedAt = Number(observation.observedAt);
+      if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Source observation observedAt must be a positive timestamp.');
+      const rank = observation.rank == null ? null : Number(observation.rank);
+      if (rank != null && (!Number.isInteger(rank) || rank < 1)) throw new Error('Source observation rank must be a positive integer when supplied.');
+      statement.run(key, snapshotKind, observedAt, rank, JSON.stringify(observation.metrics || {}));
+      inserted.push({ candidateKey: key, snapshotKind, observedAt, rank, metrics: observation.metrics || {} });
+    }
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return inserted;
+}
+
+function decodeSourceObservation(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    candidateKey: row.candidate_key,
+    snapshotKind: row.snapshot_kind,
+    observedAt: Number(row.observed_at),
+    rank: row.rank == null ? null : Number(row.rank),
+    metrics: json(row.metrics_json, {}),
+  };
+}
+
+function metricDelta(current, previous, key) {
+  if (current?.[key] == null || previous?.[key] == null) return null;
+  const left = Number(current[key]);
+  const right = Number(previous[key]);
+  return Number.isFinite(left) && Number.isFinite(right) ? left - right : null;
+}
+
+export function getSourceMomentum(candidateKeyValue, snapshotKindValue) {
+  const candidateKeyText = String(candidateKeyValue || '').trim();
+  const snapshotKind = requireSourceSnapshotKind(snapshotKindValue);
+  const rows = db.prepare(`SELECT * FROM source_observations
+    WHERE candidate_key = ? AND snapshot_kind = ?
+    ORDER BY observed_at DESC, id DESC LIMIT 2`).all(candidateKeyText, snapshotKind).map(decodeSourceObservation);
+  const current = rows[0] || null;
+  const previous = rows[1] || null;
+  if (!current) return { candidateKey: candidateKeyText, snapshotKind, current: null, previous: null, intervalMs: null, intervalHours: null, deltas: null, reason: 'no_observation' };
+  if (!previous) return { candidateKey: candidateKeyText, snapshotKind, current, previous: null, intervalMs: null, intervalHours: null, deltas: null, reason: 'no_prior_observation' };
+  const intervalMs = Math.max(0, current.observedAt - previous.observedAt);
+  const intervalHours = intervalMs > 0 ? intervalMs / 3_600_000 : null;
+  let deltas;
+  if (snapshotKind === 'github_trending') {
+    deltas = {
+      rankMovement: current.rank != null && previous.rank != null ? previous.rank - current.rank : null,
+      stars: metricDelta(current.metrics, previous.metrics, 'stars'),
+      starsToday: metricDelta(current.metrics, previous.metrics, 'starsToday'),
+    };
+  } else if (snapshotKind === 'hn_top') {
+    deltas = {
+      rankMovement: current.rank != null && previous.rank != null ? previous.rank - current.rank : null,
+      points: metricDelta(current.metrics, previous.metrics, 'points'),
+      comments: metricDelta(current.metrics, previous.metrics, 'comments'),
+    };
+  } else {
+    deltas = Object.fromEntries(['views', 'likes', 'reposts', 'replies'].map((key) => {
+      const delta = metricDelta(current.metrics, previous.metrics, key);
+      return [key, { delta, perHour: delta != null && intervalHours ? delta / intervalHours : null }];
+    }));
+  }
+  return { candidateKey: candidateKeyText, snapshotKind, current, previous, intervalMs, intervalHours, deltas, reason: null };
+}
+
+function decodeEditorialRun(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    objective: row.objective,
+    sourceSnapshot: json(row.source_snapshot_json, {}),
+    context: json(row.context_json, {}),
+    scan: json(row.scan_json, {}),
+    aiExecution: json(row.ai_execution_json, {}),
+    status: row.status,
+    error: row.error || '',
+    createdAt: Number(row.created_at),
+    completedAt: row.completed_at == null ? null : Number(row.completed_at),
+  };
+}
+
+export function createEditorialRun({ objective, sourceSnapshot = {}, context = {}, createdAt = Date.now() } = {}) {
+  const selectedObjective = String(objective || '').trim();
+  if (!selectedObjective) throw new Error('Editorial run objective is required.');
+  const timestamp = Number(createdAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Editorial run createdAt must be a positive timestamp.');
+  const result = db.prepare(`INSERT INTO editorial_runs(
+    objective, source_snapshot_json, context_json, scan_json, ai_execution_json, status, error, created_at
+  ) VALUES (?, ?, ?, '{}', '{}', 'building', '', ?)`).run(
+    selectedObjective, JSON.stringify(sourceSnapshot || {}), JSON.stringify(context || {}), timestamp,
+  );
+  return getEditorialRun(Number(result.lastInsertRowid));
+}
+
+export function getEditorialRun(id) {
+  return decodeEditorialRun(db.prepare('SELECT * FROM editorial_runs WHERE id = ?').get(Number(id)));
+}
+
+export function updateEditorialRun(id, changes = {}) {
+  const current = getEditorialRun(id);
+  if (!current) throw new Error(`Editorial run not found: ${id}`);
+  const next = { ...current, ...changes };
+  const status = String(next.status || 'building');
+  if (!EDITORIAL_RUN_STATUS_SET.has(status)) throw new Error(`Unsupported editorial run status: ${status}.`);
+  const completedAt = next.completedAt == null ? null : Number(next.completedAt);
+  db.prepare(`UPDATE editorial_runs SET source_snapshot_json = ?, context_json = ?, scan_json = ?,
+    ai_execution_json = ?, status = ?, error = ?, completed_at = ? WHERE id = ?`).run(
+    JSON.stringify(next.sourceSnapshot || {}), JSON.stringify(next.context || {}), JSON.stringify(next.scan || {}),
+    JSON.stringify(next.aiExecution || {}), status, String(next.error || ''), completedAt, current.id,
+  );
+  return getEditorialRun(current.id);
+}
+
+export function getLatestCompleteEditorialRun(objective) {
+  const selectedObjective = String(objective || '').trim();
+  return decodeEditorialRun(db.prepare(`SELECT * FROM editorial_runs
+    WHERE objective = ? AND status = 'complete'
+    ORDER BY completed_at DESC, id DESC LIMIT 1`).get(selectedObjective));
+}
+
+function decodeResearchEvidence(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id), editorialRunId: Number(row.editorial_run_id), storyKey: row.story_key,
+    candidateKey: row.candidate_key || null, claim: row.claim || '', claimType: row.claim_type,
+    status: row.status, sourceKind: row.source_kind, sourceFamily: row.source_family,
+    requestedUrl: row.requested_url, resolvedUrl: row.resolved_url, title: row.title || '', summary: row.summary || '',
+    observedAt: Number(row.observed_at), metadata: json(row.metadata_json, {}),
+  };
+}
+
+export function saveResearchEvidence(input = {}) {
+  const runId = Number(input.editorialRunId);
+  if (!getEditorialRun(runId)) throw new Error(`Editorial run not found: ${input.editorialRunId}`);
+  const storyKey = String(input.storyKey || '').trim();
+  if (!storyKey) throw new Error('Research evidence storyKey is required.');
+  const claimType = String(input.claimType || 'other');
+  if (!RESEARCH_CLAIM_TYPE_SET.has(claimType)) throw new Error(`Unsupported research claim type: ${claimType}.`);
+  const status = String(input.status || 'unresolved');
+  if (!RESEARCH_EVIDENCE_STATUS_SET.has(status)) throw new Error(`Unsupported research evidence status: ${status}.`);
+  const sourceKind = String(input.sourceKind || '').trim();
+  const sourceFamily = String(input.sourceFamily || '').trim();
+  if (!sourceKind || !sourceFamily) throw new Error('Research evidence sourceKind and sourceFamily are required.');
+  const observedAt = Number(input.observedAt || Date.now());
+  const result = db.prepare(`INSERT INTO research_evidence(
+    editorial_run_id, story_key, candidate_key, claim, claim_type, status, source_kind, source_family,
+    requested_url, resolved_url, title, summary, observed_at, metadata_json
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    runId, storyKey, input.candidateKey || null, String(input.claim || ''), claimType, status, sourceKind, sourceFamily,
+    String(input.requestedUrl || ''), String(input.resolvedUrl || input.requestedUrl || ''), String(input.title || ''),
+    String(input.summary || ''), observedAt, JSON.stringify(input.metadata || {}),
+  );
+  return getResearchEvidence(Number(result.lastInsertRowid));
+}
+
+export function getResearchEvidence(id) {
+  return decodeResearchEvidence(db.prepare('SELECT * FROM research_evidence WHERE id = ?').get(Number(id)));
+}
+
+export function listResearchEvidence({ editorialRunId, storyKey = null } = {}) {
+  const where = [];
+  const params = [];
+  if (editorialRunId != null) { where.push('editorial_run_id = ?'); params.push(Number(editorialRunId)); }
+  if (storyKey != null) { where.push('story_key = ?'); params.push(String(storyKey)); }
+  return db.prepare(`SELECT * FROM research_evidence ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY id ASC`).all(...params).map(decodeResearchEvidence);
+}
+
+function decodeEditorialRecommendation(row) {
+  if (!row) return null;
+  const potentials = json(row.potentials_json, {});
+  return {
+    id: Number(row.id), editorialRunId: Number(row.editorial_run_id), storyKey: row.story_key, rank: Number(row.rank),
+    decision: row.decision, pipeline: row.pipeline || null, objective: row.objective, title: row.title,
+    thesis: row.thesis || '', whyNow: row.why_now || '', whyThisFormat: row.why_format || '',
+    desiredReaderOutcome: row.desired_reader_outcome || '', candidateKeys: json(row.candidate_keys_json, []),
+    potentials, targetCandidateKey: potentials.targetCandidateKey || null, authority: json(row.authority_json, {}),
+    profileProof: json(row.profile_proof_json, {}), evidenceIds: json(row.evidence_ids_json, []),
+    algorithmEvidence: json(row.algorithm_evidence_json, []), learnedContext: json(row.learned_context_json, {}),
+    aiExecution: json(row.ai_execution_json, {}), risks: json(row.risks_json, []), alternatives: json(row.alternatives_json, []),
+    researchQuestions: json(row.research_questions_json, []), status: row.status,
+    selectedAt: row.selected_at == null ? null : Number(row.selected_at), dismissedAt: row.dismissed_at == null ? null : Number(row.dismissed_at),
+    createdAt: Number(row.created_at),
+  };
+}
+
+export function saveEditorialRecommendation(input = {}) {
+  const runId = Number(input.editorialRunId);
+  if (!getEditorialRun(runId)) throw new Error(`Editorial run not found: ${input.editorialRunId}`);
+  const rank = Number(input.rank);
+  if (!Number.isInteger(rank) || rank < 1) throw new Error('Editorial recommendation rank must be a positive integer.');
+  const status = String(input.status || 'suggested');
+  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(status)) throw new Error(`Unsupported editorial recommendation status: ${status}.`);
+  const potentials = { ...(input.potentials || {}), targetCandidateKey: input.targetCandidateKey || input.potentials?.targetCandidateKey || null };
+  const result = db.prepare(`INSERT INTO editorial_recommendations(
+    editorial_run_id, story_key, rank, decision, pipeline, objective, title, thesis, why_now, why_format,
+    desired_reader_outcome, candidate_keys_json, potentials_json, authority_json, profile_proof_json,
+    evidence_ids_json, algorithm_evidence_json, learned_context_json, ai_execution_json, risks_json,
+    alternatives_json, research_questions_json, status, selected_at, dismissed_at, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    runId, String(input.storyKey || ''), rank, String(input.decision || ''), String(input.pipeline || ''), String(input.objective || ''),
+    String(input.title || ''), String(input.thesis || ''), String(input.whyNow || ''), String(input.whyThisFormat || ''),
+    String(input.desiredReaderOutcome || ''), JSON.stringify(input.candidateKeys || []), JSON.stringify(potentials),
+    JSON.stringify(input.authority || {}), JSON.stringify(input.profileProof || {}), JSON.stringify(input.evidenceIds || []),
+    JSON.stringify(input.algorithmEvidence || []), JSON.stringify(input.learnedContext || {}), JSON.stringify(input.aiExecution || {}),
+    JSON.stringify(input.risks || []), JSON.stringify(input.alternatives || []), JSON.stringify(input.researchQuestions || []),
+    status, input.selectedAt ?? null, input.dismissedAt ?? null, Number(input.createdAt || Date.now()),
+  );
+  return getEditorialRecommendation(Number(result.lastInsertRowid));
+}
+
+export function getEditorialRecommendation(id) {
+  return decodeEditorialRecommendation(db.prepare('SELECT * FROM editorial_recommendations WHERE id = ?').get(Number(id)));
+}
+
+export function listEditorialRecommendations({ editorialRunId = null, objective = null, status = null, limit = 100 } = {}) {
+  const where = [];
+  const params = [];
+  if (editorialRunId != null) { where.push('editorial_run_id = ?'); params.push(Number(editorialRunId)); }
+  if (objective != null) { where.push('objective = ?'); params.push(String(objective)); }
+  if (status != null) { where.push('status = ?'); params.push(String(status)); }
+  params.push(Math.max(1, Math.min(500, Number(limit || 100))));
+  return db.prepare(`SELECT * FROM editorial_recommendations ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY editorial_run_id DESC, rank ASC, id ASC LIMIT ?`).all(...params).map(decodeEditorialRecommendation);
+}
+
+export function setEditorialRecommendationStatus(id, status, { at = Date.now() } = {}) {
+  const current = getEditorialRecommendation(id);
+  if (!current) throw new Error(`Editorial recommendation not found: ${id}`);
+  const nextStatus = String(status || '');
+  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(nextStatus)) throw new Error(`Unsupported editorial recommendation status: ${nextStatus}.`);
+  if (current.status === nextStatus) return current;
+  if (['selected', 'dismissed'].includes(current.status)) throw new Error(`Editorial recommendation ${id} is already ${current.status}.`);
+  if (current.status === 'superseded') throw new Error(`Editorial recommendation ${id} is superseded and cannot transition to ${nextStatus}.`);
+  const timestamp = Number(at);
+  db.prepare(`UPDATE editorial_recommendations SET status = ?, selected_at = ?, dismissed_at = ? WHERE id = ?`).run(
+    nextStatus,
+    nextStatus === 'selected' ? timestamp : current.selectedAt,
+    nextStatus === 'dismissed' ? timestamp : current.dismissedAt,
+    current.id,
+  );
+  return getEditorialRecommendation(current.id);
+}
+
+export function supersedeSuggestedEditorialRecommendations(objective, { exceptRunId = null } = {}) {
+  const params = [String(objective || '')];
+  let exclusion = '';
+  if (exceptRunId != null) { exclusion = ' AND editorial_run_id <> ?'; params.push(Number(exceptRunId)); }
+  db.prepare(`UPDATE editorial_recommendations SET status = 'superseded'
+    WHERE objective = ? AND status = 'suggested'${exclusion}`).run(...params);
+}
+
+export function getLatestEditorialPlan(objective) {
+  const run = getLatestCompleteEditorialRun(objective);
+  return run ? { run, recommendations: listEditorialRecommendations({ editorialRunId: run.id, limit: 10 }) } : null;
+}
+
+export function linkQueueSource(queueItemId, candidateKeyValue, role = 'supporting') {
+  const queueItem = getQueueItem(queueItemId);
+  if (!queueItem) throw new Error(`Queue item not found: ${queueItemId}`);
+  const key = String(candidateKeyValue || '').trim();
+  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  const sourceRole = String(role || 'supporting');
+  if (!QUEUE_SOURCE_ROLE_SET.has(sourceRole)) throw new Error(`Unsupported queue source role: ${sourceRole}.`);
+  if (sourceRole === 'primary') {
+    const existingPrimary = db.prepare(`SELECT candidate_key FROM queue_sources WHERE queue_item_id = ? AND role = 'primary'`).get(queueItem.id);
+    if (existingPrimary && existingPrimary.candidate_key !== key) throw new Error(`Queue item ${queueItem.id} already has primary source ${existingPrimary.candidate_key}.`);
+  }
+  db.prepare(`INSERT INTO queue_sources(queue_item_id, candidate_key, role) VALUES (?, ?, ?)
+    ON CONFLICT(queue_item_id, candidate_key) DO UPDATE SET role = excluded.role`).run(queueItem.id, key, sourceRole);
+  return listQueueSources(queueItem.id);
+}
+
+export function listQueueSources(queueItemId) {
+  return db.prepare(`SELECT queue_item_id, candidate_key, role FROM queue_sources
+    WHERE queue_item_id = ? ORDER BY CASE role WHEN 'primary' THEN 0 ELSE 1 END, candidate_key`).all(Number(queueItemId)).map((row) => ({
+    queueItemId: Number(row.queue_item_id), candidateKey: row.candidate_key, role: row.role,
+  }));
+}
+
+function decodeEditorialSelection(row) {
+  return row ? {
+    id: Number(row.id), editorialRecommendationId: Number(row.editorial_recommendation_id), queueItemId: Number(row.queue_item_id),
+    selectedPipeline: row.selected_pipeline, selectedAt: Number(row.selected_at),
+  } : null;
+}
+
+export function recordEditorialSelection({ editorialRecommendationId, queueItemId, selectedPipeline, selectedAt = Date.now() } = {}) {
+  const recommendation = getEditorialRecommendation(editorialRecommendationId);
+  if (!recommendation) throw new Error(`Editorial recommendation not found: ${editorialRecommendationId}`);
+  if (!getQueueItem(queueItemId)) throw new Error(`Queue item not found: ${queueItemId}`);
+  const existing = getEditorialSelectionByRecommendation(editorialRecommendationId);
+  if (existing) return existing;
+  db.prepare(`INSERT INTO editorial_selections(editorial_recommendation_id, queue_item_id, selected_pipeline, selected_at)
+    VALUES (?, ?, ?, ?)`).run(Number(editorialRecommendationId), Number(queueItemId), String(selectedPipeline || ''), Number(selectedAt));
+  return getEditorialSelectionByRecommendation(editorialRecommendationId);
+}
+
+export function getEditorialSelectionByRecommendation(editorialRecommendationId) {
+  return decodeEditorialSelection(db.prepare('SELECT * FROM editorial_selections WHERE editorial_recommendation_id = ?').get(Number(editorialRecommendationId)));
+}
+
+export function getLatestEditorialSelectionForQueueItem(queueItemId) {
+  return decodeEditorialSelection(db.prepare(`SELECT * FROM editorial_selections WHERE queue_item_id = ?
+    ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
+}
+
+export function ensureEditorialCandidate(recommendationId) {
+  const recommendation = getEditorialRecommendation(recommendationId);
+  if (!recommendation) throw new Error(`Editorial recommendation not found: ${recommendationId}`);
+  const key = `editorial:${recommendation.id}`;
+  const existing = getCandidate(key);
+  if (existing) return existing;
+  upsertCandidates([{
+    key,
+    source: 'editorial',
+    title: recommendation.title,
+    text: recommendation.thesis,
+    url: key,
+    score: Number(recommendation.potentials?.objectiveFit || 0),
+    niche: { score: 0, tags: [], matches: [] },
+    metrics: {},
+    timestamp: recommendation.createdAt,
+  }]);
+  return getCandidate(key);
 }
 
 export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Date.now() }) {

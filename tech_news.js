@@ -365,6 +365,44 @@ export async function fetchXTargetResponses(usernames, ourTweetIds, {
   };
 }
 
+function parseXStatusUrl(input) {
+  try {
+    const url = new URL(String(input || ''));
+    const host = url.hostname.toLowerCase();
+    if (!['x.com', 'www.x.com', 'twitter.com', 'www.twitter.com'].includes(host)) return null;
+    const match = url.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
+    return match ? { username: match[1], id: match[2], url: `https://x.com/${match[1]}/status/${match[2]}` } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchXPostContext(inputUrl) {
+  const target = parseXStatusUrl(inputUrl);
+  if (!target) return { post: null, context: [], error: 'Invalid X status URL.' };
+  try {
+    const scraper = await createAuthenticatedXScraper();
+    const tweet = await scraper.getTweet(target.id);
+    if (!tweet) return { post: null, context: [], error: 'X post was not observable.' };
+    const post = normalizeTargetTweet(tweet, target.username);
+    const context = [post];
+    const relatedIds = [...new Set([post.inReplyToStatusId, post.quotedStatusId].filter(Boolean))];
+    for (const id of relatedIds) {
+      try {
+        const relatedTweet = await scraper.getTweet(id);
+        if (!relatedTweet) continue;
+        const related = normalizeTargetTweet(relatedTweet, relatedTweet.username || target.username);
+        if (related.id && related.id !== post.id) context.push(related);
+      } catch {
+        // Exact source post remains valid context when related content is unavailable.
+      }
+    }
+    return { post, context, error: null };
+  } catch (error) {
+    return { post: null, context: [], error: error.message };
+  }
+}
+
 export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) {
   try {
     const scraper = new Scraper();

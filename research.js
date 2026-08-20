@@ -2,6 +2,11 @@ import dns from 'node:dns/promises';
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import { fetchXPostContext } from './tech_news.js';
+import {
+  getEditorialRecommendation,
+  saveResearchEvidence,
+} from './store.js';
 
 export const RESEARCH_FETCH_TIMEOUT_MS = 10_000;
 export const RESEARCH_FETCH_MAX_BYTES = 1024 * 1024;
@@ -386,4 +391,299 @@ export async function safeFetchResearchPage(inputUrl) {
       redirects,
     };
   }
+}
+
+const RESEARCH_SUMMARY_MAX_CHARS = 6000;
+
+function boundedSummary(value, limit = RESEARCH_SUMMARY_MAX_CHARS) {
+  const text = compactWhitespace(value);
+  return text.length <= limit ? text : `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+}
+
+function githubRepository(inputUrl) {
+  try {
+    const url = new URL(String(inputUrl || ''));
+    if (!['github.com', 'www.github.com'].includes(url.hostname.toLowerCase())) return null;
+    const [owner, rawRepo] = url.pathname.split('/').filter(Boolean);
+    const repo = String(rawRepo || '').replace(/\.git$/i, '');
+    if (!/^[A-Za-z0-9_.-]+$/.test(owner || '') || !/^[A-Za-z0-9_.-]+$/.test(repo)) return null;
+    return { owner, repo, fullName: `${owner}/${repo}`, url: `https://github.com/${owner}/${repo}` };
+  } catch {
+    return null;
+  }
+}
+
+function hackerNewsItemId(candidate) {
+  const values = [candidate?.metrics?.hnUrl, candidate?.url];
+  for (const value of values) {
+    try {
+      const url = new URL(String(value || ''));
+      if (url.hostname === 'news.ycombinator.com') {
+        const id = url.searchParams.get('id');
+        if (/^\d+$/.test(id || '')) return id;
+      }
+    } catch {
+      // Keep trying supplied candidate URLs.
+    }
+  }
+  return null;
+}
+
+function xStatusId(inputUrl) {
+  try {
+    return new URL(String(inputUrl || '')).pathname.match(/\/status\/(\d+)/)?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+function extractExplicitUrls(text) {
+  return [...new Set((String(text || '').match(/https?:\/\/[^\s<>()\[\]{}"']+/g) || []).map((value) => value.replace(/[.,;:!?]+$/, '')))];
+}
+
+function candidateFamily(candidate) {
+  const github = githubRepository(candidate?.url);
+  if (github) return `github:${github.fullName.toLowerCase()}`;
+  const key = String(candidate?.key || candidate?.candidateKey || candidate?.url || '').trim();
+  return key ? `candidate:${key}` : researchSourceFamily(candidate?.url) || 'candidate:unknown';
+}
+
+async function fixedFetch(url, { accept = 'application/json', text = false } = {}) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'xactions-editorial-research/1.0',
+        Accept: accept,
+        ...(process.env.GITHUB_TOKEN && new URL(url).hostname === 'api.github.com' ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+      },
+      signal: AbortSignal.timeout(RESEARCH_FETCH_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false, statusCode: response.status, error: `HTTP ${response.status}` };
+    return { ok: true, statusCode: response.status, body: text ? await response.text() : await response.json() };
+  } catch (error) {
+    return { ok: false, statusCode: null, error: error.message };
+  }
+}
+
+function persistEvidence(editorialRunId, storyKey, candidate, input) {
+  return saveResearchEvidence({
+    editorialRunId,
+    storyKey,
+    candidateKey: candidate?.key || candidate?.candidateKey || null,
+    observedAt: Date.now(),
+    ...input,
+  });
+}
+
+function failedEvidence(editorialRunId, storyKey, candidate, { sourceKind, sourceFamily, requestedUrl, result, claim = '' }) {
+  return persistEvidence(editorialRunId, storyKey, candidate, {
+    claim: claim || `Controlled research could not retrieve ${requestedUrl}.`,
+    claimType: 'other',
+    status: 'unresolved',
+    sourceKind,
+    sourceFamily,
+    requestedUrl,
+    resolvedUrl: result?.resolvedUrl || requestedUrl,
+    title: '',
+    summary: result?.message || result?.error || 'Research source unavailable.',
+    metadata: { fetchFailure: result?.reason || result?.error || 'unavailable', statusCode: result?.statusCode ?? null },
+  });
+}
+
+async function enrichGitHub(editorialRunId, storyKey, candidate) {
+  const repo = githubRepository(candidate?.url);
+  if (!repo) return [];
+  const family = `github:${repo.fullName.toLowerCase()}`;
+  const rows = [];
+  const apiBase = `https://api.github.com/repos/${repo.owner}/${repo.repo}`;
+  const metadata = await fixedFetch(apiBase);
+  if (!metadata.ok) {
+    rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'github_api', sourceFamily: family, requestedUrl: apiBase, result: metadata }));
+    return rows;
+  }
+  const data = metadata.body || {};
+  rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+    claim: `GitHub repository metadata for ${repo.fullName}.`,
+    claimType: 'implementation',
+    status: 'primary_supported',
+    sourceKind: 'github_api',
+    sourceFamily: family,
+    requestedUrl: apiBase,
+    resolvedUrl: apiBase,
+    title: String(data.full_name || repo.fullName),
+    summary: boundedSummary(JSON.stringify({
+      description: data.description || '', language: data.language || '', stargazers: data.stargazers_count ?? null,
+      forks: data.forks_count ?? null, openIssues: data.open_issues_count ?? null, defaultBranch: data.default_branch || '',
+      homepage: data.homepage || '', archived: data.archived === true, pushedAt: data.pushed_at || null,
+    })),
+    metadata: { artifact: 'repository_metadata' },
+  }));
+
+  const readmeUrl = `${apiBase}/readme`;
+  const readme = await fixedFetch(readmeUrl, { accept: 'application/vnd.github.raw+json', text: true });
+  if (readme.ok) {
+    rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+      claim: `The ${repo.fullName} repository README states the supplied implementation and usage details.`,
+      claimType: 'implementation', status: 'primary_supported', sourceKind: 'github_readme', sourceFamily: family,
+      requestedUrl: readmeUrl, resolvedUrl: readmeUrl, title: `${repo.fullName} README`, summary: boundedSummary(readme.body),
+      metadata: { artifact: 'readme' },
+    }));
+  }
+
+  const releaseUrl = `${apiBase}/releases/latest`;
+  const release = await fixedFetch(releaseUrl);
+  if (release.ok) {
+    const item = release.body || {};
+    rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+      claim: `Latest GitHub release metadata for ${repo.fullName}.`,
+      claimType: 'implementation', status: 'primary_supported', sourceKind: 'github_release', sourceFamily: family,
+      requestedUrl: releaseUrl, resolvedUrl: String(item.html_url || releaseUrl), title: String(item.name || item.tag_name || `${repo.fullName} release`),
+      summary: boundedSummary(`${item.tag_name || ''} ${item.published_at || ''} ${item.body || ''}`), metadata: { artifact: 'latest_release', tag: item.tag_name || '' },
+    }));
+  }
+
+  const homepage = String(data.homepage || '').trim();
+  if (homepage) {
+    const page = await safeFetchResearchPage(homepage);
+    if (page.ok) {
+      rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+        claim: `Repository homepage content linked by ${repo.fullName}.`, claimType: 'other', status: 'source_claim',
+        sourceKind: 'generic_page', sourceFamily: family, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+        title: page.title, summary: boundedSummary(page.text), metadata: { artifact: 'repository_homepage', contentType: page.contentType },
+      }));
+    } else {
+      rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'generic_page', sourceFamily: family, requestedUrl: homepage, result: page }));
+    }
+  }
+  return rows;
+}
+
+async function enrichHackerNews(editorialRunId, storyKey, candidate) {
+  const family = candidateFamily(candidate);
+  const rows = [];
+  const id = hackerNewsItemId(candidate);
+  if (id) {
+    const itemUrl = `https://hacker-news.firebaseio.com/v0/item/${id}.json`;
+    const result = await fixedFetch(itemUrl);
+    if (result.ok) {
+      const item = result.body || {};
+      rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+        claim: `Hacker News item ${id} metadata and source claim.`, claimType: 'announcement', status: 'source_claim',
+        sourceKind: 'hn_item', sourceFamily: family, requestedUrl: itemUrl, resolvedUrl: `https://news.ycombinator.com/item?id=${id}`,
+        title: String(item.title || candidate.title || ''), summary: boundedSummary(JSON.stringify({ by: item.by, score: item.score, descendants: item.descendants, url: item.url, text: item.text })),
+        metadata: { hnItemId: id },
+      }));
+    } else {
+      rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'hn_item', sourceFamily: family, requestedUrl: itemUrl, result }));
+    }
+  }
+  const linkedUrl = String(candidate?.url || '');
+  if (linkedUrl && !linkedUrl.includes('news.ycombinator.com/item')) {
+    const page = await safeFetchResearchPage(linkedUrl);
+    if (page.ok) {
+      rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+        claim: `Linked page for Hacker News story ${candidate.title || ''}.`, claimType: 'other', status: 'source_claim',
+        sourceKind: 'generic_page', sourceFamily: family, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+        title: page.title || String(candidate.title || ''), summary: boundedSummary(page.text), metadata: { contentType: page.contentType },
+      }));
+    } else {
+      rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'generic_page', sourceFamily: family, requestedUrl: linkedUrl, result: page }));
+    }
+  }
+  return rows;
+}
+
+async function enrichX(editorialRunId, storyKey, candidate) {
+  const family = candidateFamily(candidate);
+  const rows = [persistEvidence(editorialRunId, storyKey, candidate, {
+    claim: `X source post ${xStatusId(candidate?.url) || candidate?.key || ''} states the supplied source text.`,
+    claimType: 'announcement', status: 'source_claim', sourceKind: 'x_post', sourceFamily: family,
+    requestedUrl: String(candidate?.url || ''), resolvedUrl: String(candidate?.url || ''), title: String(candidate?.title || ''),
+    summary: boundedSummary(candidate?.text || ''), metadata: { sourceMetrics: candidate?.metrics || {} },
+  })];
+  const context = await fetchXPostContext(candidate?.url);
+  if (context?.context?.length > 1) {
+    rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+      claim: `Observable X thread/quote context around source post ${xStatusId(candidate?.url) || ''}.`,
+      claimType: 'announcement', status: 'source_claim', sourceKind: 'x_context', sourceFamily: family,
+      requestedUrl: String(candidate?.url || ''), resolvedUrl: String(context.post?.url || candidate?.url || ''),
+      title: String(candidate?.title || ''), summary: boundedSummary(context.context.map((item) => `${item.username}: ${item.text}`).join('\n')),
+      metadata: { contextPostIds: context.context.map((item) => item.id) },
+    }));
+  }
+  for (const linkedUrl of extractExplicitUrls(candidate?.text)) {
+    if (linkedUrl === candidate?.url) continue;
+    const github = githubRepository(linkedUrl);
+    if (github) {
+      rows.push(...await enrichGitHub(editorialRunId, storyKey, { ...candidate, url: github.url }));
+      continue;
+    }
+    const page = await safeFetchResearchPage(linkedUrl);
+    if (page.ok) {
+      rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+        claim: `Page explicitly linked from the X source post.`, claimType: 'other', status: 'source_claim',
+        sourceKind: 'generic_page', sourceFamily: family, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+        title: page.title, summary: boundedSummary(page.text), metadata: { contentType: page.contentType },
+      }));
+    } else {
+      rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'generic_page', sourceFamily: family, requestedUrl: linkedUrl, result: page }));
+    }
+  }
+  return rows;
+}
+
+export async function collectStoryResearch({ editorialRunId, story } = {}) {
+  const storyKey = String(story?.storyKey || '').trim();
+  if (!storyKey) throw new Error('collectStoryResearch requires story.storyKey.');
+  const rows = [];
+  for (const candidate of Array.isArray(story?.candidates) ? story.candidates : []) {
+    try {
+      if (candidate.source === 'github') rows.push(...await enrichGitHub(editorialRunId, storyKey, candidate));
+      else if (candidate.source === 'hn') rows.push(...await enrichHackerNews(editorialRunId, storyKey, candidate));
+      else if (candidate.source === 'x') rows.push(...await enrichX(editorialRunId, storyKey, candidate));
+      else if (candidate.url) {
+        const page = await safeFetchResearchPage(candidate.url);
+        const family = candidateFamily(candidate);
+        rows.push(page.ok
+          ? persistEvidence(editorialRunId, storyKey, candidate, {
+              claim: `Controlled source page for ${candidate.title || candidate.key || ''}.`, claimType: 'other', status: 'source_claim',
+              sourceKind: 'generic_page', sourceFamily: family, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+              title: page.title, summary: boundedSummary(page.text), metadata: { contentType: page.contentType },
+            })
+          : failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'generic_page', sourceFamily: family, requestedUrl: candidate.url, result: page }));
+      }
+    } catch (error) {
+      rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
+        claim: `Controlled research failed for ${candidate?.title || candidate?.key || 'candidate'}.`, claimType: 'other', status: 'unresolved',
+        sourceKind: String(candidate?.source || 'unknown'), sourceFamily: candidateFamily(candidate), requestedUrl: String(candidate?.url || ''),
+        resolvedUrl: String(candidate?.url || ''), title: String(candidate?.title || ''), summary: error.message,
+        metadata: { fetchFailure: 'research_exception' },
+      }));
+    }
+  }
+  return rows;
+}
+
+export async function attachEditorialResearchSource(recommendationId, { url, claim, claimType = 'other' } = {}) {
+  const recommendation = getEditorialRecommendation(recommendationId);
+  if (!recommendation) throw new Error(`Editorial recommendation not found: ${recommendationId}`);
+  if (recommendation.decision !== 'RESEARCH_MORE') throw new Error('Manual editorial research sources may be attached only to RESEARCH_MORE recommendations.');
+  const requestedUrl = String(url || '').trim();
+  const requestedClaim = String(claim || '').trim();
+  if (!requestedUrl || !requestedClaim) throw new Error('Manual editorial research requires url and claim.');
+  const page = await safeFetchResearchPage(requestedUrl);
+  const sourceFamily = researchSourceFamily(page.resolvedUrl || requestedUrl) || 'manual:unknown';
+  if (!page.ok) {
+    return saveResearchEvidence({
+      editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey, claim: requestedClaim, claimType,
+      status: 'unresolved', sourceKind: 'manual_url', sourceFamily, requestedUrl, resolvedUrl: page.resolvedUrl || requestedUrl,
+      title: '', summary: page.message || 'Manual research source unavailable.', observedAt: Date.now(),
+      metadata: { fetchFailure: page.reason || 'unavailable', statusCode: page.statusCode ?? null },
+    });
+  }
+  return saveResearchEvidence({
+    editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey, claim: requestedClaim, claimType,
+    status: 'source_claim', sourceKind: 'manual_url', sourceFamily, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+    title: page.title, summary: boundedSummary(page.text), observedAt: Date.now(), metadata: { contentType: page.contentType },
+  });
 }

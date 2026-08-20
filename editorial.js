@@ -1,3 +1,30 @@
+import { scoreOpportunity } from './opportunity.js';
+import { calculateProfileProofCoverage } from './profile_proof.js';
+import { classifyResearchStory, matchResearchTopics } from './research_topics.js';
+import {
+  SOURCE_SNAPSHOT_KINDS,
+  createEditorialRun,
+  getAccountHealthSummary,
+  getCandidate,
+  getDiscoverSnapshot,
+  getPreferenceProfile,
+  getQueueItemByCandidate,
+  getRelationshipProfile,
+  getSourceMomentum,
+  listAcceptedLearnedRules,
+  listAlgorithmEvidenceEntries,
+  listApprovedMainFeedItems,
+  listCandidateActions,
+  listEngagementItems,
+  listPublicationMeasurementSeries,
+  listPublishedMainFeedContent,
+  listRecentMainFeedPublications,
+  listResearchEvidence,
+  saveEditorialRecommendation,
+  supersedeSuggestedEditorialRecommendations,
+  updateEditorialRun,
+} from './store.js';
+
 export const EDITORIAL_OBJECTIVE_WEIGHTS = Object.freeze({
   qualified_growth: Object.freeze({ reach: 0.20, follow: 0.40, conversation: 0.10, relationship: 0.10, authority: 0.20 }),
   reach_momentum: Object.freeze({ reach: 0.55, follow: 0.20, conversation: 0.10, relationship: 0.05, authority: 0.10 }),
@@ -252,10 +279,12 @@ export function scoreStoryPreResearch({
     const keyValue = candidateKey(candidate);
     if (!keyValue) throw new Error(`Story ${key} contains a candidate without candidateKey.`);
     const potentials = candidatePotentials(candidate);
+    const snapshotKinds = uniqueStrings(candidate?.snapshotKinds || [candidate?.snapshotKind]).filter(Boolean);
     return {
       candidateKey: keyValue,
       source: String(candidate?.source || ''),
-      snapshotKind: String(candidate?.snapshotKind || ''),
+      snapshotKind: snapshotKinds[0] || '',
+      snapshotKinds,
       observedAt: observedAt(candidate),
       potentials,
       objectiveFit: calculateObjectiveFit({ objective, potentials, authorityValue: authority.value }),
@@ -271,7 +300,7 @@ export function scoreStoryPreResearch({
     primaryCandidateKey: primary.candidateKey,
     preResearchAuthority: authority,
     candidateFits,
-    distinctSnapshotKinds: new Set(candidateFits.map((candidate) => candidate.snapshotKind).filter(Boolean)).size,
+    distinctSnapshotKinds: new Set(candidateFits.flatMap((candidate) => candidate.snapshotKinds || [candidate.snapshotKind]).filter(Boolean)).size,
     latestObservationAt: Math.max(...candidateFits.map((candidate) => candidate.observedAt)),
   };
 }
@@ -487,4 +516,453 @@ export function rankEditorialRecommendations(recommendations = []) {
     Number(right?.objectiveFit || 0) - Number(left?.objectiveFit || 0)
     || Number(right?.storyPreResearchFit || 0) - Number(left?.storyPreResearchFit || 0)
     || String(left?.storyKey || '').localeCompare(String(right?.storyKey || '')));
+}
+
+const EDITORIAL_SCAN_CAPS = Object.freeze({ x_latest: 12, x_momentum: 12, github_trending: 10, hn_top: 10 });
+const EDITORIAL_CONVERSATION_CAP = 8;
+const EDITORIAL_SCAN_MAX_CANDIDATES = 52;
+
+function compactQueueItem(queueItem) {
+  if (!queueItem) return null;
+  return {
+    id: queueItem.id,
+    lane: queueItem.lane,
+    pipeline: queueItem.pipeline,
+    status: queueItem.status,
+    targetUsername: queueItem.targetUsername || '',
+    engagementKind: queueItem.engagementKind || '',
+    draftId: queueItem.draftId,
+    outputTweetId: queueItem.outputTweetId || null,
+    publishedAt: queueItem.publishedAt || null,
+    updatedAt: queueItem.updatedAt || null,
+  };
+}
+
+function workflowState(candidateKeyValue) {
+  const queueItem = getQueueItemByCandidate(candidateKeyValue);
+  const actions = listCandidateActions(candidateKeyValue);
+  if ((actions || []).length || queueItem?.status === 'published' || queueItem?.publishedAt || queueItem?.outputTweetId) {
+    return { state: 'already_handled', queueItem: compactQueueItem(queueItem), actions };
+  }
+  const status = String(queueItem?.status || '');
+  const pipeline = String(queueItem?.pipeline || '');
+  if (pipeline === 'research' || status === 'researching') return { state: 'research', queueItem: compactQueueItem(queueItem), actions };
+  if (pipeline === 'watch' || status === 'watching') return { state: 'on_hold', queueItem: compactQueueItem(queueItem), actions };
+  if (['ignore', 'ignored', 'skip', 'skipped'].includes(pipeline) || ['ignored', 'skipped'].includes(status)) return { state: 'skipped', queueItem: compactQueueItem(queueItem), actions };
+  if (queueItem && status !== 'triage') return { state: 'draft_in_progress', queueItem: compactQueueItem(queueItem), actions };
+  return { state: 'unresolved', queueItem: compactQueueItem(queueItem), actions };
+}
+
+function xUsername(candidate) {
+  const title = String(candidate?.title || '').trim().replace(/^@/, '');
+  if (/^[A-Za-z0-9_]{1,30}$/.test(title)) return title.toLowerCase();
+  try {
+    const username = new URL(String(candidate?.url || '')).pathname.split('/').filter(Boolean)[0] || '';
+    return /^[A-Za-z0-9_]{1,30}$/.test(username) ? username.toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+function compactRelationship(profile) {
+  if (!profile) return null;
+  return {
+    username: profile.username,
+    classes: profile.classes || profile.classNames || [],
+    relationshipStage: profile.relationshipStage,
+    targetScore: profile.targetScore,
+    relevanceScore: profile.relevanceScore,
+    followsYou: profile.followsYou,
+    youFollow: profile.youFollow,
+    mutual: profile.mutual,
+    primaryTopics: profile.primaryTopics || [],
+    scoreExplanation: profile.scoreExplanation || null,
+  };
+}
+
+function compactPublished(item) {
+  return {
+    candidateKey: item.candidateKey,
+    pipeline: item.pipeline,
+    publishedAt: item.publishedAt || null,
+    outputTweetId: item.outputTweetId || item.publishedTweetId || null,
+    text: String(item.text || '').slice(0, 2000),
+    semanticAnchors: item.semanticAnchors || [],
+    topics: item.topics || [],
+  };
+}
+
+function compactApproved(item) {
+  return {
+    candidateKey: item.candidateKey,
+    pipeline: item.pipeline,
+    status: item.status,
+    scheduledAt: item.scheduledAt || null,
+    text: String(item.text || '').slice(0, 2000),
+    semanticAnchors: item.semanticAnchors || [],
+    topics: item.topics || [],
+  };
+}
+
+function compactLearnedRule(rule) {
+  return {
+    id: rule.id,
+    scope: rule.scope,
+    key: rule.key,
+    recommendation: rule.recommendation || {},
+    evidence: rule.evidence || {},
+    adjustment: rule.adjustment,
+    status: rule.status,
+  };
+}
+
+function editorialCandidate(candidate, { snapshotKind = '', snapshotFetchedAt = null, now, preference, learnedRules, publishedMainFeed }) {
+  const username = candidate?.source === 'x' ? xUsername(candidate) : '';
+  const relationship = username ? getRelationshipProfile(username) : null;
+  const opportunity = scoreOpportunity(candidate, {
+    now,
+    preference,
+    relationship: relationship ? { ...relationship, nicheTags: relationship.primaryTopics || [] } : null,
+    learnedRules,
+  });
+  const topicMatches = matchResearchTopics(candidate);
+  const researchTopic = topicMatches[0] || null;
+  const profileProof = calculateProfileProofCoverage({
+    topic: researchTopic,
+    semanticAnchors: researchTopic?.matchedAnchors || [],
+    publishedMainFeedItems: publishedMainFeed,
+  });
+  return {
+    key: candidate.key,
+    source: candidate.source,
+    title: candidate.title || '',
+    text: candidate.text || '',
+    url: candidate.url || '',
+    timestamp: candidate.timestamp || null,
+    metrics: candidate.metrics || {},
+    niche: candidate.niche || { score: 0, tags: [], matches: [] },
+    viral: candidate.viral || null,
+    snapshotKind,
+    snapshotKinds: snapshotKind ? [snapshotKind] : [],
+    snapshotFetchedAt,
+    snapshotFetchedAtByKind: snapshotKind ? { [snapshotKind]: snapshotFetchedAt } : {},
+    latestObservationAt: getSourceMomentum(candidate.key, snapshotKind || (candidate.source === 'x' ? 'x_latest' : candidate.source === 'github' ? 'github_trending' : candidate.source === 'hn' ? 'hn_top' : 'x_latest')).current?.observedAt || candidate.timestamp || 0,
+    sourceMomentum: snapshotKind ? getSourceMomentum(candidate.key, snapshotKind) : null,
+    sourceMomentumBySnapshot: snapshotKind ? { [snapshotKind]: getSourceMomentum(candidate.key, snapshotKind) } : {},
+    workflow: workflowState(candidate.key),
+    opportunity,
+    potentials: {
+      reachPotential: opportunity.reachPotential,
+      followPotential: opportunity.followPotential,
+      conversationPotential: opportunity.conversationPotential,
+      relationshipPotential: opportunity.relationshipPotential,
+    },
+    relationship: compactRelationship(relationship),
+    researchTopic,
+    researchTopicMatches: topicMatches,
+    profileProof,
+  };
+}
+
+export function buildEditorialContext({ objective = 'qualified_growth', now = Date.now() } = {}) {
+  const selectedObjective = validateEditorialObjective(objective);
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('buildEditorialContext requires a positive numeric now timestamp.');
+  const preference = getPreferenceProfile();
+  const learnedRules = listAcceptedLearnedRules({ limit: 100 });
+  const publishedMainFeed = listPublishedMainFeedContent({ limit: 30 });
+  const snapshotState = Object.fromEntries(SOURCE_SNAPSHOT_KINDS.map((kind) => {
+    const snapshot = getDiscoverSnapshot(kind);
+    return [kind, {
+      kind,
+      fetchedAt: snapshot.fetchedAt,
+      ageMs: snapshot.fetchedAt == null ? null : Math.max(0, timestamp - snapshot.fetchedAt),
+      lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
+      error: snapshot.error,
+      legacyFallback: snapshot.legacyFallback,
+      candidateCount: snapshot.candidates.length,
+      candidateKeys: snapshot.candidates.map((candidate) => candidate.key),
+    }];
+  }));
+
+  const seen = new Map();
+  const scanCandidates = [];
+  const addCandidate = (candidate, metadata) => {
+    if (!candidate?.key) return;
+    const existing = seen.get(candidate.key);
+    if (existing) {
+      if (metadata.snapshotKind && !existing.snapshotKinds.includes(metadata.snapshotKind)) {
+        const momentum = getSourceMomentum(candidate.key, metadata.snapshotKind);
+        existing.snapshotKinds.push(metadata.snapshotKind);
+        existing.snapshotFetchedAtByKind[metadata.snapshotKind] = metadata.snapshotFetchedAt;
+        existing.sourceMomentumBySnapshot[metadata.snapshotKind] = momentum;
+        existing.latestObservationAt = Math.max(existing.latestObservationAt || 0, momentum.current?.observedAt || candidate.timestamp || 0);
+      }
+      return;
+    }
+    if (scanCandidates.length >= EDITORIAL_SCAN_MAX_CANDIDATES) return;
+    const value = editorialCandidate(candidate, {
+      ...metadata,
+      now: timestamp,
+      preference,
+      learnedRules,
+      publishedMainFeed,
+    });
+    seen.set(candidate.key, value);
+    scanCandidates.push(value);
+  };
+
+  for (const kind of SOURCE_SNAPSHOT_KINDS) {
+    const snapshot = getDiscoverSnapshot(kind);
+    for (const candidate of snapshot.candidates.slice(0, EDITORIAL_SCAN_CAPS[kind])) {
+      addCandidate(candidate, { snapshotKind: kind, snapshotFetchedAt: snapshot.fetchedAt });
+    }
+  }
+
+  const engagementItems = listEngagementItems({ includeExpired: false, limit: 100 })
+    .filter((item) => !['expired', 'completed', 'published', 'ignored', 'skipped'].includes(String(item.status || '')))
+    .sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0))
+    .slice(0, EDITORIAL_CONVERSATION_CAP);
+  for (const item of engagementItems) {
+    const candidate = getCandidate(item.candidateKey);
+    if (candidate) addCandidate(candidate, { snapshotKind: '', snapshotFetchedAt: null });
+  }
+  const activeConversationKeys = new Set(engagementItems.map((item) => item.candidateKey));
+  scanCandidates.sort((left, right) => Number(activeConversationKeys.has(right.key)) - Number(activeConversationKeys.has(left.key)));
+
+  const algorithmEvidence = resolveAlgorithmMechanisms(listAlgorithmEvidenceEntries());
+  const recentPublished = listRecentMainFeedPublications({ limit: 20 }).map(compactPublished);
+  const approvedMainFeed = listApprovedMainFeedItems({ automatedOnly: false, limit: 20 }).map(compactApproved);
+  return {
+    objective: selectedObjective,
+    objectiveWeights: EDITORIAL_OBJECTIVE_WEIGHTS[selectedObjective],
+    generatedAt: timestamp,
+    sourceSnapshots: snapshotState,
+    scanCandidates,
+    activeConversationItems: engagementItems.map((item) => ({
+      candidateKey: item.candidateKey,
+      priority: item.priority,
+      targetUsername: item.targetUsername,
+      engagementKind: item.engagementKind,
+      status: item.status,
+      expiresAt: item.expiresAt,
+    })),
+    accountHealth: getAccountHealthSummary({ now: timestamp }),
+    recentOwnedContent: { published: recentPublished, approved: approvedMainFeed },
+    publishedProfileProofSource: publishedMainFeed.map(compactPublished),
+    measurementSummary: listPublicationMeasurementSeries({ limit: 10 }),
+    acceptedLearnedRules: learnedRules.map(compactLearnedRule),
+    algorithmEvidence,
+  };
+}
+
+function evidencePacket(row) {
+  return {
+    id: String(row.id),
+    storyKey: row.storyKey,
+    candidateKey: row.candidateKey,
+    claim: row.claim,
+    claimType: row.claimType,
+    status: row.status,
+    sourceKind: row.sourceKind,
+    sourceFamily: row.sourceFamily,
+    requestedUrl: row.requestedUrl,
+    resolvedUrl: row.resolvedUrl,
+    title: row.title,
+    summary: row.summary,
+    observedAt: row.observedAt,
+  };
+}
+
+function sourceSnapshotRecord(context, refreshResult) {
+  return {
+    snapshots: context.sourceSnapshots,
+    refresh: refreshResult ? {
+      fetchedAt: refreshResult.fetchedAt,
+      results: refreshResult.results.map((result) => ({ kind: result.kind, fetchedAt: result.fetchedAt, attemptedAt: result.attemptedAt, error: result.error, candidateCount: result.candidates.length })),
+      errors: refreshResult.errors,
+    } : null,
+  };
+}
+
+function storyFromCluster(cluster, candidatesByKey, objective, publishedMainFeed) {
+  const candidates = cluster.candidateKeys.map((key) => candidatesByKey.get(key)).filter(Boolean);
+  const classification = classifyResearchStory(candidates);
+  const researchTopic = classification.primaryTopic;
+  const profileProof = calculateProfileProofCoverage({
+    topic: researchTopic,
+    semanticAnchors: researchTopic?.matchedAnchors || [],
+    publishedMainFeedItems: publishedMainFeed,
+  });
+  const score = scoreStoryPreResearch({
+    storyKey: cluster.storyKey,
+    candidates,
+    objective,
+    profileProofCoverage: profileProof,
+    researchTopic,
+  });
+  return {
+    ...cluster,
+    candidates,
+    researchTopic,
+    researchTopicMatches: classification.matches,
+    profileProof,
+    ...score,
+  };
+}
+
+function recommendationAlgorithmEvidence(tags, available) {
+  const byTag = new Map(available.map((entry) => [entry.tag, entry]));
+  return tags.map((tag) => byTag.get(tag)).filter(Boolean);
+}
+
+export async function refreshEditorialPlan({ objective = 'qualified_growth', refreshSources = false, now = Date.now() } = {}) {
+  const selectedObjective = validateEditorialObjective(objective);
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('refreshEditorialPlan requires a positive numeric now timestamp.');
+  let refreshResult = null;
+  if (refreshSources) {
+    const { refreshAllSourceSnapshots } = await import('./source_refresh.js');
+    refreshResult = await refreshAllSourceSnapshots();
+  }
+
+  const context = buildEditorialContext({ objective: selectedObjective, now: timestamp });
+  const run = createEditorialRun({
+    objective: selectedObjective,
+    sourceSnapshot: sourceSnapshotRecord(context, refreshResult),
+    context,
+    createdAt: timestamp,
+  });
+
+  try {
+    const { runEditorialFinal, runEditorialScan } = await import('./editorial_runtime.js');
+    const scanResult = await runEditorialScan(context);
+    const allowedCandidateKeys = context.scanCandidates.map((candidate) => candidate.key);
+    const candidatesByKey = new Map(context.scanCandidates.map((candidate) => [candidate.key, candidate]));
+    const publishedMainFeed = listPublishedMainFeedContent({ limit: 30 });
+    const validatedClusters = [];
+    for (const rawCluster of scanResult.stories) {
+      const validation = validateStoryCluster(rawCluster, { allowedCandidateKeys });
+      if (!validation.valid) throw new Error(`Invalid editorial scan cluster: ${validation.errors.join(' ')}`);
+      validatedClusters.push(validation.normalized);
+    }
+    const rankedStories = rankPreResearchStories(validatedClusters.map((cluster) => storyFromCluster(
+      cluster, candidatesByKey, selectedObjective, publishedMainFeed,
+    )));
+    const researchStories = rankedStories.slice(0, 5);
+    updateEditorialRun(run.id, {
+      scan: { stories: rankedStories },
+      aiExecution: { scan: scanResult.execution },
+    });
+
+    if (researchStories.length === 0) {
+      const completeRun = updateEditorialRun(run.id, {
+        context: { ...context, noStrongCurrentAction: true, noStrongCurrentActionReason: 'Editorial scan returned no current story clusters.' },
+        status: 'complete',
+        completedAt: Date.now(),
+      });
+      supersedeSuggestedEditorialRecommendations(selectedObjective, { exceptRunId: run.id });
+      return { run: completeRun, recommendations: [], refresh: refreshResult };
+    }
+
+    const { collectStoryResearch } = await import('./research.js');
+    for (const story of researchStories) await collectStoryResearch({ editorialRunId: run.id, story });
+    const evidence = listResearchEvidence({ editorialRunId: run.id });
+    const finalPacket = {
+      objective: selectedObjective,
+      objectiveWeights: EDITORIAL_OBJECTIVE_WEIGHTS[selectedObjective],
+      stories: researchStories,
+      evidence: evidence.map(evidencePacket),
+      algorithmMechanisms: context.algorithmEvidence.available,
+      accountHealth: context.accountHealth,
+      recentOwnedContent: context.recentOwnedContent,
+      acceptedLearnedRules: context.acceptedLearnedRules,
+    };
+    const finalResult = await runEditorialFinal(finalPacket);
+    const storyByKey = new Map(researchStories.map((story) => [story.storyKey, story]));
+    const evidenceById = new Map(evidence.map((item) => [String(item.id), item]));
+    const allowedMechanismTags = context.algorithmEvidence.available.map((item) => item.tag);
+    const scored = [];
+    for (const rawRecommendation of finalResult.recommendations) {
+      const story = storyByKey.get(String(rawRecommendation.storyKey || ''));
+      if (!story) throw new Error(`Editorial final result references unknown storyKey: ${rawRecommendation.storyKey || 'missing'}.`);
+      const storyEvidence = evidence.filter((item) => item.storyKey === story.storyKey);
+      const validation = validateRecommendation(rawRecommendation, {
+        story,
+        allowedEvidenceIds: storyEvidence.map((item) => String(item.id)),
+        allowedAlgorithmMechanismTags: allowedMechanismTags,
+      });
+      if (!validation.valid) throw new Error(`Invalid editorial recommendation for ${story.storyKey}: ${validation.errors.join(' ')}`);
+      const recommendation = validation.normalized;
+      const referencedEvidence = recommendation.evidenceIds.map((id) => evidenceById.get(String(id))).filter(Boolean);
+      if (recommendation.decision === 'PREPARE' && context.accountHealth?.health?.state === 'constrained') {
+        throw new Error(`PREPARE recommendation ${story.storyKey} conflicts with the current constrained account-health state.`);
+      }
+      if (recommendation.decision === 'PREPARE' && story.candidates.every((candidate) => candidate.workflow?.state === 'already_handled')) {
+        throw new Error(`PREPARE recommendation ${story.storyKey} contains only already-handled source candidates.`);
+      }
+      if (recommendation.decision === 'PREPARE' && referencedEvidence.some((item) => ['unresolved', 'contradicted'].includes(item.status))) {
+        throw new Error(`PREPARE recommendation ${story.storyKey} references unresolved or contradicted evidence.`);
+      }
+      const scoredRecommendation = scoreFinalRecommendation({
+        recommendation,
+        story,
+        objective: selectedObjective,
+        profileProofCoverage: story.profileProof,
+        researchTopic: story.researchTopic,
+        evidence: referencedEvidence,
+        supportingSourceFamilies: referencedEvidence.map((item) => item.sourceFamily),
+      });
+      scored.push({ ...recommendation, ...scoredRecommendation, story });
+    }
+
+    const ordered = rankEditorialRecommendations(scored).slice(0, 5);
+    const persisted = ordered.map((item, index) => saveEditorialRecommendation({
+      editorialRunId: run.id,
+      storyKey: item.storyKey,
+      rank: index + 1,
+      decision: item.decision,
+      pipeline: item.pipeline,
+      objective: selectedObjective,
+      title: item.title,
+      thesis: item.thesis,
+      whyNow: item.whyNow,
+      whyThisFormat: item.whyThisFormat,
+      desiredReaderOutcome: item.desiredReaderOutcome,
+      candidateKeys: item.story.candidates.map((candidate) => candidate.key),
+      targetCandidateKey: item.targetCandidateKey,
+      potentials: {
+        ...item.potentials,
+        candidateKey: item.candidateKey,
+        objectiveFit: item.objectiveFit,
+        storyPreResearchFit: item.storyPreResearchFit,
+        potentialInterpretation: item.potentialInterpretation || {},
+      },
+      authority: item.authority,
+      profileProof: item.story.profileProof,
+      evidenceIds: item.evidenceIds,
+      algorithmEvidence: recommendationAlgorithmEvidence(item.algorithmMechanisms, context.algorithmEvidence.available),
+      learnedContext: { empiricalContext: item.empiricalContext || [] },
+      aiExecution: finalResult.execution,
+      risks: item.riskFlags || [],
+      alternatives: item.alternatives || [],
+      researchQuestions: item.researchQuestions || [],
+      createdAt: Date.now(),
+    }));
+    const completeRun = updateEditorialRun(run.id, {
+      context: {
+        ...context,
+        noStrongCurrentAction: persisted.length === 0,
+        noStrongCurrentActionReason: persisted.length === 0 ? 'Final editorial reasoning returned no recommendations.' : '',
+      },
+      aiExecution: { scan: scanResult.execution, final: finalResult.execution },
+      status: 'complete',
+      completedAt: Date.now(),
+    });
+    supersedeSuggestedEditorialRecommendations(selectedObjective, { exceptRunId: run.id });
+    return { run: completeRun, recommendations: persisted, refresh: refreshResult };
+  } catch (error) {
+    updateEditorialRun(run.id, { status: 'failed', error: error.message, completedAt: Date.now() });
+    throw error;
+  }
 }
