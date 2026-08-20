@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   useAICatalog,
+  useAICatalogPreview,
   useAICatalogRefresh,
   useAIConnectionCheck,
   useAIDefaultSave,
@@ -230,6 +231,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
   const removeSecret = useAISecretRemove()
   const connection = useAIConnectionCheck()
   const profileTest = useAIProfileTest()
+  const previewCatalog = useAICatalogPreview()
   const refreshCatalog = useAICatalogRefresh()
   const catalog = useAICatalog(profile?.id ?? null)
 
@@ -252,13 +254,24 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
   const persistedId = profile?.id ?? null
   const needsCreateSecret = direct && !profile && ['openai', 'openrouter'].includes(providerKind)
   const changingToDirect = direct && profile != null && profile.runtime !== 'direct_api'
-  const selectedCatalogModel = catalog.data?.models.find((entry) => entry.id === model) || null
-  const catalogModels = (catalog.data?.models || []).filter((entry) => {
+  const catalogData = profile?.id != null ? catalog.data : previewCatalog.data
+  const selectedCatalogModel = catalogData?.models.find((entry) => entry.id === model) || null
+  const catalogModels = (catalogData?.models || []).filter((entry) => {
     const needle = catalogSearch.trim().toLowerCase()
     return !needle || entry.id.toLowerCase().includes(needle) || entry.name.toLowerCase().includes(needle)
   }).slice(0, 40)
+  const reasoningOptions = runtime === 'agy'
+    ? ['low', 'medium', 'high']
+    : selectedCatalogModel?.reasoningLevels?.length
+      ? selectedCatalogModel.reasoningLevels
+      : runtime === 'codex' && model === 'inherit'
+        ? Array.from(new Set((catalogData?.models || []).flatMap((entry) => entry.reasoningLevels || [])))
+        : []
 
   const changeRuntime = (next: AIProfileView['runtime']) => {
+    previewCatalog.reset()
+    setCatalogSearch('')
+    setReasoning('')
     setRuntime(next)
     if (next === 'direct_api') {
       setProviderKind('openrouter')
@@ -325,7 +338,6 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
             <option value="direct_api">Direct API</option>
             <option value="codex">Codex</option>
             <option value="opencode">OpenCode</option>
-            <option value="opencode2">OpenCode 2</option>
             <option value="agy">AGY</option>
           </select>
         </label>
@@ -363,11 +375,21 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         ) : null}
         <label className="text-sm text-slate-700">
           Model ID
-          <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or exact Codex model' : runtime === 'opencode' ? 'provider/model from OpenCode catalog' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
+          <input required list={`ai-model-catalog-${profile?.id ?? 'new'}`} value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or choose a Codex model' : runtime === 'opencode' ? 'Choose provider/model from the catalog' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
+          <datalist id={`ai-model-catalog-${profile?.id ?? 'new'}`}>
+            {(catalogData?.models || []).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
+          </datalist>
         </label>
         <label className="text-sm text-slate-700">
           Reasoning / variant
-          <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} placeholder={runtime === 'agy' ? 'low, medium, or high' : runtime === 'opencode' ? 'Optional OpenCode model variant, e.g. max' : 'medium, max, or provider/runtime value'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
+          {reasoningOptions.length ? (
+            <select value={reasoning} onChange={(event) => setReasoning(event.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm">
+              <option value="">Use runtime/model default</option>
+              {reasoningOptions.map((level) => <option key={level} value={level}>{level}</option>)}
+            </select>
+          ) : (
+            <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} disabled={runtime === 'opencode' && Boolean(selectedCatalogModel)} placeholder={runtime === 'opencode' && selectedCatalogModel ? 'This model advertises no variants' : 'Optional provider/runtime value'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm disabled:bg-slate-50 disabled:text-slate-500" />
+          )}
         </label>
         {direct && (
           <>
@@ -428,6 +450,32 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         </div>
       )}
 
+      {!profile && !direct && ['codex', 'opencode', 'agy'].includes(runtime) && (
+        <div className="mt-5 border-t border-slate-200 pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h4 className="font-semibold text-slate-900">Model catalog</h4>
+              <p className="text-sm text-slate-600">Load the installed runtime catalog before saving. Search GLM, Kimi, Codex models, or any exact model ID exposed by the runtime.</p>
+            </div>
+            <button type="button" disabled={previewCatalog.isPending} onClick={() => previewCatalog.mutate({ runtime, runtimeProfile })} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {previewCatalog.isPending ? 'Refreshing…' : previewCatalog.data ? 'Refresh catalog' : 'Load catalog'}
+            </button>
+          </div>
+          <input value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search model IDs or names, e.g. GLM" className="mt-3 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
+          <div className="mt-2 max-h-64 overflow-auto rounded-md border border-slate-200">
+            {!previewCatalog.data && !previewCatalog.isPending && <div className="p-3 text-sm text-slate-500">Load the catalog to choose a model and see its available reasoning/variant levels.</div>}
+            {previewCatalog.data && catalogModels.length === 0 && <div className="p-3 text-sm text-slate-500">{previewCatalog.data.error?.message || previewCatalog.data.error?.code || 'No matching models returned.'}</div>}
+            {catalogModels.map((entry) => (
+              <button key={entry.id} type="button" onClick={() => { setModel(entry.id); setReasoning(entry.defaultReasoning || '') }} className={`block w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50 ${entry.id === model ? 'bg-slate-100' : ''}`}>
+                <div className="font-medium text-slate-900">{entry.name || entry.id}</div>
+                <div className="text-xs text-slate-500">{entry.id}{entry.reasoningLevels?.length ? ` · variants: ${entry.reasoningLevels.join(', ')}` : ''}</div>
+              </button>
+            ))}
+          </div>
+          {previewCatalog.isError && <p className="mt-2 text-sm text-red-700">{previewCatalog.error.message}</p>}
+        </div>
+      )}
+
       {profile && direct && profile.id != null && (
         <div className="mt-5 border-t border-slate-200 pt-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -459,14 +507,14 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
                 <h4 className="font-semibold text-slate-900">Model catalog</h4>
                 <p className="text-sm text-slate-600">Refresh provider/runtime models, search the returned catalog, or keep a manual exact model ID above.</p>
               </div>
-              <button type="button" disabled={refreshCatalog.isPending} onClick={() => refreshCatalog.mutate(profile.id as number)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">{refreshCatalog.isPending ? 'Refreshing…' : 'Refresh models'}</button>
+              <button type="button" disabled={refreshCatalog.isPending} onClick={() => refreshCatalog.mutate(profile.id as number)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">{refreshCatalog.isPending ? 'Refreshing…' : 'Refresh catalog'}</button>
             </div>
             <input value={catalogSearch} onChange={(event) => setCatalogSearch(event.target.value)} placeholder="Search model IDs or names" className="mt-3 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
             <div className="mt-2 max-h-56 overflow-auto rounded-md border border-slate-200">
               {catalog.isLoading && <div className="p-3 text-sm text-slate-500">Loading catalog…</div>}
               {!catalog.isLoading && catalogModels.length === 0 && <div className="p-3 text-sm text-slate-500">{catalog.data?.error?.message || catalog.data?.error?.code || 'No models returned. Manual entry remains available.'}</div>}
               {catalogModels.map((entry) => (
-                <button key={entry.id} type="button" onClick={() => setModel(entry.id)} className={`block w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50 ${entry.id === model ? 'bg-slate-100' : ''}`}>
+                <button key={entry.id} type="button" onClick={() => { setModel(entry.id); setReasoning(entry.defaultReasoning || '') }} className={`block w-full border-b border-slate-100 px-3 py-2 text-left text-sm last:border-b-0 hover:bg-slate-50 ${entry.id === model ? 'bg-slate-100' : ''}`}>
                   <div className="font-medium text-slate-900">{entry.name || entry.id}</div>
                   <div className="text-xs text-slate-500">{entry.id}{entry.structuredOutput ? ` · ${CAPABILITY_LABELS[entry.structuredOutput]}` : ''}</div>
                 </button>
@@ -628,7 +676,7 @@ export function AISettings() {
           <Error message={runtimes.error.message} onRetry={() => void runtimes.refetch()} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {(runtimes.data?.runtimes || []).filter((runtime) => runtime.runtime !== 'direct_api').map((runtime) => <RuntimeCard key={runtime.runtime} runtime={runtime} />)}
+            {(runtimes.data?.runtimes || []).filter((runtime) => !['direct_api', 'opencode2'].includes(runtime.runtime)).map((runtime) => <RuntimeCard key={runtime.runtime} runtime={runtime} />)}
           </div>
         )}
       </section>

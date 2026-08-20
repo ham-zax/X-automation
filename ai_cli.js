@@ -1,12 +1,23 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { createOpencode } from '@opencode-ai/sdk/v2';
 
+const OPENCODE_HOME_BIN = path.join(homedir(), '.opencode', 'bin');
+const OPENCODE_HOME_COMMAND = path.join(OPENCODE_HOME_BIN, 'opencode');
+const OPENCODE_COMMAND = String(process.env.OPENCODE_BIN || '').trim()
+  || (existsSync(OPENCODE_HOME_COMMAND) ? OPENCODE_HOME_COMMAND : 'opencode');
+if (path.isAbsolute(OPENCODE_COMMAND)) {
+  const binDir = path.dirname(OPENCODE_COMMAND);
+  const entries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  if (!entries.includes(binDir)) process.env.PATH = [binDir, ...entries].join(path.delimiter);
+}
+
 const RUNTIME_COMMANDS = Object.freeze({
   codex: 'codex',
-  opencode: 'opencode',
+  opencode: OPENCODE_COMMAND,
   opencode2: 'opencode2',
   agy: 'agy',
 });
@@ -451,7 +462,7 @@ export async function runCliStructuredAI(profile, { prompt, schema, timeoutMs = 
   }
 }
 
-export async function listCliAiCatalog(profile, { timeoutMs = 15_000 } = {}) {
+export async function listCliAiCatalog(profile, { timeoutMs = 15_000, refresh = false } = {}) {
   const availability = await getAiCliAvailability(profile.runtime);
   if (!availability.installed) {
     return {
@@ -464,6 +475,9 @@ export async function listCliAiCatalog(profile, { timeoutMs = 15_000 } = {}) {
   }
   if (profile.runtime === 'opencode') {
     try {
+      if (refresh) {
+        await runProcess(RUNTIME_COMMANDS.opencode, ['models', '--refresh'], { timeoutMs, maxOutputChars: 64_000 });
+      }
       const models = await openCodeCatalog(profile, { timeoutMs });
       return {
         models,

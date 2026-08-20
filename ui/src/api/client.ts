@@ -1119,6 +1119,12 @@ export function useAICatalog(profileId: number | null) {
   })
 }
 
+export function useAICatalogPreview() {
+  return useMutation<AICatalogData, Error, { runtime: AIProfileView['runtime']; runtimeProfile?: string }>({
+    mutationFn: (payload) => postApi('/ai/catalog-preview', payload),
+  })
+}
+
 export function useAICatalogRefresh() {
   const queryClient = useQueryClient()
   return useMutation<AICatalogData, Error, number>({

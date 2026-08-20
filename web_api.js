@@ -1317,6 +1317,29 @@ export async function handleApi(req, res, requestUrl) {
       return sendSuccess({ runtimes: await listAiRuntimeAvailability() });
     }
 
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'catalog-preview') {
+      const payload = await readBody();
+      const runtime = String(payload.runtime || '').trim();
+      if (!['codex', 'opencode', 'agy'].includes(runtime)) {
+        throw new Error('Catalog preview before saving is supported for Codex, OpenCode, and AGY runtime profiles.');
+      }
+      const profile = {
+        id: null,
+        name: 'Catalog preview',
+        runtime,
+        providerKind: 'runtime_managed',
+        baseUrl: '',
+        protocol: 'runtime_native',
+        model: runtime === 'codex' ? 'inherit' : 'catalog-preview',
+        reasoning: '',
+        runtimeProfile: runtime === 'codex' ? String(payload.runtimeProfile || '').trim() : '',
+        secretRef: '',
+        settings: {},
+        enabled: true,
+      };
+      return sendSuccess(await listAiCatalog(profile, { refresh: true }));
+    }
+
     if (method === 'GET' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'catalog') {
       const profile = requireAiProfile(segments[2]);
       return sendSuccess(await listAiCatalog(profile, { refresh: query.get('refresh') === '1' || query.get('refresh') === 'true' }));

@@ -489,7 +489,7 @@ export async function listAiCatalog(profileOrId, { refresh = false, timeoutMs = 
       };
     }
   }
-  return listCliAiCatalog(profile, { timeoutMs });
+  return listCliAiCatalog(profile, { timeoutMs, refresh });
 }
 
 export async function listAiRuntimeAvailability() {
