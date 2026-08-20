@@ -11,7 +11,7 @@
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
 | Agent A2 — AI Settings + Configuration Surface | executable/UI | complete + integrated | completed | `/home/hamza/repo/x_test-w6-ai-settings` | isolated web/API/UI ownership | none |
-| Agent B2 — Phase-6 Backend Critical Path | executable | in progress | now | `/home/hamza/repo/x_test-w6-editorial-backend` | concurrent backend work; Agent B2 owns store/source/editorial orchestration and stays off web/API/UI | none |
+| Agent B2 — Phase-6 Backend Critical Path | executable | complete + integrated | completed | `/home/hamza/repo/x_test-w6-editorial-backend` | isolated backend persistence/orchestration ownership | none |
 
 ## Dependency map
 
@@ -52,7 +52,7 @@ If correctness requires crossing the ownership boundary, report the conflict ins
 
 ## Integration policy
 
-Agent A2 is integrated on main as `5306dde`. Main/integration owner will review and cherry-pick Agent B2 when it returns; agent branches do not merge each other. Phase-6 workflow selection/writer evidence and Today/Discover integration begin only after Agent B2 is reconciled on main.
+Agent A2 is integrated on main as `5306dde`. Agent B2 is integrated on main as `e1ccb49`. Wave 2 is complete; downstream workflow selection/writer evidence and outcome-provenance work may now begin from the integrated main state.
 
 ## Execution lifetime policy
 
@@ -76,3 +76,4 @@ No tests are authorized. Do not create, modify, or run tests. Use only the minim
 - `2026-08-20` — Wave 1 integrated on main: `1203be4` AI runtime core and `32c7575` deterministic editorial core.
 - `2026-08-20` — Wave 1 integration syntax/diff checks passed; Wave 2 materialized.
 - `2026-08-20` — Agent A2 AI Settings/configuration surface integrated on main as `5306dde`; integrated syntax and React production build passed.
+- `2026-08-20` — Agent B2 Phase-6 backend critical path integrated on main as `e1ccb49`; combined backend/runtime syntax and diff checks passed. Wave 2 complete.
