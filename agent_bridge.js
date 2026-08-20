@@ -158,7 +158,7 @@ function schedulerContext(now) {
 
 function aiProfileCapability(profile) {
   if (!profile) return 'unsupported';
-  if (profile.runtime === 'codex') return 'supported';
+  if (profile.runtime === 'codex' || profile.runtime === 'agy') return 'supported';
   if (profile.runtime !== 'direct_api') return 'unsupported';
   const configured = profile.settings?.structuredOutput;
   if (['supported', 'compatible_fallback', 'unknown', 'unsupported'].includes(configured)) return configured;

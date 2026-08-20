@@ -267,6 +267,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       setProviderKind('runtime_managed')
       setProtocol('runtime_native')
       setModel(next === 'codex' ? 'inherit' : '')
+      if (next === 'agy') setRuntimeProfile('')
     }
   }
 
@@ -284,7 +285,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       protocol: direct ? protocol : 'runtime_native',
       model,
       reasoning,
-      runtimeProfile: direct ? '' : runtimeProfile,
+      runtimeProfile: direct || runtime === 'agy' ? '' : runtimeProfile,
       settings,
       enabled: profile?.enabled ?? true,
     }
@@ -352,19 +353,19 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
               <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={providerKind === 'openrouter' ? 'https://openrouter.ai/api/v1' : providerKind === 'openai' ? 'https://api.openai.com/v1' : 'http://localhost:11434/v1'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
             </label>
           </>
-        ) : (
+        ) : runtime !== 'agy' ? (
           <label className="text-sm text-slate-700 md:col-span-2">
             Runtime profile (optional)
             <input value={runtimeProfile} onChange={(event) => setRuntimeProfile(event.target.value)} placeholder="Use the runtime's default configuration" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
           </label>
-        )}
+        ) : null}
         <label className="text-sm text-slate-700">
           Model ID
           <input required value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or exact Codex model' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
         </label>
         <label className="text-sm text-slate-700">
           Reasoning / variant
-          <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} placeholder="medium, max, or provider/runtime value" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
+          <input value={reasoning} onChange={(event) => setReasoning(event.target.value)} placeholder={runtime === 'agy' ? 'low, medium, or high' : 'medium, max, or provider/runtime value'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
         </label>
         {direct && (
           <>

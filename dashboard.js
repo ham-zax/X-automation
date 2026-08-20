@@ -19,6 +19,7 @@ import {
 } from './store.js';
 
 const PORT = Number(process.env.WEB_PORT || 3030);
+const HOST = String(process.env.WEB_HOST || '0.0.0.0');
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const UI_DIST = path.resolve('ui/dist');
 
@@ -357,4 +358,4 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log(`[web] X research system: http://localhost:${PORT}`));
+server.listen(PORT, HOST, () => console.log(`[web] X research system: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
