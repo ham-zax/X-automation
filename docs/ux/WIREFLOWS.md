@@ -109,7 +109,8 @@ Strategy recommendations | More (AI / niche / diagnostics)
 
 ```text
 +--------------------------------------------------------------------------------+
-| Today | Discover | Conversations | Posts | Results | Learn        | Advanced    |
+| PRIMARY: Today | Discover | Conversations | Posts | Results | Learn             |
+| Support: [Advanced / Settings]                                                  |
 +--------------------------------------------------------------------------------+
 | Page content                                                                   |
 +--------------------------------------------------------------------------------+
@@ -153,12 +154,14 @@ H1 secondary evidence/settings are reached from the Results section list.
 +------------------------------+
 
 [Nav]
+PRIMARY
 Today
 Discover
 Conversations
 Posts
 Results
 Learn
+SUPPORT
 Advanced / Settings
 ```
 
@@ -311,7 +314,7 @@ Connections:
 ```text
 [D-D1] Choose what this becomes -> [D-D2]
 [D-D2] Original/Thread/Quote ------> [D-P2a] Draft preparation
-[D-D2] Reply ----------------------> [D-C2] Conversation detail / reply prep
+[D-D2] Reply ----------------------> [D-C2a] Reply preparation before generation
 [D-D2] Repost ---------------------> [D-P6] Repost preparation
 [D-D2] Research -------------------> [researching state / evidence task]
 [D-D2] Pause/Skip -----------------> [D-D1] with On hold/Skipped state
@@ -374,7 +377,7 @@ Connections:
 +------------------------------+
 ```
 
-`[P-D2] -> [P-P2a]` for authored posts, `[P-C2]` for Reply, or `[P-P6]` for Repost.
+`[P-D2] -> [P-P2a]` for authored posts, `[P-C2a]` for Reply before generation, or `[P-P6]` for Repost.
 
 ---
 
@@ -396,6 +399,25 @@ Connections:
 | NEW OPPORTUNITIES                                                              |
 | @researcher  Fresh opportunity             What you can add: <contribution>     |
 | [Review opportunity]                                                           |
++--------------------------------------------------------------------------------+
+```
+
+### [D-C2a] Reply preparation before generation [P recomposition]
+
+```text
++--------------------------------------------------------------------------------+
+| < Conversations      @researcher                         State: Draft            |
+| Reply lifecycle: Draft -> Needs review -> Approved -> Sending -> Sent           |
++--------------------------------------------------------------------------------+
+| WHAT YOU CAN ADD                                                               |
+| <plain-language contribution>                                                   |
++--------------------------------------------------------------------------------+
+| SOURCE / RELATIONSHIP                                                          |
+| source text...                     relationship context...                      |
++--------------------------------------------------------------------------------+
+| No reply text has been generated yet.                                          |
+| [Generate reply]                                                               |
+| -> AI creates editable reply wording. Nothing is approved or sent.              |
 +--------------------------------------------------------------------------------+
 ```
 
@@ -459,13 +481,37 @@ Connections:
 Connections:
 
 ```text
-[D-C1] Review reply -> [D-C2]
+[D-C1] Review reply ----------------> [D-C2]
+[D-C1] Review new opportunity ------> [D-C2a]
+[D-C2a] Generate reply -------------> [D-C2]
 [D-C2] successful send -> [D-C3]
 [D-C2] remote/local uncertainty -> [D-C4]
 [D-C4] refresh -> [D-C3] OR [D-C4] OR known-failed normal review path
 ```
 
 ## Phone
+
+### [P-C2a] Reply preparation before generation
+
+```text
++------------------------------+
+| < CONVERSATION          [Nav]|
+| @researcher                  |
+| State: Draft                 |
+| Draft > Review > Send > Sent |
++------------------------------+
+| WHAT YOU CAN ADD             |
+| <contribution>               |
++------------------------------+
+| SOURCE                       |
+| text...                      |
++------------------------------+
+| No reply text yet.           |
+| [Generate reply]             |
+| -> Creates editable AI text  |
+|    Nothing is approved/sent  |
++------------------------------+
+```
 
 ### [P-C2] Conversation detail
 
@@ -562,7 +608,7 @@ Connections:
 | <source>                     Original / Thread / Quote                           |
 +--------------------------------------------------------------------------------+
 | WRITING STRATEGY [F placement stimulus]                                        |
-| Current: Advice only / No influence / Deliberately use / Not selected           |
+| Current: Advice only (default until the human changes it)                       |
 | [Inspect / change]  -> writing influence only; no approval effect               |
 +--------------------------------------------------------------------------------+
 | EXACT DRAFT                                                                     |
@@ -757,7 +803,38 @@ Connections:
 +------------------------------+
 ```
 
-**Phone test:** leave the prototype after `[P-P3]`, then re-enter on a later task and ask the participant to find whether the post is public yet.
+### [P-P5] Publication failure / reconciliation
+
+Known pre-remote failure, only when the authoritative owner can prove no publication happened:
+
+```text
++------------------------------+
+| PUBLISH FAILED               |
+| What failed: <operation>     |
+| Remote effect: none confirmed|
+| State: Failed                |
+| Retry: only if owner says safe|
+| [Return to review]           |
++------------------------------+
+```
+
+Remote/local uncertainty:
+
+```text
++------------------------------+
+| NEEDS RECONCILIATION         |
+| Post may already be public   |
+| State: Publishing            |
+| Retry: NOT SAFE YET          |
+| [Refresh state]              |
+| [View X output if known]     |
+| No publish/retry action      |
++------------------------------+
+```
+
+`[P-P1] Open recovery -> [P-P5]`. The uncertain variant suppresses ordinary publication actions until authoritative state resolves.
+
+**Phone test:** leave the prototype after `[P-P3]`, then re-enter on a later task and ask the participant to find whether the post is public yet. Also present `[P-P5]` and ask whether another publish attempt is safe.
 
 ---
 
@@ -994,13 +1071,13 @@ For H1, use the same four destinations as Results sub-sections rather than a sep
 +--------------------------------------------------------------------------------+
 | WRITING INFLUENCE — labels are research stimuli                                |
 |                                                                                |
-| ( ) No influence       canonical: off                                          |
+| ( ) No influence                                                           |
 |     Writer receives no strategy instruction.                                   |
 |                                                                                |
-| ( ) Advice only        canonical: suggest                                      |
+| (*) Advice only                                                            |
 |     Guidance stays visible; Writer generation is unchanged.                    |
 |                                                                                |
-| ( ) Deliberately use   canonical: apply                                        |
+| ( ) Deliberately use                                                       |
 |     Human allows this guidance to shape ONE generation only.                   |
 |                                                                                |
 | No mode approves, schedules, sends, publishes, accepts a learned rule, or       |
@@ -1009,6 +1086,8 @@ For H1, use the same four destinations as Results sub-sections rather than a sep
 | [Continue to work item]                                                         |
 +--------------------------------------------------------------------------------+
 ```
+
+Evaluator mapping only: `No influence=off`, `Advice only=suggest`, `Deliberately use=apply`. The canonical IDs are not part of the participant-facing frame. `(*)` is the source-plan default until the human changes it; it does not validate `Advice only` as final display wording.
 
 ### [D-L-STRAT-NA] Repost not applicable [F semantic rule]
 
@@ -1094,6 +1173,27 @@ For H1, present the same entries inside Results sections rather than a Learn pag
 +------------------------------+
 ```
 
+### [P-L-EXT2] Research progress
+
+```text
++------------------------------+
+| RESEARCH RUN            [Nav]|
+| Status: Researching          |
+| Current: Intent analysis     |
+| Unit: AI agents / 21 days    |
+| Progress: <real checkpoint>  |
+| Errors: none / <stage>       |
+|                              |
+| [Stop after current unit]    |
+| -> current bounded unit may  |
+|    finish before stopping    |
+|                              |
+| You can leave this page.     |
+| Re-entry returns to this run |
+| separately from older data.  |
++------------------------------+
+```
+
 ### [P-L-COMP] Evidence comparison
 
 ```text
@@ -1129,13 +1229,13 @@ For H1, present the same entries inside Results sections rather than a Learn pag
 | Style: Field note            |
 | [Evidence & limitations]     |
 +------------------------------+
-| ( ) No influence   [off]     |
+| ( ) No influence             |
 |     Writer unchanged         |
 |                              |
-| ( ) Advice only    [suggest] |
+| (*) Advice only              |
 |     Writer unchanged         |
 |                              |
-| ( ) Deliberately use [apply] |
+| ( ) Deliberately use         |
 |     This generation only     |
 +------------------------------+
 | No approval/send/publication |
@@ -1144,20 +1244,48 @@ For H1, present the same entries inside Results sections rather than a Learn pag
 +------------------------------+
 ```
 
+Evaluator mapping only: `No influence=off`, `Advice only=suggest`, `Deliberately use=apply`. The canonical IDs are not part of the participant-facing frame. `(*)` is the source-plan default until the human changes it.
+
+### [D-P2-STRAT] Desktop point-of-use strategy choice [F placement stimulus]
+
+Use this frame for the draft-only placement hypothesis before generation.
+
+```text
++--------------------------------------------------------------------------------+
+| < Posts         <post title>                                      State: Draft   |
+| Selected type: Original / Thread / Quote                                        |
++--------------------------------------------------------------------------------+
+| WRITING INFLUENCE — labels are research stimuli                                |
+| ( ) No influence       Writer receives no strategy instruction.                |
+| (*) Advice only        Guidance stays visible; Writer generation is unchanged. |
+| ( ) Deliberately use   Selected guidance may shape this generation only.       |
+|                                                                                |
+| None of these choices approves, schedules, sends, or publishes.                |
++--------------------------------------------------------------------------------+
+| [Generate draft] -> creates editable text only                                 |
++--------------------------------------------------------------------------------+
+```
+
+Evaluator mapping only: `No influence=off`, `Advice only=suggest`, `Deliberately use=apply`. `(*)` is the default canonical `suggest` behavior, not a final-label decision.
+
 ### [P-P2-STRAT] Point-of-use draft state [F]
 
 ```text
 +------------------------------+
 | DRAFT                        |
-| Writing guidance: APPLY      |
-| Teach/explain / Field note   |
-| [Change] [Remove]            |
+| Writing influence            |
+| ( ) No influence             |
+| (*) Advice only              |
+| ( ) Deliberately use         |
+| [Evidence & limitations]     |
 | -> writing influence only    |
 +------------------------------+
 | [Generate draft]             |
 | -> editable text only        |
 +------------------------------+
 ```
+
+Evaluator mapping only: `No influence=off`, `Advice only=suggest`, `Deliberately use=apply`. `(*)` is the default canonical `suggest` behavior until the human changes it.
 
 **Applicable types:** Original, Thread, Quote, Reply. For Repost, render the not-applicable explanation instead of a mode selector.
 
@@ -1236,7 +1364,7 @@ Simplified External Research
    | Use as Original -> selection only
    v
 [D-P2a Draft preparation: no generated text]
-   | optional strategy point-of-use [F]
+   | optional strategy point-of-use [F] -> [D-P2-STRAT] when testing S2/S3
    | Generate draft -> editable text only
    v
 [D-P2 Draft review]
@@ -1293,6 +1421,7 @@ Learn > Tests ---------------------------------------------------^
 ... later ...
 [Nav -> Posts]
   -> same item shows Publishing / Published / Failed truth
+  -> if failed/uncertain: [P-P5] recovery
 ```
 
 ## Scenario P2 — discover and prepare without surprise generation
@@ -1323,7 +1452,7 @@ Learn > Tests ---------------------------------------------------^
 H1:
 
 ```text
-[Nav -> Results -> External patterns] -> [P-L-EXT1]
+[Nav -> Results -> External patterns] -> [P-L-EXT1] -> [P-L-EXT2] -> later findings
 [Results -> Own patterns] -------------> [P-L-COMP]
 [Results -> Tests] ---------------------> [P-L-COMP]
 ```
@@ -1331,7 +1460,7 @@ H1:
 H2:
 
 ```text
-[Nav -> Learn -> External] -> [P-L-EXT1]
+[Nav -> Learn -> External] -> [P-L-EXT1] -> [P-L-EXT2] -> later findings
 [Learn -> Our account] ------> [P-L-COMP]
 [Learn -> Tests] ------------> [P-L-COMP]
 ```

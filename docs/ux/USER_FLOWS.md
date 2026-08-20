@@ -68,6 +68,7 @@ Learn
   What works for you           [internal evidence; label provisional]
   Tests                        [experiment evidence]
   Strategy recommendations     [future writing-strategy evidence]
+Support / utility entry (not a seventh primary destination)
 Advanced / Settings
   AI Settings
   Niche / audience definition

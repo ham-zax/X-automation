@@ -234,6 +234,8 @@ The exact user-facing labels for intent and style remain **research hypotheses**
 
 Canonical behavior IDs are fixed: `off|suggest|apply`. These are system semantics, not validated display labels.
 
+Until participant research supports a different default, an applicable draft starts in canonical `suggest`: guidance is visible, but Writer generation is unchanged. This default is a behavior contract, not validation of any display label such as `Advice only` or `Suggest`. The human can explicitly change the mode to `off` or `apply` for the work item.
+
 | Canonical ID | Stable behavior | Writer effect | Human-visible effect | Must not change |
 |---|---|---|---|---|
 | `off` | No learned style/intent guidance influences this generation. | No strategy instruction is supplied. | The UI may state that guidance is not being used. | Recommendation/selection, approval state, schedule, publication/send authority, learned-rule status. |

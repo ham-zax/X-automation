@@ -324,6 +324,8 @@ This is the future draft-time writing-guidance contract from the source plan. Th
 
 Canonical behavior IDs are `off|suggest|apply`; final user-facing labels remain research hypotheses.
 
+**Initial behavior:** until participant research supports another default, an applicable work item starts in canonical `suggest`. Guidance is visible and Writer generation remains unchanged unless the human deliberately changes the mode. There is no fourth `unset`/`not selected` behavior state.
+
 **Visible first layer**
 
 Show:
