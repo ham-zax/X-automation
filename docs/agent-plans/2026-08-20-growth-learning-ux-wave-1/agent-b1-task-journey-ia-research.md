@@ -6,7 +6,7 @@
 **Branch:** `agent/w7-ux-research`
 **Isolation reason:** concurrent documentation writer; this mission owns task/journey/IA research artifacts while Agent A1 owns current-state audit/walkthrough artifacts
 **Can start:** immediately
-**Depends on:** authoritative plan `docs/plans/UX_HCI_DEEP_RESEARCH_PROGRAM.md` at source base `01cc68f`
+**Depends on:** authoritative plan `docs/plans/UX_HCI_DEEP_RESEARCH_PROGRAM.md` at source base `01cc68f`; inspect the current product baseline at `d99ed94` or later compatible main state
 **Execution lifetime:** ordinary
 
 ## Read first

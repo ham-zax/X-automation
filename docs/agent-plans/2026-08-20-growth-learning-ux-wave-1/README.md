@@ -3,6 +3,7 @@
 **Repository:** `/home/hamza/repo/x_test`
 **Authoritative source plan:** `docs/plans/UX_HCI_DEEP_RESEARCH_PROGRAM.md`
 **Source-plan base:** `01cc68f`
+**Current execution baseline:** `d99ed94` — includes the latest editable niche-settings surface that Wave 1 must study
 **Execution shape:** two parallel documentation/research missions, then planner integration and contract freeze before any React/backend implementation
 **Current wave:** 1 — UX evidence foundation
 
