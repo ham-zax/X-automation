@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useAudience, useAudienceUnfollow, type AudienceProfile } from '../../api/client'
+import { useAudience, useAudienceReview, useAudienceUnfollow, type AudienceProfile, type AudienceReviewSuggestion } from '../../api/client'
 import { Badge, Disclosure, Error, Loading, Pending, StatCard, formatDateTime } from '../../components/primitives'
 
 const FIT_LABELS: Record<string, string> = {
@@ -14,7 +14,7 @@ const FIT_TONES: Record<string, 'success' | 'neutral' | 'danger'> = {
   outside_niche: 'danger',
 }
 
-function ProfileRow({ profile }: { profile: AudienceProfile }) {
+function ProfileRow({ profile, review = null }: { profile: AudienceProfile; review?: AudienceReviewSuggestion | null }) {
   const unfollow = useAudienceUnfollow()
   const pending = unfollow.isPending && unfollow.variables === profile.username
   const failed = unfollow.isError && unfollow.variables === profile.username ? unfollow.error : null
@@ -65,6 +65,19 @@ function ProfileRow({ profile }: { profile: AudienceProfile }) {
           </a>
         </div>
       </div>
+      {review && (
+        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong>AI review #{review.rank}</strong>
+            <Badge tone={review.decision === 'consider_unfollow' ? 'danger' : 'neutral'}>
+              {review.decision === 'consider_unfollow' ? 'Consider unfollowing' : 'Human review'}
+            </Badge>
+            <span className="text-xs text-amber-800">{review.confidence} confidence</span>
+          </div>
+          <p className="mt-1">{review.reason}</p>
+          {review.signals.length > 0 && <p className="mt-1 text-xs text-amber-800">Signals: {review.signals.join(' · ')}</p>}
+        </div>
+      )}
       {failed && (
         <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{failed.message}</div>
       )}
@@ -99,6 +112,7 @@ function BucketSection({ title, note, profiles, batchSize = 10 }: { title: strin
 
 export function Audience() {
   const { data, isLoading, error, refetch } = useAudience()
+  const aiReview = useAudienceReview()
 
   if (isLoading) {
     return <Loading message="Loading audience profiles..." />
@@ -128,6 +142,50 @@ export function Audience() {
         <StatCard label="Niche following" value={data.counts.inNicheFollowing} />
         <StatCard label="Outside-niche following" value={data.counts.outsideFollowing} />
       </div>
+
+      <section className="rounded-lg border border-sky-200 bg-sky-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-3xl">
+            <h3 className="text-lg font-semibold text-slate-900">AI following review</h3>
+            <p className="mt-1 text-sm text-slate-700">
+              Send the current following list, niche signals, mutual status, and known relationship context to the configured Audience review model. The AI only suggests accounts to inspect; it cannot unfollow anyone.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => aiReview.mutate()}
+              disabled={aiReview.isPending}
+              className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {aiReview.isPending ? 'Reviewing following…' : 'Ask AI to review following'}
+            </button>
+            <a href="#/advanced/ai" className="text-sm font-medium text-sky-700 hover:underline">AI settings</a>
+          </div>
+        </div>
+        {aiReview.isError && (
+          <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{aiReview.error.message}</div>
+        )}
+        {data.aiReview && (
+          <div className="mt-4 space-y-3">
+            <div className="text-sm text-slate-700">
+              <strong>{data.aiReview.suggestions.length} suggestions from {data.aiReview.reviewedCount} followed accounts.</strong> {data.aiReview.summary}
+            </div>
+            <div className="text-xs text-slate-500">
+              Reviewed {formatDateTime(data.aiReview.reviewedAt)}
+              {data.aiReview.execution ? ` · ${data.aiReview.execution.runtime} · ${data.aiReview.execution.model}${data.aiReview.execution.reasoning ? ` / ${data.aiReview.execution.reasoning}` : ''}` : ''}
+            </div>
+            {data.aiReview.suggestions.length > 0 ? (
+              <div className="space-y-2">
+                {data.aiReview.suggestions.map((suggestion) => (
+                  <ProfileRow key={`ai-${suggestion.username}`} profile={suggestion.profile} review={suggestion} />
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-600">The latest AI review did not identify a strong removal candidate.</p>
+            )}
+          </div>
+        )}
+      </section>
 
       {data.counts.outsideFollowing > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">

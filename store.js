@@ -47,7 +47,7 @@ export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
 export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy']);
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
-export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'writer']);
+export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer']);
 export const SOURCE_SNAPSHOT_KINDS = Object.freeze(['x_latest', 'x_momentum', 'github_trending', 'hn_top']);
 
 const AI_RUNTIME_SET = new Set(AI_RUNTIME_TYPES);

@@ -1,10 +1,12 @@
 import 'dotenv/config';
 import { Scraper, createBrowser, createPage } from 'xactions';
 import { TwitterHttpClient, unfollowUser as unfollowUserHttp } from 'xactions/scrapers/twitter/http';
-import { classifyAudienceProfile } from './strategy.js';
+import { AUDIENCE_NICHE_LABELS, classifyAudienceProfile } from './strategy.js';
+import { runStructuredAI } from './ai_runtime.js';
 import {
   getAppState,
   getAudienceProfile,
+  getAudienceSummary,
   getNewFollowerQuality,
   getRelationshipProfile,
   listAudienceProfiles,
@@ -13,6 +15,161 @@ import {
   setAppState,
   setAudienceFollowState,
 } from './store.js';
+
+const AUDIENCE_AI_REVIEW_KEY = 'audience_ai_review';
+const AUDIENCE_REVIEW_SCHEMA = {
+  type: 'object',
+  properties: {
+    summary: { type: 'string', maxLength: 2000 },
+    suggestions: {
+      type: 'array',
+      maxItems: 150,
+      items: {
+        type: 'object',
+        properties: {
+          username: { type: 'string', minLength: 1, maxLength: 50 },
+          decision: { type: 'string', enum: ['consider_unfollow', 'needs_human_review'] },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          reason: { type: 'string', minLength: 1, maxLength: 600 },
+          signals: {
+            type: 'array',
+            maxItems: 6,
+            items: { type: 'string', minLength: 1, maxLength: 120 },
+          },
+        },
+        required: ['username', 'decision', 'confidence', 'reason', 'signals'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['summary', 'suggestions'],
+  additionalProperties: false,
+};
+
+function audienceReviewInput(profile) {
+  const relationship = getRelationshipProfile(profile.username);
+  return {
+    username: profile.username,
+    displayName: profile.displayName || profile.username,
+    bio: String(profile.bio || '').slice(0, 600),
+    followsYou: Boolean(profile.followsYou),
+    fitBucket: profile.fitBucket || 'uncertain',
+    relevanceScore: Number(profile.relevanceScore || 0),
+    nicheTags: (profile.nicheTags || []).map((tag) => AUDIENCE_NICHE_LABELS[tag] || tag),
+    matchedKeywords: (profile.matchedKeywords || []).slice(0, 12),
+    exclusionMatches: (profile.exclusionMatches || []).slice(0, 8),
+    deprioritizationMatches: (profile.deprioritizationMatches || []).slice(0, 8),
+    relationship: relationship ? {
+      classes: relationship.classes || [],
+      stage: relationship.relationshipStage || 'observed',
+      targetScore: Number(relationship.targetScore || 0),
+      meaningfulInteractions: Number(relationship.meaningfulInteractions || 0),
+      theirRepliesToUs: Number(relationship.theirRepliesToUs || 0),
+      theirQuotesOfUs: Number(relationship.theirQuotesOfUs || 0),
+      theirRepostsOfUs: Number(relationship.theirRepostsOfUs || 0),
+      lastInteractionAt: relationship.lastInteractionAt || null,
+    } : null,
+  };
+}
+
+function hydrateAudienceReview(review) {
+  if (!review || typeof review !== 'object') return null;
+  const suggestions = (review.suggestions || []).map((suggestion) => {
+    const profile = getAudienceProfile(suggestion.username);
+    if (!profile?.youFollow) return null;
+    return { ...suggestion, profile };
+  }).filter(Boolean);
+  return { ...review, suggestions };
+}
+
+export function getAudienceAiReview() {
+  const raw = getAppState(AUDIENCE_AI_REVIEW_KEY, '');
+  if (!raw) return null;
+  try {
+    return hydrateAudienceReview(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export async function reviewAudienceFollowing({ profile = null } = {}) {
+  const summary = getAudienceSummary();
+  const following = listAudienceProfiles({
+    youFollow: true,
+    minScore: 0,
+    limit: Math.max(100, Number(summary.following || 0) + 20),
+  });
+  const reviewedAt = Date.now();
+  if (!following.length) {
+    const empty = {
+      reviewedAt,
+      reviewedCount: 0,
+      totalFollowing: 0,
+      summary: 'No currently followed accounts are available to review.',
+      suggestions: [],
+      execution: null,
+    };
+    setAppState(AUDIENCE_AI_REVIEW_KEY, JSON.stringify(empty));
+    return hydrateAudienceReview(empty);
+  }
+
+  const packet = following.map(audienceReviewInput);
+  const prompt = [
+    'You are reviewing the operator current X following list for network quality.',
+    'The target network is AI, coding agents, models/inference, developer tools, software engineering, infrastructure, technical education/careers, builders/startups, and technical communities.',
+    'Suggest only accounts worth CONSIDERING for unfollow. Do not produce keep recommendations.',
+    'Be conservative. A sparse bio or an existing deterministic outside/uncertain label is not enough by itself.',
+    'Preserve strategically useful technical accounts, active relationships, recurring conversations, authorities, customers/prospects, and mutual relationships unless the supplied evidence clearly argues otherwise.',
+    'Prioritize clearly unrelated focus, explicit exclusion/spam signals, chronically low relevance with no strategic relationship, or accounts whose current profile evidence does not support the target network.',
+    'Use needs_human_review instead of consider_unfollow when evidence is incomplete, the account follows the operator back, or relationship context creates a meaningful tradeoff.',
+    'Never infer sensitive traits and never use protected characteristics as a reason.',
+    'Return only exact usernames present in FOLLOWING. Do not invent usernames. Order suggestions from strongest removal case to weakest.',
+    `TARGET NICHE LABELS: ${JSON.stringify(Object.values(AUDIENCE_NICHE_LABELS))}`,
+    `FOLLOWING (${packet.length}): ${JSON.stringify(packet)}`,
+  ].join('\n\n');
+
+  const result = await runStructuredAI({
+    role: 'audience_review',
+    profile,
+    prompt,
+    schema: AUDIENCE_REVIEW_SCHEMA,
+    timeoutMs: 120_000,
+    metadata: { consumer: 'audience_review', followingCount: packet.length },
+  });
+
+  const allowed = new Map(following.map((item) => [item.username.toLowerCase(), item]));
+  const seen = new Set();
+  const suggestions = [];
+  for (const item of result.output.suggestions || []) {
+    const username = String(item.username || '').replace(/^@/, '').trim().toLowerCase();
+    if (!allowed.has(username) || seen.has(username)) continue;
+    seen.add(username);
+    const stored = allowed.get(username);
+    const relationship = getRelationshipProfile(username);
+    const needsReview = Boolean(stored.followsYou)
+      || Number(relationship?.meaningfulInteractions || 0) > 0
+      || ['responsive', 'recurring', 'connected', 'mutual'].includes(String(relationship?.relationshipStage || ''));
+    suggestions.push({
+      rank: suggestions.length + 1,
+      username,
+      decision: needsReview ? 'needs_human_review' : item.decision,
+      confidence: item.confidence,
+      reason: item.reason,
+      signals: item.signals || [],
+    });
+  }
+
+  const review = {
+    reviewedAt,
+    reviewedCount: following.length,
+    totalFollowing: Number(summary.following || following.length),
+    summary: result.output.summary,
+    suggestions,
+    execution: result.execution,
+  };
+  setAppState(AUDIENCE_AI_REVIEW_KEY, JSON.stringify(review));
+  return hydrateAudienceReview(review);
+}
 
 function normalizeCell(row) {
   const lines = String(row.text || '').split('\n').map((line) => line.trim()).filter(Boolean);

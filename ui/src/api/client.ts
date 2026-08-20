@@ -747,6 +747,25 @@ export interface AudienceProfile {
   firstSeenAt: number | null
 }
 
+export interface AudienceReviewSuggestion {
+  rank: number
+  username: string
+  decision: 'consider_unfollow' | 'needs_human_review'
+  confidence: 'high' | 'medium' | 'low'
+  reason: string
+  signals: string[]
+  profile: AudienceProfile
+}
+
+export interface AudienceReview {
+  reviewedAt: number
+  reviewedCount: number
+  totalFollowing: number
+  summary: string
+  suggestions: AudienceReviewSuggestion[]
+  execution: { runtime: string; provider: string; model: string; reasoning: string; profileId: number | null; fallbackUsed: boolean } | null
+}
+
 export interface AudienceData {
   summary: { followers: number; following: number; relevantFollowers: number; relevantFollowing: number; targetAccounts: number }
   counts: { outsideFollowing: number; uncertainFollowing: number; inNicheFollowing: number; inNicheFollowers: number }
@@ -754,6 +773,7 @@ export interface AudienceData {
   uncertainFollowing: AudienceProfile[]
   targets: AudienceProfile[]
   relevantFollowers: AudienceProfile[]
+  aiReview: AudienceReview | null
 }
 
 interface AudienceUnfollowJob {
@@ -771,6 +791,16 @@ export function useAudience() {
     queryKey: ['audience'],
     queryFn: () => fetchApi<AudienceData>('/audience'),
     staleTime: 60_000,
+  })
+}
+
+export function useAudienceReview() {
+  const queryClient = useQueryClient()
+  return useMutation<AudienceReview, Error, void>({
+    mutationFn: () => postApi<AudienceReview>('/audience/review', {}),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['audience'] })
+    },
   })
 }
 
@@ -925,7 +955,7 @@ export interface AIProfileView {
 }
 
 export interface AIRoleView {
-  role: 'continuous_scan' | 'editorial_scan' | 'editorial_final' | 'writer'
+  role: 'continuous_scan' | 'editorial_scan' | 'editorial_final' | 'audience_review' | 'writer'
   activity: 'not_active' | 'configured' | 'unconfigured'
   primaryProfileId: number | null
   fallbackProfileId: number | null

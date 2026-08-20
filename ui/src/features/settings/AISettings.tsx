@@ -28,6 +28,7 @@ const ROLE_LABELS: Record<string, string> = {
   continuous_scan: 'Continuous scan',
   editorial_scan: 'Editorial scan',
   editorial_final: 'Editorial final',
+  audience_review: 'Audience review',
   writer: 'Writer',
 }
 

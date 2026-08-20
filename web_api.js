@@ -29,7 +29,7 @@ import {
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, isOpportunityCandidate } from './strategy.js';
-import { syncAudience, unfollowAudienceUser } from './audience.js';
+import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
   AI_ROLES,
@@ -2356,6 +2356,28 @@ export async function handleApi(req, res, requestUrl) {
         uncertainFollowing: uncertainFollowing.map(formatAudienceProfile),
         targets: inNicheFollowing.filter((profile) => !profile.followsYou).slice(0, 40).map(formatAudienceProfile),
         relevantFollowers: inNicheFollowers.slice(0, 20).map(formatAudienceProfile),
+        aiReview: (() => {
+          const review = getAudienceAiReview();
+          if (!review) return null;
+          return {
+            ...review,
+            suggestions: (review.suggestions || []).map((suggestion) => ({
+              ...suggestion,
+              profile: formatAudienceProfile(suggestion.profile),
+            })),
+          };
+        })(),
+      });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'audience' && segments[1] === 'review') {
+      const review = await reviewAudienceFollowing();
+      return sendSuccess({
+        ...review,
+        suggestions: (review.suggestions || []).map((suggestion) => ({
+          ...suggestion,
+          profile: formatAudienceProfile(suggestion.profile),
+        })),
       });
     }
 
