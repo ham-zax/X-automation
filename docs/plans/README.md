@@ -35,6 +35,9 @@ AI Runtime & Provider Layer (cross-cutting Phase-6 prerequisite)
    |
    v
 Phase 6   AI Editorial Director
+   |
+   v
+Viral Style Research (observational research subsystem)
 ```
 
 ## Phase 1A — implemented
@@ -236,6 +239,23 @@ Depends on:
 - Phase 5 accepted learned rules.
 
 Phase 6 remains advisory: it may recommend Prepare / Research More / Skip and a format, but it cannot approve, schedule, publish, send, complete a repost, or accept learned rules.
+
+## Viral Style Research — implemented observational subsystem
+
+[`VIRAL_STYLE_RESEARCH.md`](VIRAL_STYLE_RESEARCH.md)
+
+Owns:
+
+- read-only discovery of high-signal X posts in the AI/developer niche;
+- exact post/profile enrichment with observed views/likes/reposts/replies/bookmarks/follower counts;
+- matched same-author control sampling when available;
+- best-effort thread reconstruction;
+- append-only longitudinal post/author snapshots;
+- deterministic hook/style/format/timing features;
+- local gitignored JSONL plus CSV/summary exports;
+- follower-normalized and same-author comparisons that remain observational rather than causal.
+
+The subsystem does not automatically change Editorial Director ordering, writer prompts, learned rules, approval, or publication authority. Any later promotion of an observed style into product guidance requires repeated evidence and explicit review.
 
 ## Cross-cutting source-of-truth docs
 

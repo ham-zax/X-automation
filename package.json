@@ -13,6 +13,10 @@
     "audience:sync": "node audience.js",
     "automation": "node automation.js",
     "automation:once": "node automation.js --once",
+    "viral:collect": "node viral_style_research.js collect",
+    "viral:snapshot": "node viral_style_research.js snapshot",
+    "viral:export": "node viral_style_research.js export",
+    "viral:inspect": "node viral_style_research.js inspect",
     "ui:build": "cd ui && npm run build && cd .. && tailwindcss -i ./dashboard.tailwind.css -o ./dashboard.tailwind.generated.css --minify"
   },
   "keywords": [],

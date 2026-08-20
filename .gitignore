@@ -4,5 +4,6 @@ node_modules/
 .automation-state.json
 .interesting-posts.json
 .x-research.sqlite*
+.viral-style-research/
 .DS_Store
 dashboard.tailwind.generated.css
