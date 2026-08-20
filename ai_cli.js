@@ -263,7 +263,7 @@ async function withOpenCode(profile, timeoutMs, callback) {
 
 async function openCodeCatalog(profile, { timeoutMs = 15_000 } = {}) {
   return withOpenCode({ ...profile, model: 'catalog/placeholder', runtimeProfile: '' }, timeoutMs, async (client, _parsed, signal) => {
-    const response = await client.config.providers({ signal });
+    const response = await client.config.providers({}, { signal });
     if (response.error) throw openCodeFailure(response.error, 'OpenCode model catalog is unavailable.');
     const providers = Array.isArray(response.data?.providers) ? response.data.providers : [];
     const models = [];
@@ -292,27 +292,33 @@ async function openCodeCatalog(profile, { timeoutMs = 15_000 } = {}) {
 
 async function runOpenCodeStructuredAI(profile, { prompt, schema, timeoutMs }) {
   return withOpenCode(profile, timeoutMs, async (client, parsed, signal) => {
-    const sessionResponse = await client.session.create({ body: { title: 'X structured AI runtime' }, signal });
+    const sessionResponse = await client.session.create({ title: 'X structured AI runtime' }, { signal });
     if (sessionResponse.error || !sessionResponse.data?.id) {
       throw openCodeFailure(sessionResponse.error, 'OpenCode could not create a structured session.');
     }
     const sessionID = sessionResponse.data.id;
     try {
-      const body = {
+      const request = {
+        sessionID,
         model: { providerID: parsed.providerID, modelID: parsed.modelID },
         parts: [{ type: 'text', text: prompt }],
         format: { type: 'json_schema', schema, retryCount: 1 },
       };
-      if (parsed.variant) body.variant = parsed.variant;
-      const response = await client.session.prompt({ path: { sessionID }, body, signal });
+      if (parsed.variant) request.variant = parsed.variant;
+      const response = await client.session.prompt(request, { signal });
       if (response.error) throw openCodeFailure(response.error);
       const info = response.data?.info;
-      if (info?.error) throw openCodeFailure(info.error);
-      if (!info || info.structured == null) {
+      const textFallback = Array.isArray(response.data?.parts)
+        ? response.data.parts.filter((part) => part?.type === 'text').map((part) => String(part.text || '')).join('\n').trim()
+        : '';
+      const structuredFallback = info?.error?.name === 'StructuredOutputError' && textFallback;
+      if (info?.error && !structuredFallback) throw openCodeFailure(info.error);
+      if (!info || (info.structured == null && !structuredFallback)) {
         throw new AiCliError('invalid_structured_output', 'OpenCode did not produce structured JSON output.', { fallbackEligible: true });
       }
+      const outputText = info.structured != null ? JSON.stringify(info.structured) : textFallback;
       return {
-        text: JSON.stringify(info.structured),
+        text: outputText,
         runtime: 'opencode',
         provider: info.providerID || parsed.providerID,
         model: info.modelID ? `${info.providerID || parsed.providerID}/${info.modelID}` : profile.model,
@@ -320,10 +326,10 @@ async function runOpenCodeStructuredAI(profile, { prompt, schema, timeoutMs }) {
         inputTokens: finiteOrNull(info.tokens?.input),
         outputTokens: finiteOrNull(info.tokens?.output),
         costUsd: finiteOrNull(info.cost),
-        nativeStructuredOutput: true,
+        nativeStructuredOutput: info.structured != null,
         metadata: {
           protocol: 'runtime_native',
-          structuredOutput: 'runtime_schema',
+          structuredOutput: info.structured != null ? 'runtime_schema' : 'validated_json_fallback',
           sessionId: sessionID,
           reasoningTokens: finiteOrNull(info.tokens?.reasoning),
           cacheReadTokens: finiteOrNull(info.tokens?.cache?.read),
@@ -331,19 +337,21 @@ async function runOpenCodeStructuredAI(profile, { prompt, schema, timeoutMs }) {
         },
       };
     } finally {
-      await client.session.delete({ path: { sessionID }, signal }).catch(() => {});
+      await client.session.delete({ sessionID }, { signal }).catch(() => {});
     }
   });
 }
 
-function parseAgyJson(stdout, label) {
+function parseAgyJson(stdout, label, { acceptStructuredOutput = false } = {}) {
   let body;
   try {
     body = JSON.parse(String(stdout || '').trim());
   } catch {
     throw new AiCliError('invalid_structured_output', `AGY ${label} did not return valid JSON.`, { fallbackEligible: true });
   }
-  if (body?.status !== 'SUCCESS') throw classifyCliFailure(body?.error || body?.response || 'AGY command failed.');
+  if (body?.status !== 'SUCCESS' && !(acceptStructuredOutput && body?.structured_output != null)) {
+    throw classifyCliFailure(body?.error || body?.response || 'AGY command failed.');
+  }
   return body;
 }
 
@@ -364,12 +372,13 @@ async function runAgyStructuredAI(profile, { prompt, schema, timeoutMs }) {
     if (profile.reasoning) args.push('--effort', reasoning);
     args.push('--print', prompt);
     const { stdout } = await runProcess('agy', args, { timeoutMs, maxOutputChars: 2_000_000, cwd: dir });
-    const body = parseAgyJson(stdout, 'structured execution');
-    if (body.response == null || body.response === '') {
+    const body = parseAgyJson(stdout, 'structured execution', { acceptStructuredOutput: true });
+    const structured = body.structured_output ?? body.response;
+    if (structured == null || structured === '') {
       throw new AiCliError('invalid_structured_output', 'AGY did not produce a structured response.', { fallbackEligible: true });
     }
     return {
-      text: typeof body.response === 'string' ? body.response : JSON.stringify(body.response),
+      text: typeof structured === 'string' ? structured : JSON.stringify(structured),
       runtime: 'agy',
       provider: 'runtime_managed',
       model: profile.model,
@@ -384,6 +393,8 @@ async function runAgyStructuredAI(profile, { prompt, schema, timeoutMs }) {
         conversationId: String(body.conversation_id || '') || null,
         durationSeconds: finiteOrNull(body.duration_seconds),
         numTurns: finiteOrNull(body.num_turns),
+        agyStatus: String(body.status || '') || null,
+        agyError: String(body.error || '') || null,
         thinkingTokens: finiteOrNull(body.usage?.thinking_tokens),
         cacheReadTokens: finiteOrNull(body.usage?.cache_read_tokens),
       },
