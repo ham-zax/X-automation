@@ -30,7 +30,15 @@ import {
   reviewLearnedRules,
   transitionLearnedRule,
 } from './learning.js';
-import { classifyAudienceProfile, getActiveNicheProfile, getDefaultNicheProfile, setActiveNicheProfile } from './strategy.js';
+import {
+  CANDIDATE_CLASSIFIER_VERSION,
+  GROWTH_FOCUS_OBJECTIVES,
+  classifyAudienceProfile,
+  classifyCandidateForGrowth,
+  getActiveNicheProfile,
+  getDefaultNicheProfile,
+  setActiveNicheProfile,
+} from './strategy.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,6 +89,9 @@ db.exec(`
     niche_score REAL NOT NULL DEFAULT 0,
     niche_tags TEXT NOT NULL DEFAULT '[]',
     matched_keywords TEXT NOT NULL DEFAULT '[]',
+    niche_profile_revision INTEGER,
+    niche_classifier_version INTEGER,
+    niche_classified_at INTEGER,
     metrics_json TEXT NOT NULL DEFAULT '{}',
     published_at INTEGER,
     viral_score REAL,
@@ -243,6 +254,7 @@ db.exec(`
     contribution_summary TEXT NOT NULL DEFAULT '',
     reply_archetype TEXT NOT NULL DEFAULT '',
     engagement_json TEXT NOT NULL DEFAULT '{}',
+    relevance_json TEXT NOT NULL DEFAULT '{}',
     approved_text TEXT,
     output_tweet_id TEXT,
     output_url TEXT,
@@ -275,11 +287,13 @@ db.exec(`
     likes INTEGER NOT NULL DEFAULT 0,
     reposts INTEGER NOT NULL DEFAULT 0,
     replies INTEGER NOT NULL DEFAULT 0,
+    bookmarks INTEGER,
     followers INTEGER NOT NULL DEFAULT 0,
     follower_delta INTEGER NOT NULL DEFAULT 0,
     follows_per_1000_views REAL,
     replies_per_1000_views REAL,
     reposts_per_1000_views REAL,
+    bookmarks_per_1000_views REAL,
     visible_engagement_per_1000_views REAL,
     views_per_hour REAL,
     attribution_confidence TEXT NOT NULL DEFAULT 'unknown',
@@ -325,6 +339,39 @@ db.exec(`
     accepted_at INTEGER,
     retired_at INTEGER,
     UNIQUE(scope, key)
+  );
+
+  CREATE TABLE IF NOT EXISTS content_style_labels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_item_id INTEGER NOT NULL,
+    content_hash TEXT NOT NULL,
+    taxonomy_version INTEGER NOT NULL,
+    primary_intent TEXT NOT NULL,
+    semantic_style TEXT NOT NULL,
+    audience_goal TEXT NOT NULL,
+    reader_action TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    evidence_spans_json TEXT NOT NULL DEFAULT '[]',
+    ai_execution_json TEXT NOT NULL DEFAULT '{}',
+    classified_at INTEGER NOT NULL,
+    UNIQUE(queue_item_id, content_hash, taxonomy_version),
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS writing_strategy_selections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_item_id INTEGER NOT NULL,
+    draft_id INTEGER,
+    mode TEXT NOT NULL,
+    intent TEXT,
+    style TEXT,
+    opening_features_json TEXT NOT NULL DEFAULT '[]',
+    guidance_json TEXT NOT NULL DEFAULT '{}',
+    selection_source TEXT NOT NULL,
+    selected_by TEXT NOT NULL,
+    selected_at INTEGER NOT NULL,
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id),
+    FOREIGN KEY(draft_id) REFERENCES drafts(id)
   );
 
   CREATE TABLE IF NOT EXISTS ai_profiles (
@@ -533,6 +580,15 @@ db.exec(`
     );
 `);
 
+const candidateColumns = new Set(db.prepare('PRAGMA table_info(candidates)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['niche_profile_revision', 'ALTER TABLE candidates ADD COLUMN niche_profile_revision INTEGER'],
+  ['niche_classifier_version', 'ALTER TABLE candidates ADD COLUMN niche_classifier_version INTEGER'],
+  ['niche_classified_at', 'ALTER TABLE candidates ADD COLUMN niche_classified_at INTEGER'],
+]) {
+  if (!candidateColumns.has(name)) db.exec(sql);
+}
+
 const draftColumns = new Set(db.prepare('PRAGMA table_info(drafts)').all().map((row) => row.name));
 for (const [name, sql] of [
   ['thread_parts_json', "ALTER TABLE drafts ADD COLUMN thread_parts_json TEXT NOT NULL DEFAULT '[]'"],
@@ -560,6 +616,7 @@ for (const [name, sql] of [
   ['contribution_summary', "ALTER TABLE queue_items ADD COLUMN contribution_summary TEXT NOT NULL DEFAULT ''"],
   ['reply_archetype', "ALTER TABLE queue_items ADD COLUMN reply_archetype TEXT NOT NULL DEFAULT ''"],
   ['engagement_json', "ALTER TABLE queue_items ADD COLUMN engagement_json TEXT NOT NULL DEFAULT '{}'"],
+  ['relevance_json', "ALTER TABLE queue_items ADD COLUMN relevance_json TEXT NOT NULL DEFAULT '{}'"],
   ['approved_text', 'ALTER TABLE queue_items ADD COLUMN approved_text TEXT'],
   ['output_tweet_id', 'ALTER TABLE queue_items ADD COLUMN output_tweet_id TEXT'],
   ['output_url', 'ALTER TABLE queue_items ADD COLUMN output_url TEXT'],
@@ -577,6 +634,14 @@ for (const [name, sql] of [
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
+const publicationMeasurementColumns = new Set(db.prepare('PRAGMA table_info(publication_measurements)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['bookmarks', 'ALTER TABLE publication_measurements ADD COLUMN bookmarks INTEGER'],
+  ['bookmarks_per_1000_views', 'ALTER TABLE publication_measurements ADD COLUMN bookmarks_per_1000_views REAL'],
+]) {
+  if (!publicationMeasurementColumns.has(name)) db.exec(sql);
+}
+
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_priority ON queue_items(lane, status, priority DESC, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_source ON queue_items(target_tweet_id, engagement_kind, updated_at DESC);
@@ -585,6 +650,7 @@ db.exec(`
 `);
 
 const NICHE_PROFILE_STATE_KEY = 'niche_profile:v1';
+const NICHE_PROFILE_REVISION_STATE_KEY = 'niche_profile_revision:v1';
 const storedNicheProfile = db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_STATE_KEY)?.value;
 if (storedNicheProfile) {
   try {
@@ -593,6 +659,20 @@ if (storedNicheProfile) {
   } catch {
     setActiveNicheProfile(getDefaultNicheProfile());
   }
+}
+if (!db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_REVISION_STATE_KEY)) {
+  db.prepare('INSERT INTO app_state(key, value) VALUES (?, ?)').run(NICHE_PROFILE_REVISION_STATE_KEY, '1');
+}
+
+export function getNicheProfileRevision() {
+  return Math.max(1, Number(db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_REVISION_STATE_KEY)?.value || 1));
+}
+
+function bumpNicheProfileRevision() {
+  const revision = getNicheProfileRevision() + 1;
+  db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(NICHE_PROFILE_REVISION_STATE_KEY, String(revision));
+  return revision;
 }
 
 function json(value, fallback) {
@@ -610,10 +690,21 @@ export function candidateKey(candidate) {
 function decodeCandidate(row) {
   if (!row) return null;
   const metrics = json(row.metrics_json, {});
+  const profileRevision = row.niche_profile_revision == null ? null : Number(row.niche_profile_revision);
+  const classifierVersion = row.niche_classifier_version == null ? null : Number(row.niche_classifier_version);
+  const classifiedAt = row.niche_classified_at == null ? null : Number(row.niche_classified_at);
+  const classificationKnown = profileRevision != null && classifierVersion != null && classifiedAt != null;
+  const classificationCurrent = classificationKnown
+    && profileRevision === getNicheProfileRevision()
+    && classifierVersion === CANDIDATE_CLASSIFIER_VERSION;
   const niche = {
-    score: Number(row.niche_score || 0),
+    score: classificationCurrent ? Number(row.niche_score || 0) : null,
     tags: json(row.niche_tags, []),
     matches: json(row.matched_keywords, []),
+    profileRevision,
+    classifierVersion,
+    classifiedAt,
+    status: classificationCurrent ? 'current' : classificationKnown ? 'stale' : 'unclassified',
   };
   const viral = row.viral_score == null ? null : {
     score: Number(row.viral_score),
@@ -642,9 +733,10 @@ function decodeCandidate(row) {
 const upsertCandidateStatement = db.prepare(`
   INSERT INTO candidates (
     key, source, title, text, url, score, niche_score, niche_tags, matched_keywords,
+    niche_profile_revision, niche_classifier_version, niche_classified_at,
     metrics_json, published_at, viral_score, viral_tier, views_per_hour,
     engagements_per_hour, saved, discovered_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ON CONFLICT(key) DO UPDATE SET
     source = excluded.source,
     title = excluded.title,
@@ -652,8 +744,11 @@ const upsertCandidateStatement = db.prepare(`
     url = excluded.url,
     score = excluded.score,
     niche_score = excluded.niche_score,
-    niche_tags = CASE WHEN excluded.niche_tags <> '[]' THEN excluded.niche_tags ELSE candidates.niche_tags END,
-    matched_keywords = CASE WHEN excluded.matched_keywords <> '[]' THEN excluded.matched_keywords ELSE candidates.matched_keywords END,
+    niche_tags = excluded.niche_tags,
+    matched_keywords = excluded.matched_keywords,
+    niche_profile_revision = excluded.niche_profile_revision,
+    niche_classifier_version = excluded.niche_classifier_version,
+    niche_classified_at = excluded.niche_classified_at,
     metrics_json = excluded.metrics_json,
     published_at = COALESCE(excluded.published_at, candidates.published_at),
     viral_score = COALESCE(excluded.viral_score, candidates.viral_score),
@@ -666,29 +761,34 @@ const upsertCandidateStatement = db.prepare(`
 
 export function upsertCandidates(candidates = [], { saved = false } = {}) {
   const now = Date.now();
+  const profileRevision = getNicheProfileRevision();
   db.exec('BEGIN');
   try {
     for (const candidate of candidates) {
       const key = candidateKey(candidate);
       if (!key) continue;
+      const classified = classifyCandidateForGrowth(candidate, { profileRevision, classifiedAt: now });
       upsertCandidateStatement.run(
         key,
-        candidate.source || 'unknown',
-        candidate.title || '',
-        candidate.text || '',
-        candidate.url || key,
-        Number(candidate.score || 0),
-        Number(candidate.niche?.score || 0),
-        JSON.stringify(candidate.niche?.tags || []),
-        JSON.stringify(candidate.niche?.matches || []),
-        JSON.stringify(candidate.metrics || {}),
-        Number(candidate.timestamp || 0) || null,
-        candidate.viral ? Number(candidate.viral.score ?? candidate.score ?? 0) : null,
-        candidate.viral?.tier || null,
-        candidate.viral ? Number(candidate.viral.viewsPerHour || 0) : null,
-        candidate.viral ? Number(candidate.viral.engagementsPerHour || 0) : null,
-        saved || candidate.saved ? 1 : 0,
-        Number(candidate.discoveredAt || now),
+        classified.source || 'unknown',
+        classified.title || '',
+        classified.text || '',
+        classified.url || key,
+        Number(classified.score || 0),
+        Number(classified.niche.score || 0),
+        JSON.stringify(classified.niche.tags || []),
+        JSON.stringify(classified.niche.matches || []),
+        classified.niche.profileRevision,
+        classified.niche.classifierVersion,
+        classified.niche.classifiedAt,
+        JSON.stringify(classified.metrics || {}),
+        Number(classified.timestamp || 0) || null,
+        classified.viral ? Number(classified.viral.score ?? classified.score ?? 0) : null,
+        classified.viral?.tier || null,
+        classified.viral ? Number(classified.viral.viewsPerHour || 0) : null,
+        classified.viral ? Number(classified.viral.engagementsPerHour || 0) : null,
+        saved || classified.saved ? 1 : 0,
+        Number(classified.discoveredAt || now),
         now,
       );
     }
@@ -698,6 +798,73 @@ export function upsertCandidates(candidates = [], { saved = false } = {}) {
     throw error;
   }
 }
+
+const rescoreCandidateStatement = db.prepare(`UPDATE candidates SET
+  niche_score = ?, niche_tags = ?, matched_keywords = ?,
+  niche_profile_revision = ?, niche_classifier_version = ?, niche_classified_at = ?
+  WHERE key = ?`);
+
+export function rescoreCandidateClassifications({ staleOnly = false } = {}) {
+  const profileRevision = getNicheProfileRevision();
+  const classifiedAt = Date.now();
+  const rows = staleOnly
+    ? db.prepare(`SELECT * FROM candidates
+        WHERE niche_profile_revision IS NULL
+          OR niche_classifier_version IS NULL
+          OR niche_classified_at IS NULL
+          OR niche_profile_revision <> ?
+          OR niche_classifier_version <> ?`).all(profileRevision, CANDIDATE_CLASSIFIER_VERSION)
+    : db.prepare('SELECT * FROM candidates').all();
+
+  if (rows.length) {
+    db.exec('BEGIN');
+    try {
+      for (const row of rows) {
+        const classified = classifyCandidateForGrowth({
+          key: row.key,
+          source: row.source,
+          title: row.title,
+          text: row.text,
+          url: row.url,
+          niche: {
+            tags: json(row.niche_tags, []),
+            matches: json(row.matched_keywords, []),
+          },
+        }, { profileRevision, classifiedAt });
+        rescoreCandidateStatement.run(
+          Number(classified.niche.score || 0),
+          JSON.stringify(classified.niche.tags || []),
+          JSON.stringify(classified.niche.matches || []),
+          classified.niche.profileRevision,
+          classified.niche.classifierVersion,
+          classified.niche.classifiedAt,
+          row.key,
+        );
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  const summary = db.prepare(`SELECT
+    COUNT(*) AS total,
+    SUM(CASE WHEN niche_profile_revision = ? AND niche_classifier_version = ? AND niche_classified_at IS NOT NULL THEN 1 ELSE 0 END) AS current_count,
+    SUM(CASE WHEN niche_profile_revision = ? AND niche_classifier_version = ? AND niche_classified_at IS NOT NULL AND niche_score = 0 THEN 1 ELSE 0 END) AS current_zero_count
+    FROM candidates`).get(profileRevision, CANDIDATE_CLASSIFIER_VERSION, profileRevision, CANDIDATE_CLASSIFIER_VERSION);
+  return {
+    totalCandidates: Number(summary.total || 0),
+    rescored: rows.length,
+    current: Number(summary.current_count || 0),
+    currentZeroScore: Number(summary.current_zero_count || 0),
+    profileRevision,
+    classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
+    classifiedAt,
+  };
+}
+
+rescoreCandidateClassifications({ staleOnly: true });
 
 export function getCandidate(key) {
   return decodeCandidate(db.prepare('SELECT * FROM candidates WHERE key = ?').get(key));
@@ -786,6 +953,7 @@ function decodeQueueItem(row) {
     contributionSummary: row.contribution_summary || '',
     replyArchetype: row.reply_archetype || '',
     engagement: json(row.engagement_json, {}),
+    relevance: json(row.relevance_json, {}),
     approvedText: row.approved_text,
     outputTweetId: row.output_tweet_id,
     outputUrl: row.output_url,
@@ -859,7 +1027,7 @@ export function saveQueueItem(item) {
     recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?,
     target_username = ?, target_tweet_id = ?, engagement_kind = ?, parent_our_tweet_id = ?,
     priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
-    engagement_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
+    engagement_json = ?, relevance_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
     schedule_urgency = ?, scheduled_at = ?, schedule_source = ?, publish_started_at = ?,
     publish_error = ?, published_at = ?, measurement_baseline_at = ?, measurement_baseline_followers = ?,
     experiment_variant_id = ?, experiment_assigned_at = ?,
@@ -886,6 +1054,7 @@ export function saveQueueItem(item) {
     next.contributionSummary || '',
     next.replyArchetype || '',
     JSON.stringify(next.engagement || {}),
+    JSON.stringify(next.relevance || {}),
     next.approvedText ?? null,
     next.outputTweetId ?? null,
     next.outputUrl ?? null,
@@ -1013,6 +1182,7 @@ export function listPublishedMainFeedContent({ limit = 30 } = {}) {
     const threadParts = json(row.draft_thread_parts_json, []);
     const editor = json(row.draft_editor_json, {});
     return {
+      queueItemId: Number(row.id),
       candidateKey: row.candidate_key,
       pipeline: row.pipeline,
       status: 'published',
@@ -1040,6 +1210,7 @@ export function listPublishedMainFeedContent({ limit = 30 } = {}) {
     const editor = json(row.editor_json, {});
     const pipeline = queueItem?.pipeline && ['original', 'quote', 'thread'].includes(queueItem.pipeline) ? queueItem.pipeline : 'original';
     published.push({
+      queueItemId: queueItem?.id ?? null,
       candidateKey: row.candidate_key,
       pipeline,
       status: 'published',
@@ -1056,6 +1227,130 @@ export function listPublishedMainFeedContent({ limit = 30 } = {}) {
     seen.add(row.candidate_key);
   }
   return published.sort((a, b) => b.publishedAt - a.publishedAt).slice(0, bounded);
+}
+
+function decodeContentStyleLabel(row) {
+  return row ? {
+    id: Number(row.id),
+    queueItemId: Number(row.queue_item_id),
+    contentHash: row.content_hash,
+    taxonomyVersion: Number(row.taxonomy_version),
+    primaryIntent: row.primary_intent,
+    semanticStyle: row.semantic_style,
+    audienceGoal: row.audience_goal,
+    readerAction: row.reader_action,
+    confidence: Number(row.confidence),
+    evidenceSpans: json(row.evidence_spans_json, []),
+    aiExecution: json(row.ai_execution_json, {}),
+    classifiedAt: Number(row.classified_at),
+  } : null;
+}
+
+export function getContentStyleLabel(queueItemId, contentHash, taxonomyVersion) {
+  return decodeContentStyleLabel(db.prepare(`SELECT * FROM content_style_labels
+    WHERE queue_item_id = ? AND content_hash = ? AND taxonomy_version = ?`).get(
+    Number(queueItemId), String(contentHash || ''), Number(taxonomyVersion),
+  ));
+}
+
+export function listContentStyleLabels({ queueItemId = null, taxonomyVersion = null, limit = 500 } = {}) {
+  const where = [];
+  const params = [];
+  if (queueItemId != null) { where.push('queue_item_id = ?'); params.push(Number(queueItemId)); }
+  if (taxonomyVersion != null) { where.push('taxonomy_version = ?'); params.push(Number(taxonomyVersion)); }
+  params.push(Math.max(1, Math.min(2000, Number(limit || 500))));
+  return db.prepare(`SELECT * FROM content_style_labels ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY classified_at DESC, id DESC LIMIT ?`).all(...params).map(decodeContentStyleLabel);
+}
+
+export function saveContentStyleLabel(input = {}) {
+  const queueItem = getQueueItem(Number(input.queueItemId));
+  if (!queueItem) throw new Error(`Queue item not found: ${input.queueItemId}`);
+  const contentHash = String(input.contentHash || '').trim();
+  const taxonomyVersion = Number(input.taxonomyVersion);
+  const primaryIntent = String(input.primaryIntent || '').trim();
+  const semanticStyle = String(input.semanticStyle || '').trim();
+  const audienceGoal = String(input.audienceGoal || '').trim();
+  const readerAction = String(input.readerAction || '').trim();
+  const confidence = Number(input.confidence);
+  const classifiedAt = Number(input.classifiedAt || Date.now());
+  if (!contentHash) throw new Error('Content style label requires contentHash.');
+  if (!Number.isInteger(taxonomyVersion) || taxonomyVersion < 1) throw new Error('Content style label requires a positive taxonomyVersion.');
+  if (!primaryIntent || !semanticStyle || !audienceGoal || !readerAction) throw new Error('Content style label requires canonical intent/style/audience/action labels.');
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error('Content style label confidence must be between 0 and 1.');
+  if (!Number.isFinite(classifiedAt) || classifiedAt <= 0) throw new Error('Content style label classifiedAt must be a positive timestamp.');
+  db.prepare(`INSERT INTO content_style_labels(
+    queue_item_id, content_hash, taxonomy_version, primary_intent, semantic_style,
+    audience_goal, reader_action, confidence, evidence_spans_json, ai_execution_json, classified_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(queue_item_id, content_hash, taxonomy_version) DO NOTHING`).run(
+    queueItem.id, contentHash, taxonomyVersion, primaryIntent, semanticStyle,
+    audienceGoal, readerAction, confidence, JSON.stringify(input.evidenceSpans || []),
+    JSON.stringify(input.aiExecution || {}), classifiedAt,
+  );
+  return getContentStyleLabel(queueItem.id, contentHash, taxonomyVersion);
+}
+
+const WRITING_STRATEGY_MODES = new Set(['off', 'suggest', 'apply']);
+const WRITING_STRATEGY_SOURCES = new Set(['recommended', 'manual']);
+
+function decodeWritingStrategySelection(row) {
+  return row ? {
+    id: Number(row.id),
+    queueItemId: Number(row.queue_item_id),
+    draftId: row.draft_id == null ? null : Number(row.draft_id),
+    mode: row.mode,
+    intent: row.intent || null,
+    style: row.style || null,
+    openingFeatures: json(row.opening_features_json, []),
+    guidance: json(row.guidance_json, {}),
+    selectionSource: row.selection_source,
+    selectedBy: row.selected_by,
+    selectedAt: Number(row.selected_at),
+  } : null;
+}
+
+export function getWritingStrategySelection(id) {
+  return decodeWritingStrategySelection(db.prepare('SELECT * FROM writing_strategy_selections WHERE id = ?').get(Number(id)));
+}
+
+export function getLatestWritingStrategySelectionForQueueItem(queueItemId) {
+  return decodeWritingStrategySelection(db.prepare(`SELECT * FROM writing_strategy_selections
+    WHERE queue_item_id = ? AND selected_by = 'human' ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
+}
+
+export function getWritingStrategySelectionForQueueItemAt(queueItemId, selectedAt) {
+  const timestamp = Number(selectedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Writing strategy selection lookup requires a positive timestamp.');
+  return decodeWritingStrategySelection(db.prepare(`SELECT * FROM writing_strategy_selections
+    WHERE queue_item_id = ? AND selected_by = 'human' AND selected_at <= ? ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId), timestamp));
+}
+
+export function recordWritingStrategySelection(input = {}) {
+  const queueItem = getQueueItem(Number(input.queueItemId));
+  if (!queueItem) throw new Error(`Queue item not found: ${input.queueItemId}`);
+  const draftId = input.draftId == null ? null : Number(input.draftId);
+  if (draftId != null) {
+    const draft = getDraft(draftId);
+    if (!draft || draft.candidateKey !== queueItem.candidateKey) throw new Error('Writing strategy draftId must belong to the queue item candidate.');
+  }
+  const mode = String(input.mode || '');
+  const selectionSource = String(input.selectionSource || '');
+  const selectedBy = String(input.selectedBy || '');
+  const selectedAt = Number(input.selectedAt || Date.now());
+  if (!WRITING_STRATEGY_MODES.has(mode)) throw new Error(`Unsupported writing strategy mode: ${mode || 'missing'}.`);
+  if (!WRITING_STRATEGY_SOURCES.has(selectionSource)) throw new Error(`Unsupported writing strategy selection source: ${selectionSource || 'missing'}.`);
+  if (selectedBy !== 'human') throw new Error('Writing strategy selection requires selectedBy=human.');
+  if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new Error('Writing strategy selectedAt must be a positive timestamp.');
+  const inserted = db.prepare(`INSERT INTO writing_strategy_selections(
+    queue_item_id, draft_id, mode, intent, style, opening_features_json,
+    guidance_json, selection_source, selected_by, selected_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    queueItem.id, draftId, mode, input.intent == null ? null : String(input.intent),
+    input.style == null ? null : String(input.style), JSON.stringify(input.openingFeatures || []),
+    JSON.stringify(input.guidance || {}), selectionSource, selectedBy, selectedAt,
+  );
+  return getWritingStrategySelection(Number(inserted.lastInsertRowid));
 }
 
 export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human' } = {}) {
@@ -1978,11 +2273,13 @@ function decodePublicationMeasurement(row) {
     likes: Number(row.likes || 0),
     reposts: Number(row.reposts || 0),
     replies: Number(row.replies || 0),
+    bookmarks: row.bookmarks == null ? null : Number(row.bookmarks),
     followers: Number(row.followers || 0),
     followerDelta: Number(row.follower_delta || 0),
     associatedFollowsPer1000Views: row.follows_per_1000_views == null ? null : Number(row.follows_per_1000_views),
     repliesPer1000Views: row.replies_per_1000_views == null ? null : Number(row.replies_per_1000_views),
     repostsPer1000Views: row.reposts_per_1000_views == null ? null : Number(row.reposts_per_1000_views),
+    bookmarksPer1000Views: row.bookmarks_per_1000_views == null ? null : Number(row.bookmarks_per_1000_views),
     visibleEngagementPer1000Views: row.visible_engagement_per_1000_views == null ? null : Number(row.visible_engagement_per_1000_views),
     viewsPerHour: row.views_per_hour == null ? null : Number(row.views_per_hour),
     attributionConfidence: row.attribution_confidence || 'unknown',
@@ -2095,6 +2392,103 @@ export function getPublicationEditorialProvenance(queueItemId) {
   return { ...provenance, learningContext: editorialLearningContext(provenance) };
 }
 
+function publicationWriterGeneration(draft, publishedAt) {
+  const editor = draft?.editor && typeof draft.editor === 'object' ? draft.editor : {};
+  const history = Array.isArray(editor.generationHistory) ? editor.generationHistory : [];
+  const candidates = [...history, editor.generation]
+    .filter((entry) => entry && typeof entry === 'object')
+    .map((entry) => ({
+      entry,
+      timestamp: numericOrNull(entry.generatedAt ?? entry.generationPreparedAt),
+    }))
+    .filter(({ timestamp }) => timestamp != null && timestamp <= Number(publishedAt))
+    .sort((left, right) => left.timestamp - right.timestamp);
+  return candidates.at(-1)?.entry || null;
+}
+
+function compactGrowthFocusSnapshot(context) {
+  const growthFit = context?.growthFit;
+  if (!growthFit || typeof growthFit !== 'object') return null;
+  return {
+    state: growthFit.state ?? null,
+    allowed: growthFit.allowed === true,
+    objective: growthFit.objective ?? context?.objective ?? null,
+    profileRevision: growthFit.profileRevision ?? null,
+  };
+}
+
+function compactClassificationSnapshot(context) {
+  const classification = context?.classification;
+  if (!classification || typeof classification !== 'object') return null;
+  return {
+    status: classification.status ?? null,
+    profileRevision: classification.profileRevision ?? null,
+    classifierVersion: classification.classifierVersion ?? null,
+    classifiedAt: classification.classifiedAt ?? null,
+  };
+}
+
+export function getPublicationWritingStrategyProvenance(queueItemId) {
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem?.publishedAt) return null;
+
+  const selection = getWritingStrategySelectionForQueueItemAt(queueItem.id, queueItem.publishedAt);
+  const draft = queueItem.draftId == null ? null : getDraft(queueItem.draftId);
+  const generation = publicationWriterGeneration(draft, queueItem.publishedAt);
+  const publicationSnapshot = selection?.guidance && typeof selection.guidance === 'object' ? selection.guidance : null;
+  const generationSnapshot = generation?.strategySnapshot && typeof generation.strategySnapshot === 'object'
+    ? generation.strategySnapshot
+    : null;
+  const historicalContext = publicationSnapshot?.context || generationSnapshot?.context || null;
+  const editorial = getPublicationEditorialProvenance(queueItem.id);
+
+  return {
+    version: 1,
+    publicationSelection: {
+      state: selection ? 'selected' : 'none',
+      selectionId: selection?.id ?? null,
+      selectedAt: selection?.selectedAt ?? null,
+      mode: selection?.mode ?? null,
+      selectionSource: selection?.selectionSource ?? 'none',
+      intent: selection?.intent ?? null,
+      style: selection?.style ?? null,
+      openingFeatures: [...(selection?.openingFeatures || [])],
+      guidanceSnapshot: publicationSnapshot,
+    },
+    generation: generation ? {
+      state: 'recorded',
+      generatedAt: generation.generatedAt ?? null,
+      generationPreparedAt: generation.generationPreparedAt ?? null,
+      strategySelectionId: generation.strategySelectionId ?? null,
+      strategyMode: generation.strategyMode ?? null,
+      strategyApplied: generation.strategyApplied === true,
+      strategySnapshot: generationSnapshot,
+      writerExecutionSource: generation.writerExecutionSource ?? null,
+      writerAiExecution: generation.writerAiExecution ?? null,
+    } : {
+      state: 'not_recorded',
+      generatedAt: null,
+      generationPreparedAt: null,
+      strategySelectionId: null,
+      strategyMode: null,
+      strategyApplied: null,
+      strategySnapshot: null,
+      writerExecutionSource: null,
+      writerAiExecution: null,
+    },
+    editorialObjective: historicalContext?.objective ?? editorial?.objective ?? null,
+    finalPublishedPipeline: queueItem.pipeline || null,
+    growthFocus: compactGrowthFocusSnapshot(historicalContext),
+    candidateClassification: compactClassificationSnapshot(historicalContext),
+    limitations: [
+      'strategyApplied=true means the selected strategy was supplied to Writer generation; it does not prove the strategy caused publication performance.',
+      'Manual editing after generation is not quantified, so strategy provenance does not claim that every published word remained generated text.',
+      'Follower deltas and new-follower quality are period associations, not direct post attribution.',
+    ],
+    causalClaimAllowed: false,
+  };
+}
+
 export function listPublicationMeasurements({ windowMinutes = null, limit = 200 } = {}) {
   const bounded = Math.max(1, Math.min(2000, Number(limit || 200)));
   if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
@@ -2197,29 +2591,33 @@ export function recordPublicationMeasurement(measurement = {}) {
   const normalized = normalizeContentMeasurement({
     views: Number(measurement.views || 0), likes: Number(measurement.likes || 0),
     reposts: Number(measurement.reposts || 0), replies: Number(measurement.replies || 0),
+    bookmarks: measurement.bookmarks == null ? null : Number(measurement.bookmarks),
     followerDelta, capturedAt, publishedAt: queueItem.publishedAt, attribution: attributionInput,
   });
   const suppliedMetadata = { ...(measurement.metadata || {}) };
   delete suppliedMetadata.editorial;
+  delete suppliedMetadata.writingStrategy;
   const editorial = getPublicationEditorialProvenance(queueItem.id);
+  const writingStrategy = getPublicationWritingStrategyProvenance(queueItem.id);
   const metadata = {
     ...suppliedMetadata,
     attributionInput,
     associatedFollowerDelta: true,
     causalClaimAllowed: false,
     ...(editorial ? { editorial } : {}),
+    ...(writingStrategy ? { writingStrategy } : {}),
   };
   db.prepare(`INSERT OR IGNORE INTO publication_measurements(
     queue_item_id, tweet_id, window_minutes, baseline_at, baseline_followers, captured_at,
-    views, likes, reposts, replies, followers, follower_delta, follows_per_1000_views,
-    replies_per_1000_views, reposts_per_1000_views, visible_engagement_per_1000_views,
+    views, likes, reposts, replies, bookmarks, followers, follower_delta, follows_per_1000_views,
+    replies_per_1000_views, reposts_per_1000_views, bookmarks_per_1000_views, visible_engagement_per_1000_views,
     views_per_hour, attribution_confidence, metadata_json
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     queueItem.id, tweetId, windowMinutes, baselineAt, baselineFollowers, capturedAt,
-    normalized.raw.views, normalized.raw.likes, normalized.raw.reposts, normalized.raw.replies,
+    normalized.raw.views, normalized.raw.likes, normalized.raw.reposts, normalized.raw.replies, normalized.raw.bookmarks,
     followers, followerDelta, normalized.metrics.associated_follows_per_1000_views,
     normalized.metrics.replies_per_1000_views, normalized.metrics.reposts_per_1000_views,
-    normalized.metrics.visible_engagement_per_1000_views, normalized.metrics.views_per_hour,
+    normalized.metrics.bookmarks_per_1000_views, normalized.metrics.visible_engagement_per_1000_views, normalized.metrics.views_per_hour,
     normalized.attribution.confidence || 'unknown', JSON.stringify(metadata),
   );
   return decodePublicationMeasurement(db.prepare(`SELECT * FROM publication_measurements
@@ -2993,22 +3391,62 @@ export function getNicheProfile() {
     profile: getActiveNicheProfile(),
     customized: Boolean(stored),
     updatedAt,
+    revision: getNicheProfileRevision(),
+    classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
   };
 }
 
 export function saveNicheProfile(profile) {
   const normalized = setActiveNicheProfile(profile || {});
   const updatedAt = Date.now();
+  const revision = bumpNicheProfileRevision();
   db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
-    .run(NICHE_PROFILE_STATE_KEY, JSON.stringify({ profile: normalized, updatedAt }));
-  return { profile: normalized, customized: true, updatedAt };
+    .run(NICHE_PROFILE_STATE_KEY, JSON.stringify({ profile: normalized, revision, updatedAt }));
+  const classification = rescoreCandidateClassifications({ staleOnly: true });
+  return {
+    profile: normalized,
+    customized: true,
+    updatedAt,
+    revision,
+    classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
+    classification,
+  };
 }
 
 export function resetNicheProfile() {
   db.prepare('DELETE FROM app_state WHERE key = ?').run(NICHE_PROFILE_STATE_KEY);
   const profile = setActiveNicheProfile(getDefaultNicheProfile());
-  return { profile, customized: false, updatedAt: null };
+  const revision = bumpNicheProfileRevision();
+  const classification = rescoreCandidateClassifications({ staleOnly: true });
+  return {
+    profile,
+    customized: false,
+    updatedAt: null,
+    revision,
+    classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
+    classification,
+  };
+}
+
+export function saveGrowthFocusObjective(objective) {
+  const selectedObjective = String(objective || '');
+  if (!GROWTH_FOCUS_OBJECTIVES.includes(selectedObjective)) {
+    throw new Error(`Unsupported Growth Focus objective: ${selectedObjective || 'missing'}.`);
+  }
+  const profile = setActiveNicheProfile({ ...getActiveNicheProfile(), defaultObjective: selectedObjective });
+  const updatedAt = Date.now();
+  const revision = getNicheProfileRevision();
+  db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+    .run(NICHE_PROFILE_STATE_KEY, JSON.stringify({ profile, revision, updatedAt }));
+  return {
+    profile,
+    customized: true,
+    updatedAt,
+    revision,
+    classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
+  };
 }
 
 function requireSourceSnapshotKind(kind) {

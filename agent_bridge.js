@@ -17,6 +17,7 @@ import {
   inspectWorkflow,
   requestQueueReview,
   resolveEngagementItem,
+  rescoreCandidateRelevance,
   routeCandidate,
   saveCandidateToWorkflow,
   sendApprovedEngagementReply,
@@ -49,6 +50,7 @@ import {
   getNextReadyDraft,
   getMainFeedScheduleItem,
   getNewFollowerQuality,
+  getNicheProfile,
   getPublicationMeasurements,
   getPerformanceSnapshot,
   getQueueItem,
@@ -83,6 +85,15 @@ import {
   resolveAiProfileForRole,
 } from './store.js';
 import { listAiRuntimeAvailability } from './ai_runtime.js';
+import {
+  buildWritingStrategyGenerationProvenance,
+  classifyPublishedContent,
+  getWritingStrategyGenerationContext,
+  getWritingStrategyPreview,
+  recommendWritingStrategy,
+  selectWritingStrategy,
+  validateWritingStrategyGenerationContext,
+} from './writing_strategy.js';
 
 async function readInput() {
   let input = '';
@@ -219,8 +230,8 @@ function requireAssignableAiProfile(id, { confirmUnknownCapability = false } = {
   return profile;
 }
 
-function bridgeEditorialObjective(value = 'qualified_growth') {
-  const objective = String(value || 'qualified_growth');
+function bridgeEditorialObjective(value = null) {
+  const objective = String(value || getNicheProfile().profile.defaultObjective || 'qualified_growth');
   if (!EDITORIAL_OBJECTIVES.includes(objective)) throw new Error(`Unsupported editorial objective: ${objective}.`);
   return objective;
 }
@@ -246,7 +257,7 @@ function bridgeEditorialRecommendation(recommendation) {
   };
 }
 
-function bridgeEditorialPlan(objective = 'qualified_growth') {
+function bridgeEditorialPlan(objective = null) {
   const selectedObjective = bridgeEditorialObjective(objective);
   const plan = getLatestEditorialPlan(selectedObjective);
   return {
@@ -275,12 +286,12 @@ async function main() {
   const payload = await readInput();
 
   if (command === 'editorial-plan') {
-    result(bridgeEditorialPlan(payload.objective || 'qualified_growth'));
+    result(bridgeEditorialPlan(payload.objective));
     return;
   }
 
   if (command === 'editorial-refresh') {
-    const objective = bridgeEditorialObjective(payload.objective || 'qualified_growth');
+    const objective = bridgeEditorialObjective(payload.objective);
     await refreshEditorialPlan({ objective, refreshSources: payload.refreshSources === true });
     result(bridgeEditorialPlan(objective));
     return;
@@ -336,6 +347,37 @@ async function main() {
     return;
   }
 
+  if (command === 'writing-strategy') {
+    const queueItemId = Number(payload.queueItemId);
+    if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy requires queueItemId.');
+    result(await getWritingStrategyPreview(queueItemId));
+    return;
+  }
+
+  if (command === 'writing-strategy-recommend') {
+    if (payload.confirmRecommend !== true) throw new Error('writing-strategy-recommend requires confirmRecommend=true because it may spend AI tokens.');
+    const queueItemId = Number(payload.queueItemId);
+    if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy-recommend requires queueItemId.');
+    result(await recommendWritingStrategy(queueItemId, { profile: payload.profileId ?? null }));
+    return;
+  }
+
+  if (command === 'writing-strategy-select') {
+    if (payload.confirmSelect !== true) throw new Error('writing-strategy-select requires confirmSelect=true for the explicit human strategy selection.');
+    result({ selection: await selectWritingStrategy(payload) });
+    return;
+  }
+
+  if (command === 'learn-classify-published') {
+    if (payload.confirmClassify !== true) throw new Error('learn-classify-published requires confirmClassify=true because it may spend AI tokens.');
+    result(await classifyPublishedContent({
+      queueItemIds: payload.queueItemIds || [],
+      limit: payload.limit,
+      profile: payload.profileId ?? null,
+    }));
+    return;
+  }
+
   if (command === 'ai-config') {
     result(safeAiConfig());
     return;
@@ -376,6 +418,11 @@ async function main() {
     return;
   }
 
+  if (command === 'rescore-candidates') {
+    result({ classification: rescoreCandidateRelevance() });
+    return;
+  }
+
   if (command === 'ingest') {
     const candidate = manualCandidate(payload);
     const key = candidateKey(candidate);
@@ -393,8 +440,8 @@ async function main() {
   }
 
   if (command === 'inspect') {
-    const candidate = requireCandidate(payload.key);
-    result({ candidate, draft: getDraftByCandidate(candidate.key) });
+    const workflow = inspectWorkflow(payload.key);
+    result({ candidate: workflow.candidate, growthFit: workflow.growthFit, draft: workflow.draft });
     return;
   }
 
@@ -416,14 +463,17 @@ async function main() {
     }
     if (!workflow.draft) throw new Error(`Draft required for ${pipeline}.`);
     const username = sourceUsername(workflow.candidate);
-    result(buildWriterPacket({
+    const generation = getWritingStrategyGenerationContext(workflow.queueItem.id);
+    const packet = buildWriterPacket({
       candidate: workflow.candidate,
       queueItem: workflow.queueItem,
       draft: workflow.draft,
       relationship: username ? getRelationshipProfile(username) : null,
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: workflow.candidate.key }),
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: workflow.candidate.key }),
-    }));
+      writingStrategy: generation.writingStrategy,
+    });
+    result({ packet, generation });
     return;
   }
 
@@ -442,9 +492,14 @@ async function main() {
       throw new Error(`Writer pipeline mismatch: ${payload.output?.pipeline || 'missing'} !== ${pipeline}. Route the queue item first.`);
     }
     const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
-      ? { ...current, editor: {} }
+      ? { ...current, editor: Array.isArray(current.editor?.generationHistory) ? { generationHistory: [...current.editor.generationHistory] } : {} }
       : current;
-    const next = applyWriterOutput(writerBase, payload.output || {});
+    const strategyGeneration = validateWritingStrategyGenerationContext(workflow.queueItem.id, payload.generation);
+    const generationProvenance = buildWritingStrategyGenerationProvenance(strategyGeneration, {
+      writerAiExecution: payload.writerAiExecution || null,
+      writerExecutionSource: 'agent_bridge_external',
+    });
+    const next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance });
     const analysis = scoreDraft(next, candidate, {
       pipeline,
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
@@ -454,6 +509,7 @@ async function main() {
       factualityConfirmed: false,
       evidenceConfirmed: false,
       mediaReady: false,
+      relevanceOverride: workflow.queueItem?.relevance?.humanOverride || null,
     });
     const draft = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     const queueItem = routeCandidate(candidate.key, pipeline, { actor: 'agent' });
@@ -686,12 +742,15 @@ async function main() {
 
   if (command === 'decide') {
     const candidate = requireCandidate(payload.key);
+    const workflow = inspectWorkflow(candidate.key);
     const existingActions = listCandidateActions(candidate.key);
     const context = {
       ...(payload.context || {}),
       alreadyUsed: payload.context?.alreadyUsed ?? hasCandidateAction(candidate.key),
+      strategicRelevance: payload.context?.strategicRelevance ?? workflow.growthFit,
+      relevanceOverride: payload.context?.relevanceOverride ?? workflow.queueItem?.relevance?.humanOverride ?? null,
     };
-    result({ candidate, existingActions, recommendation: recommendDistributionAction(candidate, context) });
+    result({ candidate, growthFit: workflow.growthFit, existingActions, recommendation: recommendDistributionAction(candidate, context) });
     return;
   }
 
@@ -766,9 +825,11 @@ async function main() {
       workflow = inspectWorkflow(key);
     }
     const queueItem = workflow.queueItem;
+    const writerGeneration = getWritingStrategyGenerationContext(queueItem.id);
     result({
       ...engagementPacket(queueItem),
       review: review ? { analysis: review.analysis, approvalRequired: true } : null,
+      writerGeneration,
       writerPacket: buildWriterPacket({
         candidate: workflow.candidate,
         queueItem,
@@ -779,6 +840,7 @@ async function main() {
         recentReplyArchetypes: listEngagementItems({ includeExpired: true, limit: 30 })
           .filter((recent) => recent.candidateKey !== key && recent.replyArchetype)
           .map((recent) => recent.replyArchetype),
+        writingStrategy: writerGeneration.writingStrategy,
       }),
     });
     return;
@@ -896,7 +958,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

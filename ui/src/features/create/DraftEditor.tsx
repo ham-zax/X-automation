@@ -8,6 +8,7 @@ import {
   TechnicalDetails,
   useDebounced,
 } from '../../components/primitives'
+import { WritingApproachPanel } from './WritingApproachPanel'
 
 const MEDIA_TYPE_OPTIONS = [
   ['none', 'No visual'],
@@ -19,15 +20,18 @@ const MEDIA_TYPE_OPTIONS = [
 
 interface PreviewResult {
   score: number
-  gatesView: { passed: boolean; writingFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] }
+  gatesView: { passed: boolean; approvalFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] }
   breakdown: Record<string, number>
   weightedLength: number | null
 }
 
-function displayRiskFlags(flags: string[]): string {
-  return flags.map((flag) => /no verified evidence beyond the source text/i.test(flag)
-    ? 'No additional verified evidence was supplied to this writing pass.'
-    : flag).join(' · ')
+function displayRiskFlags(flags: string[], growthFitAllowed: boolean): string {
+  return flags
+    .filter((flag) => !(growthFitAllowed && /^weak niche fit\.?$/i.test(flag.trim())))
+    .map((flag) => /no verified evidence beyond the source text/i.test(flag)
+      ? 'No additional verified evidence was supplied to this writing pass.'
+      : flag)
+    .join(' · ')
 }
 
 export function DraftEditor({ data }: { data: DraftEditorData }) {
@@ -171,15 +175,6 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${qualityClass}`}>
             {readOnly ? 'Recorded quality' : 'Draft quality'} {score}/50 {!readOnly && <>· approval threshold 40 {previewPending && dirty ? '· checking…' : ''}</>}
           </span>
-          {!readOnly && (
-            <button
-              onClick={handleGenerate}
-              disabled={generate.isPending}
-              className="rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50"
-            >
-              {generate.isPending ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
-            </button>
-          )}
           {data.candidate.url && (
             <a
               href={data.candidate.url}
@@ -193,7 +188,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
       </div>
 
-      {readOnly ? (
+      {readOnly && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
           <strong>{flags.engagementReply ? 'This is the reply that was sent.' : 'This is the text that was published.'}</strong>
           {' '}It is kept as read-only history so later edits cannot rewrite what actually went out.
@@ -201,7 +196,16 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             <> <a href={data.queueItem.outputUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-sky-700 underline">View on X ↗</a></>
           )}
         </div>
-      ) : (
+      )}
+
+      <WritingApproachPanel
+        data={data}
+        hasDraftContent={hasDraftContent}
+        generating={generate.isPending}
+        onGenerate={handleGenerate}
+      />
+
+      {!readOnly && (
         <>
           {generate.isPending && (
             <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
@@ -213,7 +217,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             generationOutcome.decision === 'DO_NOT_POST' ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <strong>AI suggestion: don’t post yet.</strong>
-                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
                 <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
               </div>
             ) : (
@@ -226,7 +230,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <strong>AI suggestion: don’t post yet.</strong>
-              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || []) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
+              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
               <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
             </div>
           ) : (editorMeta.decision || body) ? (
@@ -235,7 +239,10 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             </div>
           ) : null)}
 
-          <GatePanel gates={gatesView} />
+          <div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Approval readiness</div>
+            <GatePanel gates={gatesView} />
+          </div>
         </>
       )}
 
@@ -311,7 +318,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           )}
         {!readOnly && (
           <div className="mt-2 text-xs text-slate-500">
-            This feedback updates from the exact text you are editing. It helps improve the draft; the approval-readiness panel above decides whether it is ready.
+            The five writing dimensions total 40 raw points and are proportionally normalized to the 50-point Draft quality scale. The approval threshold remains 40/50; Growth fit is evaluated separately.
           </div>
         )}
       </div>

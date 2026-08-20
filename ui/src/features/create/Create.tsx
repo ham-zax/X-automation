@@ -13,6 +13,7 @@ import {
   fromDatetimeLocal,
   toDatetimeLocal,
 } from '../../components/primitives'
+import { GrowthFitPanel } from './GrowthFitPanel'
 
 const ROUTE_OPTIONS = [
   ['original', 'Original post'],
@@ -145,12 +146,14 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
   const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
   const mainFeedReview = item.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(item.pipeline)
-  const canApprove = mainFeedReview && (item.pipeline === 'repost' || (item.draft != null && item.draft.qualityScore >= 40 && item.draft.gates?.passed === true))
+  const canApprove = mainFeedReview && (item.pipeline === 'repost'
+    ? item.growthFit.allowed
+    : (item.draft != null && item.draft.qualityScore >= 40 && item.draft.gates?.passed === true))
   const canRequestReview = ['original', 'quote', 'thread', 'reply'].includes(item.pipeline) && ['drafting', 'needs_review'].includes(item.status)
   const choosingType = ['triage', 'researching', 'watching'].includes(item.status)
   const approvalBlockers = item.draft
     ? [
-        ...(item.draft.gatesView?.writingFailures || []).map((failure) => failure.message),
+        ...(item.draft.gatesView?.approvalFailures || []).map((failure) => failure.message),
         ...(item.draft.gatesView?.humanConfirmations || []).map((confirmation) => confirmation.message),
       ]
     : []
@@ -188,6 +191,15 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
       </div>
 
       <p className="mt-3 break-words text-sm text-slate-700">{item.text}</p>
+
+      <div className="mt-3">
+        <GrowthFitPanel
+          growthFit={item.growthFit}
+          queueItemId={item.id}
+          candidateKey={item.candidateKey}
+          readOnly={Boolean(item.humanApprovedAt) || ['publishing', 'published'].includes(item.status)}
+        />
+      </div>
 
       {item.status !== 'published' && item.recommendedPipeline && (
         <div className="mt-2 text-sm text-slate-700">

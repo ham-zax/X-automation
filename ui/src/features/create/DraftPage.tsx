@@ -10,6 +10,7 @@ import {
   formatDateTime,
 } from '../../components/primitives'
 import { DraftEditor } from './DraftEditor'
+import { GrowthFitPanel } from './GrowthFitPanel'
 
 export function DraftPage({ draftId }: { draftId: number }) {
   const { data, isLoading, error, refetch } = useDraftEditor(Number.isFinite(draftId) ? draftId : null)
@@ -43,7 +44,12 @@ export function DraftPage({ draftId }: { draftId: number }) {
       </div>
 
       <div className="rounded-lg border border-slate-200 bg-white p-6">
-        <DraftEditor data={data} />
+        <GrowthFitPanel
+          growthFit={data.growthFit}
+          queueItemId={queueItem?.id ?? null}
+          readOnly={flags.readOnly || Boolean(queueItem?.humanApprovedAt)}
+        />
+        <div className="mt-5"><DraftEditor data={data} /></div>
 
         <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
           {flags.canApproveSend && (

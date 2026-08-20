@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   useEditorialAddResearchSource,
   useEditorialDismiss,
   useEditorialPlan,
   useEditorialRefresh,
   useEditorialSelect,
+  useGrowthFocus,
+  useGrowthFocusObjective,
   useToday,
   type EditorialObjective,
   type EditorialRecommendationView,
@@ -15,10 +17,10 @@ import { Badge, Disclosure, Loading, Error, Empty, Pending, StatCard, formatDate
 import { navigate } from '../../router'
 
 const OBJECTIVES: { value: EditorialObjective; label: string }[] = [
-  { value: 'qualified_growth', label: 'Qualified growth' },
-  { value: 'reach_momentum', label: 'Reach momentum' },
-  { value: 'relationships', label: 'Relationships' },
-  { value: 'technical_authority', label: 'Technical authority' },
+  { value: 'qualified_growth', label: 'Grow relevant followers' },
+  { value: 'reach_momentum', label: 'Maximize reach' },
+  { value: 'relationships', label: 'Build relationships' },
+  { value: 'technical_authority', label: 'Build technical authority' },
   { value: 'balanced', label: 'Balanced' },
 ]
 
@@ -216,6 +218,7 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
 function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialObjective; onObjectiveChange: (objective: EditorialObjective) => void }) {
   const plan = useEditorialPlan(objective)
   const refresh = useEditorialRefresh()
+  const saveObjective = useGrowthFocusObjective()
   const data = plan.data
 
   return (
@@ -229,7 +232,15 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs font-medium text-slate-600">
             Goal
-            <select value={objective} onChange={(event) => onObjectiveChange(event.target.value as EditorialObjective)} className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800">
+            <select
+              value={objective}
+              onChange={(event) => {
+                const next = event.target.value as EditorialObjective
+                onObjectiveChange(next)
+                saveObjective.mutate(next)
+              }}
+              className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+            >
               {OBJECTIVES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
@@ -240,7 +251,9 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
       </div>
 
       {refresh.isPending && <div className="mt-3"><Pending label="Refreshing source snapshots and editorial recommendations…" /></div>}
+      {saveObjective.isPending && <div className="mt-2 text-xs text-slate-500">Saving this as your default Growth Focus goal…</div>}
       {refresh.isError && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{refresh.error.message}</div>}
+      {saveObjective.isError && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{saveObjective.error.message}</div>}
       {plan.isError && <div className="mt-3"><Error message={plan.error.message} onRetry={() => void plan.refetch()} /></div>}
       {plan.isLoading && <div className="mt-3"><Loading message="Loading the latest editorial plan…" /></div>}
 
@@ -294,7 +307,12 @@ function ActionCard({ action }: { action: TodayAction }) {
 
 export function Today() {
   const { data, isLoading, error, refetch } = useToday()
+  const growthFocus = useGrowthFocus()
   const [objective, setObjective] = useState<EditorialObjective>('qualified_growth')
+
+  useEffect(() => {
+    if (growthFocus.data?.profile.defaultObjective) setObjective(growthFocus.data.profile.defaultObjective)
+  }, [growthFocus.data?.profile.defaultObjective])
 
   if (isLoading) {
     return <Loading message="Loading your workspace..." />

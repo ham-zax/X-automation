@@ -38,6 +38,9 @@ Phase 6   AI Editorial Director
    |
    v
 Viral Style Research (observational research subsystem)
+   |
+   v
+Growth Focus + H2 Learn + Evidence-Guided Writer Integration (planned)
 ```
 
 ## Phase 1A — implemented
@@ -290,6 +293,24 @@ Owns the operator-facing Viral Styles workflow:
 Opening the tab is read-only. X collection and AI inference begin only after the operator presses **Run research**.
 
 Baseline findings before the broader sweep are recorded in [`../VIRAL_STYLE_FINDINGS_2026-08-20.md`](../VIRAL_STYLE_FINDINGS_2026-08-20.md).
+
+## Growth Focus + H2 Learn + Evidence-Guided Writer Integration — planned
+
+[`GROWTH_FOCUS_LEARN_WRITER_LOOP.md`](GROWTH_FOCUS_LEARN_WRITER_LOOP.md)
+
+Owns the new cross-system integration front exposed by current prototype review:
+
+- make candidate topic classification source-consistent and versioned so GitHub/HN/manual candidates cannot silently persist missing relevance as a legitimate zero;
+- replace the operator model of a brittle `niche` veto with editable **Growth Focus** plus Core / Adjacent / Outside strategic relevance;
+- remove candidate topic fit from the number labeled Draft quality and keep approval readiness separate from opportunity relevance;
+- move toward the H2 work architecture `Today / Discover / Conversations / Posts / Results / Learn`, with Settings / Advanced as a utility rather than a primary work destination;
+- consolidate external patterns, own-account evidence, tests, and strategy recommendations under Learn while preserving evidence provenance;
+- add append-only per-draft writing-strategy selection with canonical `off | suggest | apply` behavior;
+- support both deterministic evidence shortlisting and optional bounded AI recommendation over supplied intent/style/opening options, with manual choice always available;
+- pass strategy to Writer only in explicit Apply mode and persist what actually influenced generation;
+- connect publication-time strategy provenance to existing Phase-4 follower/reach/relationship measurements so Results reports outcomes and Learn interprets observed patterns without causal overclaiming.
+
+This plan preserves Phase 1-6 authority boundaries and the UX/HCI participant-research gates. Backend correctness/provenance work can start before final IA wording is validated; final labels such as `Learn`, Growth Focus wording, and strategy display labels remain research-sensitive.
 
 ## Cross-cutting source-of-truth docs
 

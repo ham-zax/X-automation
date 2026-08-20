@@ -404,6 +404,8 @@ export function normalizeContentMeasurement(measurement = {}) {
   const likes = nonNegative(measurement.likes);
   const reposts = nonNegative(measurement.reposts ?? measurement.retweets);
   const replies = nonNegative(measurement.replies);
+  const suppliedBookmarks = finiteNumber(measurement.bookmarks ?? measurement.bookmarkCount ?? measurement.bookmark_count);
+  const bookmarks = suppliedBookmarks == null ? null : Math.max(0, suppliedBookmarks);
   const followerDelta = finiteNumber(measurement.followerDelta ?? measurement.follower_delta) ?? 0;
   const elapsedHours = elapsedHoursOf(measurement);
   const visibleEngagement = likes + reposts + replies;
@@ -413,6 +415,7 @@ export function normalizeContentMeasurement(measurement = {}) {
       likes,
       reposts,
       replies,
+      bookmarks,
       followerDelta,
       visibleEngagement,
       elapsedHours,
@@ -421,6 +424,7 @@ export function normalizeContentMeasurement(measurement = {}) {
       views_per_hour: elapsedHours && elapsedHours > 0 ? round(views / elapsedHours) : null,
       replies_per_1000_views: per1000(replies, views),
       reposts_per_1000_views: per1000(reposts, views),
+      bookmarks_per_1000_views: bookmarks == null ? null : per1000(bookmarks, views),
       visible_engagement_per_1000_views: per1000(visibleEngagement, views),
       associated_follows_per_1000_views: per1000(followerDelta, views),
     },
@@ -513,6 +517,11 @@ export function summarizeContentCohort(observations = [], options = {}) {
     acc.likes += row.raw.likes;
     acc.reposts += row.raw.reposts;
     acc.replies += row.raw.replies;
+    if (row.raw.bookmarks != null) {
+      acc.bookmarks += row.raw.bookmarks;
+      acc.bookmarkViews += row.raw.views;
+      acc.bookmarkObservationCount += 1;
+    }
     acc.followerDelta += row.raw.followerDelta;
     acc.visibleEngagement += row.raw.visibleEngagement;
     if (row.raw.elapsedHours != null) {
@@ -526,6 +535,9 @@ export function summarizeContentCohort(observations = [], options = {}) {
     likes: 0,
     reposts: 0,
     replies: 0,
+    bookmarks: 0,
+    bookmarkViews: 0,
+    bookmarkObservationCount: 0,
     followerDelta: 0,
     visibleEngagement: 0,
     elapsedHours: 0,
@@ -541,6 +553,7 @@ export function summarizeContentCohort(observations = [], options = {}) {
       views_per_hour: totals.elapsedHours > 0 ? round(totals.viewsWithElapsed / totals.elapsedHours) : null,
       replies_per_1000_views: per1000(totals.replies, totals.views),
       reposts_per_1000_views: per1000(totals.reposts, totals.views),
+      bookmarks_per_1000_views: totals.bookmarkObservationCount > 0 ? per1000(totals.bookmarks, totals.bookmarkViews) : null,
       visible_engagement_per_1000_views: per1000(totals.visibleEngagement, totals.views),
       associated_follows_per_1000_views: per1000(totals.followerDelta, totals.views),
     },

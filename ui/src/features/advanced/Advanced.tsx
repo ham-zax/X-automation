@@ -1,5 +1,5 @@
 const DETAIL_VIEWS = [
-  ['#/advanced/niche', 'Your niche', 'Review and edit the topics and audience-fit terms that define what the product treats as relevant.'],
+  ['#/advanced/niche', 'Growth Focus', 'Review the default growth goal, topic roles, classification terms, and target-audience signals.'],
   ['#/advanced/ai', 'AI Settings', 'Runtime, provider, model, role assignments, connection checks, and recent AI usage.'],
   ['/legacy?source=relationships', 'Relationships', 'Strategic relationship profiles, stages, and relationship-fit detail.'],
   ['/legacy?source=health', 'Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],

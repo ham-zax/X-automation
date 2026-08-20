@@ -128,6 +128,7 @@ export async function captureDuePublicationMeasurements({
       likes: Number(post.likes || 0),
       reposts: Number(post.retweets || post.reposts || 0),
       replies: Number(post.replies || 0),
+      bookmarks: post.bookmarks == null && post.bookmarkCount == null ? null : Number(post.bookmarks ?? post.bookmarkCount),
       followers,
       attribution: suppliedAttribution,
       metadata: {

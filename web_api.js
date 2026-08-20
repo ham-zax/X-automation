@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
-import { fetchAccountPerformance } from './tech_news.js';
+import { ACCOUNT_PERFORMANCE_CAPABILITIES, fetchAccountPerformance } from './tech_news.js';
 import { applyWriterOutput, buildWriterPacket, scoreDraft } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
@@ -21,14 +21,17 @@ import {
   ensureCandidateWorkflow,
   inspectWorkflow,
   recordManualRepost,
+  refreshCandidateRecommendations,
   refreshQueueRecommendation,
+  rescoreCandidateRelevance,
   requestQueueReview,
   resolveEngagementItem,
   routeCandidate,
+  setRelevanceDecision,
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, isOpportunityCandidate } from './strategy.js';
+import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, assessStrategicRelevance, isOpportunityCandidate } from './strategy.js';
 import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
@@ -90,6 +93,7 @@ import {
   resetNicheProfile,
   retireLearnedRule,
   saveDraft,
+  saveGrowthFocusObjective,
   saveNicheProfile,
   setAiDefaultProfile,
   setAiProfileEnabled,
@@ -104,6 +108,15 @@ import { checkAiProfileConnection, listAiCatalog, listAiRuntimeAvailability, tes
 import { runViralSweep, VIRAL_SWEEP_THRESHOLDS } from './viral_style_sweep.js';
 import { viralStyleIntent } from './viral_style_intent.js';
 import { analyzeStoredDataset, writeStoredAnalysis } from './viral_style_analyze.js';
+import {
+  buildWritingStrategyGenerationProvenance,
+  classifyPublishedContent,
+  getWritingStrategyGenerationContext,
+  getWritingStrategyPreview,
+  recommendWritingStrategy,
+  selectWritingStrategy,
+} from './writing_strategy.js';
+import { getWritingStrategyFeedbackReadModel, getWritingStrategyOutcomeSummary } from './strategy_outcomes.js';
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
@@ -466,7 +479,6 @@ export const HEALTH_STATE_COPY = Object.freeze({
 });
 
 export const QUALITY_SIGNAL_LABELS = Object.freeze({
-  niche: { label: 'Topic fit', max: 10, description: 'How closely this matches your AI/dev/builder focus.' },
   hook: { label: 'Opening', max: 8, description: 'Whether the first line quickly gives someone a reason to keep reading.' },
   insight: { label: 'Useful insight', max: 10, description: 'Whether the post adds a concrete implication instead of repeating the source.' },
   evidence: { label: 'Support', max: 10, description: 'Whether claims are backed by source material, data, steps, or observed results.' },
@@ -535,16 +547,31 @@ export function schedulerContext(now = Date.now()) {
   };
 }
 
-export function evaluateDraftQuality(candidate, draft, pipeline, { evidence = null } = {}) {
+export function evaluateDraftQuality(candidate, draft, pipeline, {
+  evidence = null,
+  confirmations = {},
+  relevanceOverride = null,
+  growthObjective = null,
+} = {}) {
   return scoreDraft(draft, candidate, {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
-    factualityConfirmed: false,
-    evidenceConfirmed: false,
+    factualityConfirmed: confirmations.factualityConfirmed === true,
+    evidenceConfirmed: confirmations.evidenceConfirmed === true,
     evidence,
     mediaReady: !draft.editor?.media?.required,
+    relevanceOverride,
+    growthObjective,
   });
+}
+
+function persistedDraftConfirmations(draft) {
+  const checks = draft?.gates?.checks || {};
+  return {
+    factualityConfirmed: checks.factualityConfirmed === true,
+    evidenceConfirmed: checks.evidenceConfirmed === true,
+  };
 }
 
 function writerEditorialContext(candidate, queueItem) {
@@ -585,6 +612,7 @@ export async function generateDraftCandidate(current) {
   const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
   const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
   const editorialContext = writerEditorialContext(candidate, queueItem);
+  const strategyGeneration = getWritingStrategyGenerationContext(queueItem.id);
   const packet = buildWriterPacket({
     candidate,
     queueItem,
@@ -596,20 +624,30 @@ export async function generateDraftCandidate(current) {
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
     health: getAccountHealthSummary().health,
+    writingStrategy: strategyGeneration.writingStrategy,
   });
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
   const output = await generateWriterOutput(packet, promptDocumentText);
   if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
-  const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline ? { ...current, editor: {} } : current;
-  const next = applyWriterOutput(writerBase, output);
-  const analysis = evaluateDraftQuality(candidate, next, pipeline, { evidence: editorialContext.evidence });
+  const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
+    ? { ...current, editor: Array.isArray(current.editor?.generationHistory) ? { generationHistory: [...current.editor.generationHistory] } : {} }
+    : current;
+  const generationProvenance = buildWritingStrategyGenerationProvenance(strategyGeneration, {
+    writerAiExecution: output.execution || null,
+    writerExecutionSource: 'writer_runtime',
+  });
+  const next = applyWriterOutput(writerBase, output, { generationProvenance });
+  const analysis = evaluateDraftQuality(candidate, next, pipeline, {
+    evidence: editorialContext.evidence,
+    relevanceOverride: queueItem.relevance?.humanOverride || null,
+  });
   const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   routeCandidate(candidate.key, pipeline, { actor: 'agent' });
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 
-function editorialObjective(value = 'qualified_growth') {
-  const objective = String(value || 'qualified_growth');
+function editorialObjective(value = null) {
+  const objective = String(value || getNicheProfile().profile.defaultObjective || 'qualified_growth');
   if (!EDITORIAL_OBJECTIVES.includes(objective)) throw new Error(`Unsupported editorial objective: ${objective}.`);
   return objective;
 }
@@ -742,14 +780,19 @@ export function requireEngagementSendAllowed() {
 // Payload formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatCandidate(candidate, { includeQueue = true, sourceKind = null, editorialRecommendation = null } = {}) {
+function formatCandidate(candidate, { includeQueue = true, sourceKind = null, editorialRecommendation = null, objective = null } = {}) {
   const metrics = candidate.metrics || {};
   const niche = candidate.niche || {};
   let queueItem = includeQueue ? getQueueItemByCandidate(candidate.key) : null;
   if (includeQueue && candidate.saved && queueItem && !queueItem.recommendedPipeline) {
     queueItem = refreshQueueRecommendation(candidate.key).queueItem;
   }
-  const draft = includeQueue && queueItem?.draftId ? getDraft(queueItem.draftId) : null;
+  const workflow = includeQueue && queueItem ? inspectWorkflow(candidate.key) : null;
+  const growthFit = assessStrategicRelevance(candidate, {
+    objective,
+    humanOverride: queueItem?.relevance?.humanOverride || null,
+  });
+  const draft = workflow?.draft || (includeQueue && queueItem?.draftId ? getDraft(queueItem.draftId) : null);
   const actions = includeQueue ? listCandidateActions(candidate.key) : [];
   const actionViews = actions.map((action) => candidateActionView(action, queueItem));
   const publishedWithoutAction = includeQueue && queueItem && (queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId)
@@ -791,7 +834,12 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
       tags: (niche.tags || []).map((tag) => ({ tag, label: NICHE_LABELS[tag] || tag })),
       matches: niche.matches || [],
       score: niche.score ?? null,
+      status: niche.status || 'unclassified',
+      profileRevision: niche.profileRevision ?? null,
+      classifierVersion: niche.classifierVersion ?? null,
+      classifiedAt: niche.classifiedAt ?? null,
     },
+    growthFit,
     viral: candidate.viral
       ? {
           tier: candidate.viral.tier,
@@ -825,16 +873,18 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
           pipelineLabel: label(PIPELINE_LABELS, queueItem.pipeline),
           status: queueItem.status,
           statusLabel: queueStatusLabel(queueItem),
-          recommendedPipeline: queueItem.recommendedPipeline || null,
-          recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
-          routingReason: queueItem.routingReason || '',
+          recommendedPipeline: workflow?.recommendation?.pipeline || queueItem.recommendedPipeline || null,
+          recommendedPipelineLabel: workflow?.recommendation?.pipeline
+            ? label(PIPELINE_LABELS, workflow.recommendation.pipeline)
+            : queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
+          routingReason: workflow?.recommendation?.reason || queueItem.routingReason || '',
           draftId: queueItem.draftId ?? null,
           draftQualityScore: draft?.qualityScore ?? null,
           potentials: {
-            reach: Math.round(queueItem.reachPotential || 0),
-            follow: Math.round(queueItem.followPotential || 0),
-            conversation: Math.round(queueItem.conversationPotential || 0),
-            relationship: Math.round(queueItem.relationshipPotential || 0),
+            reach: Math.round(workflow?.scores?.reachPotential ?? queueItem.reachPotential ?? 0),
+            follow: Math.round(workflow?.scores?.followPotential ?? queueItem.followPotential ?? 0),
+            conversation: Math.round(workflow?.scores?.conversationPotential ?? queueItem.conversationPotential ?? 0),
+            relationship: Math.round(workflow?.scores?.relationshipPotential ?? queueItem.relationshipPotential ?? 0),
           },
         }
       : null,
@@ -848,7 +898,7 @@ function formatGates(gates = {}) {
   const failures = gates.failures || [];
   return {
     passed: gates.passed === true,
-    writingFailures: failures.filter((item) => !humanCodes.has(item.code)),
+    approvalFailures: failures.filter((item) => !humanCodes.has(item.code)),
     humanConfirmations: failures.filter((item) => humanCodes.has(item.code)),
     warnings: gates.warnings || [],
   };
@@ -856,6 +906,7 @@ function formatGates(gates = {}) {
 
 function formatDraft(draft, { analysis = null } = {}) {
   if (!draft) return null;
+  const currentGates = analysis?.gates || draft.gates || {};
   const payload = {
     id: draft.id,
     candidateKey: draft.candidateKey,
@@ -866,9 +917,9 @@ function formatDraft(draft, { analysis = null } = {}) {
     body: draft.body || '',
     threadParts: draft.threadParts || [],
     editor: draft.editor || {},
-    gates: draft.gates || {},
-    gatesView: formatGates(draft.gates),
-    qualityScore: draft.qualityScore || 0,
+    gates: currentGates,
+    gatesView: formatGates(currentGates),
+    qualityScore: analysis?.score ?? draft.qualityScore ?? 0,
     status: draft.status,
     scheduledAt: draft.scheduledAt || null,
     publishedTweetId: draft.publishedTweetId || null,
@@ -906,8 +957,15 @@ function formatQueueItem(queueItem) {
     targetUsername: queueItem.targetUsername || null,
     draftId: queueItem.draftId ?? null,
     draft: formatDraft(draft, {
-      analysis: draft && CONTENT_PIPELINES.has(queueItem.pipeline)
-        ? evaluateDraftQuality(candidate, draft, queueItem.pipeline)
+      analysis: draft
+        && queueItem.status !== 'published'
+        && !queueItem.publishedAt
+        && !queueItem.outputTweetId
+        && CONTENT_PIPELINES.has(queueItem.pipeline)
+        ? evaluateDraftQuality(candidate, draft, queueItem.pipeline, {
+            confirmations: persistedDraftConfirmations(draft),
+            relevanceOverride: queueItem.relevance?.humanOverride || null,
+          })
         : null,
     }),
     recommendedPipeline: queueItem.recommendedPipeline || null,
@@ -924,6 +982,7 @@ function formatQueueItem(queueItem) {
     publishedTweetId: queueItem.publishedTweetId || queueItem.outputTweetId || null,
     outputUrl: queueItem.outputUrl || null,
     publishError: queueItem.publishError || null,
+    growthFit: snapshot.growthFit,
     potentials: {
       reach: Math.round(queueItem.reachPotential || 0),
       follow: Math.round(queueItem.followPotential || 0),
@@ -940,11 +999,15 @@ function draftEditorPayload(draftId) {
   if (!candidate) return null;
   const queueItem = getQueueItemByCandidate(candidate.key);
   const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
-  const analysis = evaluateDraftQuality(candidate, draft, pipeline);
+  const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem?.relevance?.humanOverride || null });
+  const analysis = evaluateDraftQuality(candidate, draft, pipeline, {
+    confirmations: persistedDraftConfirmations(draft),
+    relevanceOverride: queueItem?.relevance?.humanOverride || null,
+  });
   const engagementReply = queueItem?.lane === 'engagement' && pipeline === 'reply';
   const health = getAccountHealthSummary();
   const engagementConstrained = engagementReply && health.health.state === 'constrained';
-  const gatesPassed = draft.gates?.passed === true;
+  const gatesPassed = analysis.gates?.passed === true;
   const readOnly = draft.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
   let schedule = null;
   if (queueItem?.status === 'approved' && ['main', 'main_feed'].includes(queueItem.lane) && SCHEDULABLE_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) {
@@ -973,7 +1036,7 @@ function draftEditorPayload(draftId) {
   const relationship = engagementReply && username ? getRelationshipProfile(username) : null;
   return {
     mode: engagementReply ? 'conversation' : 'create',
-    draft: formatDraft(draft, { analysis }),
+    draft: formatDraft(draft, { analysis: readOnly ? null : analysis }),
     candidate: {
       key: candidate.key,
       title: candidate.title,
@@ -984,6 +1047,7 @@ function draftEditorPayload(draftId) {
     pipeline,
     pipelineLabel: label(PIPELINE_LABELS, pipeline),
     queueItem: formatQueueItem(queueItem),
+    growthFit,
     analysis: {
       score: analysis.score,
       gates: analysis.gates,
@@ -995,8 +1059,8 @@ function draftEditorPayload(draftId) {
       engagementConstrained,
       readOnly,
       canReview: !readOnly && CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status),
-      canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && draft.qualityScore >= 40 && gatesPassed,
-      canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && draft.qualityScore >= 40 && gatesPassed,
+      canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && analysis.score >= 40 && gatesPassed,
+      canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && analysis.score >= 40 && gatesPassed,
       canSendApproved: engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
       approvedMainFeed: !engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt),
     },
@@ -1023,8 +1087,8 @@ function formatConversationDetail(key) {
   const score = queueItem.engagement || {};
   const health = getAccountHealthSummary();
   const constrained = health.health.state === 'constrained';
-  const gatesPassed = draft?.gates?.passed === true;
   const payload = draftEditorPayload(draft?.id);
+  const gatesPassed = payload?.analysis?.gates?.passed === true;
   return {
     key,
     targetUsername: queueItem.targetUsername || profile?.username || 'unknown',
@@ -1067,7 +1131,7 @@ function formatConversationDetail(key) {
     },
     flags: {
       canReview: Boolean(draft) && ['drafting', 'needs_review', 'failed'].includes(queueItem.status),
-      canApproveSend: !constrained && queueItem.status === 'needs_review' && draft?.qualityScore >= 40 && gatesPassed,
+      canApproveSend: !constrained && queueItem.status === 'needs_review' && Number(payload?.analysis?.score || 0) >= 40 && gatesPassed,
       approved: !constrained && queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
     },
   };
@@ -1651,13 +1715,40 @@ export async function handleApi(req, res, requestUrl) {
       return sendSuccess({ job: formatViralResearchJob() });
     }
 
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'writing-strategy') {
+      const queueItemId = Number(query.get('queueItemId'));
+      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy requires queueItemId.');
+      return sendSuccess(await getWritingStrategyPreview(queueItemId));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'writing-strategy' && segments[1] === 'recommend') {
+      const payload = await readBody();
+      const queueItemId = Number(payload.queueItemId);
+      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy recommend requires queueItemId.');
+      return sendSuccess(await recommendWritingStrategy(queueItemId, { profile: payload.profileId ?? null }));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'writing-strategy' && segments[1] === 'select') {
+      const payload = await readBody();
+      return sendSuccess({ selection: await selectWritingStrategy(payload) });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'learn' && segments[1] === 'classify-published') {
+      const payload = await readBody();
+      return sendSuccess(await classifyPublishedContent({
+        queueItemIds: payload.queueItemIds || [],
+        limit: payload.limit,
+        profile: payload.profileId ?? null,
+      }));
+    }
+
     if (method === 'GET' && segments.length === 1 && segments[0] === 'editorial') {
-      return sendSuccess(editorialPlanView(query.get('objective') || 'qualified_growth'));
+      return sendSuccess(editorialPlanView(query.get('objective')));
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'editorial' && segments[1] === 'refresh') {
       const payload = await readBody();
-      const objective = editorialObjective(payload.objective || 'qualified_growth');
+      const objective = editorialObjective(payload.objective);
       await refreshEditorialPlan({ objective, refreshSources: payload.refreshSources === true });
       return sendSuccess(editorialPlanView(objective));
     }
@@ -1753,12 +1844,18 @@ export async function handleApi(req, res, requestUrl) {
       if (reviewItem) {
         const draft = getDraftByCandidate(reviewItem.candidateKey);
         const candidate = getCandidate(reviewItem.candidateKey);
-        const ready = Boolean(draft && draft.qualityScore >= 40 && draft.gates?.passed === true);
+        const analysis = draft && candidate && CONTENT_PIPELINES.has(reviewItem.pipeline)
+          ? evaluateDraftQuality(candidate, draft, reviewItem.pipeline, {
+              confirmations: persistedDraftConfirmations(draft),
+              relevanceOverride: reviewItem.relevance?.humanOverride || null,
+            })
+          : null;
+        const ready = Boolean(analysis && analysis.score >= 40 && analysis.gates?.passed === true);
         actions.push({
           eyebrow: 'Review a post',
           title: candidate?.title || 'A draft needs your decision',
           body: ready ? 'The draft passed its checks and is ready for your approval.' : 'The draft still needs a fix or confirmation before it can be approved.',
-          note: draft ? `Quality ${draft.qualityScore}/50 · ${label(PIPELINE_LABELS, reviewItem.pipeline)}` : label(PIPELINE_LABELS, reviewItem.pipeline),
+          note: draft ? `Quality ${analysis?.score ?? draft.qualityScore}/50 · ${label(PIPELINE_LABELS, reviewItem.pipeline)}` : label(PIPELINE_LABELS, reviewItem.pipeline),
           href: draft ? `#/draft/${draft.id}` : '#/create',
           action: 'Review draft',
           tone: ready ? 'success' : 'warning',
@@ -1815,7 +1912,7 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'GET' && segments.length === 1 && segments[0] === 'discover') {
       const feed = DISCOVER_FEEDS.has(query.get('feed')) ? query.get('feed') : 'for-you';
       const tag = query.get('tag') || '';
-      const objective = editorialObjective(query.get('objective') || 'qualified_growth');
+      const objective = editorialObjective(query.get('objective'));
       const currentPlan = getLatestEditorialPlan(objective);
       const editorialByCandidate = new Map();
       for (const recommendation of currentPlan?.recommendations || []) {
@@ -1887,6 +1984,7 @@ export async function handleApi(req, res, requestUrl) {
       const visible = candidates.slice(0, 60).map((candidate) => formatCandidate(candidate, {
         sourceKind,
         editorialRecommendation: editorialByCandidate.get(candidate.key) || null,
+        objective,
       }));
       const refreshable = feed === 'x' ? 'x' : feed === 'trending' ? 'viral' : ['github', 'hn'].includes(feed) ? feed : null;
       return sendSuccess({
@@ -1974,6 +2072,12 @@ export async function handleApi(req, res, requestUrl) {
         const candidate = getCandidate(item.candidateKey);
         const profile = item.targetUsername ? getRelationshipProfile(item.targetUsername) : null;
         const draft = getDraftByCandidate(item.candidateKey);
+        const draftAnalysis = draft && candidate && CONTENT_PIPELINES.has(item.pipeline)
+          ? evaluateDraftQuality(candidate, draft, item.pipeline, {
+              confirmations: persistedDraftConfirmations(draft),
+              relevanceOverride: item.relevance?.humanOverride || null,
+            })
+          : null;
         const score = item.engagement || {};
         return {
           key: item.candidateKey,
@@ -1988,7 +2092,7 @@ export async function handleApi(req, res, requestUrl) {
           sourceText: candidate?.text?.slice(0, 240) || '',
           sourceUrl: candidate?.url || '',
           draftId: draft?.id ?? null,
-          draftQualityScore: draft?.qualityScore ?? null,
+          draftQualityScore: draftAnalysis?.score ?? draft?.qualityScore ?? null,
           expiresAt: item.expiresAt || null,
           relationship: profile
             ? {
@@ -2156,7 +2260,9 @@ export async function handleApi(req, res, requestUrl) {
 
       if (action === 'preview') {
         const updated = applyEditorPayload(current, payload);
-        const analysis = evaluateDraftQuality(candidate, updated, pipeline);
+        const analysis = evaluateDraftQuality(candidate, updated, pipeline, {
+          relevanceOverride: queueItem?.relevance?.humanOverride || null,
+        });
         return sendSuccess({
           score: analysis.score,
           gates: analysis.gates,
@@ -2173,7 +2279,9 @@ export async function handleApi(req, res, requestUrl) {
         const scheduledAt = scheduledRaw === undefined ? current.scheduledAt : (scheduledRaw === null ? null : Number(scheduledRaw));
         if (scheduledRaw != null && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
         updated.scheduledAt = scheduledAt;
-        const analysis = evaluateDraftQuality(candidate, updated, CONTENT_PIPELINES.has(queue.pipeline) ? queue.pipeline : 'original');
+        const analysis = evaluateDraftQuality(candidate, updated, CONTENT_PIPELINES.has(queue.pipeline) ? queue.pipeline : 'original', {
+          relevanceOverride: queue.relevance?.humanOverride || null,
+        });
         updated.gates = analysis.gates;
         updated.qualityScore = analysis.score;
         updated.status = current.status === 'published' ? 'published' : 'draft';
@@ -2208,6 +2316,22 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       throw new Error(`Unknown draft action: ${action}`);
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'work' && segments[1] === 'relevance-decision') {
+      const payload = await readBody();
+      const queueItem = payload.queueItemId == null ? null : getQueueItem(Number(payload.queueItemId));
+      const key = queueItem?.candidateKey || String(payload.key || '');
+      if (!key) throw new Error('Growth Focus decision requires queueItemId or candidate key.');
+      const result = setRelevanceDecision(key, {
+        decision: String(payload.decision || ''),
+        reason: String(payload.reason || ''),
+        actor: 'human',
+      });
+      return sendSuccess({
+        queueItem: formatQueueItem(result.queueItem),
+        growthFit: result.growthFit,
+      });
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'queue') {
@@ -2282,6 +2406,12 @@ export async function handleApi(req, res, requestUrl) {
       const measured = formatMeasurementSeries(listPublicationMeasurementSeries({ limit: 8 }), { latestOnly: true }).slice(0, 4);
       const technical = formatMeasurementSeries(listPublicationMeasurementSeries({ limit: 20 }));
       const editorialOutcomes = getEditorialOutcomeSummary({ windowMinutes: 1440, limit: 200 });
+      const writingStrategyOutcomes = getWritingStrategyOutcomeSummary({ windowMinutes: 1440, limit: 200 });
+      const writingStrategyFeedback = await getWritingStrategyFeedbackReadModel({
+        windowMinutes: 1440,
+        limit: 200,
+        outcomes: writingStrategyOutcomes,
+      });
       return sendSuccess({
         account: account
           ? {
@@ -2319,6 +2449,16 @@ export async function handleApi(req, res, requestUrl) {
         measuredPosts: measured,
         technical,
         editorialOutcomes,
+        writingStrategyOutcomes,
+        writingStrategyEvidence: {
+          windowMinutes: writingStrategyFeedback.windowMinutes,
+          externalEvidence: writingStrategyFeedback.externalEvidence,
+          experimentEvidence: writingStrategyFeedback.experimentEvidence,
+          comparisons: writingStrategyFeedback.comparisons,
+          agreementInterpretation: writingStrategyFeedback.agreementInterpretation,
+          limitations: writingStrategyFeedback.limitations,
+        },
+        measurementCapabilities: ACCOUNT_PERFORMANCE_CAPABILITIES,
       });
     }
 
@@ -2329,17 +2469,28 @@ export async function handleApi(req, res, requestUrl) {
       return sendSuccess({ error: result.error || null, account: snapshot.account || null });
     }
 
-    if (method === 'GET' && segments.length === 1 && segments[0] === 'niche') {
+    if (method === 'GET' && segments.length === 1 && ['growth-focus', 'niche'].includes(segments[0])) {
       return sendSuccess(getNicheProfile());
     }
 
-    if (method === 'POST' && segments.length === 1 && segments[0] === 'niche') {
+    if (method === 'POST' && segments.length === 1 && ['growth-focus', 'niche'].includes(segments[0])) {
       const payload = await readBody();
-      return sendSuccess(saveNicheProfile(payload.profile || payload));
+      const saved = saveNicheProfile(payload.profile || payload);
+      return sendSuccess({ ...saved, queueRecommendationsRefreshed: refreshCandidateRecommendations().refreshed });
     }
 
-    if (method === 'POST' && segments.length === 2 && segments[0] === 'niche' && segments[1] === 'reset') {
-      return sendSuccess(resetNicheProfile());
+    if (method === 'POST' && segments.length === 2 && ['growth-focus', 'niche'].includes(segments[0]) && segments[1] === 'reset') {
+      const reset = resetNicheProfile();
+      return sendSuccess({ ...reset, queueRecommendationsRefreshed: refreshCandidateRecommendations().refreshed });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'growth-focus' && segments[1] === 'objective') {
+      const payload = await readBody();
+      return sendSuccess(saveGrowthFocusObjective(editorialObjective(payload.objective)));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'growth-focus' && segments[1] === 'rescore-candidates') {
+      return sendSuccess(rescoreCandidateRelevance());
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'audience') {

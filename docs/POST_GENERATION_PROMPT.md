@@ -217,7 +217,31 @@ You receive:
 - relationship and prior-conversation context if replying;
 - profile-proof coverage for the topic when available;
 - available media/evidence;
-- desired reader outcome.
+- desired reader outcome;
+- `writingStrategy` only when the human explicitly selected Apply for this generation.
+
+### AUTHORITY ORDER
+
+Use this priority when inputs pull in different directions:
+
+1. verified facts and supplied evidence;
+2. pipeline/content-type contract;
+3. hard constraints and deterministic gates;
+4. explicit human edits and decisions;
+5. selected `writingStrategy` presentation guidance;
+6. general stylistic preference.
+
+If `WRITER PACKET.writingStrategy` is absent, do not infer or invent one. If it is present, realize only the supplied intent, presentation style, and opening features where the higher-authority facts and constraints support them. Do not recompute a different strategy.
+
+Writing strategy never supplies missing facts. In particular:
+
+- urgency guidance cannot invent a deadline, scarcity, emergency, or time pressure;
+- release framing cannot claim a launch or release that did not happen;
+- benchmark style cannot invent metrics, comparisons, tests, or measurements;
+- `report_experiment` cannot imply that we ran an experiment without supplied first-party evidence;
+- build-in-public framing cannot fabricate personal work, usage, or experience;
+- provocative/opinion framing cannot fabricate controversy or another person's position;
+- external examples and strategy evidence are references, not copyable tweet templates.
 
 ### STEP 1 — DETERMINE WHETHER A POST SHOULD EXIST
 

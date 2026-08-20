@@ -403,6 +403,12 @@ export async function fetchXPostContext(inputUrl) {
   }
 }
 
+export const ACCOUNT_PERFORMANCE_CAPABILITIES = Object.freeze({
+  bookmarks: Object.freeze({ available: true, field: 'bookmarkCount', source: 'xactions_scraper_tweet' }),
+  profileClicks: Object.freeze({ available: false, reason: 'The current Scraper.getTweets owned-post measurement path does not expose profile-click analytics.' }),
+  urlClicks: Object.freeze({ available: false, reason: 'The current Scraper.getTweets owned-post measurement path does not expose URL-click analytics.' }),
+});
+
 export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) {
   try {
     const scraper = new Scraper();
@@ -422,6 +428,7 @@ export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) 
         likes: Number(tweet.likes || 0),
         retweets: Number(tweet.retweets || 0),
         replies: Number(tweet.replies || 0),
+        bookmarks: tweet.bookmarkCount == null ? null : Number(tweet.bookmarkCount),
         views: Number(tweet.views || 0),
         timestamp: tweet.timestamp || (tweet.timeParsed ? Date.parse(tweet.timeParsed) : 0),
         url: tweet.permanentUrl || (tweet.id ? `https://x.com/${username}/status/${tweet.id}` : ''),

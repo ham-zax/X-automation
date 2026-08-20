@@ -2,6 +2,7 @@ import { scoreOpportunity } from './opportunity.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { classifyResearchStory, matchResearchTopics } from './research_topics.js';
 import { routeCandidate } from './pipeline.js';
+import { GROWTH_FOCUS_OBJECTIVES } from './strategy.js';
 import {
   SOURCE_SNAPSHOT_KINDS,
   createEditorialRun,
@@ -44,7 +45,7 @@ export const EDITORIAL_OBJECTIVE_WEIGHTS = Object.freeze({
   balanced: Object.freeze({ reach: 0.25, follow: 0.25, conversation: 0.20, relationship: 0.15, authority: 0.15 }),
 });
 
-export const EDITORIAL_OBJECTIVES = Object.freeze(Object.keys(EDITORIAL_OBJECTIVE_WEIGHTS));
+export const EDITORIAL_OBJECTIVES = GROWTH_FOCUS_OBJECTIVES;
 export const RECOMMENDATION_DECISIONS = Object.freeze(['PREPARE', 'RESEARCH_MORE', 'SKIP']);
 export const PREPARE_PIPELINES = Object.freeze(['original', 'quote', 'thread', 'reply', 'repost']);
 export const SCAN_FORMAT_CANDIDATES = Object.freeze([...PREPARE_PIPELINES, 'research']);

@@ -167,8 +167,8 @@ export function ConfirmCheckboxes({ factuality, evidence, evidenceRequired, onCh
   )
 }
 
-export function GatePanel({ gates }: { gates: { passed: boolean; writingFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] } | null | undefined }) {
-  if (!gates || (!gates.writingFailures.length && !gates.warnings.length && !gates.humanConfirmations.length && !gates.passed)) {
+export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] } | null | undefined }) {
+  if (!gates || (!gates.approvalFailures.length && !gates.warnings.length && !gates.humanConfirmations.length && !gates.passed)) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <div className="font-semibold">Checks update as you edit.</div>
@@ -176,13 +176,14 @@ export function GatePanel({ gates }: { gates: { passed: boolean; writingFailures
       </div>
     )
   }
-  const ready = gates.writingFailures.length === 0
+  const ready = gates.passed === true
+  const heading = ready ? 'Approval checks passed' : gates.approvalFailures.length ? 'Fix before approval' : 'Human confirmation needed'
   return (
     <div className={`rounded-xl p-4 text-sm ${ready ? 'border border-emerald-200 bg-emerald-50 text-emerald-900' : 'border border-amber-200 bg-amber-50 text-amber-950'}`}>
-      <strong>{ready ? 'Writing checks passed' : 'Fix before approval'}</strong>
-      {gates.writingFailures.length > 0 && (
+      <strong>{heading}</strong>
+      {gates.approvalFailures.length > 0 && (
         <ul className="mt-2 mb-0 list-disc space-y-1 pl-5">
-          {gates.writingFailures.map((failure, index) => <li key={index}>{failure.message}</li>)}
+          {gates.approvalFailures.map((failure, index) => <li key={index}>{failure.message}</li>)}
         </ul>
       )}
       {gates.warnings.length > 0 && (
@@ -203,7 +204,6 @@ export function GatePanel({ gates }: { gates: { passed: boolean; writingFailures
 }
 
 const QUALITY_SIGNALS: { key: string; label: string; max: number; description: string }[] = [
-  { key: 'niche', label: 'Topic fit', max: 10, description: 'How closely this matches your AI/dev/builder focus.' },
   { key: 'hook', label: 'Opening', max: 8, description: 'Whether the first line quickly gives someone a reason to keep reading.' },
   { key: 'insight', label: 'Useful insight', max: 10, description: 'Whether the post adds a concrete implication instead of repeating the source.' },
   { key: 'evidence', label: 'Support', max: 10, description: 'Whether claims are backed by source material, data, steps, or observed results.' },

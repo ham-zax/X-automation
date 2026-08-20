@@ -12,6 +12,7 @@ import {
 } from '../../components/primitives'
 import { navigate } from '../../router'
 import { DraftEditor } from '../create/DraftEditor'
+import { GrowthFitPanel } from '../create/GrowthFitPanel'
 
 export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   const { data, isLoading, error, refetch } = useConversationDetail(candidateKey)
@@ -140,7 +141,13 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
 
       {editor ? (
         <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <DraftEditor data={editor} />
+          <GrowthFitPanel
+            growthFit={editor.growthFit}
+            queueItemId={editor.queueItem?.id ?? null}
+            candidateKey={editor.candidate.key}
+            readOnly={editor.flags.readOnly || Boolean(editor.queueItem?.humanApprovedAt)}
+          />
+          <div className="mt-5"><DraftEditor data={editor} /></div>
 
           <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
             {editor.flags.canReview && (

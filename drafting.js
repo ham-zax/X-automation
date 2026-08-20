@@ -1,4 +1,4 @@
-import { NICHE_LABELS } from './strategy.js';
+import { NICHE_LABELS, assessStrategicRelevance } from './strategy.js';
 
 const PLACEHOLDER = /\[[^\]]+\]/;
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
@@ -137,6 +137,14 @@ function writerEvidenceItem(item) {
   };
 }
 
+function writerCurrentDraft(draft) {
+  if (!draft) return null;
+  const editor = { ...(draft.editor || {}) };
+  delete editor.generation;
+  delete editor.generationHistory;
+  return { ...draft, editor };
+}
+
 export function buildWriterPacket({
   candidate,
   queueItem,
@@ -149,6 +157,7 @@ export function buildWriterPacket({
   recentReplies = [],
   recentReplyArchetypes = [],
   health = {},
+  writingStrategy = null,
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
   return {
@@ -195,7 +204,8 @@ export function buildWriterPacket({
       supportingPostIds: Array.isArray(profileProof?.supportingPostIds) ? [...profileProof.supportingPostIds] : [],
       reason: profileProof?.reason ?? '',
     },
-    currentDraft: draft ? { ...draft } : null,
+    ...(writingStrategy ? { writingStrategy } : {}),
+    currentDraft: writerCurrentDraft(draft),
     constraints: {
       singlePostWeightedLimit: 280,
       hashtagsPreferredMax: 1,
@@ -207,7 +217,7 @@ export function buildWriterPacket({
   };
 }
 
-export function applyWriterOutput(draft, writerOutput = {}) {
+export function applyWriterOutput(draft, writerOutput = {}, { generationProvenance = null } = {}) {
   const decision = writerOutput?.decision;
   const pipeline = writerOutput?.pipeline;
   if (!WRITER_DECISIONS.has(decision)) throw new Error(`Invalid writer decision: ${decision}`);
@@ -243,6 +253,14 @@ export function applyWriterOutput(draft, writerOutput = {}) {
   };
   if (writerOutput?.relationshipValue != null) editor.relationshipValue = String(writerOutput.relationshipValue).trim();
   if (writerOutput?.profileProofValue != null) editor.profileProofValue = String(writerOutput.profileProofValue).trim();
+
+  const generationHistory = Array.isArray(draft?.editor?.generationHistory) ? [...draft.editor.generationHistory] : [];
+  if (generationProvenance) {
+    editor.generation = generationProvenance;
+    editor.generationHistory = [...generationHistory, generationProvenance];
+  } else if (generationHistory.length) {
+    editor.generationHistory = generationHistory;
+  }
 
   const next = { ...draft, editor };
   if (pipeline === 'thread') {
@@ -437,7 +455,8 @@ export function evaluateDraftGates(draft, candidate, {
   evidenceConfirmed = false,
   evidence = null,
   mediaReady = false,
-  nicheOverride = null,
+  relevanceOverride = null,
+  growthObjective = null,
   threadLengthApproved = false,
 } = {}) {
   const pipeline = ensurePipeline(requestedPipeline || draft?.editor?.pipeline || 'original');
@@ -451,7 +470,7 @@ export function evaluateDraftGates(draft, candidate, {
     evidenceConfirmed: true,
     evidenceReferences: true,
     claimScope: true,
-    niche: true,
+    growthFocus: true,
     additiveValue: true,
     originality: true,
     scannability: true,
@@ -508,10 +527,18 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'FIRST_PERSON_EVIDENCE_UNVERIFIED', 'First-person test/measurement language requires a supplied eligible first-party evidence ID.');
   }
 
-  const overrideAccepted = nicheOverride?.adjacentTechnicalTopic === true && Boolean(String(nicheOverride?.reason || '').trim());
-  if (Number(candidate?.niche?.score || 0) < 12 && !overrideAccepted) {
-    checks.niche = false;
-    addIssue(failures, 'NICHE_OUT_OF_SCOPE', 'Candidate niche score is below 12 and no reasoned adjacent-technical-topic override was supplied.');
+  const growthFit = assessStrategicRelevance(candidate, {
+    objective: growthObjective,
+    humanOverride: relevanceOverride,
+  });
+  if (growthFit.state === 'unknown') {
+    checks.growthFocus = false;
+    addIssue(failures, 'GROWTH_FIT_UNKNOWN', 'Growth fit needs a current classification. Rescore candidates from Growth Focus before approval.');
+  } else if (!growthFit.allowed) {
+    checks.growthFocus = false;
+    addIssue(failures, 'GROWTH_FOCUS_DECISION_REQUIRED', 'This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before approval.');
+  } else if (growthFit.state === 'outside' && growthFit.humanOverride) {
+    addIssue(warnings, 'OUTSIDE_GROWTH_FOCUS_ACCEPTED', `Human decision to use an outside-focus opportunity: ${growthFit.humanOverride.reason}`);
   }
 
   const sourceText = candidate?.text || '';
@@ -692,7 +719,6 @@ export function scoreDraft(draft, candidate, context = {}) {
   const firstLine = String(blocks[0] || body || '').split('\n')[0].trim();
   const insightText = blocks.length > 1 ? blocks.slice(1).join(' ') : String(body || '').trim();
   const finalBlock = blocks.at(-1) || '';
-  const niche = Math.min(10, Math.round(Number(candidate?.niche?.score || 0) / 5));
   const hook = usefulText(firstLine, 20) ? 8 : firstLine ? 3 : 0;
   const insight = usefulText(insightText, 45) ? 10 : usefulText(body, 60) ? 6 : String(body || '').trim() ? 3 : 0;
   const evidenceText = String(body || '');
@@ -704,7 +730,8 @@ export function scoreDraft(draft, candidate, context = {}) {
   const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;
   const sourceSimilarity = similarity(body, candidate?.text || '');
   const originality = sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
-  const score = niche + hook + insight + evidence + action + originality;
+  const rawWritingScore = hook + insight + evidence + action + originality;
+  const score = Math.round((rawWritingScore / 40) * 50);
   const weightedLength = pipeline === 'thread'
     ? Math.max(0, ...units.map((part) => weightedPostLength(part)))
     : weightedPostLength(body);
@@ -714,7 +741,7 @@ export function scoreDraft(draft, candidate, context = {}) {
   return {
     score,
     quality,
-    breakdown: { niche, hook, insight, evidence, action, originality },
+    breakdown: { hook, insight, evidence, action, originality },
     sourceSimilarity,
     weightedLength,
     publishable: gateAware ? score >= 40 && gates.passed : legacyPublishable,

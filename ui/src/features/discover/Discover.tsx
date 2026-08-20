@@ -7,6 +7,7 @@ import {
 } from '../../api/client'
 import { Loading, Error, Empty, Badge, Disclosure, Pending, formatDateTime, formatNumber } from '../../components/primitives'
 import { navigate } from '../../router'
+import { GrowthFitPanel } from '../create/GrowthFitPanel'
 
 const FEEDS = [
   { id: 'for-you', label: 'To review' },
@@ -121,6 +122,8 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
   const skipped = queue?.status === 'ignored'
   const movement = sourceMomentumLine(candidate)
   const planLabel = editorialPlanLabel(candidate)
+  const classificationNeedsRefresh = candidate.niche.status !== 'current'
+  const canProceed = candidate.growthFit.allowed
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-6">
@@ -142,7 +145,9 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         </div>
       </div>
 
-      {isX && candidate.niche.tags.length > 0 && (
+      <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />
+
+      {!classificationNeedsRefresh && candidate.niche.tags.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
           {candidate.niche.tags.map((tag) => <Badge key={tag.tag} tone="info">{tag.label}</Badge>)}
         </div>
@@ -189,11 +194,14 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         <div className="mt-3 text-sm text-slate-600">You skipped this source. Choosing a draft action below reopens it.</div>
       )}
 
-      {isX && candidate.niche.matches.length > 0 && (
-        <Disclosure summary="Why it matches">
+      {!classificationNeedsRefresh && candidate.niche.score != null && (
+        <Disclosure summary="Classification evidence">
           <div className="flex flex-wrap gap-1">
             {candidate.niche.matches.map((match) => <Badge key={match}>{match}</Badge>)}
-            {candidate.niche.score != null && <Badge>Internal topic fit {candidate.niche.score}/50</Badge>}
+            <Badge>Classifier topic score {candidate.niche.score}/50</Badge>
+            {candidate.niche.profileRevision != null && candidate.niche.classifierVersion != null && (
+              <Badge>Classification rev {candidate.niche.profileRevision} · v{candidate.niche.classifierVersion}</Badge>
+            )}
           </div>
         </Disclosure>
       )}
@@ -231,28 +239,32 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             onClick={() => runTriage('original')}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+            disabled={!canProceed}
+            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
             {skipped ? 'Reopen as original' : 'Draft original'}
           </button>
           {isX && (
             <button
               onClick={() => runTriage('quote')}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              disabled={!canProceed}
+              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
               {skipped ? 'Reopen as quote' : 'Draft quote'}
             </button>
           )}
           <button
             onClick={() => runTriage('thread')}
-            className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+            disabled={!canProceed}
+            className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
           >
             {skipped ? 'Reopen as thread' : 'Draft thread'}
           </button>
           {isX && (
             <button
               onClick={() => runTriage('reply')}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200"
+              disabled={!canProceed}
+              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
               {skipped ? 'Reopen as reply' : 'Draft reply'}
             </button>

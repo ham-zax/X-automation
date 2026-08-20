@@ -47,6 +47,24 @@ export const NICHE_GROUPS = [
 ];
 
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
+export const CANDIDATE_CLASSIFIER_VERSION = 1;
+export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
+  'qualified_growth',
+  'reach_momentum',
+  'relationships',
+  'technical_authority',
+  'balanced',
+]);
+
+const DEFAULT_CONTENT_ROLES = Object.freeze({
+  agents: 'core',
+  models: 'core',
+  devtools: 'core',
+  infra: 'core',
+  'jobs/career': 'adjacent',
+  builders: 'adjacent',
+  business: 'adjacent',
+});
 
 export const AUDIENCE_NICHE_GROUPS = [
   {
@@ -180,9 +198,18 @@ function cloneNicheGroup(group) {
     tag: group.tag,
     label: group.label,
     weight: group.weight,
+    ...(group.role ? { role: group.role } : {}),
     ...(group.requiresTechnicalContext ? { requiresTechnicalContext: true } : {}),
     terms: [...group.terms],
   };
+}
+
+function normalizeContentRole(value, fallback = 'core') {
+  return ['core', 'adjacent', 'off'].includes(value) ? value : fallback;
+}
+
+function normalizeGrowthObjective(value) {
+  return GROWTH_FOCUS_OBJECTIVES.includes(value) ? value : 'qualified_growth';
 }
 
 function normalizeTerms(values, fallback) {
@@ -192,7 +219,11 @@ function normalizeTerms(values, fallback) {
 
 export function getDefaultNicheProfile() {
   return {
-    contentGroups: NICHE_GROUPS.map(cloneNicheGroup),
+    defaultObjective: 'qualified_growth',
+    contentGroups: NICHE_GROUPS.map((group) => ({
+      ...cloneNicheGroup(group),
+      role: DEFAULT_CONTENT_ROLES[group.tag] || 'core',
+    })),
     audienceGroups: AUDIENCE_NICHE_GROUPS.map(cloneNicheGroup),
     deprioritizedTerms: [...AUDIENCE_DEPRIORITY_SIGNALS],
     exclusionTerms: [...AUDIENCE_EXCLUSION_SIGNALS],
@@ -206,8 +237,10 @@ export function setActiveNicheProfile(profile = {}) {
   const suppliedContent = new Map((profile.contentGroups || []).map((group) => [String(group?.tag || ''), group]));
   const suppliedAudience = new Map((profile.audienceGroups || []).map((group) => [String(group?.tag || ''), group]));
   ACTIVE_NICHE_PROFILE = {
+    defaultObjective: normalizeGrowthObjective(profile.defaultObjective),
     contentGroups: defaults.contentGroups.map((group) => ({
       ...group,
+      role: normalizeContentRole(suppliedContent.get(group.tag)?.role, group.role),
       terms: normalizeTerms(suppliedContent.get(group.tag)?.terms, group.terms),
     })),
     audienceGroups: defaults.audienceGroups.map((group) => ({
@@ -223,6 +256,7 @@ export function setActiveNicheProfile(profile = {}) {
 
 export function getActiveNicheProfile() {
   return {
+    defaultObjective: ACTIVE_NICHE_PROFILE.defaultObjective,
     contentGroups: ACTIVE_NICHE_PROFILE.contentGroups.map(cloneNicheGroup),
     audienceGroups: ACTIVE_NICHE_PROFILE.audienceGroups.map(cloneNicheGroup),
     deprioritizedTerms: [...ACTIVE_NICHE_PROFILE.deprioritizedTerms],
@@ -287,6 +321,101 @@ export function classifyNiche(text) {
     score: Math.min(50, score),
     tags,
     matches: [...new Set(matches)],
+  };
+}
+
+function candidateClassificationText(candidate = {}) {
+  const source = String(candidate.source || '').toLowerCase();
+  const title = String(candidate.title || '').trim();
+  const text = String(candidate.text || '').trim();
+  if (source === 'x') return text;
+  const parts = title && title !== text ? [title, text] : [text || title];
+  if (source === 'editorial') parts.push(...(candidate.niche?.matches || []));
+  return parts.filter(Boolean).join(' ');
+}
+
+export function classifyCandidateForGrowth(candidate = {}, { profileRevision = null, classifiedAt = Date.now() } = {}) {
+  return {
+    ...candidate,
+    niche: {
+      ...classifyNiche(candidateClassificationText(candidate)),
+      profileRevision: profileRevision == null ? null : Number(profileRevision),
+      classifierVersion: CANDIDATE_CLASSIFIER_VERSION,
+      classifiedAt: Number(classifiedAt),
+    },
+  };
+}
+
+export function assessStrategicRelevance(candidate = {}, { objective, humanOverride = null } = {}) {
+  const niche = candidate?.niche || {};
+  const selectedObjective = normalizeGrowthObjective(objective || ACTIVE_NICHE_PROFILE.defaultObjective);
+  const profileRevision = niche.profileRevision == null ? null : Number(niche.profileRevision);
+  const classifierVersion = niche.classifierVersion == null ? null : Number(niche.classifierVersion);
+  const current = niche.status === 'current' && niche.score != null;
+  const validOverride = humanOverride?.accepted === true
+    && humanOverride?.actor === 'human'
+    && Boolean(String(humanOverride?.reason || '').trim())
+    && Number(humanOverride?.profileRevision) === profileRevision
+    && Number(humanOverride?.classifierVersion) === classifierVersion;
+
+  if (!current) {
+    return {
+      state: 'unknown',
+      allowed: false,
+      topicScore: null,
+      tags: [],
+      objective: selectedObjective,
+      reasonCodes: ['CLASSIFICATION_NOT_CURRENT'],
+      explanation: 'Growth fit needs a current candidate classification. Rescore candidates before making a focus decision.',
+      profileRevision,
+      classifierVersion,
+      humanOverride: null,
+    };
+  }
+
+  const groups = new Map(ACTIVE_NICHE_PROFILE.contentGroups.map((group) => [group.tag, group]));
+  const tags = [...new Set(niche.tags || [])];
+  const coreTags = tags.filter((tag) => groups.get(tag)?.role === 'core');
+  const adjacentTags = tags.filter((tag) => groups.get(tag)?.role === 'adjacent');
+  const offTags = tags.filter((tag) => groups.get(tag)?.role === 'off');
+  const state = offTags.length ? 'outside' : adjacentTags.length ? 'adjacent' : coreTags.length ? 'core' : 'outside';
+  const reasonCodes = state === 'core'
+    ? ['CORE_GROUP_MATCH']
+    : state === 'adjacent'
+      ? ['ADJACENT_GROUP_MATCH']
+      : offTags.length ? ['OFF_GROUP_MATCH'] : ['NO_ACTIVE_GROUP_MATCH'];
+  const labels = (values) => values.map((tag) => groups.get(tag)?.label || tag).join(', ');
+  let explanation = state === 'core'
+    ? `Matches core Growth Focus groups: ${labels(coreTags)}.`
+    : state === 'adjacent'
+      ? `Matches adjacent Growth Focus groups: ${labels(adjacentTags)}.${coreTags.length ? ` Supporting core signals: ${labels(coreTags)}.` : ''}`
+      : offTags.length
+        ? `Matches a Growth Focus group currently set to Off: ${labels(offTags)}.`
+        : 'The current classifier found no topic group configured as Core or Adjacent.';
+  const acceptedOverride = validOverride ? {
+    accepted: true,
+    reason: String(humanOverride.reason).trim(),
+    actor: 'human',
+    at: Number(humanOverride.at || 0) || null,
+    profileRevision,
+    classifierVersion,
+  } : null;
+  if (state === 'outside' && acceptedOverride) {
+    explanation += ` Human decision: use anyway — ${acceptedOverride.reason}`;
+    reasonCodes.push('HUMAN_USE_ANYWAY');
+  }
+
+  return {
+    state,
+    allowed: state === 'core' || state === 'adjacent' || Boolean(acceptedOverride),
+    topicScore: Number(niche.score),
+    tags,
+    objective: selectedObjective,
+    reasonCodes,
+    explanation,
+    profileRevision,
+    classifierVersion,
+    humanOverride: acceptedOverride,
   };
 }
 
@@ -391,14 +520,24 @@ export function personalizeCandidates(candidates = [], preference = {}) {
 }
 
 export function isOpportunityCandidate(candidate) {
-  const tags = candidate?.niche?.tags || [];
+  if (candidate?.niche?.status !== 'current') return false;
+  const tags = candidate.niche.tags || [];
   return tags.some((tag) => ['jobs/career', 'builders', 'business'].includes(tag));
 }
 
 export function recommendDistributionAction(candidate, context = {}) {
-  const nicheScore = Number(candidate?.niche?.score || 0);
-  if (context.alreadyUsed || nicheScore < 12) {
-    return { action: 'ignore', reason: context.alreadyUsed ? 'Already used for distribution.' : 'Weak niche fit.' };
+  if (context.alreadyUsed) {
+    return { action: 'ignore', reason: 'Already used for distribution.' };
+  }
+  const growthFit = context.strategicRelevance || assessStrategicRelevance(candidate, {
+    objective: context.objective,
+    humanOverride: context.relevanceOverride,
+  });
+  if (growthFit.state === 'unknown') {
+    return { action: 'ignore', reason: 'Growth fit is unknown until the candidate classification is refreshed.' };
+  }
+  if (!growthFit.allowed) {
+    return { action: 'ignore', reason: 'Outside current Growth Focus. A human can explicitly choose to use the opportunity anyway.' };
   }
 
   if (context.originalStandalone || context.ourExperiment || context.multipleSources) {

@@ -136,7 +136,7 @@ export function Audience() {
             Review observed follower/following relationships and niche alignment. Classifications are advisory; nothing is unfollowed automatically.
           </p>
         </div>
-        <a href="#/advanced/niche" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Edit niche</a>
+        <a href="#/advanced/niche" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Review Growth Focus</a>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

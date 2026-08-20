@@ -7,7 +7,9 @@ const POSTS_FILE = path.join(DATA_DIR, 'posts.jsonl');
 const THREADS_FILE = path.join(DATA_DIR, 'threads.jsonl');
 const INTENTS_FILE = path.join(DATA_DIR, 'intent_ai.jsonl');
 
-const INTENT_LABELS = Object.freeze([
+export const VIRAL_STYLE_TAXONOMY_VERSION = 1;
+
+export const INTENT_LABELS = Object.freeze([
   'announce_release',
   'report_experiment',
   'compare_evaluate',
@@ -25,7 +27,7 @@ const INTENT_LABELS = Object.freeze([
   'share_observation',
 ]);
 
-const SEMANTIC_STYLE_LABELS = Object.freeze([
+export const SEMANTIC_STYLE_LABELS = Object.freeze([
   'announcement',
   'field_note',
   'benchmark_breakdown',
@@ -43,7 +45,7 @@ const SEMANTIC_STYLE_LABELS = Object.freeze([
   'short_observation',
 ]);
 
-const AUDIENCE_GOALS = Object.freeze([
+export const AUDIENCE_GOALS = Object.freeze([
   'inform',
   'teach',
   'help',
@@ -55,7 +57,7 @@ const AUDIENCE_GOALS = Object.freeze([
   'entertain',
 ]);
 
-const READER_ACTIONS = Object.freeze([
+export const READER_ACTIONS = Object.freeze([
   'none',
   'learn',
   'try',
@@ -244,7 +246,7 @@ function buildPrompt(batch, threadMap) {
 
   const records = batch.map((post) => {
     const thread = threadMap.get(String(post.id));
-    const context = threadContext(thread);
+    const context = String(post.threadText || '').trim() || threadContext(thread);
     return [
       `<tweet id="${post.id}">`,
       String(post.text || '').trim(),
@@ -308,6 +310,33 @@ function validateBatchResult(batch, result) {
     if (!seen.has(id)) invalid.push({ tweetId: id, reason: 'missing_id' });
   }
   return { valid, invalid };
+}
+
+export async function classifyViralStyleTexts(rows = [], { profile = null, timeoutMs = 120_000, metadata = {} } = {}) {
+  const batch = (Array.isArray(rows) ? rows : []).map((row) => ({
+    id: String(row?.id ?? row?.tweetId ?? '').trim(),
+    text: String(row?.text || '').trim(),
+    threadText: String(row?.threadText || '').trim(),
+  }));
+  if (!batch.length) return { items: [], invalid: [], execution: null };
+  if (batch.length > 20) throw new Error('Viral style classification accepts at most 20 texts per explicit call.');
+  if (batch.some((row) => !row.id || !row.text)) throw new Error('Viral style classification requires a non-empty id and text for every item.');
+
+  const result = await runStructuredAI({
+    role: 'editorial_scan',
+    profile,
+    prompt: buildPrompt(batch, new Map()),
+    schema: BATCH_SCHEMA,
+    timeoutMs,
+    metadata: {
+      task: 'content_style_classification',
+      batchSize: batch.length,
+      taxonomyVersion: VIRAL_STYLE_TAXONOMY_VERSION,
+      ...metadata,
+    },
+  });
+  const checked = validateBatchResult(batch, result.output);
+  return { items: checked.valid, invalid: checked.invalid, execution: result.execution || null };
 }
 
 function eligiblePosts(posts, { days, now, cached, refresh }) {

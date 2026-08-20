@@ -48,9 +48,29 @@ async function postApi<T>(path: string, body: object = {}): Promise<T> {
 // ---------------------------------------------------------------------------
 export interface GatesView {
   passed: boolean
-  writingFailures: { code: string; message: string }[]
+  approvalFailures: { code: string; message: string }[]
   humanConfirmations: { code: string; message: string }[]
   warnings: { code: string; message: string }[]
+}
+
+export interface StrategicRelevance {
+  state: 'core' | 'adjacent' | 'outside' | 'unknown'
+  allowed: boolean
+  topicScore: number | null
+  tags: string[]
+  objective: EditorialObjective
+  reasonCodes: string[]
+  explanation: string
+  profileRevision: number | null
+  classifierVersion: number | null
+  humanOverride: {
+    accepted: true
+    reason: string
+    actor: 'human'
+    at: number | null
+    profileRevision: number | null
+    classifierVersion: number | null
+  } | null
 }
 
 export interface DraftView {
@@ -62,7 +82,7 @@ export interface DraftView {
   action: string
   body: string
   threadParts: string[]
-  editor: Record<string, unknown>
+  editor: DraftEditorMetadata
   gates: Record<string, unknown>
   gatesView: GatesView
   qualityScore: number
@@ -108,6 +128,7 @@ export interface QueueItemView {
   publishedTweetId: string | null
   outputUrl: string | null
   publishError: string | null
+  growthFit: StrategicRelevance
   potentials: { reach: number; follow: number; conversation: number; relationship: number }
   schedule?: SchedulePlan | null
 }
@@ -361,7 +382,16 @@ export interface DiscoveredCandidate {
   score: number
   saved: boolean
   metrics: Record<string, number | string> & { kind: string }
-  niche: { tags: { tag: string; label: string }[]; matches: string[]; score: number | null }
+  niche: {
+    tags: { tag: string; label: string }[]
+    matches: string[]
+    score: number | null
+    status: 'current' | 'stale' | 'unclassified'
+    profileRevision: number | null
+    classifierVersion: number | null
+    classifiedAt: number | null
+  }
+  growthFit: StrategicRelevance
   viral: { tier: string; label: string; ageHours: number; viewsPerHour: number; engagementsPerHour: number; score: number } | null
   sourceMomentum: {
     snapshotKind: string
@@ -494,6 +524,7 @@ export interface DraftEditorData {
   pipeline: string
   pipelineLabel: string
   queueItem: QueueItemView | null
+  growthFit: StrategicRelevance
   analysis: { score: number; gates: Record<string, unknown>; gatesView: GatesView; breakdown: Record<string, number> }
   flags: {
     engagementReply: boolean
@@ -616,6 +647,20 @@ export function useQueueAction(action: string) {
   })
 }
 
+export function useRelevanceDecision() {
+  const queryClient = useQueryClient()
+  return useMutation<{ queueItem: QueueItemView; growthFit: StrategicRelevance }, Error, { queueItemId?: number; key?: string; decision: 'use_anyway' | 'clear_override'; reason?: string }>({
+    mutationFn: (payload) => postApi('/work/relevance-decision', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['draft'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversation'] })
+    },
+  })
+}
+
 export interface DraftActionPayload {
   body?: string
   threadParts?: string[]
@@ -656,6 +701,7 @@ export interface MeasuredPost {
     views: number
     replies: number
     reposts: number
+    bookmarks: number | null
     followerDelta: number | null
     attributionConfidence: string
     capturedAt: number
@@ -689,6 +735,142 @@ export interface EditorialOutcomeSummary {
   causalClaimAllowed: false
 }
 
+export interface StrategyOutcomeSourcePublication {
+  measurementId: number
+  queueItemId: number
+  tweetId: string
+  title: string
+  outputUrl: string | null
+  publishedAt: number | null
+  capturedAt: number
+}
+
+export interface StrategyFollowerQualitySummary {
+  observationWindows: number
+  newlyObservedFollowerAssociations: number
+  relevantFollowerAssociations: number
+  alignmentRate: number | null
+  attribution: 'period_association_only'
+  overlappingWindowsMayDoubleCount: true
+}
+
+export interface StrategyOutcomeCohort extends EditorialOutcomeCohort {
+  newFollowerQuality: StrategyFollowerQualitySummary
+  sourcePublications: StrategyOutcomeSourcePublication[]
+}
+
+export interface PublicationStrategySelectionProvenance {
+  state: 'selected' | 'none'
+  selectionId: number | null
+  selectedAt: number | null
+  mode: 'off' | 'suggest' | 'apply' | null
+  selectionSource: 'recommended' | 'manual' | 'none'
+  intent: string | null
+  style: string | null
+  openingFeatures: string[]
+  guidanceSnapshot: WritingStrategySelectionSnapshot | null
+}
+
+export interface PublicationStrategyGenerationProvenance {
+  state: 'recorded' | 'not_recorded'
+  generatedAt: number | null
+  generationPreparedAt: number | null
+  strategySelectionId: number | null
+  strategyMode: 'off' | 'suggest' | 'apply' | null
+  strategyApplied: boolean | null
+  strategySnapshot: WritingStrategySelectionSnapshot | null
+  writerExecutionSource: string | null
+  writerAiExecution: Record<string, unknown> | null
+}
+
+export interface WritingStrategyOutcomeObservation {
+  sourcePublication: StrategyOutcomeSourcePublication
+  strategyApplied: boolean
+  strategyMode: 'off' | 'suggest' | 'apply' | null
+  selectionSource: 'recommended' | 'manual' | 'none' | 'unknown'
+  approach: { intent: string | null; style: string | null; openingFeatures: string[] }
+  newFollowerQuality: {
+    newlyObservedFollowers: number
+    nicheAlignedNewFollowers: number
+    alignmentRate: number | null
+    attribution: string
+  }
+  publicationSelection: PublicationStrategySelectionProvenance
+  generation: PublicationStrategyGenerationProvenance
+  editorialObjective: string | null
+  finalPublishedPipeline: string | null
+  growthFocus: { state: string | null; allowed: boolean; objective: string | null; profileRevision: number | null } | null
+  candidateClassification: { status: string | null; profileRevision: number | null; classifierVersion: number | null; classifiedAt: number | null } | null
+  limitations: string[]
+}
+
+export interface WritingStrategyOutcomeSummary {
+  windowMinutes: number
+  availability: 'available' | 'generation_provenance_unavailable' | 'no_measurements'
+  measurementCount: number
+  observationCount: number
+  appliedObservationCount: number
+  unavailable: {
+    strategyProvenanceNotRecorded: number
+    generationProvenanceNotRecorded: number
+    publishedQueueItemUnavailable: number
+  }
+  byIntent: { value: string; summary: StrategyOutcomeCohort }[]
+  byStyle: { value: string; summary: StrategyOutcomeCohort }[]
+  byOpeningFeature: { value: string; summary: StrategyOutcomeCohort }[]
+  byStrategyMode: { value: string; summary: StrategyOutcomeCohort }[]
+  bySelectionSource: { value: string; summary: StrategyOutcomeCohort }[]
+  observations: WritingStrategyOutcomeObservation[]
+  comparisonEvidenceState: null
+  causalClaimAllowed: false
+  limitations: string[]
+}
+
+export interface WritingStrategyEvidenceReadModel {
+  windowMinutes: number
+  externalEvidence: {
+    available: boolean
+    generatedAt: number | null
+    windowDays: number
+    maturityHours: number
+    confidence: number
+    dataset: Record<string, unknown> | null
+    evidence: WritingStrategyEvidenceRef[]
+    error: string | null
+  }
+  experimentEvidence: {
+    experimentId: number
+    name: string
+    status: string
+    dimension: string
+    windowMinutes: number
+    variants: { id: number; experimentId: number; label: string; config: Record<string, unknown> }[]
+    sampleSize: number
+    completedByVariant: Record<string, number>
+    primaryMetric: string
+    primaryMetricValues: Record<string, number | null>
+    secondaryMetricValues: Record<string, Record<string, number | null>>
+    evidence: Record<string, unknown> | null
+    interpretation: Record<string, unknown>
+  }[]
+  comparisons: {
+    dimension: 'intent' | 'style' | 'opening_feature'
+    value: string
+    externalEvidence: WritingStrategyEvidenceRef[]
+    ownAccount: StrategyOutcomeCohort | null
+    agreementState: null
+    limitations: string[]
+  }[]
+  agreementInterpretation: null
+  limitations: string[]
+}
+
+export interface OwnedPostMeasurementCapabilities {
+  bookmarks: { available: true; field: string; source: string }
+  profileClicks: { available: false; reason: string }
+  urlClicks: { available: false; reason: string }
+}
+
 export interface ResultsData {
   account: {
     followers: number
@@ -706,6 +888,9 @@ export interface ResultsData {
   measuredPosts: MeasuredPost[]
   technical: { title: string; pipeline: string; publishedAt: number | null; outputUrl: string | null; measurements: Record<string, unknown>[] }[]
   editorialOutcomes: EditorialOutcomeSummary | null
+  writingStrategyOutcomes: WritingStrategyOutcomeSummary
+  writingStrategyEvidence: WritingStrategyEvidenceReadModel
+  measurementCapabilities: OwnedPostMeasurementCapabilities
 }
 
 export function useResults() {
@@ -727,58 +912,102 @@ export function useRefreshPerformance() {
 }
 
 // ---------------------------------------------------------------------------
-// Niche
+// Growth Focus
 // ---------------------------------------------------------------------------
 
-export interface NicheGroup {
+export interface GrowthFocusGroup {
   tag: string
   label: string
   weight: number
+  role?: 'core' | 'adjacent' | 'off'
   requiresTechnicalContext?: boolean
   terms: string[]
 }
 
-export interface NicheProfile {
-  contentGroups: NicheGroup[]
-  audienceGroups: NicheGroup[]
+export interface GrowthFocusProfile {
+  defaultObjective: EditorialObjective
+  contentGroups: GrowthFocusGroup[]
+  audienceGroups: GrowthFocusGroup[]
   deprioritizedTerms: string[]
   exclusionTerms: string[]
 }
 
-export interface NicheSettingsData {
-  profile: NicheProfile
-  customized: boolean
-  updatedAt: number | null
+export interface CandidateClassificationSummary {
+  totalCandidates: number
+  rescored: number
+  current: number
+  currentZeroScore: number
+  profileRevision: number
+  classifierVersion: number
+  classifiedAt: number
 }
 
-export function useNiche() {
+export interface GrowthFocusSettingsData {
+  profile: GrowthFocusProfile
+  customized: boolean
+  updatedAt: number | null
+  revision: number
+  classifierVersion: number
+  classification?: CandidateClassificationSummary
+}
+
+export function useGrowthFocus() {
   return useQuery({
-    queryKey: ['niche'],
-    queryFn: () => fetchApi<NicheSettingsData>('/niche'),
+    queryKey: ['growth-focus'],
+    queryFn: () => fetchApi<GrowthFocusSettingsData>('/growth-focus'),
     staleTime: 60_000,
   })
 }
 
-export function useNicheSave() {
+export function useGrowthFocusSave() {
   const queryClient = useQueryClient()
-  return useMutation<NicheSettingsData, Error, NicheProfile>({
-    mutationFn: (profile) => postApi<NicheSettingsData>('/niche', { profile }),
+  return useMutation<GrowthFocusSettingsData, Error, GrowthFocusProfile>({
+    mutationFn: (profile) => postApi<GrowthFocusSettingsData>('/growth-focus', { profile }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['niche'] })
+      void queryClient.invalidateQueries({ queryKey: ['growth-focus'] })
       void queryClient.invalidateQueries({ queryKey: ['audience'] })
       void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
     },
   })
 }
 
-export function useNicheReset() {
+export function useGrowthFocusReset() {
   const queryClient = useQueryClient()
-  return useMutation<NicheSettingsData, Error, void>({
-    mutationFn: () => postApi<NicheSettingsData>('/niche/reset', {}),
+  return useMutation<GrowthFocusSettingsData, Error, void>({
+    mutationFn: () => postApi<GrowthFocusSettingsData>('/growth-focus/reset', {}),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['niche'] })
+      void queryClient.invalidateQueries({ queryKey: ['growth-focus'] })
       void queryClient.invalidateQueries({ queryKey: ['audience'] })
       void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+export function useGrowthFocusObjective() {
+  const queryClient = useQueryClient()
+  return useMutation<GrowthFocusSettingsData, Error, EditorialObjective>({
+    mutationFn: (objective) => postApi<GrowthFocusSettingsData>('/growth-focus/objective', { objective }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['growth-focus'] })
+      void queryClient.invalidateQueries({ queryKey: ['editorial'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+export function useCandidateRescore() {
+  const queryClient = useQueryClient()
+  return useMutation<CandidateClassificationSummary, Error, void>({
+    mutationFn: () => postApi<CandidateClassificationSummary>('/growth-focus/rescore-candidates', {}),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
     },
   })
 }
@@ -1231,6 +1460,234 @@ export function useAIConnectionCheck() {
 export function useAIProfileTest() {
   return useMutation<AIProfileTestResult, Error, number>({
     mutationFn: (profileId) => postApi(`/ai/profiles/${profileId}/test`),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Writing strategy evidence + human selection
+// ---------------------------------------------------------------------------
+
+export interface WritingStrategyEvidenceRef {
+  id: string
+  lane: 'external' | 'internal' | 'experiment' | 'learned_rule'
+  state: 'supported' | 'directional' | 'insufficient'
+  sourceState: string | null
+  strategy: { intent: string | null; style: string | null; openingFeatures: string[] }
+  sampleSize: number | null
+  rationale: string | null
+  limitations: string[]
+  scope: { objectives: string[]; pipelines: string[]; topicTags: string[] }
+  contextMatch: boolean
+  contextMismatchReason: string | null
+  learnedRuleStatus: string | null
+  learnedRuleMatch: Record<string, unknown> | null
+}
+
+export interface WritingStrategyContext {
+  queueItemId: number
+  candidateKey: string
+  objective: EditorialObjective
+  pipeline: string
+  growthFit: StrategicRelevance
+  classification: {
+    status: 'current' | 'stale' | 'unclassified'
+    score: number | null
+    tags: string[]
+    matches: string[]
+    profileRevision: number | null
+    classifierVersion: number | null
+    classifiedAt: number | null
+  }
+  editorialRecommendation: {
+    id: number
+    objective: EditorialObjective
+    pipeline: string
+    title: string
+    storyKey: string
+    selectedPipeline: string
+    selectedAt: number
+  } | null
+}
+
+export interface WritingStrategyProvenance {
+  taxonomyVersion: number
+  external?: {
+    generatedAt?: number
+    windowDays: number
+    maturityHours: number
+    confidence: number
+    dataset: Record<string, unknown>
+  }
+  internal?: { labeledPublishedContent: number; measuredOutcomeReferences: number }
+  experiments?: { references: string[] }
+  learnedRules?: { references: string[] }
+}
+
+export interface WritingStrategySelectionSnapshot {
+  selectionSource: 'recommended' | 'manual'
+  context: WritingStrategyContext
+  intent: string | null
+  style: string | null
+  openingFeatures: string[]
+  applicability: 'strong_fit' | 'possible_fit' | 'weak_fit' | 'manual'
+  rationale: string
+  externalEvidence: WritingStrategyEvidenceRef[]
+  internalEvidence: WritingStrategyEvidenceRef[]
+  experimentEvidence: WritingStrategyEvidenceRef[]
+  learnedRuleContext: WritingStrategyEvidenceRef[]
+  limitations: string[]
+  provenance: WritingStrategyProvenance
+}
+
+export interface WritingStrategyOption {
+  intent: string | null
+  style: string | null
+  openingFeatures: string[]
+  applicability: 'strong_fit' | 'possible_fit' | 'weak_fit'
+  rationale: string
+  externalEvidence: WritingStrategyEvidenceRef[]
+  internalEvidence: WritingStrategyEvidenceRef[]
+  experimentEvidence: WritingStrategyEvidenceRef[]
+  learnedRuleEvidence: WritingStrategyEvidenceRef[]
+  limitations: string[]
+  selectionSnapshot: WritingStrategySelectionSnapshot
+}
+
+export interface WritingStrategySelection {
+  id: number
+  queueItemId: number
+  draftId: number | null
+  mode: 'off' | 'suggest' | 'apply'
+  intent: string | null
+  style: string | null
+  openingFeatures: string[]
+  guidance: WritingStrategySelectionSnapshot
+  selectionSource: 'recommended' | 'manual'
+  selectedBy: 'human'
+  selectedAt: number
+}
+
+export interface WritingStrategyPreview {
+  queueItem: { id: number; candidateKey: string; draftId: number | null; pipeline: string; status: string }
+  context: WritingStrategyContext
+  availability: { status: string; selectable: boolean; reason: string | null }
+  evidenceSummary: { external: number; internal: number; experiment: number; learnedRuleContext: number; rejected: number }
+  shortlist: {
+    status: 'applicable' | 'insufficient_evidence' | 'not_applicable'
+    reason: string | null
+    options: WritingStrategyOption[]
+    rejectedEvidence: { id: string; lane: string; reason: string }[]
+  }
+  provenance: WritingStrategyProvenance
+  currentSelection: WritingStrategySelection | null
+}
+
+export interface WritingStrategySelectPayload {
+  queueItemId: number
+  draftId?: number | null
+  mode: 'off' | 'suggest' | 'apply'
+  intent?: string | null
+  style?: string | null
+  openingFeatures?: string[]
+  selectionSource: 'recommended' | 'manual'
+  guidanceSnapshot?: WritingStrategySelectionSnapshot
+}
+
+export interface WriterGenerationProvenance {
+  generatedAt: number
+  generationPreparedAt: number
+  strategySelectionId: number | null
+  strategyMode: 'off' | 'suggest' | 'apply' | null
+  strategyApplied: boolean
+  strategySnapshot: WritingStrategySelectionSnapshot | null
+  writerExecutionSource: string
+  writerAiExecution: Record<string, unknown> | null
+}
+
+export interface DraftEditorMetadata extends Record<string, unknown> {
+  generation?: WriterGenerationProvenance
+  generationHistory?: WriterGenerationProvenance[]
+}
+
+export interface WritingStrategyRecommendationResult {
+  status: 'recommended' | 'no_recommendation' | 'not_available' | 'failed'
+  recommendation: {
+    optionIndex: number
+    option: WritingStrategyOption
+    rationale: string
+    evidenceIds: string[]
+    limitations: string[]
+  } | null
+  rationale?: string
+  evidenceIds?: string[]
+  limitations?: string[]
+  reason?: string
+  error?: { code: string; message: string }
+  preview: WritingStrategyPreview
+  aiExecution: Record<string, unknown> | null
+}
+
+export interface ContentStyleLabel {
+  id: number
+  queueItemId: number
+  contentHash: string
+  taxonomyVersion: number
+  primaryIntent: string
+  semanticStyle: string
+  audienceGoal: string
+  readerAction: string
+  confidence: number
+  evidenceSpans: string[]
+  aiExecution: Record<string, unknown>
+  classifiedAt: number
+}
+
+export interface PublishedStyleClassificationResult {
+  taxonomyVersion: number
+  requested: number
+  classified: number
+  reused: number
+  labels: ContentStyleLabel[]
+  invalid: { tweetId: string; reason: string }[]
+  aiExecution: Record<string, unknown> | null
+}
+
+export function useWritingStrategy(queueItemId: number | null) {
+  return useQuery({
+    queryKey: ['writing-strategy', queueItemId],
+    queryFn: () => fetchApi<WritingStrategyPreview>(`/writing-strategy?queueItemId=${queueItemId}`),
+    enabled: queueItemId != null && Number.isFinite(queueItemId),
+    staleTime: 30_000,
+  })
+}
+
+export function useWritingStrategyRecommend() {
+  const queryClient = useQueryClient()
+  return useMutation<WritingStrategyRecommendationResult, Error, { queueItemId: number; profileId?: number | null }>({
+    mutationFn: (payload) => postApi('/writing-strategy/recommend', payload),
+    onSuccess: (result, payload) => {
+      queryClient.setQueryData(['writing-strategy', payload.queueItemId], result.preview)
+    },
+  })
+}
+
+export function useWritingStrategySelect() {
+  const queryClient = useQueryClient()
+  return useMutation<{ selection: WritingStrategySelection }, Error, WritingStrategySelectPayload>({
+    mutationFn: (payload) => postApi('/writing-strategy/select', payload),
+    onSuccess: (_result, payload) => {
+      void queryClient.invalidateQueries({ queryKey: ['writing-strategy', payload.queueItemId] })
+    },
+  })
+}
+
+export function useClassifyPublishedContent() {
+  const queryClient = useQueryClient()
+  return useMutation<PublishedStyleClassificationResult, Error, { queueItemIds?: number[]; limit?: number; profileId?: number | null }>({
+    mutationFn: (payload) => postApi('/learn/classify-published', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['writing-strategy'] })
+    },
   })
 }
 

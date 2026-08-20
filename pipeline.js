@@ -1,7 +1,7 @@
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { scoreOpportunity } from './opportunity.js';
 import { postTweetHttp } from './x_http.js';
-import { recommendDistributionAction } from './strategy.js';
+import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
   deleteDraft,
   ensureQueueItem,
@@ -15,12 +15,14 @@ import {
   hasCandidateAction,
   listCandidateActions,
   listAcceptedLearnedRules,
+  listQueueItems,
   listResearchEvidence,
   listRecentPublishedContent,
   listRelationshipEvents,
   markCandidateSaved,
   recordCandidateAction,
   recordRelationshipEvent,
+  rescoreCandidateClassifications,
   saveDraft,
   saveQueueItem,
 } from './store.js';
@@ -146,6 +148,7 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     evidenceConfirmed: confirmations.evidenceConfirmed === true,
     evidence: editorialEvidenceForQueue(queueItem),
     mediaReady: false,
+    relevanceOverride: queueItem?.relevance?.humanOverride || null,
     replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
 }
@@ -155,7 +158,16 @@ export function refreshQueueRecommendation(key, context = {}) {
   ensureQueueItem(key);
   const scoreContext = scoringContext(candidate, context);
   const scores = scoreOpportunity(candidate, scoreContext);
-  const recommendation = recommendDistributionAction(candidate, recommendationContext(candidate, scores, context));
+  const existingQueueItem = getQueueItemByCandidate(key);
+  const growthFit = assessStrategicRelevance(candidate, {
+    objective: context.objective,
+    humanOverride: existingQueueItem?.relevance?.humanOverride || null,
+  });
+  const recommendation = recommendDistributionAction(candidate, recommendationContext(candidate, scores, {
+    ...context,
+    strategicRelevance: growthFit,
+    relevanceOverride: existingQueueItem?.relevance?.humanOverride || null,
+  }));
   const recommendedPipeline = actionToPipeline(recommendation.action);
   const queueItem = saveQueueItem({
     candidateKey: key,
@@ -169,17 +181,94 @@ export function refreshQueueRecommendation(key, context = {}) {
   return { candidate, queueItem, scores, recommendation: { ...recommendation, pipeline: recommendedPipeline } };
 }
 
+export function refreshCandidateRecommendations() {
+  let refreshed = 0;
+  for (const queueItem of listQueueItems({ lane: 'main', limit: 10_000 })) {
+    if (['approved', 'publishing', 'published'].includes(queueItem.status)) continue;
+    refreshQueueRecommendation(queueItem.candidateKey);
+    refreshed += 1;
+  }
+  return { refreshed };
+}
+
+export function rescoreCandidateRelevance(options = {}) {
+  const classification = rescoreCandidateClassifications(options);
+  const recommendations = refreshCandidateRecommendations();
+  return { ...classification, queueRecommendationsRefreshed: recommendations.refreshed };
+}
+
+export function setRelevanceDecision(key, { decision, reason = '', actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('Growth Focus override decisions require an explicit human action.');
+  const candidate = requireCandidate(key);
+  ensureQueueItem(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw new Error('Growth Focus decisions cannot be changed after approval or publication.');
+  }
+  if (decision === 'clear_override') {
+    const saved = saveQueueItem({ candidateKey: key, relevance: {} });
+    return { queueItem: saved, growthFit: assessStrategicRelevance(candidate) };
+  }
+  if (decision !== 'use_anyway') throw new Error(`Unsupported Growth Focus decision: ${decision || 'missing'}.`);
+
+  const growthFit = assessStrategicRelevance(candidate);
+  if (growthFit.state === 'unknown') {
+    throw new Error('Growth fit is unknown. Rescore candidates from Growth Focus before choosing to use this opportunity.');
+  }
+  if (growthFit.state !== 'outside') {
+    throw new Error(`Growth Focus override is only needed for outside-focus opportunities; current state is ${growthFit.state}.`);
+  }
+  const explanation = String(reason || '').trim();
+  if (!explanation) throw new Error('Using an outside-focus opportunity requires a short human reason.');
+  const humanOverride = {
+    accepted: true,
+    reason: explanation,
+    actor: 'human',
+    at: Date.now(),
+    profileRevision: growthFit.profileRevision,
+    classifierVersion: growthFit.classifierVersion,
+  };
+  const saved = saveQueueItem({ candidateKey: key, relevance: { humanOverride } });
+  return {
+    queueItem: saved,
+    growthFit: assessStrategicRelevance(candidate, { humanOverride }),
+  };
+}
+
 export function inspectWorkflow(key) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
+  const storedDraft = getDraftByCandidate(key);
+  const historicalDraft = storedDraft?.status === 'published'
+    || queueItem?.status === 'published'
+    || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
+  let draft = storedDraft;
+  if (storedDraft && queueItem && !historicalDraft && TEXT_PIPELINES.has(queueItem.pipeline)) {
+    const checks = storedDraft.gates?.checks || {};
+    const analysis = scoreDraft(storedDraft, candidate, contentGateContext(key, queueItem.pipeline, {
+      factualityConfirmed: checks.factualityConfirmed === true,
+      evidenceConfirmed: checks.evidenceConfirmed === true,
+    }));
+    draft = { ...storedDraft, qualityScore: analysis.score, gates: analysis.gates };
+  }
   const scores = scoreOpportunity(candidate, scoringContext(candidate));
+  const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem?.relevance?.humanOverride || null });
+  const currentRecommendation = queueItem
+    ? recommendDistributionAction(candidate, recommendationContext(candidate, scores, {
+        strategicRelevance: growthFit,
+        relevanceOverride: queueItem?.relevance?.humanOverride || null,
+      }))
+    : null;
   return {
     candidate,
     queueItem,
-    draft: getDraftByCandidate(key),
+    draft,
     actions: listCandidateActions(key),
     scores,
-    recommendation: queueItem ? { pipeline: queueItem.recommendedPipeline, reason: queueItem.routingReason } : null,
+    growthFit,
+    recommendation: currentRecommendation
+      ? { ...currentRecommendation, pipeline: actionToPipeline(currentRecommendation.action) }
+      : null,
   };
 }
 
@@ -259,6 +348,15 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
   if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
     throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
   }
+  if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {
+    const growthFit = assessStrategicRelevance(candidate, { humanOverride: previousQueueItem.relevance?.humanOverride || null });
+    if (growthFit.state === 'unknown') {
+      throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
+    }
+    if (!growthFit.allowed) {
+      throw new Error('This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
+    }
+  }
   const state = routeState(pipeline);
   let draft = getDraftByCandidate(key);
   if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
@@ -321,7 +419,11 @@ export function approveQueueItem(key, confirmations = {}) {
 
   let draft = null;
   let analysis = null;
-  if (queueItem.pipeline !== 'repost') {
+  if (queueItem.pipeline === 'repost') {
+    const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem.relevance?.humanOverride || null });
+    if (growthFit.state === 'unknown') throw new Error('Growth fit needs a current classification before repost approval.');
+    if (!growthFit.allowed) throw new Error('This repost is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before approval.');
+  } else {
     draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
     analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));

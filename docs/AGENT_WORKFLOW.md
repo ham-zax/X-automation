@@ -302,14 +302,15 @@ The generated scaffold is deliberately incomplete and normally scores below publ
 printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js writer-packet
 ```
 
-`writer-packet` returns the routed pipeline, candidate/queue opportunity context, relationship context when available, current draft, recent approved/published content, profile-proof slot, constraints, and `docs/POST_GENERATION_PROMPT.md`. It does not call an LLM.
+`writer-packet` returns `{ packet, generation }`. Feed only `packet` to the external Writer. `packet` contains the routed pipeline, candidate/queue opportunity context, relationship context when available, current draft, recent approved/published content, profile-proof slot, constraints, and `docs/POST_GENERATION_PROMPT.md`. It contains `writingStrategy` only when the latest persisted human selection is `apply`. `off`, `suggest`, and no selection add no strategy instruction. `generation` is transport provenance for `apply-writer-output`; it is not Writer guidance. `writer-packet` does not call an LLM.
 
-After applying that prompt externally, persist only the structured candidate output:
+After applying that prompt externally, persist the structured candidate output and echo the exact `generation` object returned by `writer-packet`:
 
 ```bash
 cat <<'JSON' | node agent_bridge.js apply-writer-output
 {
   "id": 12,
+  "generation": {"preparedAt": 1787230000000, "selectionId": null, "selectionSelectedAt": null, "selectionSource": null, "mode": null, "strategyApplied": false, "strategySnapshot": null, "writingStrategy": null},
   "output": {
     "decision": "POST",
     "pipeline": "original",
@@ -328,7 +329,7 @@ cat <<'JSON' | node agent_bridge.js apply-writer-output
 JSON
 ```
 
-The writer output pipeline must match the currently routed queue item. Applying output persists editor/thread text and returns the item to `drafting`; it never requests review or approval. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
+The writer output pipeline must match the currently routed queue item. `apply-writer-output` validates the echoed generation context against the append-only human selection history, persists generation provenance with the draft, and returns the item to `drafting`; it never requests review or approval. If the external Writer has inspectable execution metadata, pass it separately as `writerAiExecution`; otherwise execution remains explicitly unavailable for that bridge generation. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
 
 The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media upload/readiness is not implemented in Phase 2.
 

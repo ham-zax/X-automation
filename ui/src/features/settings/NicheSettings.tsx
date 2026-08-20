@@ -1,9 +1,26 @@
 import { useEffect, useState } from 'react'
-import { useNiche, useNicheReset, useNicheSave, type NicheGroup, type NicheProfile } from '../../api/client'
+import {
+  useCandidateRescore,
+  useGrowthFocus,
+  useGrowthFocusReset,
+  useGrowthFocusSave,
+  type EditorialObjective,
+  type GrowthFocusGroup,
+  type GrowthFocusProfile,
+} from '../../api/client'
 import { Badge, Error, Loading, formatDateTime } from '../../components/primitives'
 
-function cloneProfile(profile: NicheProfile): NicheProfile {
+const OBJECTIVES: { value: EditorialObjective; label: string }[] = [
+  { value: 'qualified_growth', label: 'Grow relevant followers' },
+  { value: 'reach_momentum', label: 'Maximize reach' },
+  { value: 'technical_authority', label: 'Build technical authority' },
+  { value: 'relationships', label: 'Build relationships and opportunities' },
+  { value: 'balanced', label: 'Balanced' },
+]
+
+function cloneProfile(profile: GrowthFocusProfile): GrowthFocusProfile {
   return {
+    defaultObjective: profile.defaultObjective,
     contentGroups: profile.contentGroups.map((group) => ({ ...group, terms: [...group.terms] })),
     audienceGroups: profile.audienceGroups.map((group) => ({ ...group, terms: [...group.terms] })),
     deprioritizedTerms: [...profile.deprioritizedTerms],
@@ -15,7 +32,15 @@ function splitTerms(value: string) {
   return [...new Set(value.split(/\n|,/).map((term) => term.trim().toLowerCase()).filter(Boolean))]
 }
 
-function GroupEditor({ group, onChange }: { group: NicheGroup; onChange: (terms: string[]) => void }) {
+function GroupEditor({
+  group,
+  onChange,
+  onRoleChange,
+}: {
+  group: GrowthFocusGroup
+  onChange: (terms: string[]) => void
+  onRoleChange?: (role: 'core' | 'adjacent' | 'off') => void
+}) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -23,7 +48,21 @@ function GroupEditor({ group, onChange }: { group: NicheGroup; onChange: (terms:
           <div className="font-semibold text-slate-900">{group.label}</div>
           <div className="mt-1 text-xs text-slate-500">{group.terms.length} matching terms</div>
         </div>
-        {group.requiresTechnicalContext && <Badge tone="neutral">Needs technical context</Badge>}
+        <div className="flex items-center gap-2">
+          {group.requiresTechnicalContext && <Badge tone="neutral">Needs technical context</Badge>}
+          {onRoleChange && (
+            <select
+              value={group.role || 'core'}
+              onChange={(event) => onRoleChange(event.target.value as 'core' | 'adjacent' | 'off')}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
+              aria-label={`${group.label} Growth Focus role`}
+            >
+              <option value="core">Core</option>
+              <option value="adjacent">Adjacent</option>
+              <option value="off">Off</option>
+            </select>
+          )}
+        </div>
       </div>
       <textarea
         value={group.terms.join('\n')}
@@ -55,18 +94,19 @@ function TermListEditor({ title, note, terms, onChange }: { title: string; note:
 }
 
 export function NicheSettings() {
-  const { data, isLoading, error, refetch } = useNiche()
-  const save = useNicheSave()
-  const reset = useNicheReset()
-  const [draft, setDraft] = useState<NicheProfile | null>(null)
+  const { data, isLoading, error, refetch } = useGrowthFocus()
+  const save = useGrowthFocusSave()
+  const reset = useGrowthFocusReset()
+  const rescore = useCandidateRescore()
+  const [draft, setDraft] = useState<GrowthFocusProfile | null>(null)
 
   useEffect(() => {
     if (data?.profile) setDraft(cloneProfile(data.profile))
   }, [data])
 
-  if (isLoading) return <Loading message="Loading niche settings..." />
+  if (isLoading) return <Loading message="Loading Growth Focus..." />
   if (error) return <Error message={error.message} onRetry={() => refetch()} />
-  if (!data || !draft) return <Error message="Niche settings are unavailable." />
+  if (!data || !draft) return <Error message="Growth Focus is unavailable." />
 
   const updateGroup = (kind: 'contentGroups' | 'audienceGroups', tag: string, terms: string[]) => {
     setDraft((current) => current ? {
@@ -74,22 +114,37 @@ export function NicheSettings() {
       [kind]: current[kind].map((group) => group.tag === tag ? { ...group, terms } : group),
     } : current)
   }
+  const updateContentRole = (tag: string, role: 'core' | 'adjacent' | 'off') => {
+    setDraft((current) => current ? {
+      ...current,
+      contentGroups: current.contentGroups.map((group) => group.tag === tag ? { ...group, role } : group),
+    } : current)
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <a href="#/advanced" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Diagnostics</a>
-          <h2 className="mt-2 text-2xl font-semibold text-slate-900">Your niche</h2>
+          <a href="#/advanced" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Advanced</a>
+          <h2 className="mt-2 text-2xl font-semibold text-slate-900">Growth Focus</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Define the topics the product should treat as relevant and the kinds of technical profiles that fit the audience you want to build.
+            Choose the audience-growth goal and how deterministic topic matches should be interpreted. Topic classification remains evidence; these roles decide whether an opportunity is Core, Adjacent, or Outside current focus.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <Badge tone={data.customized ? 'info' : 'neutral'}>{data.customized ? 'Customized' : 'Using defaults'}</Badge>
+            <Badge tone="neutral">Classification rev {data.revision} · v{data.classifierVersion}</Badge>
             {data.updatedAt && <span>Last changed {formatDateTime(data.updatedAt)}</span>}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={rescore.isPending}
+            onClick={() => rescore.mutate()}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {rescore.isPending ? 'Rescoring…' : 'Rescore candidates'}
+          </button>
           <button
             type="button"
             disabled={reset.isPending || !data.customized}
@@ -104,30 +159,54 @@ export function NicheSettings() {
             onClick={() => save.mutate(draft)}
             className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            {save.isPending ? 'Saving…' : 'Save niche'}
+            {save.isPending ? 'Saving…' : 'Save Growth Focus'}
           </button>
         </div>
       </div>
 
       {(save.isSuccess || reset.isSuccess) && (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Niche settings updated. Audience fit is recalculated from the saved profile as it is displayed.
+          Growth Focus updated. Stored candidate classifications were refreshed to the new profile revision.
         </div>
       )}
-      {(save.isError || reset.isError) && (
+      {rescore.isSuccess && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          Rescored {rescore.data.rescored} of {rescore.data.totalCandidates} candidates · classification rev {rescore.data.profileRevision} · v{rescore.data.classifierVersion}.
+        </div>
+      )}
+      {(save.isError || reset.isError || rescore.isError) && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {(save.error || reset.error)?.message}
+          {(save.error || reset.error || rescore.error)?.message}
         </div>
       )}
 
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <label className="text-sm font-semibold text-slate-900">
+          Default growth goal
+          <select
+            value={draft.defaultObjective}
+            onChange={(event) => setDraft((current) => current ? { ...current, defaultObjective: event.target.value as EditorialObjective } : current)}
+            className="mt-2 block w-full max-w-md rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+          >
+            {OBJECTIVES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 text-xs text-slate-500">Qualified growth remains the default: relevant followers first, while reach, authority, relationships, and opportunities stay distinct outcomes.</p>
+      </section>
+
       <section>
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">What we want to talk about</h3>
-          <p className="mt-1 text-sm text-slate-600">These terms drive the core topic-fit classifier used when new content is evaluated.</p>
+          <h3 className="text-lg font-semibold text-slate-900">Topics and their role</h3>
+          <p className="mt-1 text-sm text-slate-600">Terms drive deterministic classification. The role controls strategy: Core is normal focus, Adjacent is allowed when technically relevant, and Off is treated as outside current focus unless you explicitly choose to use an opportunity anyway.</p>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {draft.contentGroups.map((group) => (
-            <GroupEditor key={group.tag} group={group} onChange={(terms) => updateGroup('contentGroups', group.tag, terms)} />
+            <GroupEditor
+              key={group.tag}
+              group={group}
+              onChange={(terms) => updateGroup('contentGroups', group.tag, terms)}
+              onRoleChange={(role) => updateContentRole(group.tag, role)}
+            />
           ))}
         </div>
       </section>
@@ -146,8 +225,8 @@ export function NicheSettings() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <TermListEditor
-          title="Outside current focus"
-          note="Topics that should normally be deprioritized unless the same profile also has strong technical context."
+          title="Audience deprioritization signals"
+          note="Profile-language signals that lower audience fit unless the same account also has strong technical context. These do not set candidate Growth fit."
           terms={draft.deprioritizedTerms}
           onChange={(terms) => setDraft((current) => current ? { ...current, deprioritizedTerms: terms } : current)}
         />
@@ -160,7 +239,7 @@ export function NicheSettings() {
       </section>
 
       <div className="rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-600">
-        <strong className="text-slate-800">Current scope:</strong> these settings change niche scoring/classification and audience-fit review. They do not rewrite the live X source-search queries yet. AI-assisted niche suggestions are intentionally not part of this first version.
+        <strong className="text-slate-800">Current scope:</strong> Growth Focus changes how current candidate classification is interpreted and how audience fit is reviewed. It does not rewrite live X source-search queries, approve content, or change Writer strategy behavior.
       </div>
     </div>
   )
