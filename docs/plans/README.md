@@ -1,6 +1,6 @@
 # Implementation Plan Index
 
-These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-5 are implemented; Phase 6 is the next planned layer. Implemented phase files serve as executable design/history for the current runtime.
+These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-6 plus the shared AI runtime/provider layer are implemented. The plan files now serve as executable design/history for the current runtime and remaining optional work.
 
 Do not implement later phases by inventing interfaces that earlier plans have not established yet.
 
@@ -121,7 +121,7 @@ Owns:
 
 - format-aware original/quote/reply/thread writing contracts;
 - canonical writer packet;
-- ProfileProofCoverage packet/editorial contract; the strict published-only shared runtime owner is planned in Phase 6;
+- ProfileProofCoverage packet/editorial contract plus the strict published-only shared runtime owner implemented with Phase 6;
 - deterministic gates;
 - 50-point score integration;
 - thread storage;
@@ -190,28 +190,28 @@ Depends on:
 - Phase 4 measurements/experiments;
 - Phase 1D account-health/visibility contract.
 
-## AI Runtime & Provider Layer — planned Phase-6 prerequisite
+## AI Runtime & Provider Layer — implemented
 
 [`AI_RUNTIME_PROVIDER_LAYER.md`](AI_RUNTIME_PROVIDER_LAYER.md)
 
-Will own:
+Owns:
 
 - one provider-independent `runStructuredAI()` execution boundary;
 - per-role AI profiles for continuous scan, editorial scan, editorial final, and writer;
 - Codex model/reasoning selection, including an operator-created Luna/Max profile when supported by the installed model catalog;
 - first-class OpenRouter configuration and dynamic model catalog;
 - arbitrary OpenAI-compatible base URL/API key/model configuration for local or remote inference;
-- optional OpenCode, OpenCode 2, and AGY runtime adapters when installed and compatible;
+- installed AGY structured runtime support with exact model catalog IDs and capability-gated flags; OpenCode/OpenCode 2 remain unavailable when not installed;
 - AI Settings UI, runtime/model availability, structured-output capability checks, secret references, and observable usage/cost provenance;
-- migration of the current Codex-only writer subprocess behind the shared boundary.
+- migration of the former Codex-only writer subprocess behind the shared boundary.
 
 Changing runtime/provider/model never changes source truth, workflow state, evidence authority, human approval, publication authorization, or learned-rule acceptance.
 
-## Phase 6 — planned
+## Phase 6 — implemented
 
 [`PHASE_6_AI_EDITORIAL_DIRECTOR.md`](PHASE_6_AI_EDITORIAL_DIRECTOR.md)
 
-Will own:
+Owns:
 
 - one shared canonical source-refresh path for X Latest / X Momentum / GitHub Trending / HN Top Stories;
 - current-source editorial context plus source-observation history and source-native momentum deltas;

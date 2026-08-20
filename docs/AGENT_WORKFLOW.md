@@ -14,7 +14,7 @@ The architecture is also **network-first**. Publishing is one instrument inside 
 
 **conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion.**
 
-Use `PRODUCT_ARCHITECTURE.md` for the complete current/planned product map, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership and Engage Next behavior, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification. Phase 6 editorial planning and the selectable AI runtime/provider layer are planned; do not treat their future bridge/UI operations as current commands until implemented.
+Use `PRODUCT_ARCHITECTURE.md` for the complete current/planned product map, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership and Engage Next behavior, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification. Phase 6 editorial planning and the selectable AI runtime/provider layer are current: agents may inspect/refresh/select/dismiss editorial recommendations and inspect/select AI configuration through the bridge, but those actions do not grant approval or publication authority.
 
 ## Stable interface
 
@@ -47,6 +47,28 @@ Available commands:
 - `engage-resolve` - ignore/expire an item or explicitly send an already human-approved exact reply; it cannot approve one.
 - `audience-sync` - refresh the authenticated follower/following audience snapshot and strategic state for currently observed relevant profiles.
 - `audience` - inspect the raw niche-aligned follower/following observation layer.
+- `editorial-plan` - read the latest completed plan for an objective without refreshing sources or invoking a model.
+- `editorial-refresh` - explicitly recompute the advisory plan, optionally refreshing canonical sources first; it never selects a recommendation.
+- `editorial-recommendation` - inspect one persisted recommendation and its evidence/provenance context.
+- `editorial-select` - explicit human/operator route selection for one recommendation; may create/reuse normal workflow work but never approves, schedules, publishes, or sends.
+- `editorial-dismiss` - dismiss one still-actionable recommendation.
+- `editorial-add-source` - attach an operator-supplied URL/claim through the controlled research fetch boundary; it does not search the web itself.
+- `editorial-outcomes` - read observational Phase-4 outcome cohorts associated with editorial provenance when real measurements exist.
+- `ai-config` / `ai-runtimes` - inspect safe AI profile/binding/runtime state without exposing stored secrets.
+- `ai-select-default` / `ai-bind-role` - explicitly select existing AI profiles; these commands cannot create/read secrets or change content/workflow authority.
+
+### AI Editorial Director — implemented
+
+The default product loop is now `Discover -> Research -> AI Editorial Director -> human select/override -> Writer -> human edit/approve -> Publish -> Measure -> Learn`.
+
+```bash
+npm run agent -- editorial-plan <<<'{"objective":"qualified_growth"}'
+npm run agent -- editorial-refresh <<<'{"objective":"qualified_growth","refreshSources":true}'
+npm run agent -- editorial-select <<<'{"recommendationId":1}'
+npm run agent -- editorial-add-source <<<'{"recommendationId":2,"url":"https://example.com/evidence","claim":"Claim to investigate","claimType":"other"}'
+```
+
+`editorial-select` is route selection, not approval. Original/Quote/Thread/Reply enter the existing editable workflow, Repost enters its existing manual-review flow, and `RESEARCH_MORE` remains research-only with unresolved questions until the human explicitly chooses a publication route. Writer evidence references must resolve to persisted evidence IDs and claim scope; free-form AI labels such as `verified` are not proof.
 
 ## Distribution decision before drafting or engaging
 

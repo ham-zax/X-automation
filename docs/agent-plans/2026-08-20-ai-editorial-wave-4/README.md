@@ -10,8 +10,8 @@
 
 | Mission | Type | Status | Can start | Workspace | Isolation reason | Blocked by |
 |---|---|---|---|---|---|---|
-| Agent A4 — Editorial Product Surface | executable/UI | ready | now | `/home/hamza/repo/x_test-w6-editorial-surface` | owns web/bridge/React product surfaces; B4 stays entirely inside AI CLI adapter | none |
-| Agent B4 — AGY Structured Runtime Adapter | executable | ready | now | `/home/hamza/repo/x_test-w6-agy-runtime` | owns `ai_cli.js` optional-runtime seam; no overlap with Editorial web/UI files | none |
+| Agent A4 — Editorial Product Surface | executable/UI | complete + integrated | completed | `/home/hamza/repo/x_test-w6-editorial-surface` | isolated web/bridge/React Editorial surface ownership | none |
+| Agent B4 — AGY Structured Runtime Adapter | executable | complete + integrated | completed | `/home/hamza/repo/x_test-w6-agy-runtime` | isolated `ai_cli.js` runtime ownership | none |
 
 ## Dependency map
 
@@ -57,7 +57,7 @@ If either mission discovers it needs the other mission's owned mutable file, rep
 
 ## Integration policy
 
-Main/integration owner reviews and cherry-picks both commits. Agent branches do not merge one another. Current-state documentation is intentionally deferred until both Wave-4 missions are integrated so the docs describe landed behavior rather than planned behavior.
+Agent A4 is integrated on main as `f4aca2b`; Agent B4 is integrated on main as `5a6f066`. Wave 4 is complete. Current-state documentation is reconciled after those integration commits so it describes landed behavior rather than planned behavior.
 
 ## Validation policy
 
@@ -76,3 +76,4 @@ Do not make live X writes. Agent A4 should not trigger provider/model inference 
 - `2026-08-20` — Waves 1-2 integrated runtime/settings/editorial backend foundations.
 - `2026-08-20` — Wave 3 selection/writer evidence and outcome/background refresh integrated as `1b93542` and `ce1b062`.
 - `2026-08-20` — Wave 4 materialized as the final operator-facing product surface plus the independently supported installed AGY adapter.
+- `2026-08-20` — Agent A4 Editorial Product Surface integrated as `f4aca2b`; Agent B4 AGY adapter integrated as `5a6f066`; final current-state documentation reconciliation completed with syntax/UI-build/diff checks passing.

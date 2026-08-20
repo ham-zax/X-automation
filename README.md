@@ -10,15 +10,15 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
 - `tech_news.js` — X niche/viral discovery, bounded relationship-target timelines/responses, authenticated Under-the-Hood visibility observations, Hacker News, GitHub, ranking, and account-performance reads.
-- `store.js` — built-in `node:sqlite` research memory for candidates, saved preferences, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, experiment/variant assignments, and suggested/accepted/retired learned rules.
+- `store.js` — built-in `node:sqlite` system of record for candidates, authoritative source snapshots/observations, editorial runs/evidence/recommendations/selections, action/relationship/health history, audience first-seen state, format-aware drafts, workflow/publication state, fixed-window publication measurements, experiment/variant assignments, AI profile/run provenance, and suggested/accepted/retired learned rules.
 - `drafting.js` — Original/Quote/Reply/Thread composition, canonical writer packets, structured writer output, deterministic hard gates, weighted length, and the separate 50-point quality rubric.
-- `writer_runtime.js` — current structured writer-model execution through the locally configured Codex CLI; the planned AI runtime/provider layer will move this behind a provider-independent `runStructuredAI()` boundary.
+- `writer_runtime.js` — writer-specific structured prompt/schema owner behind the shared provider-independent `runStructuredAI()` boundary; writer execution can use the configured Direct API, Codex, or supported installed runtime profile without changing workflow authority.
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
 - `experiments.js` — pure experiment definition/population validation, attribution-confidence semantics, normalized content/network cohorts, InteractionYield context, and cautious evidence states.
 - `learning.js` — pure learned-strategy qualification, bounded adjustment, matching/application, lifecycle transition, and stale/reversal/mechanism-review logic.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for workflow/health/relationship/measurement/experiment/learning reads and explicit writes; learning acceptance/retirement require explicit confirmation and the bridge cannot approve or publish main-feed content.
-- `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; exposes Account Health, Engage Next, scheduler reasoning, Relationships, Audience, fixed-window Performance, observational Experiments, and human-controlled Learned Strategy.
-- `automation.js` — captures due publication measurement windows, refreshes research/Engage Next, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never sends Engage Next replies.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for editorial planning, AI configuration, workflow/health/relationship/measurement/experiment/learning reads and explicit writes; recommendation selection is not approval, learning acceptance/retirement require explicit confirmation, and the bridge cannot approve or publish main-feed content.
+- `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; Today includes the AI Editorial Plan, Advanced includes AI Settings, and Results exposes observational editorial outcomes alongside Account Health, Engage Next, scheduling, Relationships, Audience, Experiments, and human-controlled Learned Strategy.
+- `automation.js` — captures due publication measurement windows, refreshes the canonical source snapshots and Engage Next, optionally recomputes an advisory editorial plan when explicitly enabled, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never selects recommendations or sends Engage Next replies.
 
 ## Operating standards
 
@@ -35,9 +35,9 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/RESEARCH_AGENDA.md`](docs/RESEARCH_AGENDA.md) — deep technical research bets and the first 30-day research program.
 - [`docs/PRODUCT_ARCHITECTURE.md`](docs/PRODUCT_ARCHITECTURE.md) — canonical current/planned product map: Phases 1–6, source truth vs workflow/history, Discover → Research → AI Editorial Director → Human → Writer → Human → Publish → Measure → Learn, AI runtime/provider choices, and authority boundaries.
 - [`docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md`](docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md) — cross-system implementation/history plan for the full network-growth and publishing loop.
-- [`docs/plans/AI_RUNTIME_PROVIDER_LAYER.md`](docs/plans/AI_RUNTIME_PROVIDER_LAYER.md) — planned Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY runtime/provider/model configuration and AI Settings layer.
-- [`docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`](docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md) — planned current-signal clustering, controlled evidence, objective-aware editorial recommendations, Today plan UX, and recommendation outcome provenance.
-- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index, with Phases 1A–5 implemented and Phase 6 planned.
+- [`docs/plans/AI_RUNTIME_PROVIDER_LAYER.md`](docs/plans/AI_RUNTIME_PROVIDER_LAYER.md) — implemented shared structured runtime/provider layer: Direct API/OpenRouter/OpenAI-compatible, Codex, installed AGY support, AI Settings, role/default profiles, secrets, catalogs, and run provenance; absent OpenCode variants remain unavailable.
+- [`docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`](docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md) — implemented current-signal clustering, controlled evidence, objective-aware editorial recommendations, Today plan UX, human selection provenance, writer evidence, and editorial outcome context.
+- [`docs/plans/README.md`](docs/plans/README.md) — phase-specific implementation-plan index; Phases 1A–6 and the shared AI runtime/provider layer are implemented.
 
 ### Current implemented architecture
 
@@ -57,10 +57,13 @@ Phase 4 Measurement & Experiments is implemented: published main-feed items accu
 
 Phase 5 Learned Strategy is implemented: Phase-4 experiment summaries can produce `suggested` evidence-backed rules; suggestions remain zero-effect until explicit human acceptance; accepted target/engagement/health/content/format/topic/timing adjustments are bounded and shown separately from base scoring; retirement preserves history; linked retired algorithm-evidence tags and newer/reversing evidence surface review signals. Hard gates, expiry, required human approval, explicit manual routing/timing, and provenance-backed Account Health constraints remain authoritative over learning.
 
-Phases 1A–5 are the current network/workflow/measurement/learning runtime. Two planned layers remain outside that implemented boundary:
+Phases 1A–6 plus the shared AI runtime/provider layer are current runtime behavior. Remaining planned work outside that implemented boundary is:
 
 - **media attachment/upload readiness** — required proof media remains blocked until a real attachment path exists;
-- **Phase 6 AI Editorial Director + AI runtime/provider layer** — current-story clustering, controlled research evidence, Today editorial recommendations, and operator-selectable AI runtime/provider/model configuration.
+- **continuous-scan background consumer** — the `continuous_scan` role is configurable but intentionally shown as **Not active** until a concrete background semantic consumer is implemented;
+- **optional OpenCode/OpenCode 2 execution adapters** — these remain unavailable when the corresponding runtimes are not installed; no undocumented TUI parsing is used.
+
+Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed an evidence-bounded two-pass AI Editorial Plan; code owns story/recommendation scoring and final order; the human selects or overrides a recommendation; selected work enters the existing writer/gates/approval workflow; publication measurements preserve recommendation vs selected vs final route provenance. AI runtime/provider/model choice never changes approval or publication authority.
 
 `docs/PRODUCT_ARCHITECTURE.md` owns the end-to-end product map. `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic network model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system implementation/history map. `docs/plans/` owns implementation order and exact file/interface changes.
 
@@ -119,9 +122,10 @@ Key settings:
 ```dotenv
 POLL_MINUTES=30
 AUTO_POST=false
+AUTO_EDITORIAL_PLAN_REFRESH=false
 ```
 
-Before research/publication work, automation checks for missing due 15m/1h/6h/24h measurements and, only when needed, batches one existing account/post performance read. It records the first available snapshot after each due window idempotently. After a successful publication it also attempts one read-only follower-baseline snapshot; baseline/measurement read failures never change the persisted publication result or authorize another send. It then refreshes X niche discovery, viral discovery, GitHub, Hacker News, and Engage Next opportunities. Main-feed publication still ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before publication claim/transport and only previews the recommendation; Phase-4 measurement reads do not change that authority. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item after the existing atomic claim. Repost remains manual and required media remains blocked until real attachment readiness exists.
+Before research/publication work, automation checks for missing due 15m/1h/6h/24h measurements and, only when needed, batches one existing account/post performance read. It records the first available snapshot after each due window idempotently. After a successful publication it also attempts one read-only follower-baseline snapshot; baseline/measurement read failures never change the persisted publication result or authorize another send. It then refreshes canonical X Latest/X Momentum/GitHub Trending/HN Top Stories snapshots and Engage Next opportunities. `AUTO_EDITORIAL_PLAN_REFRESH=true` may recompute a `qualified_growth` advisory plan from those already-refreshed snapshots; failure is isolated and no recommendation is selected. Main-feed publication still ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before publication claim/transport and only previews the scheduler recommendation; Phase-4 measurement reads and editorial planning do not change that authority. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item after the existing atomic claim. Repost remains manual and required media remains blocked until real attachment readiness exists.
 
 ## Web preview
 
@@ -133,17 +137,17 @@ npm start
 
 The guided dashboard shell is organized around user goals instead of implementation modules:
 
-- **Today** — prioritized human decisions, useful conversations, review work, next publishing state, and a concise account-status summary.
+- **Today** — the current AI Editorial Plan above prioritized workflow attention: objective selector, source freshness, evidence-bounded recommendations, explicit refresh/select/dismiss/research-source actions, useful conversations, review work, and account status.
 - **Discover** — source truth and source workflow context: To review, X Latest, X Momentum, Opportunities, GitHub Trending, HN Top Stories, Bookmarks, Handled, and All sources.
 - **Conversations** — active/new conversation opportunities plus relationship and audience context.
 - **Create** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.
-- **Results** — performance and account-status views.
+- **Results** — performance/account-status views plus observational editorial outcome cohorts when real Phase-4 measurements exist.
 - **Improve** — Tests and What we've learned.
-- **Advanced** — direct access to the detailed legacy/diagnostic views while the new IA is validated.
+- **Advanced** — direct access to detailed diagnostics plus **AI Settings** for global/per-role profiles, provider/runtime/model selection, connection/catalog checks, secret status, and recent AI-run usage/provenance.
 
 The shell changes presentation only: the existing approval, exact-reply send, scheduler, Account Health, experiment, and learned-rule boundaries remain authoritative. Technical scores/details are progressively disclosed rather than removed.
 
-Planned Phase 6 adds an **AI Editorial Plan** to Today and an **AI Settings** surface for default/per-role runtime profiles. The planned provider layer supports Codex model/reasoning selection, OpenRouter model selection, arbitrary OpenAI-compatible base URL/API key/model configuration for local or remote inference, and optional OpenCode/OpenCode 2/AGY runtimes when installed. This is documented architecture, not current runtime behavior yet.
+The implemented AI runtime layer supports Direct OpenAI/OpenRouter/OpenAI-compatible endpoints, Codex model/reasoning selection, and the installed AGY structured runtime contract. AI Settings exposes a global default plus per-role profiles for `continuous_scan`, `editorial_scan`, `editorial_final`, and `writer`; `continuous_scan` is configurable but explicitly **Not active** until a background consumer exists. AGY support is capability-gated against its installed CLI contract and uses exact catalog model IDs; the current adapter was verified against AGY 1.1.15. OpenCode/OpenCode 2 remain truthfully unavailable when not installed.
 
 ## Agent interface
 
@@ -168,6 +172,15 @@ npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
 npm run agent -- engage-next <<<'{"refresh":true,"limit":30}'
 npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123"}'
 npm run agent -- engage-resolve <<<'{"key":"https://x.com/example/status/123","action":"ignore"}'
+npm run agent -- editorial-plan <<<'{"objective":"qualified_growth"}'
+npm run agent -- editorial-refresh <<<'{"objective":"qualified_growth","refreshSources":true}'
+npm run agent -- editorial-recommendation <<<'{"recommendationId":1}'
+npm run agent -- editorial-select <<<'{"recommendationId":1}'
+npm run agent -- editorial-dismiss <<<'{"recommendationId":1}'
+npm run agent -- editorial-add-source <<<'{"recommendationId":1,"url":"https://example.com/evidence","claim":"Claim to investigate","claimType":"other"}'
+npm run agent -- editorial-outcomes <<<'{"windowMinutes":1440,"limit":100}'
+npm run agent -- ai-config <<<'{}'
+npm run agent -- ai-runtimes <<<'{}'
 npm run audience:sync
 ```
 

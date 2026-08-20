@@ -2,9 +2,9 @@
 
 **Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where sources selected for action enter explicit workflow triage, bookmarks remain independent reference state, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
 
-**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, and one learned-strategy owner. Planned Phase 6 adds an editorial owner above per-source routing plus a shared AI runtime/provider boundary. AI may classify, cluster, research through controlled retrieval, recommend, draft, score, surface target/conversation opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
+**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, one learned-strategy owner, one Phase-6 editorial owner above per-source routing, and one shared AI runtime/provider boundary. AI may classify, cluster, research through controlled retrieval, recommend, draft, score, surface target/conversation opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
 
-**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`; planned structured AI execution is provider-independent through `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
+**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`; structured AI execution is provider-independent through the implemented `runStructuredAI()` layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
 
 ## Global Constraints
 
@@ -65,15 +65,17 @@
 - Phase 1D Account Health with provenance-backed HEALTHY/WATCH/CONSTRAINED evidence and soft saturation/repetition/network diagnostics;
 - Phase 4 fixed 15m/1h/6h/24h publication measurement, follower-quality/attribution context, and content/network experiments;
 - Phase 5 suggested/accepted/retired learned strategy with bounded accepted adjustments;
-- current Discover source-truth split: X Latest, X Momentum, actual GitHub Trending, and current HN Top Stories snapshots are separate from the persistent To review/Bookmarks/Handled/history workflow views.
+- current Discover source-truth split: X Latest, X Momentum, actual GitHub Trending, and current HN Top Stories snapshots are separate from the persistent To review/Bookmarks/Handled/history workflow views;
+- shared AI runtime/provider execution with Direct API/OpenRouter/OpenAI-compatible, Codex, installed AGY, safe secret references, global/per-role profiles, AI Settings, and per-run provenance;
+- Phase 6 canonical source snapshots/observations, evidence-bounded editorial planning, explicit human recommendation selection, writer evidence IDs/claim scope, Today/Discover product surfaces, and recommendation provenance into Phase-4 outcomes/Phase-5 context.
 
 ### Remaining planned work
 
-Phases 1A-1D and 2-5 are implemented. The remaining cross-system work is:
+Phases 1A-1D and 2-6 plus the shared AI runtime/provider layer are implemented. Remaining cross-system work is:
 
 - actual media upload/attachment-ID readiness while preserving the existing media-plan hard block;
-- the cross-cutting AI runtime/provider layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md` so continuous scan, editorial reasoning, and writing can use operator-selected Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY profiles;
-- Phase 6 AI Editorial Director in `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`: authoritative source snapshots, story clustering, controlled claim-level research, objective-aware recommendations, Today editorial-plan UX, and recommendation provenance into measurement/learning.
+- a concrete `continuous_scan` background consumer; the role/profile is configurable but intentionally **Not active** today;
+- optional OpenCode/OpenCode 2 execution support only when those runtimes are installed and expose a supported structured contract.
 
 `PRODUCT_ARCHITECTURE.md` is the canonical product-level description of the intended final system. The phase plans remain authoritative for execution details.
 
@@ -129,7 +131,7 @@ SCHEDULER + PUBLISH
                              +---------------------> future Discover/Plan
 ```
 
-Before Phase 6 is implemented, the current runtime still uses the implemented Save/Triage/rule-based route/writer flow underneath this target architecture.
+This full loop is now the current architecture. Discover still exposes independent source-level controls and the rule-based route, but Today owns the current AI Editorial Plan; selecting a recommendation enters the same existing workflow rather than bypassing it.
 
 A time-sensitive lane may shorten research/writing latency but does not remove factual verification, human approval, or publication serialization:
 
@@ -987,7 +989,7 @@ Plan: `plans/PHASE_5_LEARNED_STRATEGY.md`
 - accepted rules consumed as bounded context by TargetScore components, opportunity potentials, EngagePriority/soft health pressure, and main-feed scheduler priority;
 - hard gates, expiry, required approval, explicit human route/timing, and observed hard Account Health constraints remain authoritative.
 
-### AI Runtime & Provider Layer — PLANNED PHASE-6 PREREQUISITE
+### AI Runtime & Provider Layer — IMPLEMENTED
 
 Plan: `plans/AI_RUNTIME_PROVIDER_LAYER.md`
 
@@ -1001,7 +1003,7 @@ Plan: `plans/AI_RUNTIME_PROVIDER_LAYER.md`
 
 The provider/runtime layer changes how semantic AI work is executed. It does not change source truth, evidence ownership, queue state, approval, publishing, or learned-rule authority.
 
-### Phase 6 — AI Editorial Director — PLANNED
+### Phase 6 — AI Editorial Director — IMPLEMENTED
 
 Plan: `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`
 

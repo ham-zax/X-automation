@@ -95,12 +95,12 @@ AI may recommend and prepare work. Human actions remain the authority for conseq
 
 Current repository state:
 
-- Phases 1A, 1B, 1C, 1D, 2, 3, 4, and 5 are implemented.
-- Phase 6, the AI Editorial Director, is planned and documented but not implemented.
-- The AI runtime/provider layer required by Phase 6 is planned in `docs/plans/AI_RUNTIME_PROVIDER_LAYER.md`.
+- Phases 1A, 1B, 1C, 1D, 2, 3, 4, 5, and 6 are implemented.
+- The shared AI runtime/provider layer is implemented: Direct API/OpenRouter/OpenAI-compatible endpoints, Codex, and installed AGY use the common structured boundary; AI Settings owns profile/default/role configuration and safe secret references.
+- `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode/OpenCode 2 remain unavailable when not installed rather than being simulated through undocumented output parsing.
 - Media attachment/upload readiness remains separate incomplete work; required proof media must not be treated as attached when it is not.
 
-Do not describe planned Phase-6 behavior as current runtime behavior until the implementation lands.
+Phase-6 editorial planning is current runtime behavior, but it remains advisory: human route selection, approval, reply send, repost completion, and publication authority stay separate.
 
 ## Phase map
 
@@ -114,7 +114,7 @@ Do not describe planned Phase-6 behavior as current runtime behavior until the i
 | 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication |
 | 4 | Implemented | Measurement and experiments | 15m/1h/6h/24h outcomes, follower/relationship attribution context, experiment summaries |
 | 5 | Implemented | Learned strategy | suggested/accepted/retired bounded learned rules |
-| 6 | Planned | AI Editorial Director | current story clusters, controlled evidence, objective-aware ranked editorial recommendations |
+| 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware ranked editorial recommendations, human selection provenance, writer evidence, outcome context |
 
 ### Phase 1A — Workflow foundation
 
@@ -194,10 +194,10 @@ It owns:
 - hard factuality/evidence/niche/originality/scannability/integrity gates;
 - the separate 50-point draft-quality score;
 - media-plan metadata;
-- the ProfileProofCoverage packet/editorial contract; Phase 6 adds the strict published-only runtime owner shared by Today and the writer;
+- the ProfileProofCoverage packet/editorial contract plus the strict published-only runtime owner shared by Today and the writer;
 - final human editorial review.
 
-The writer must not independently decide what is true. Phase 6 will supply persisted research evidence; the writer consumes that evidence and the human confirms the final factual assertions.
+The writer must not independently decide what is true. Phase 6 supplies persisted research evidence with stable IDs/claim scope; the writer consumes that evidence and the human confirms the final factual assertions.
 
 ### Phase 3 — Main-feed distribution
 
@@ -255,7 +255,7 @@ It answers:
 
 > Given today's real source signals, our niche, our current profile proof, our conversations, our account health, and what has worked for this account, what should we do next?
 
-It will own:
+It owns:
 
 - one canonical live-source refresh path;
 - source-observation history and source-native momentum deltas;
@@ -531,13 +531,13 @@ This is the path for local or remote endpoints such as Ollama, LM Studio, vLLM, 
 - **Codex** — supported as a runtime. The adapter may select model/reasoning per run and use the locally configured Codex authentication/provider profile. Codex may itself target OpenAI or compatible/local providers when configured by the operator.
 - **OpenCode** — optional runtime when installed. Use its model/provider selector and structured-output/server facilities where available.
 - **OpenCode 2** — optional runtime when installed. Prefer its V2 server/client contract when the beta API is stable enough for the required operation; keep runtime availability explicit because V2 contracts may change.
-- **AGY / Antigravity CLI** — optional runtime when installed. Use non-interactive sandbox/plan mode plus model selection and structured JSON-schema output.
+- **AGY / Antigravity CLI** — supported for the installed capability contract and verified against AGY 1.1.15: non-interactive `--print`, JSON output, JSON Schema, sandbox + plan mode, exact catalog model selection, optional `low|medium|high` effort, and runtime-managed credentials. The adapter never uses `--dangerously-skip-permissions` or silently substitutes a model. Catalog/model checks are intentionally non-generative, so authentication may remain unknown; AGY cost remains `null` when the runtime does not expose it.
 
 A missing runtime is a normal availability state. The UI should show **Not installed** instead of failing after selection.
 
 ## AI configuration and UI
 
-The product needs an **AI Settings** surface.
+The product has an **AI Settings** surface.
 
 It should show:
 
@@ -599,7 +599,7 @@ If the adapter still cannot produce valid structured output, fail that AI run vi
 
 API keys are local secrets, not content data.
 
-The planned contract is:
+The implemented contract is:
 
 - non-secret AI profile configuration lives in SQLite;
 - API keys are referenced by `secret_ref` and are not stored in ordinary profile JSON;
@@ -667,7 +667,7 @@ A cheaper local model may produce a worse recommendation. It may not gain extra 
 
 Today becomes the main decision surface.
 
-Current implemented content remains workflow attention. Planned Phase 6 adds the Editorial Plan above it.
+Today shows the implemented AI Editorial Plan above the existing workflow attention area.
 
 It should answer:
 

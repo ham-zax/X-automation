@@ -1,5 +1,7 @@
 # AI Runtime & Provider Layer Implementation Plan
 
+**Implementation status (2026-08-20): Implemented on `main`.** The shared runtime, Direct API/OpenRouter/OpenAI-compatible providers, Codex, AI Settings/configuration APIs, writer migration, Phase-6 integration, and AGY structured adapter are landed. `continuous_scan` remains configuration-only/Not active, and OpenCode/OpenCode 2 remain unavailable when not installed. The checklist below is retained as the historical execution contract; this status line is authoritative for current implementation state.
+
 **Goal:** Let the product run its continuous scan, editorial scan, final editorial reasoning, and writer through operator-selected AI runtimes/models, including Codex with a selected model/reasoning level, OpenRouter, arbitrary OpenAI-compatible APIs, OpenCode/OpenCode 2, and AGY, without changing workflow/evidence/approval authority.
 
 **Architecture:** Add one shared `runStructuredAI()` boundary between product logic and model execution. Persist non-secret AI profiles and role assignments in SQLite, keep API keys outside ordinary application data, implement direct-API and optional CLI/runtime adapters, expose runtime/model capability and usage state through one AI Settings surface, and migrate the current Codex-only writer runtime behind the shared boundary. Phase-6 `editorial_runtime.js` will consume the same boundary.

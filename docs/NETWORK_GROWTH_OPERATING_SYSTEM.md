@@ -130,8 +130,8 @@ NETWORK + CONTENT SCORING
 ENGAGEMENT LANE            OWNED-CONTENT LANE
    |                           |
    |                     PHASE-6 EDITORIAL PLAN
-   |                    (planned: current stories,
-   |                     evidence, objective, format)
+   |                    (current stories, evidence,
+   |                     objective, format, provenance)
    |                           |
 target selection            route selection
    |                           |
@@ -170,7 +170,7 @@ Phase 1C Engage Next is current: bounded target timelines and observed replies/q
 
 Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase 5 Learned Strategy is current: accepted rules make bounded transparent adjustments while suggestions remain inert until human acceptance.
 
-Phase 6 is planned, not current runtime behavior. It adds an AI Editorial Director above individual source routing: current X/GitHub/HN/conversation signals -> story clustering -> controlled evidence -> objective-aware Prepare/Research More/Skip recommendation -> human selection -> existing writer/gates/approval/scheduler. The shared AI runtime/provider layer lets the operator choose Codex/OpenRouter/OpenAI-compatible/local/OpenCode/OpenCode 2/AGY profiles without changing network, evidence, approval, or learning authority. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
+Phase 6 is current runtime behavior. The AI Editorial Director sits above individual source routing: canonical X/GitHub/HN/conversation snapshots -> story clustering -> controlled evidence -> objective-aware Prepare/Research More/Skip recommendation -> explicit human selection -> existing writer/gates/approval/scheduler. Publication measurements preserve AI-recommended, human-selected, and final-published route separately so later cohort analysis remains observational rather than rewriting history. The shared AI runtime/provider layer lets the operator choose Direct API/OpenRouter/OpenAI-compatible/local, Codex, or supported installed AGY profiles without changing network, evidence, approval, or learning authority; absent OpenCode variants remain unavailable. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
 
 ---
 

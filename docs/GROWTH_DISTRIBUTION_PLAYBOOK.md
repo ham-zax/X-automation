@@ -272,7 +272,7 @@ Then adjust topics and interaction targets—not by farming more actions, but by
 
 ## 12. Human + AI publishing loop
 
-The workflow/relationship/health/writer/distribution/measurement/learning foundation in Phases 1A-5 is implemented. Phase 6 adds the missing editorial layer above individual source routing.
+The workflow/relationship/health/writer/distribution/measurement/learning foundation and Phase 6 Editorial Director are implemented. The editorial layer sits above individual source routing without replacing source truth or human approval.
 
 Target loop:
 
@@ -289,7 +289,7 @@ Current route choices already include:
 - Watch;
 - Ignore.
 
-Phase 6 will recommend `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval and outbound reply send remain human-controlled.
+Phase 6 recommends `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval and outbound reply send remain human-controlled.
 
 Bookmarking is independent reference state. A source may enter Triage/Drafting/Research without being bookmarked, and a bookmarked source may already be handled.
 
@@ -299,8 +299,8 @@ Canonical design:
 
 - `PRODUCT_ARCHITECTURE.md` — complete current/planned product loop, source/workflow/history semantics, AI/human authority, and AI runtime/provider model;
 - `HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` — cross-system implementation/history map;
-- `plans/AI_RUNTIME_PROVIDER_LAYER.md` — planned selectable Codex/OpenRouter/OpenAI-compatible/OpenCode/OpenCode 2/AGY execution layer;
-- `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md` — planned current-story/evidence/editorial recommendation layer;
+- `plans/AI_RUNTIME_PROVIDER_LAYER.md` — implemented selectable Direct API/Codex/installed-AGY execution layer plus safe AI Settings; absent OpenCode variants remain unavailable;
+- `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md` — implemented current-story/evidence/editorial recommendation layer;
 - `ACCOUNT_HEALTH_AND_VISIBILITY.md` — advisory account health, visibility observations, saturation/repetition, Network Quality, and InteractionYield;
 - `POST_GENERATION_PROMPT.md` — final writing/scannability contract;
 - `RESEARCH_AGENDA.md` — topics deep enough to create original account-level intellectual property.
