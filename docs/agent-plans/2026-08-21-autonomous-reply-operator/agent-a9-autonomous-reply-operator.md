@@ -33,6 +33,8 @@ Turn the existing human-reviewed Engage Next capability into a **bounded, explic
 
 The system should be able to notice relevant X conversations — high-momentum or ordinary — decide whether a reply is worth making, choose an appropriate reply intent and tone, generate a concise context-aware reply, and send it automatically **only when an explicit operator autonomy grant allows it and all deterministic safety/value conditions pass**.
 
+This is a persistent operator, not a one-shot "find one reply" action. Once the operator explicitly starts autonomous replies, the running service should keep refreshing the relevant X inputs, evaluate newly observed opportunities, act on every independently eligible opportunity allowed by the current grant, then continue waiting for the next refresh until the operator pauses/stops/revokes the grant or the process is intentionally stopped. A refresh may legitimately produce zero, one, or several sends.
+
 The goal is legitimate network growth through useful participation in existing conversations, not reply volume.
 
 ## Current state
@@ -55,6 +57,8 @@ What does **not** exist today:
 - autonomous reply-send authority;
 - an explicit autonomy grant/configuration model;
 - a bounded autonomous candidate claim/send loop;
+- persistent start/pause/stop loop semantics that continue without a human keeping the UI open;
+- durable new-item/watermark or equivalent decision state so each refresh distinguishes newly observed opportunities from already-decided targets;
 - a first-class separation between reply **intent/contribution** and reply **tone**;
 - humor/playfulness as a deliberate, context-safe tone option;
 - an autonomous dry-run/read model explaining why the system would or would not reply;
@@ -147,15 +151,19 @@ The grant must cover the equivalent of:
 
 - enabled / paused;
 - dry-run versus live-send mode;
+- persistent start/stop semantics: "Start" enables/resumes the loop; it does not mean "run once";
 - allowed source classes (active conversation / momentum / normal);
 - allowed reply intents;
 - allowed tones, including whether light humor is allowed;
 - an operator-selected autonomy/send budget;
+- an inspectable refresh cadence or equivalent source-refresh policy suitable for continuously discovering new tweets while respecting the existing source/provider rate limits;
 - revision / updated-at provenance.
 
 Do not invent a hard-coded "optimal daily reply quota" and do not describe the budget as an X algorithm law.
 
 The budget is an **operator safety/autonomy limit**, not a growth heuristic. If a numerical budget is required for live mode, require the operator to set it explicitly rather than silently choosing one for them.
+
+Do not make "one reply per refresh" an implicit safety budget. If three or four independently eligible opportunities arrive before one refresh and the operator's remaining grant budget permits them, the service may send three or four in that cycle. Conversely, if nothing is worth replying to, it must send zero.
 
 ### 5. Autonomous-send eligibility
 
@@ -252,42 +260,67 @@ Extend the existing automation lifecycle rather than creating a second daemon wh
 The autonomous reply loop should conceptually:
 
 ```text
-refresh engagement opportunities
+operator starts / grant is enabled
         ↓
-rank active + momentum + normal opportunities
+refresh current X inputs needed by Engage Next
+        ↓
+discover newly observed active + momentum + normal opportunities
+        ↓
+dedupe against already-decided / already-replied targets
         ↓
 inspect autonomy grant / budget
         ↓
-select at most the bounded eligible unit for this cycle
+rank eligible opportunities
         ↓
-choose reply intent + tone
+for each independently eligible opportunity, serially:
+    re-check current budget + account/relationship state
         ↓
-generate exact reply
+    choose reply intent + tone
         ↓
-deterministic autonomous eligibility
+    generate exact reply
         ↓
-atomic claim
+    deterministic autonomous eligibility
         ↓
-send one reply
+    atomic claim
         ↓
-record candidate + relationship + autonomy provenance
+    send one reply
+        ↓
+    record candidate + relationship + autonomy provenance
+        ↓
+    decrement/re-read remaining operator grant budget
+        ↓
+when no more independently eligible opportunities remain
+        ↓
+wait for the configured/allowed refresh boundary
+        ↓
+refresh again
+        ↓
+repeat until paused/stopped/revoked/process stopped
 ```
 
 Do not add fake-human jitter, circadian delays, or arbitrary behavior designed to evade platform detection.
 
-Do not mass reply.
+Do not mass reply. "Several qualified replies arrived in the same refresh" is different from a mass-reply campaign. Process sends serially, not as a blind parallel burst, and re-evaluate state after each send so relationship concentration, account health, duplicate state, and remaining autonomy budget are current.
 
-If no opportunity is strong enough, send nothing.
+If no opportunity is strong enough, send nothing and keep the loop active for the next refresh.
+
+The loop must not depend on a ChatGPT/agent session remaining alive. Prefer the repository's existing long-running automation/process owner so the application itself owns continuity. The UI is a control/observability surface, not the process lifetime authority.
+
+Refreshing must actually make new X observations available. Do not implement a loop that repeatedly ranks the same stale local snapshot. Reuse the existing source-refresh/Engage Next owners and provider limits; add only the smallest distinct engagement refresh cadence/state necessary if the current main automation cadence is too slow for the intended feature.
+
+Persist enough decision/watermark state that a restart does not reinterpret every old eligible tweet as newly discovered. A restart may resume an enabled persisted grant, subject to the application's existing process/startup policy, but must remain idempotent with respect to already-decided and already-sent targets.
 
 ### 10. Settings and operator visibility
 
 Add the smallest clear UI surface, preferably under Settings and/or Conversations, that allows the operator to:
 
 - see autonomous replies are off/on;
+- explicitly Start / Pause / Stop the continuous operator;
 - switch dry-run/live mode;
 - select allowed source classes;
 - select allowed reply intents/tones;
 - explicitly configure the safety budget needed for live mode;
+- inspect the current refresh cadence/source-refresh state and the last successful refresh;
 - pause immediately;
 - inspect recent autonomous decisions/sends/skips;
 - see why an item was downgraded to human review.
@@ -372,21 +405,24 @@ Do not call this mission complete until all are observable:
 1. Existing human Engage Next still works and retains explicit human authority.
 2. Autonomous replies are OFF by default.
 3. An explicit operator grant can enable dry-run/live mode and can be paused/revoked.
-4. Operator must explicitly configure the live autonomy/send budget; no silent quota is invented.
-5. High-momentum and normal relevant tweets can both enter autonomous consideration; viral status is not required.
-6. Active conversations/direct responses receive appropriate priority without becoming an unconditional auto-send.
-7. Reply intent and tone are separately represented.
-8. Useful question, constructive feedback, technical insight/caveat/comparison, and light-humor behavior are supported.
-9. Humor is context-safe and non-degrading.
-10. Unsupported corrections/benchmarks/first-person claims cannot auto-send.
-11. Autonomous mode can downgrade an uncertain candidate to human review instead of forcing a send.
-12. Dry-run explains selection, intent, tone, exact proposed text, and skip/review/send decision.
-13. Live path uses an atomic claim/idempotency boundary and cannot duplicate-send the same candidate.
-14. Autonomous sends, when later enabled, record authority/provenance distinct from `humanApprovedAt`.
-15. Candidate action and relationship history are recorded exactly once after a successful send.
-16. Settings/Conversations make autonomy state and recent decisions legible.
-17. Existing docs no longer falsely state that automation can never send replies; they instead describe the explicit grant boundary.
-18. No live X reply is sent during this implementation mission without fresh bounded user authorization.
+4. Start means a persistent loop, not a one-shot run: after a refresh with zero eligible tweets it remains active and refreshes again until paused/stopped/revoked or the application process stops.
+5. One refresh may legitimately produce zero, one, or several autonomous sends. The implementation must not hard-code one send per cycle; it may process multiple independently eligible opportunities serially while grant budget remains.
+6. Newly observed tweets become eligible without a human manually clicking Refresh, and stale/already-decided targets are not repeatedly reconsidered as new after each cycle or process restart.
+7. Operator must explicitly configure the live autonomy/send budget; no silent quota is invented.
+8. High-momentum and normal relevant tweets can both enter autonomous consideration; viral status is not required.
+9. Active conversations/direct responses receive appropriate priority without becoming an unconditional auto-send.
+10. Reply intent and tone are separately represented.
+11. Useful question, constructive feedback, technical insight/caveat/comparison, and light-humor behavior are supported.
+12. Humor is context-safe and non-degrading.
+13. Unsupported corrections/benchmarks/first-person claims cannot auto-send.
+14. Autonomous mode can downgrade an uncertain candidate to human review instead of forcing a send.
+15. Dry-run runs continuously too and explains selection, intent, tone, exact proposed text, and skip/review/send decision without transport mutation.
+16. Live path uses an atomic claim/idempotency boundary and cannot duplicate-send the same candidate, including across daemon restarts.
+17. Autonomous sends, when later enabled, record authority/provenance distinct from `humanApprovedAt`.
+18. Candidate action and relationship history are recorded exactly once after a successful send.
+19. Settings/Conversations make autonomy state, last refresh, and recent decisions legible.
+20. Existing docs no longer falsely state that automation can never send replies; they instead describe the explicit grant boundary.
+21. No live X reply is sent during this implementation mission without fresh bounded user authorization.
 
 ## Required validation
 

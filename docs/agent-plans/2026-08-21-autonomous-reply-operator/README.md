@@ -24,6 +24,8 @@ A9 Autonomous Reply Operator
         +--> bounded autonomous opportunity selection
         +--> reply intent + tone selection
         +--> explicit operator autonomy grant
+        +--> persistent refresh / start-pause-stop daemon semantics
+        +--> zero/one/many eligible replies per refresh within the grant budget
         +--> shared safe reply-send transport/bookkeeping
         +--> Settings / Conversations observability
         +--> dry-run operator verification
@@ -38,6 +40,9 @@ A9 Autonomous Reply Operator
 - Main-feed scheduler and reply automation remain separate lanes.
 - Growth Focus, account-health constraints, duplicate protection, relationship history, and result recording remain existing owners.
 - High engagement may improve opportunity value but must not be required; normal relevant tweets can qualify when conversation/relationship/contribution value is strong.
+- "Start autonomous replies" means keep refreshing and acting until explicitly paused/stopped/revoked (or the application process is stopped), not a one-shot scan.
+- A refresh is not capped to one reply. Zero, one, or several independently eligible opportunities may be processed serially, constrained by the explicit operator grant/budget and current safety/value state.
+- Continuous mode must use fresh source observations and durable dedupe/decision state; repeatedly scoring one stale snapshot is not an autonomous reply loop.
 
 ## Workspace policy
 
@@ -49,7 +54,7 @@ A9 should finish on `agent/w8-autonomous-reply`. It must not merge into `main` i
 
 ## Execution lifetime policy
 
-A9 uses `persistent-agent-loop`. It may begin with read-only investigation while waiting for A8's stable integration commit. Use repository state/event observation rather than a fake polling loop. After the dependency clears, implement and verify the mission. No live X reply send is authorized by this coordination package; live sending requires a separate bounded user authorization.
+A9 uses `persistent-agent-loop`. It may begin with read-only investigation while waiting for A8's stable integration commit. Use repository state/event observation rather than a fake polling loop. After the dependency clears, implement and verify the mission. The product itself must own long-running autonomous-reply continuity through the repository's automation/process lifecycle; ChatGPT session lifetime is not the product runtime. No live X reply send is authorized by this coordination package; live sending requires a separate bounded user authorization.
 
 ## Validation policy
 
@@ -63,3 +68,4 @@ No test creation, modification, or execution. Use only directly relevant non-tes
 ## Status log
 
 - 2026-08-21 — coordination package created. Existing Engage Next confirmed implemented; autonomous sending/tone-selection does not yet exist. A9 isolated because A8 currently owns overlapping shared authority files in the main worktree.
+- 2026-08-21 — requirement sharpened: autonomous mode is a persistent refresh-and-act loop. Once started it keeps discovering newly observed tweets and may send zero/one/several qualified replies per refresh within the explicit operator grant; it does not stop merely because one cycle had no candidate or because one reply was sent.
