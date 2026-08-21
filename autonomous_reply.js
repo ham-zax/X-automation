@@ -16,6 +16,7 @@ import {
   hasCandidateAction,
   listAutonomousReplyDecisions,
   listEngagementItems,
+  listRecentOurConversationPosts,
   listRecentPublishedContent,
   listRelationshipEvents,
   recordAutonomousReplyDecision,
@@ -392,6 +393,9 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
 }
 
 function autonomousGateResult(item, candidate, generated, recentReplies, recentReplyArchetypes) {
+  const parentConversation = item.parentOurTweetId
+    ? listRecentOurConversationPosts({ limit: 100 }).find((entry) => String(entry.tweetId) === String(item.parentOurTweetId))
+    : null;
   const analysis = scoreDraft(generated, candidate, {
     pipeline: 'reply',
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
@@ -401,6 +405,7 @@ function autonomousGateResult(item, candidate, generated, recentReplies, recentR
     factualityConfirmed: false,
     evidenceConfirmed: false,
     relevanceOverride: item.relevance?.humanOverride || null,
+    conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
   });
   const failures = analysis.gates?.failures || [];
   const deterministicFailures = failures.filter((failure) => failure.code !== 'FACTUALITY_UNCONFIRMED');
@@ -414,7 +419,7 @@ function autonomousGateResult(item, candidate, generated, recentReplies, recentR
   const evidenceDependent = deterministicFailures.some((failure) => ['EVIDENCE_UNCONFIRMED', 'SECURITY_CLAIM_REVIEW'].includes(failure.code));
   return {
     analysis,
-    passed: analysis.score >= 40 && analysis.growthPackaging?.ready === true && deterministicFailures.length === 0,
+    passed: analysis.score >= analysis.minimumScore && analysis.growthPackaging?.ready === true && deterministicFailures.length === 0,
     evidenceDependent,
     deterministicFailures,
   };

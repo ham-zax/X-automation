@@ -21,6 +21,7 @@ import {
   listAcceptedLearnedRules,
   listQueueItems,
   listResearchEvidence,
+  listRecentOurConversationPosts,
   listRecentPublishedContent,
   listRelationshipEvents,
   markCandidateSaved,
@@ -157,6 +158,9 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
   const queueItem = getQueueItemByCandidate(candidateKey);
   const draft = getDraftByCandidate(candidateKey);
   const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
+  const parentConversation = pipeline === 'reply' && queueItem?.parentOurTweetId
+    ? listRecentOurConversationPosts({ limit: 100 }).find((item) => String(item.tweetId) === String(queueItem.parentOurTweetId))
+    : null;
   return {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidateKey }),
@@ -169,6 +173,7 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
     mediaPublishingAvailable: true,
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
+    conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
     strategyMode: strategySelection?.mode || null,
     strategySelectionId: strategySelection?.id ?? null,
     generationStrategySelectionId: draft?.editor?.generation?.strategySelectionId ?? null,

@@ -251,10 +251,14 @@ function addIssue(target, code, message) {
   target.push({ code, message });
 }
 
-function claimNeedsEvidence(text, sourceText) {
+function claimNeedsEvidence(text, sourceText, pipeline = 'original') {
   const body = String(text || '');
   if (/\b(?:i|we)\s+(?:tested|measured|benchmarked|used|ran|observed|verified|found)\b/i.test(body)) return true;
-  if (/\b(?:benchmark|latency|throughput|measured|tested|result(?:s)?|faster|slower|costs?)\b/i.test(body)) return true;
+  const measurementAssertion = pipeline === 'reply'
+    ? /\b(?:benchmark|measured|tested|result(?:s)?|faster|slower|costs?)\b/i.test(body)
+      || /\b(?:latency|throughput|performance)\b.{0,30}\b(?:improved|reduced|increased|lower|higher|better|worse)\b/i.test(body)
+    : /\b(?:benchmark|latency|throughput|measured|tested|result(?:s)?|faster|slower|costs?)\b/i.test(body);
+  if (measurementAssertion) return true;
   if (/\b\d+(?:\.\d+)?\s?(?:%|x|ms|s|sec|seconds?|tokens?|rps|req\/s|mb|gb|usd)\b/i.test(body)) return true;
 
   const capability = /\b(?:supports?|allows?|adds?|ships?|includes?|handles?|runs?|works with|can|now has)\b/i;
@@ -432,6 +436,7 @@ export function evaluateDraftGates(draft, candidate, {
   evidence = null,
   mediaReady = false,
   relevanceOverride = null,
+  conversationRelevanceCandidate = null,
   growthObjective = null,
   threadLengthApproved = false,
 } = {}) {
@@ -466,7 +471,7 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'FACTUALITY_UNCONFIRMED', 'Factuality must be explicitly confirmed before approval.');
   }
 
-  const evidenceRequired = claimNeedsEvidence(combinedText, candidate?.text || '');
+  const evidenceRequired = claimNeedsEvidence(combinedText, candidate?.text || '', pipeline);
   if (evidenceRequired && !evidenceConfirmed) {
     checks.evidenceConfirmed = false;
     addIssue(failures, 'EVIDENCE_UNCONFIRMED', 'This draft contains test, measurement, benchmark, result, or unsupported capability claims that require explicit evidence confirmation.');
@@ -503,10 +508,20 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'FIRST_PERSON_EVIDENCE_UNVERIFIED', 'First-person test/measurement language requires a supplied eligible first-party evidence ID.');
   }
 
-  const growthFit = assessStrategicRelevance(candidate, {
+  let growthFit = assessStrategicRelevance(candidate, {
     objective: growthObjective,
     humanOverride: relevanceOverride,
   });
+  if (pipeline === 'reply' && !growthFit.allowed && conversationRelevanceCandidate) {
+    const conversationGrowthFit = assessStrategicRelevance(conversationRelevanceCandidate, {
+      objective: growthObjective,
+      humanOverride: relevanceOverride,
+    });
+    if (conversationGrowthFit.allowed) {
+      growthFit = conversationGrowthFit;
+      addIssue(warnings, 'ACTIVE_CONVERSATION_RELEVANCE_INHERITED', 'Reply relevance is inherited from the in-focus parent conversation instead of the isolated response text.');
+    }
+  }
   if (growthFit.state === 'unknown') {
     checks.growthFocus = false;
     addIssue(failures, 'GROWTH_FIT_UNKNOWN', 'Growth fit needs a current classification. Rescore candidates from Growth Focus before approval.');
@@ -774,16 +789,18 @@ export function scoreDraft(draft, candidate, context = {}) {
     ? Math.max(0, ...units.map((part) => weightedPostLength(part)))
     : weightedPostLength(body);
   const quality = score >= 45 ? 'high' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
-  const legacyPublishable = score >= 40 && !PLACEHOLDER.test(body) && weightedLength <= 280;
+  const minimumScore = pipeline === 'reply' ? 30 : 40;
+  const legacyPublishable = score >= minimumScore && !PLACEHOLDER.test(body) && weightedLength <= 280;
   const gates = gateAware ? evaluateDraftGates(draft, candidate, context) : null;
   const growthPackaging = gateAware ? reviewGrowthPackaging(draft, candidate, context) : null;
   return {
     score,
+    minimumScore,
     quality,
     breakdown: { hook, insight, evidence, action, originality },
     sourceSimilarity,
     weightedLength,
-    publishable: gateAware ? score >= 40 && gates.passed && growthPackaging.ready : legacyPublishable,
+    publishable: gateAware ? score >= minimumScore && gates.passed && growthPackaging.ready : legacyPublishable,
     ...(gates ? { gates } : {}),
     ...(growthPackaging ? { growthPackaging } : {}),
   };
