@@ -112,7 +112,7 @@ export function Results() {
   }
 
   if (!data) {
-    return <Error message="Performance data is unavailable." />
+    return <Error message="Results data is unavailable." />
   }
 
   const health = data.accountHealth
@@ -123,7 +123,7 @@ export function Results() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Performance</h2>
+          <h2 className="text-2xl font-semibold text-slate-900">Results</h2>
           <p className="mt-1 text-sm text-slate-600">A plain-language view of recent outcomes. Detailed measurements remain available when you need them.</p>
         </div>
         <button
@@ -245,6 +245,9 @@ export function Results() {
           <div className="space-y-5">
             <div className="text-sm text-slate-700">
               {data.writingStrategyOutcomes.observationCount} publication observation{data.writingStrategyOutcomes.observationCount === 1 ? '' : 's'} with recorded generation provenance; {data.writingStrategyOutcomes.appliedObservationCount} used an Apply strategy in Writer.
+              {data.writingStrategyOutcomes.truncated && (
+                <> Showing the latest {data.writingStrategyOutcomes.measurementCount} of {data.writingStrategyOutcomes.totalMeasurementCount} mature measurements.</>
+              )}
             </div>
             <StrategyOutcomeGroups title="Intent · Apply generations only" groups={data.writingStrategyOutcomes.byIntent} showBookmarks={data.measurementCapabilities.bookmarks.available} />
             <StrategyOutcomeGroups title="Presentation style · Apply generations only" groups={data.writingStrategyOutcomes.byStyle} showBookmarks={data.measurementCapabilities.bookmarks.available} />
@@ -283,6 +286,12 @@ export function Results() {
           </div>
         )}
       </section>
+
+      <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+        <strong>Want to compare these outcomes with broader evidence?</strong>
+        {' '}Learn keeps external patterns, your own observations, and explicit tests separate before any strategy interpretation.
+        {' '}<a href="#/learn" className="font-medium underline">Open Learn →</a>
+      </div>
 
       {data.editorialOutcomes && (
         <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">

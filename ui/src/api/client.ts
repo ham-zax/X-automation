@@ -808,6 +808,8 @@ export interface WritingStrategyOutcomeSummary {
   windowMinutes: number
   availability: 'available' | 'generation_provenance_unavailable' | 'no_measurements'
   measurementCount: number
+  totalMeasurementCount: number
+  truncated: boolean
   observationCount: number
   appliedObservationCount: number
   unavailable: {

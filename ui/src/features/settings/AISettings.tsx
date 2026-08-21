@@ -650,7 +650,7 @@ export function AISettings() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <a href="#/advanced" className="text-sm text-slate-500 hover:text-slate-900">← Diagnostics</a>
+          <a href="#/settings" className="text-sm text-slate-500 hover:text-slate-900">← Settings</a>
           <h1 className="mt-2 text-2xl font-semibold text-slate-900">AI Settings</h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">Choose runtime/provider/model configuration for advisory AI work. These settings do not change approval, routing, scheduling, or publishing authority.</p>
         </div>

@@ -115,6 +115,7 @@ import {
   getWritingStrategyPreview,
   recommendWritingStrategy,
   selectWritingStrategy,
+  validateWritingStrategyGenerationContext,
 } from './writing_strategy.js';
 import { getWritingStrategyFeedbackReadModel, getWritingStrategyOutcomeSummary } from './strategy_outcomes.js';
 
@@ -629,10 +630,11 @@ export async function generateDraftCandidate(current) {
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
   const output = await generateWriterOutput(packet, promptDocumentText);
   if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
+  const validatedStrategyGeneration = validateWritingStrategyGenerationContext(queueItem.id, strategyGeneration);
   const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
     ? { ...current, editor: Array.isArray(current.editor?.generationHistory) ? { generationHistory: [...current.editor.generationHistory] } : {} }
     : current;
-  const generationProvenance = buildWritingStrategyGenerationProvenance(strategyGeneration, {
+  const generationProvenance = buildWritingStrategyGenerationProvenance(validatedStrategyGeneration, {
     writerAiExecution: output.execution || null,
     writerExecutionSource: 'writer_runtime',
   });

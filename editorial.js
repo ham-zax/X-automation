@@ -598,15 +598,16 @@ function recommendationPrimarySourceKey(recommendation, sources) {
 }
 
 function enrichEditorialCandidate(recommendation, candidate, sources) {
-  const nicheScore = Math.max(0, ...sources.map((source) => Number(source?.niche?.score || 0)));
+  const editorialSourceText = sources
+    .flatMap((source) => [source?.title, source?.text])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 12_000);
   upsertCandidates([{
     ...candidate,
     score: Number(recommendation?.potentials?.objectiveFit || candidate.score || 0),
-    niche: {
-      score: nicheScore,
-      tags: uniqueStrings(sources.flatMap((source) => source?.niche?.tags || [])),
-      matches: uniqueStrings(sources.flatMap((source) => source?.niche?.matches || [])),
-    },
+    metrics: { ...(candidate.metrics || {}), editorialSourceText },
   }]);
   return getCandidate(candidate.key);
 }

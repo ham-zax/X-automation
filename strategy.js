@@ -330,7 +330,10 @@ function candidateClassificationText(candidate = {}) {
   const text = String(candidate.text || '').trim();
   if (source === 'x') return text;
   const parts = title && title !== text ? [title, text] : [text || title];
-  if (source === 'editorial') parts.push(...(candidate.niche?.matches || []));
+  if (source === 'editorial') {
+    const sourceText = String(candidate.metrics?.editorialSourceText || '').trim();
+    if (sourceText) parts.push(sourceText);
+  }
   return parts.filter(Boolean).join(' ');
 }
 

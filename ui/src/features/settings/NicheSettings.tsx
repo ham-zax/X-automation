@@ -125,7 +125,7 @@ export function NicheSettings() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <a href="#/advanced" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Advanced</a>
+          <a href="#/settings" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Settings</a>
           <h2 className="mt-2 text-2xl font-semibold text-slate-900">Growth Focus</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
             Choose the audience-growth goal and how deterministic topic matches should be interpreted. Topic classification remains evidence; these roles decide whether an opportunity is Core, Adjacent, or Outside current focus.

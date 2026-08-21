@@ -826,10 +826,7 @@ export function rescoreCandidateClassifications({ staleOnly = false } = {}) {
           title: row.title,
           text: row.text,
           url: row.url,
-          niche: {
-            tags: json(row.niche_tags, []),
-            matches: json(row.matched_keywords, []),
-          },
+          metrics: json(row.metrics_json, {}),
         }, { profileRevision, classifiedAt });
         rescoreCandidateStatement.run(
           Number(classified.niche.score || 0),
@@ -1164,6 +1161,28 @@ export function listRecentMainFeedPublications({ limit = 20 } = {}) {
   return published.sort((a, b) => Number(b.publishedAt || 0) - Number(a.publishedAt || 0)).slice(0, bounded);
 }
 
+function decodePublishedMainFeedQueueRow(row) {
+  if (!row) return null;
+  const candidate = getCandidate(row.candidate_key);
+  const threadParts = json(row.draft_thread_parts_json, []);
+  const editor = json(row.draft_editor_json, {});
+  return {
+    queueItemId: Number(row.id),
+    candidateKey: row.candidate_key,
+    pipeline: row.pipeline,
+    status: 'published',
+    published: true,
+    publishedTweetId: String(row.output_tweet_id || row.draft_published_tweet_id || ''),
+    outputTweetId: row.output_tweet_id || null,
+    publishedAt: Number(row.published_at || row.updated_at || 0),
+    text: row.pipeline === 'thread' ? String(threadParts[0] || '') : String(row.draft_body || ''),
+    body: String(row.draft_body || ''),
+    threadParts: Array.isArray(threadParts) ? threadParts : [],
+    semanticAnchors: Array.isArray(editor.semanticAnchors) ? editor.semanticAnchors : [],
+    topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
+  };
+}
+
 export function listPublishedMainFeedContent({ limit = 30 } = {}) {
   const bounded = Math.max(1, Math.min(100, Number(limit || 30)));
   const rows = db.prepare(`SELECT q.*, d.published_tweet_id AS draft_published_tweet_id,
@@ -1177,26 +1196,7 @@ export function listPublishedMainFeedContent({ limit = 30 } = {}) {
       AND COALESCE(NULLIF(q.output_tweet_id, ''), NULLIF(d.published_tweet_id, '')) IS NOT NULL
     ORDER BY COALESCE(q.published_at, q.updated_at) DESC
     LIMIT ?`).all(bounded);
-  const published = rows.map((row) => {
-    const candidate = getCandidate(row.candidate_key);
-    const threadParts = json(row.draft_thread_parts_json, []);
-    const editor = json(row.draft_editor_json, {});
-    return {
-      queueItemId: Number(row.id),
-      candidateKey: row.candidate_key,
-      pipeline: row.pipeline,
-      status: 'published',
-      published: true,
-      publishedTweetId: String(row.output_tweet_id || row.draft_published_tweet_id || ''),
-      outputTweetId: row.output_tweet_id || null,
-      publishedAt: Number(row.published_at || row.updated_at || 0),
-      text: row.pipeline === 'thread' ? String(threadParts[0] || '') : String(row.draft_body || ''),
-      body: String(row.draft_body || ''),
-      threadParts: Array.isArray(threadParts) ? threadParts : [],
-      semanticAnchors: Array.isArray(editor.semanticAnchors) ? editor.semanticAnchors : [],
-      topics: Array.isArray(candidate?.niche?.tags) ? candidate.niche.tags : [],
-    };
-  });
+  const published = rows.map(decodePublishedMainFeedQueueRow);
   const seen = new Set(published.map((item) => item.candidateKey));
   const legacy = db.prepare(`SELECT d.* FROM drafts d
     WHERE d.status = 'published' AND NULLIF(d.published_tweet_id, '') IS NOT NULL
@@ -1227,6 +1227,21 @@ export function listPublishedMainFeedContent({ limit = 30 } = {}) {
     seen.add(row.candidate_key);
   }
   return published.sort((a, b) => b.publishedAt - a.publishedAt).slice(0, bounded);
+}
+
+export function getPublishedMainFeedContent(queueItemId) {
+  const row = db.prepare(`SELECT q.*, d.published_tweet_id AS draft_published_tweet_id,
+      d.status AS draft_status, d.body AS draft_body, d.thread_parts_json AS draft_thread_parts_json,
+      d.editor_json AS draft_editor_json
+    FROM queue_items q
+    LEFT JOIN drafts d ON d.id = q.draft_id OR (q.draft_id IS NULL AND d.candidate_key = q.candidate_key)
+    WHERE q.id = ?
+      AND q.lane IN ('main', 'main_feed')
+      AND q.pipeline IN ('original', 'quote', 'thread')
+      AND q.status = 'published'
+      AND COALESCE(NULLIF(q.output_tweet_id, ''), NULLIF(d.published_tweet_id, '')) IS NOT NULL
+    LIMIT 1`).get(Number(queueItemId));
+  return decodePublishedMainFeedQueueRow(row);
 }
 
 function decodeContentStyleLabel(row) {
@@ -2498,6 +2513,16 @@ export function listPublicationMeasurements({ windowMinutes = null, limit = 200 
     ? db.prepare('SELECT * FROM publication_measurements ORDER BY captured_at DESC, id DESC LIMIT ?').all(bounded)
     : db.prepare('SELECT * FROM publication_measurements WHERE window_minutes = ? ORDER BY captured_at DESC, id DESC LIMIT ?').all(Number(windowMinutes), bounded);
   return rows.map(decodePublicationMeasurement);
+}
+
+export function countPublicationMeasurements({ windowMinutes = null } = {}) {
+  if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
+    throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+  }
+  const row = windowMinutes == null
+    ? db.prepare('SELECT COUNT(*) AS count FROM publication_measurements').get()
+    : db.prepare('SELECT COUNT(*) AS count FROM publication_measurements WHERE window_minutes = ?').get(Number(windowMinutes));
+  return Number(row?.count || 0);
 }
 
 function countOverlappingMainFeedPublications(queueItemId, baselineAt, capturedAt) {

@@ -47,7 +47,7 @@ export function GrowthFitPanel({
             {growthFit.topicScore != null && <span className="text-xs text-slate-500">Classifier evidence {growthFit.topicScore}/50</span>}
           </div>
         </div>
-        <a href="#/advanced/niche" className="text-sm font-medium text-sky-700 hover:underline">Review Growth Focus</a>
+        <a href="#/settings/growth-focus" className="text-sm font-medium text-sky-700 hover:underline">Review Growth Focus</a>
       </div>
 
       <p className="mt-2 text-sm text-slate-700">{growthFit.explanation}</p>
@@ -91,7 +91,7 @@ export function GrowthFitPanel({
           >
             {decision.isPending ? 'Saving decision…' : 'Use this opportunity anyway'}
           </button>
-          <div className="mt-1 text-xs text-amber-800">This records a human strategy decision. It does not approve, schedule, publish, or send anything.</div>
+          <div className="mt-1 text-xs text-amber-800">This records a human Growth Focus decision. It does not approve, schedule, publish, or send anything.</div>
         </div>
       )}
 

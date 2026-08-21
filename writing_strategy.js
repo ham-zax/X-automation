@@ -16,6 +16,7 @@ import {
   getExperimentSummary,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
+  getPublishedMainFeedContent,
   getWritingStrategySelectionForQueueItemAt,
   getQueueItem,
   listContentStyleLabels,
@@ -109,17 +110,12 @@ function externalPatterns(report) {
   };
 }
 
-function currentPublishedByQueueItem() {
-  return new Map(listPublishedMainFeedContent({ limit: 100 })
-    .filter((item) => item.queueItemId != null)
-    .map((item) => [Number(item.queueItemId), item]));
-}
-
 function reusableOwnedStyleLabels() {
-  const published = currentPublishedByQueueItem();
   return listContentStyleLabels({ taxonomyVersion: VIRAL_STYLE_TAXONOMY_VERSION, limit: 2000 })
-    .filter((label) => published.has(label.queueItemId)
-      && publishedContentHash(published.get(label.queueItemId)) === label.contentHash);
+    .filter((label) => {
+      const published = getPublishedMainFeedContent(label.queueItemId);
+      return published && publishedContentHash(published) === label.contentHash;
+    });
 }
 
 function ownAccountOutcomes(labels) {
@@ -227,6 +223,9 @@ function learnedRuleContext() {
 
 function strategyAvailability(workflow, shortlist) {
   const pipeline = workflow.queueItem?.pipeline || 'triage';
+  if (workflow.queueItem?.status === 'published' || workflow.queueItem?.publishedAt || workflow.queueItem?.outputTweetId) {
+    return { status: 'historical', selectable: false, reason: 'Published writing-strategy history is read-only.' };
+  }
   if (pipeline === 'repost') return { status: 'not_applicable', selectable: false, reason: 'Repost has no authored body.' };
   if (!AUTHORED_PIPELINES.has(pipeline)) return { status: 'not_applicable', selectable: false, reason: `Writing strategy is not applicable while the queue item is in ${pipeline}.` };
   if (workflow.growthFit?.state === 'unknown') return { status: 'growth_fit_unknown', selectable: false, reason: 'Growth fit is unknown until candidate classification is current.' };
@@ -320,9 +319,11 @@ function writingStrategyFromSelection(selection) {
   };
 }
 
-function generationContextFromSelection(selection, preparedAt) {
+function generationContextFromSelection(selection, preparedAt, draft) {
   return {
     preparedAt,
+    draftId: draft?.id ?? null,
+    draftUpdatedAt: draft?.updatedAt == null ? null : Number(draft.updatedAt),
     selectionId: selection?.id ?? null,
     selectionSelectedAt: selection?.selectedAt ?? null,
     selectionSource: selection?.selectionSource ?? null,
@@ -339,7 +340,8 @@ export function getWritingStrategyGenerationContext(queueItemId, { at = Date.now
   const preparedAt = Number(at);
   if (!Number.isFinite(preparedAt) || preparedAt <= 0) throw new Error('Writing strategy generation context requires a positive timestamp.');
   const selection = getWritingStrategySelectionForQueueItemAt(queueItem.id, preparedAt);
-  return generationContextFromSelection(selection, preparedAt);
+  const draft = queueItem.draftId == null ? null : getDraft(queueItem.draftId);
+  return generationContextFromSelection(selection, preparedAt, draft);
 }
 
 export function validateWritingStrategyGenerationContext(queueItemId, supplied = {}) {
@@ -347,7 +349,7 @@ export function validateWritingStrategyGenerationContext(queueItemId, supplied =
   if (!Number.isFinite(preparedAt) || preparedAt <= 0) throw new Error('apply-writer-output requires the generation context returned by writer-packet.');
   const expected = getWritingStrategyGenerationContext(queueItemId, { at: preparedAt });
   if (JSON.stringify(stableValue(expected)) !== JSON.stringify(stableValue(supplied))) {
-    throw new Error('Writer generation context does not match the human strategy selection that was in force when writer-packet was prepared.');
+    throw new Error('Writer generation context no longer matches the packet-time strategy selection and draft revision. Request a fresh writer-packet.');
   }
   return expected;
 }
@@ -682,14 +684,15 @@ export async function selectWritingStrategy(input = {}) {
 export async function classifyPublishedContent({ queueItemIds = [], limit = 10, profile = null } = {}) {
   const requested = stringList(queueItemIds).map(Number).filter(Number.isFinite);
   const bounded = Math.max(1, Math.min(20, Number(limit || 10)));
-  const published = listPublishedMainFeedContent({ limit: 100 }).filter((item) => item.queueItemId != null);
-  const byId = new Map(published.map((item) => [Number(item.queueItemId), item]));
   if (requested.length > 20) throw new Error('Published content classification accepts at most 20 queue item ids per explicit action.');
+  const requestedPublished = requested.map((id) => getPublishedMainFeedContent(id));
   if (requested.length) {
-    const missing = requested.filter((id) => !byId.has(id));
+    const missing = requested.filter((_, index) => !requestedPublished[index]);
     if (missing.length) throw new Error(`Only real published owned main-feed content can be classified; unavailable queue item id(s): ${missing.join(', ')}.`);
   }
-  const targets = (requested.length ? requested.map((id) => byId.get(id)) : published).slice(0, bounded);
+  const targets = (requested.length
+    ? requestedPublished.filter(Boolean)
+    : listPublishedMainFeedContent({ limit: 100 }).filter((item) => item.queueItemId != null)).slice(0, bounded);
   const reused = [];
   const pending = [];
   for (const item of targets) {

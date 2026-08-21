@@ -1,6 +1,4 @@
 const DETAIL_VIEWS = [
-  ['#/advanced/niche', 'Growth Focus', 'Review the default growth goal, topic roles, classification terms, and target-audience signals.'],
-  ['#/advanced/ai', 'AI Settings', 'Runtime, provider, model, role assignments, connection checks, and recent AI usage.'],
   ['/legacy?source=relationships', 'Relationships', 'Strategic relationship profiles, stages, and relationship-fit detail.'],
   ['/legacy?source=health', 'Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],
 ]
@@ -9,9 +7,10 @@ export function Advanced() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Diagnostics</h2>
+        <a href="#/settings" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Settings</a>
+        <h2 className="mt-2 text-2xl font-semibold text-slate-900">Advanced / diagnostics</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Inspect account-health and relationship details that sit behind the main workflow.
+          Inspect account-health and relationship details that sit behind the main workflow. Growth focus and AI configuration remain separate Settings sections.
         </p>
       </div>
 

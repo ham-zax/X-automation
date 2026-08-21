@@ -3,6 +3,7 @@ import { buildWritingStrategyEvidence } from './strategy_guidance.js';
 import { analyzeStoredDataset } from './viral_style_analyze.js';
 import {
   PUBLICATION_MEASUREMENT_WINDOWS,
+  countPublicationMeasurements,
   getCandidate,
   getExperimentSummary,
   getNewFollowerQuality,
@@ -118,6 +119,7 @@ export function getWritingStrategyOutcomeSummary({ windowMinutes = FINAL_WINDOW_
   const window = Number(windowMinutes);
   if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new Error(`Unsupported writing-strategy outcome window: ${windowMinutes}.`);
   const measurements = listPublicationMeasurements({ windowMinutes: window, limit });
+  const totalMeasurementCount = countPublicationMeasurements({ windowMinutes: window });
   const resolved = measurements.map(strategyObservation);
   const observations = resolved.filter((entry) => !entry.unavailable);
   const applied = observations.filter((observation) => observation.strategyApplied);
@@ -131,6 +133,8 @@ export function getWritingStrategyOutcomeSummary({ windowMinutes = FINAL_WINDOW_
         ? 'generation_provenance_unavailable'
         : 'no_measurements',
     measurementCount: measurements.length,
+    totalMeasurementCount,
+    truncated: totalMeasurementCount > measurements.length,
     observationCount: observations.length,
     appliedObservationCount: applied.length,
     unavailable: {

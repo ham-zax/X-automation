@@ -3,9 +3,9 @@ import { useAudience, useAudienceReview, useAudienceUnfollow, type AudienceProfi
 import { Badge, Disclosure, Error, Loading, Pending, StatCard, formatDateTime } from '../../components/primitives'
 
 const FIT_LABELS: Record<string, string> = {
-  in_niche: 'In niche',
+  in_niche: 'Aligned',
   uncertain: 'Not enough profile evidence',
-  outside_niche: 'Outside current niche',
+  outside_niche: 'Outside current audience focus',
 }
 
 const FIT_TONES: Record<string, 'success' | 'neutral' | 'danger'> = {
@@ -130,20 +130,20 @@ export function Audience() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Performance</a>
+          <a href="#/results" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to Results</a>
           <h2 className="mt-2 text-2xl font-semibold text-slate-900">Audience quality</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Review observed follower/following relationships and niche alignment. Classifications are advisory; nothing is unfollowed automatically.
+            Review observed follower/following relationships and target-audience alignment. Classifications are advisory; nothing is unfollowed automatically.
           </p>
         </div>
-        <a href="#/advanced/niche" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Review Growth Focus</a>
+        <a href="#/settings/growth-focus" className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Review Growth Focus</a>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Observed followers" value={data.summary.followers} />
-        <StatCard label="Niche followers" value={data.counts.inNicheFollowers} />
-        <StatCard label="Niche following" value={data.counts.inNicheFollowing} />
-        <StatCard label="Outside-niche following" value={data.counts.outsideFollowing} />
+        <StatCard label="Aligned followers" value={data.counts.inNicheFollowers} />
+        <StatCard label="Aligned following" value={data.counts.inNicheFollowing} />
+        <StatCard label="Outside-focus following" value={data.counts.outsideFollowing} />
       </div>
 
       <section className="rounded-lg border border-sky-200 bg-sky-50 p-5">
@@ -151,7 +151,7 @@ export function Audience() {
           <div className="max-w-3xl">
             <h3 className="text-lg font-semibold text-slate-900">AI following review</h3>
             <p className="mt-1 text-sm text-slate-700">
-              Send the current following list, niche signals, mutual status, and known relationship context to the configured Audience review model. The AI only suggests accounts to inspect; it cannot unfollow anyone.
+              Send the current following list, audience/topic signals, mutual status, and known relationship context to the configured Audience review model. The AI only suggests accounts to inspect; it cannot unfollow anyone.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -162,7 +162,7 @@ export function Audience() {
             >
               {aiReview.isPending ? 'Reviewing following…' : 'Ask AI to review following'}
             </button>
-            <a href="#/advanced/ai" className="text-sm font-medium text-sky-700 hover:underline">AI settings</a>
+            <a href="#/settings/ai" className="text-sm font-medium text-sky-700 hover:underline">AI settings</a>
           </div>
         </div>
         {aiReview.isError && (
@@ -198,7 +198,7 @@ export function Audience() {
       )}
 
       <BucketSection
-        title="Accounts you follow outside your niche"
+        title="Accounts you follow outside the current audience focus"
         note="Profiles with clear outside-focus signals and no matching technical context, plus explicit exclusions such as engagement spam, gambling, or adult content. Review the profile before using the single-account unfollow action."
         profiles={data.outsideFollowing}
       />
@@ -210,14 +210,14 @@ export function Audience() {
       />
 
       <BucketSection
-        title="In-niche accounts you follow"
+        title="Aligned accounts you follow"
         note="Relevant accounts you follow that do not currently follow you. Strategic classes and stages live in Relationships."
         profiles={data.targets}
         batchSize={40}
       />
 
       <BucketSection
-        title="Niche-aligned followers"
+        title="Target-audience followers"
         note="Current followers already close to the AI/developer/builder audience we want more of."
         profiles={data.relevantFollowers}
         batchSize={20}
@@ -225,9 +225,9 @@ export function Audience() {
 
       <Disclosure summary="What do the fit buckets mean?">
         <div className="space-y-2 text-sm text-slate-600">
-          <div><strong>In niche:</strong> the profile shows developer/technical signals matching the target audience.</div>
+          <div><strong>Aligned:</strong> the profile shows developer/technical signals matching the target audience.</div>
           <div><strong>Not enough profile evidence:</strong> no recognizable signals — uncertain, not low fit.</div>
-          <div><strong>Outside current niche:</strong> explicit exclusion signals or clearly non-technical focus.</div>
+          <div><strong>Outside current audience focus:</strong> explicit exclusion signals or clearly non-technical focus.</div>
         </div>
       </Disclosure>
     </div>

@@ -160,7 +160,7 @@ function PostCard({ post }: { post: ViralResearchPost }) {
   )
 }
 
-export function ViralStyles() {
+export function ViralStyles({ embedded = false }: { embedded?: boolean } = {}) {
   const [days, setDays] = useState(21)
   const research = useViralResearch(days)
   const status = useViralResearchStatus()
@@ -246,19 +246,21 @@ export function ViralStyles() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Viral Styles</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Study how high-performing X posts are written across niches. Collection is read-only; AI classifies text-supported communicative intent, not private motivation.
-          </p>
+      {!embedded && (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-semibold text-slate-900">Viral Styles</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Study how high-performing X posts are written across niches. Collection is read-only; AI classifies text-supported communicative intent, not private motivation.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="success">Read-only X research</Badge>
+            <Badge>90% association intervals</Badge>
+            <Badge>Human-selected scope</Badge>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="success">Read-only X research</Badge>
-          <Badge>90% association intervals</Badge>
-          <Badge>Human-selected scope</Badge>
-        </div>
-      </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Stored posts" value={report.dataset.totalStoredPosts} note={`${report.dataset.totalStoredSnapshots} metric/profile snapshots`} />
@@ -365,7 +367,7 @@ export function ViralStyles() {
                       <option value="">Select configured profile…</option>
                       {profiles.map((profile) => <option key={profile.id || profile.name} value={profile.id || ''}>{profile.name} · {profile.model}</option>)}
                     </select>
-                    {profiles.length === 0 && <span className="mt-2 block text-xs text-amber-700">No enabled structured profiles. Use Runtime + exact model here, or configure one in <a className="underline" href="#/advanced/ai">AI Settings</a>.</span>}
+                    {profiles.length === 0 && <span className="mt-2 block text-xs text-amber-700">No enabled structured profiles. Use Runtime + exact model here, or configure one in <a className="underline" href="#/settings/ai">AI Settings</a>.</span>}
                   </label>
                 ) : (
                   <>

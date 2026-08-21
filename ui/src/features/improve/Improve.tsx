@@ -535,7 +535,9 @@ function RefreshSuggestionForms({ tests }: { tests: TestView[] }) {
   )
 }
 
-export function Improve() {
+type ImproveView = 'all' | 'tests' | 'learning'
+
+export function Improve({ embedded = false, view = 'all' }: { embedded?: boolean; view?: ImproveView } = {}) {
   const { data, isLoading, error, refetch } = useImprove()
   const decisionRule = useMemo(() => {
     if (!data) return null
@@ -556,26 +558,32 @@ export function Improve() {
   }
 
   const activeTests = data.tests.filter((test) => test.status === 'active')
+  const showTests = view !== 'learning'
+  const showLearning = view !== 'tests'
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-semibold text-slate-900">Experiments</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Use measured outcomes to ask focused questions, then decide whether any recommendation should change.
-        </p>
-      </div>
+      {!embedded && (
+        <div>
+          <h2 className="text-2xl font-semibold text-slate-900">Experiments</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Use measured outcomes to ask focused questions, then decide whether any recommendation should change.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <StatCard label="Tests" value={data.tests.length} note={`${activeTests.length} active. Assignments are explicit and never randomized.`} />
-        <StatCard
-          label="What we've learned"
-          value={data.learning.suggested}
-          note={`suggested · ${data.learning.accepted} accepted. Suggestions have zero effect until you accept them.`}
-        />
+        {showTests && <StatCard label="Tests" value={data.tests.length} note={`${activeTests.length} active. Assignments are explicit and never randomized.`} />}
+        {showLearning && (
+          <StatCard
+            label="What we've learned"
+            value={data.learning.suggested}
+            note={`suggested · ${data.learning.accepted} accepted. Suggestions have zero effect until you accept them.`}
+          />
+        )}
       </div>
 
-      {decisionRule ? (
+      {showLearning && (decisionRule ? (
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Needs a human decision</div>
           <h3 className="mt-1 text-lg font-semibold text-slate-900">{decisionRule.finding || 'A measured pattern is ready to review'}</h3>
@@ -588,7 +596,7 @@ export function Improve() {
         <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-700">
           <strong>No strategy decision is waiting right now.</strong> Keep collecting measured outcomes or create a focused test when you have a question worth comparing.
         </div>
-      )}
+      ))}
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
         <strong>Nothing here publishes by itself.</strong>
@@ -597,32 +605,40 @@ export function Improve() {
         </div>
       </div>
 
-      <CreateTestForm />
-      {data.tests.length > 0 && (
-        <section className="space-y-3">
-          {data.tests.map((test) => <TestCard key={test.id} test={test} />)}
-        </section>
+      {showTests && (
+        <>
+          <CreateTestForm />
+          {data.tests.length > 0 && (
+            <section className="space-y-3">
+              {data.tests.map((test) => <TestCard key={test.id} test={test} />)}
+            </section>
+          )}
+        </>
       )}
 
-      <section>
-        <h3 className="mb-1 text-lg font-semibold text-slate-900">What we've learned</h3>
-        <p className="mb-3 text-sm text-slate-600">Patterns from your own measured work. Suggestions stay inert until you explicitly accept them.</p>
-        {data.learning.rules.length > 0 ? (
-          <div className="space-y-3">
-            {data.learning.rules.map((rule) => <LearnedRuleCard key={rule.id} rule={rule} />)}
-          </div>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
-            No learning suggestions yet. Run tests and collect measured outcomes first.
-          </div>
-        )}
-      </section>
+      {showLearning && (
+        <>
+          <section>
+            <h3 className="mb-1 text-lg font-semibold text-slate-900">What we've learned</h3>
+            <p className="mb-3 text-sm text-slate-600">Patterns from your own measured work. Suggestions stay inert until you explicitly accept them.</p>
+            {data.learning.rules.length > 0 ? (
+              <div className="space-y-3">
+                {data.learning.rules.map((rule) => <LearnedRuleCard key={rule.id} rule={rule} />)}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+                No learning suggestions yet. Run tests and collect measured outcomes first.
+              </div>
+            )}
+          </section>
 
-      <section>
-        <h3 className="mb-1 text-lg font-semibold text-slate-900">Look for a new pattern</h3>
-        <p className="mb-3 text-sm text-slate-600">Check a declared test for a measurable difference between its options.</p>
-        <RefreshSuggestionForms tests={data.tests} />
-      </section>
+          <section>
+            <h3 className="mb-1 text-lg font-semibold text-slate-900">Look for a new pattern</h3>
+            <p className="mb-3 text-sm text-slate-600">Check a declared test for a measurable difference between its options.</p>
+            <RefreshSuggestionForms tests={data.tests} />
+          </section>
+        </>
+      )}
     </div>
   )
 }
