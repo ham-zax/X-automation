@@ -30,7 +30,7 @@
 - `relationship.js` — consume completed engagement events, not discovery logic.
 - `dashboard.js` — Engage Next / Active Conversations views.
 - `agent_bridge.js` — engage-next, engage-draft, engage-resolve commands.
-- `automation.js` — refresh opportunities only; no autonomous reply sends.
+- `automation.js` — refresh real engagement inputs and run the later A9 autonomous-reply operator when its separate persisted grant is explicitly started; Phase 1C human approval/send remains intact.
 
 ---
 

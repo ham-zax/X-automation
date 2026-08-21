@@ -12,6 +12,7 @@ import { Audience } from './features/results/Audience'
 import { Learn } from './features/learn/Learn'
 import { Advanced } from './features/advanced/Advanced'
 import { AISettings } from './features/settings/AISettings'
+import { AutonomousRepliesSettings } from './features/settings/AutonomousRepliesSettings'
 import { NicheSettings } from './features/settings/NicheSettings'
 import { Settings } from './features/settings/Settings'
 
@@ -64,6 +65,7 @@ function RouteContent() {
   if (first === 'improve') return <Learn section="tests" />
   if (first === 'settings' && second === 'growth-focus') return <NicheSettings />
   if (first === 'settings' && second === 'ai') return <AISettings />
+  if (first === 'settings' && second === 'autonomous-replies') return <AutonomousRepliesSettings />
   if (first === 'settings' && second === 'advanced') return <Advanced />
   if (first === 'settings') return <Settings />
   if (first === 'advanced' && second === 'ai') return <AISettings />

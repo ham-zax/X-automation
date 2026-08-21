@@ -159,6 +159,8 @@ export function qualifyContribution(contribution = {}) {
     evidenceAdjustment,
     contextAdjustment,
     strength,
+    verificationRequired,
+    verified: contribution.verified === true,
     qualified: rejectionReasons.length === 0,
     rejectionReasons,
   };
@@ -550,6 +552,8 @@ export async function refreshEngagementOpportunities({
       rejected.push({ candidateKey: candidate.key, reason: 'MISSING_TARGET_TWEET_ID' });
       return null;
     }
+    const engagementKind = context.engagementKind || 'initial_reply';
+    const existingEngagement = store.getActiveEngagementItem(targetTweetId, engagementKind);
     const opportunityScores = opportunity.scoreOpportunity(candidate, {
       now,
       relationship: profile ? { ...profile, nicheTags: profile.primaryTopics || [] } : null,
@@ -594,7 +598,7 @@ export async function refreshEngagementOpportunities({
       candidate,
       targetUsername,
       targetTweetId,
-      engagementKind: context.engagementKind || 'initial_reply',
+      engagementKind,
       relationship: profile || {},
       conversationPotential: opportunityScores.conversationPotential,
       relationshipPotential: Number(profile?.relationshipPotential ?? opportunityScores.relationshipPotential ?? 0),
@@ -636,7 +640,14 @@ export async function refreshEngagementOpportunities({
       status: 'triage',
       urgency: Number(scored.components.freshness || 0),
       routingReason: `EngagePriority ${scored.engagePriority}: ${scored.contribution.summary}`,
-      engagement: { ...scored, refreshedAt: now, source: context.source || 'target_timeline' },
+      engagement: {
+        ...scored,
+        refreshedAt: now,
+        firstObservedAt: existingEngagement?.engagement?.firstObservedAt || existingEngagement?.createdAt || now,
+        source: context.source || 'target_timeline',
+        sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
+        recipientOptIn: context.recipientOptIn === true || context.response === true,
+      },
     });
     if (item.lane !== 'engagement') {
       rejected.push({ candidateKey: candidate.key, reason: 'HUMAN_ROUTE_PRESERVED' });
@@ -684,6 +695,8 @@ export async function refreshEngagementOpportunities({
       }
       persistOpportunity(candidate, profile, {
         source: 'target_response',
+        sourceClass: 'active',
+        recipientOptIn: true,
         response: true,
         directQuestion: candidate.text.includes('?'),
         targetUsername: response.targetUsername,
@@ -707,8 +720,25 @@ export async function refreshEngagementOpportunities({
       const candidate = candidateFromPost(post, profile, false);
       persistOpportunity(candidate, profile, {
         source: 'target_timeline',
+        sourceClass: 'normal',
         targetUsername: post.targetUsername,
         targetTweetId: post.id,
+        engagementKind: 'initial_reply',
+      });
+    }
+  }
+
+  for (const [snapshotKind, sourceClass] of [['x_latest', 'normal'], ['x_momentum', 'momentum']]) {
+    for (const candidate of store.getDiscoverSnapshot(snapshotKind).candidates.slice(0, 60)) {
+      if (candidate.source !== 'x') continue;
+      const username = sourceUsername(candidate);
+      const profile = username ? store.getRelationshipProfile(username) : null;
+      if (!profile) continue;
+      persistOpportunity(candidate, profile, {
+        source: snapshotKind,
+        sourceClass,
+        targetUsername: username,
+        targetTweetId: tweetIdFromCandidate(candidate),
         engagementKind: 'initial_reply',
       });
     }
@@ -726,6 +756,7 @@ export async function refreshEngagementOpportunities({
     if (!profile) continue;
     persistOpportunity(candidate, profile, {
       source: 'research_candidate',
+      sourceClass: ['viral', 'breakout'].includes(candidate.viral?.tier) ? 'momentum' : 'normal',
       targetUsername: username,
       targetTweetId: tweetIdFromCandidate(candidate),
       engagementKind: 'initial_reply',

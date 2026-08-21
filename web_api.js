@@ -32,6 +32,13 @@ import {
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
+import {
+  configureAutonomousReplyGrant,
+  getAutonomousReplyReadModel,
+  pauseAutonomousReplies,
+  startAutonomousReplies,
+  stopAutonomousReplies,
+} from './autonomous_reply.js';
 import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, assessStrategicRelevance, isOpportunityCandidate } from './strategy.js';
 import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
@@ -71,6 +78,7 @@ import {
   getRelationshipProfile,
   getAudienceSummary,
   getAccountHealthSummary,
+  getAutonomousReplyDecisionForTarget,
   getDiscoverSnapshot,
   getSourceMomentum,
   listAcceptedLearnedRules,
@@ -1173,6 +1181,7 @@ function formatConversationDetail(key) {
       state: health.health.state,
       constrained,
     },
+    autonomousDecision: queueItem.targetTweetId ? getAutonomousReplyDecisionForTarget(queueItem.targetTweetId) : null,
     flags: {
       canReview: Boolean(draft) && ['drafting', 'needs_review', 'failed'].includes(queueItem.status),
       canApproveSend: !constrained && queueItem.status === 'needs_review' && Number(payload?.analysis?.score || 0) >= 40 && gatesPassed,
@@ -2150,9 +2159,26 @@ export async function handleApi(req, res, requestUrl) {
       throw new Error(`Unknown triage action: ${action || '(missing)'}`);
     }
 
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'autonomous-replies') {
+      return sendSuccess(getAutonomousReplyReadModel({ limit: 100 }));
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'autonomous-replies') {
+      const action = segments[1];
+      const payload = await readBody();
+      if (action === 'configure') configureAutonomousReplyGrant(payload, { actor: 'human' });
+      else if (action === 'start') startAutonomousReplies({ actor: 'human' });
+      else if (action === 'pause') pauseAutonomousReplies({ actor: 'human' });
+      else if (action === 'stop') stopAutonomousReplies({ actor: 'human' });
+      else throw new Error(`Unknown autonomous reply action: ${action}.`);
+      return sendSuccess(getAutonomousReplyReadModel({ limit: 100 }));
+    }
+
     if (method === 'GET' && segments.length === 1 && segments[0] === 'conversations') {
       const items = listEngagementItems({ limit: 200 });
       const health = getAccountHealthSummary();
+      const autonomous = getAutonomousReplyReadModel({ limit: 100 });
+      const autonomousByTarget = new Map(autonomous.recentDecisions.map((decision) => [decision.targetTweetId, decision]));
       const formatItem = (item) => {
         const candidate = getCandidate(item.candidateKey);
         const profile = item.targetUsername ? getRelationshipProfile(item.targetUsername) : null;
@@ -2179,6 +2205,7 @@ export async function handleApi(req, res, requestUrl) {
           draftId: draft?.id ?? null,
           draftQualityScore: draftAnalysis?.score ?? draft?.qualityScore ?? null,
           expiresAt: item.expiresAt || null,
+          autonomousDecision: autonomousByTarget.get(item.targetTweetId) || null,
           relationship: profile
             ? {
                 stage: profile.relationshipStage,
@@ -2198,6 +2225,11 @@ export async function handleApi(req, res, requestUrl) {
           state: health.health.state,
           label: label(HEALTH_STATE_COPY, health.health.state),
           explanation: health.health.explanation || '',
+        },
+        autonomous: {
+          grant: autonomous.grant,
+          runtime: autonomous.runtime,
+          recentDecisions: autonomous.recentDecisions.slice(0, 20),
         },
       });
     }

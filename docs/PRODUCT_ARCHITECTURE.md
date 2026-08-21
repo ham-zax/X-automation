@@ -100,7 +100,7 @@ Current repository state:
 - `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode uses its documented SDK/server structured-output contract when available; OpenCode 2 remains separately capability-gated rather than being simulated through undocumented output parsing.
 - Operator-attached JPEG/PNG/WebP/GIF media now has a real local readiness, preview, and authenticated publication path. Required proof media must still remain blocked until the attachment and media plan are complete; Writer-planned media does not create files by itself.
 
-Phase-6 editorial planning is current runtime behavior, but it remains advisory: human route selection, approval, reply send, repost completion, and publication authority stay separate.
+Phase-6 editorial planning is current runtime behavior and remains advisory: human route selection, main-feed approval, repost completion, and publication authority stay separate. Reply authority has two explicit paths: exact human approval/send, or the off-by-default autonomous-reply grant with deterministic policy/value checks and atomic autonomous claim.
 
 ## Phase map
 
@@ -108,7 +108,7 @@ Phase-6 editorial planning is current runtime behavior, but it remains advisory:
 | --- | --- | --- | --- |
 | 1A | Implemented | Workflow foundation and four-dimensional triage | `queue_items`, route selection, approval boundary, Reach/Follow/Conversation/Relationship potentials |
 | 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages |
-| 1C | Implemented | Engage Next | ranked reply/follow-up opportunities with explicit human send |
+| 1C | Implemented | Engage Next + autonomous reply operator | ranked reply/follow-up opportunities, exact human send, and off-by-default persistent autonomous dry-run/live authority |
 | 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus evidence-backed diagnostics |
 | 2 | Implemented | Content quality and profile proof | writer packet, drafts, hard gates, quality score, human editorial review |
 | 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
@@ -716,7 +716,8 @@ Advanced retains detailed diagnostics. AI Settings owns runtime/provider/model c
 | Draft text | Yes | Yes after work exists | Human edits/rejects |
 | Confirm factuality/evidence | No final authority | No | Human confirms |
 | Approve main-feed item | No | No | Human only |
-| Send reply | No | No | Human explicit action |
+| Send human-reviewed reply | No | No | Human exact approval/send |
+| Send autonomous reply | AI may choose allowed intent/tone and exact text | Only under an explicitly started persisted grant after deterministic eligibility, recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X AI-reply approval, remaining operator budget, and atomic claim | Human configures/pauses/stops/revokes the grant; autonomous send never creates `humanApprovedAt` |
 | Complete repost | No | No | Human records manual action |
 | Schedule suggestion | Yes | Yes, advisory calculation | Human can override |
 | Publish approved main-feed item | No recommendation authority | Existing automation may transport an already approved eligible item when enabled | Approval remains human authority |

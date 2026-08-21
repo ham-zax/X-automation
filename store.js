@@ -74,6 +74,8 @@ const EDITORIAL_RECOMMENDATION_STATUS_SET = new Set(['suggested', 'selected', 'd
 const QUEUE_SOURCE_ROLE_SET = new Set(['primary', 'supporting']);
 const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
 const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
+const AUTONOMOUS_REPLY_GRANT_STATE_KEY = 'autonomous_reply_grant';
+const AUTONOMOUS_REPLY_RUNTIME_STATE_KEY = 'autonomous_reply_runtime';
 const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
 
 const db = new DatabaseSync(DB_FILE);
@@ -274,6 +276,35 @@ db.exec(`
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key),
     FOREIGN KEY(draft_id) REFERENCES drafts(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS autonomous_reply_decisions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_item_id INTEGER,
+    candidate_key TEXT NOT NULL,
+    target_tweet_id TEXT NOT NULL UNIQUE,
+    target_username TEXT NOT NULL DEFAULT '',
+    source_class TEXT NOT NULL,
+    relationship_stage TEXT,
+    intent TEXT,
+    tone TEXT,
+    exact_reply TEXT NOT NULL DEFAULT '',
+    selection_json TEXT NOT NULL DEFAULT '{}',
+    relationship_context_json TEXT NOT NULL DEFAULT '{}',
+    ai_execution_json TEXT NOT NULL DEFAULT '{}',
+    checks_json TEXT NOT NULL DEFAULT '{}',
+    reasons_json TEXT NOT NULL DEFAULT '[]',
+    grant_revision INTEGER NOT NULL,
+    mode TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    claimed_at INTEGER,
+    sent_at INTEGER,
+    output_tweet_id TEXT,
+    output_url TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id),
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key)
   );
 
   CREATE TABLE IF NOT EXISTS publication_measurements (
@@ -543,6 +574,9 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_health_type_observed ON account_health_observations(type, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_time ON autonomous_reply_decisions(created_at DESC, id DESC);
+  CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_status ON autonomous_reply_decisions(decision, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_target ON autonomous_reply_decisions(target_username, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_measurements_queue_window ON publication_measurements(queue_item_id, window_minutes);
   CREATE INDEX IF NOT EXISTS idx_measurements_captured ON publication_measurements(captured_at DESC);
   CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status, created_at DESC);
@@ -1501,6 +1535,195 @@ export function listEngagementItems({ status, minPriority = 0, includeExpired = 
   if (includeExpired) return items;
   return items.filter((item) => !['ignored', 'expired', 'published'].includes(item.status)
     && item.engagement?.expiry?.effectiveExpired !== true);
+}
+
+function decodeAutonomousReplyDecision(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    queueItemId: row.queue_item_id == null ? null : Number(row.queue_item_id),
+    candidateKey: row.candidate_key,
+    targetTweetId: row.target_tweet_id,
+    targetUsername: row.target_username || '',
+    sourceClass: row.source_class,
+    relationshipStage: row.relationship_stage || null,
+    intent: row.intent || null,
+    tone: row.tone || null,
+    exactReply: row.exact_reply || '',
+    selection: json(row.selection_json, {}),
+    relationshipContext: json(row.relationship_context_json, {}),
+    aiExecution: json(row.ai_execution_json, {}),
+    checks: json(row.checks_json, {}),
+    reasons: json(row.reasons_json, []),
+    grantRevision: Number(row.grant_revision || 0),
+    mode: row.mode,
+    decision: row.decision,
+    claimedAt: row.claimed_at == null ? null : Number(row.claimed_at),
+    sentAt: row.sent_at == null ? null : Number(row.sent_at),
+    outputTweetId: row.output_tweet_id || null,
+    outputUrl: row.output_url || null,
+    createdAt: Number(row.created_at || 0),
+    updatedAt: Number(row.updated_at || 0),
+  };
+}
+
+export function getAutonomousReplyDecision(id) {
+  return decodeAutonomousReplyDecision(db.prepare('SELECT * FROM autonomous_reply_decisions WHERE id = ?').get(Number(id)));
+}
+
+export function getAutonomousReplyDecisionForTarget(targetTweetId) {
+  return decodeAutonomousReplyDecision(db.prepare('SELECT * FROM autonomous_reply_decisions WHERE target_tweet_id = ?').get(String(targetTweetId || '')));
+}
+
+export function listAutonomousReplyDecisions({ decision = null, limit = 100 } = {}) {
+  const bounded = Math.max(1, Math.min(1000, Number(limit || 100)));
+  const rows = decision
+    ? db.prepare('SELECT * FROM autonomous_reply_decisions WHERE decision = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(String(decision), bounded)
+    : db.prepare('SELECT * FROM autonomous_reply_decisions ORDER BY created_at DESC, id DESC LIMIT ?').all(bounded);
+  return rows.map(decodeAutonomousReplyDecision);
+}
+
+export function recordAutonomousReplyDecision(input = {}) {
+  const candidateKey = String(input.candidateKey || '');
+  const targetTweetId = String(input.targetTweetId || '');
+  const sourceClass = String(input.sourceClass || '');
+  const mode = String(input.mode || '');
+  const decision = String(input.decision || '');
+  const grantRevision = Number(input.grantRevision);
+  if (!candidateKey || !targetTweetId || !sourceClass || !mode || !decision || !Number.isInteger(grantRevision)) {
+    throw new Error('Autonomous reply decisions require candidate, target, source class, mode, decision, and grant revision.');
+  }
+  const now = Number(input.createdAt || Date.now());
+  const result = db.prepare(`INSERT OR IGNORE INTO autonomous_reply_decisions(
+      queue_item_id, candidate_key, target_tweet_id, target_username, source_class, relationship_stage,
+      intent, tone, exact_reply, selection_json, relationship_context_json, ai_execution_json,
+      checks_json, reasons_json, grant_revision, mode, decision, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    input.queueItemId ?? null,
+    candidateKey,
+    targetTweetId,
+    String(input.targetUsername || ''),
+    sourceClass,
+    input.relationshipStage || null,
+    input.intent || null,
+    input.tone || null,
+    String(input.exactReply || ''),
+    JSON.stringify(input.selection || {}),
+    JSON.stringify(input.relationshipContext || {}),
+    JSON.stringify(input.aiExecution || {}),
+    JSON.stringify(input.checks || {}),
+    JSON.stringify(Array.isArray(input.reasons) ? input.reasons : []),
+    grantRevision,
+    mode,
+    decision,
+    now,
+    now,
+  );
+  const saved = getAutonomousReplyDecisionForTarget(targetTweetId);
+  return { ...saved, created: Number(result.changes || 0) === 1 };
+}
+
+export function updateAutonomousReplyDecision(id, patch = {}) {
+  const current = getAutonomousReplyDecision(id);
+  if (!current) throw new Error(`Autonomous reply decision not found: ${id}`);
+  const next = { ...current, ...patch };
+  const updatedAt = Number(patch.updatedAt || Date.now());
+  db.prepare(`UPDATE autonomous_reply_decisions SET
+      target_username = ?, source_class = ?, relationship_stage = ?, intent = ?, tone = ?, exact_reply = ?,
+      selection_json = ?, relationship_context_json = ?, ai_execution_json = ?, checks_json = ?, reasons_json = ?,
+      grant_revision = ?, mode = ?, decision = ?, claimed_at = ?, sent_at = ?, output_tweet_id = ?, output_url = ?, updated_at = ?
+    WHERE id = ?`).run(
+    String(next.targetUsername || ''),
+    next.sourceClass,
+    next.relationshipStage || null,
+    next.intent || null,
+    next.tone || null,
+    String(next.exactReply || ''),
+    JSON.stringify(next.selection || {}),
+    JSON.stringify(next.relationshipContext || {}),
+    JSON.stringify(next.aiExecution || {}),
+    JSON.stringify(next.checks || {}),
+    JSON.stringify(Array.isArray(next.reasons) ? next.reasons : []),
+    Number(next.grantRevision),
+    next.mode,
+    next.decision,
+    next.claimedAt ?? null,
+    next.sentAt ?? null,
+    next.outputTweetId ?? null,
+    next.outputUrl ?? null,
+    updatedAt,
+    Number(id),
+  );
+  return getAutonomousReplyDecision(id);
+}
+
+export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp) || !Number.isInteger(Number(grantRevision))) {
+    throw new Error('Autonomous reply claim requires numeric time and grant revision.');
+  }
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const decision = getAutonomousReplyDecision(id);
+    if (!decision || decision.decision !== 'eligible_live' || decision.claimedAt != null) {
+      db.exec('ROLLBACK');
+      return null;
+    }
+    if (decision.checks?.policy?.allowed !== true || !String(decision.exactReply || '').trim()) {
+      throw new Error('Autonomous reply decision is not policy-authorized for live send.');
+    }
+    const storedGrant = db.prepare('SELECT value FROM app_state WHERE key = ?').get(AUTONOMOUS_REPLY_GRANT_STATE_KEY)?.value;
+    const grant = json(storedGrant, {});
+    if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(grantRevision)) {
+      throw new Error('Autonomous reply authority changed before claim.');
+    }
+    const liveBudget = Number(grant.liveBudget);
+    const budgetUsed = Number(grant.budgetUsed || 0);
+    if (!Number.isInteger(liveBudget) || liveBudget <= 0 || budgetUsed >= liveBudget) {
+      throw new Error('Autonomous reply live budget has no remaining capacity.');
+    }
+    if (!String(grant.xApprovalReference || '').trim()) {
+      throw new Error('Autonomous live replies require a recorded X AI-reply approval reference.');
+    }
+    if (!String(grant.optOutMechanism || '').trim()) {
+      throw new Error('Autonomous live replies require a recorded recipient opt-out mechanism.');
+    }
+    const changed = db.prepare(`UPDATE autonomous_reply_decisions
+      SET decision = 'sending', claimed_at = ?, updated_at = ?
+      WHERE id = ? AND decision = 'eligible_live' AND claimed_at IS NULL AND grant_revision = ?`)
+      .run(timestamp, timestamp, Number(id), Number(grantRevision));
+    if (Number(changed.changes || 0) !== 1) {
+      db.exec('ROLLBACK');
+      return null;
+    }
+    const nextGrant = { ...grant, budgetUsed: budgetUsed + 1, lastClaimAt: timestamp };
+    db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
+      .run(AUTONOMOUS_REPLY_GRANT_STATE_KEY, JSON.stringify(nextGrant));
+    db.exec('COMMIT');
+    return { decision: getAutonomousReplyDecision(id), grant: nextGrant };
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+}
+
+export function getAutonomousReplyGrantState() {
+  return json(getAppState(AUTONOMOUS_REPLY_GRANT_STATE_KEY, null), null);
+}
+
+export function saveAutonomousReplyGrantState(grant) {
+  setAppState(AUTONOMOUS_REPLY_GRANT_STATE_KEY, JSON.stringify(grant || {}));
+  return getAutonomousReplyGrantState();
+}
+
+export function getAutonomousReplyRuntimeState() {
+  return json(getAppState(AUTONOMOUS_REPLY_RUNTIME_STATE_KEY, null), null);
+}
+
+export function saveAutonomousReplyRuntimeState(runtime) {
+  setAppState(AUTONOMOUS_REPLY_RUNTIME_STATE_KEY, JSON.stringify(runtime || {}));
+  return getAutonomousReplyRuntimeState();
 }
 
 export function listRecentOurConversationPosts({ limit = 100 } = {}) {

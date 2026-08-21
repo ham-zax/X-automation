@@ -508,8 +508,96 @@ export function useDiscoverTriage() {
 }
 
 // ---------------------------------------------------------------------------
-// Conversations
+// Autonomous replies / Conversations
 // ---------------------------------------------------------------------------
+
+export interface AutonomousReplyDecision {
+  id: number
+  candidateKey: string
+  targetTweetId: string
+  targetUsername: string
+  sourceClass: 'active' | 'momentum' | 'normal'
+  relationshipStage: string | null
+  intent: string | null
+  tone: string | null
+  exactReply: string
+  selection: Record<string, unknown>
+  relationshipContext: Record<string, unknown>
+  aiExecution: Record<string, unknown>
+  checks: Record<string, unknown>
+  reasons: { code: string; reason: string }[]
+  grantRevision: number
+  mode: 'dry_run' | 'live'
+  decision: string
+  claimedAt: number | null
+  sentAt: number | null
+  outputTweetId: string | null
+  outputUrl: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AutonomousReplyGrant {
+  state: 'stopped' | 'running' | 'paused'
+  mode: 'dry_run' | 'live'
+  allowedSources: ('active' | 'momentum' | 'normal')[]
+  allowedIntents: string[]
+  allowedTones: string[]
+  humorAllowed: boolean
+  liveBudget: number | null
+  budgetUsed: number
+  remainingBudget: number | null
+  refreshMinutes: number
+  xApprovalReference: string
+  optOutMechanism: string
+  revision: number
+  updatedAt: number | null
+  startedAt: number | null
+  discoveryWatermarkAt: number | null
+  liveStartReady: boolean
+}
+
+export interface AutonomousReplyData {
+  grant: AutonomousReplyGrant
+  runtime: {
+    lastAttemptAt: number | null
+    lastSuccessfulRefreshAt: number | null
+    nextExpectedRefreshAt: number | null
+    lastError: string
+    lastDecisionCounts: { sent: number; review: number; skipped: number }
+  }
+  policy: { recipientOptInRequired: boolean; aiReplyApprovalRequired: boolean; note: string }
+  options: { sourceClasses: string[]; intents: string[]; tones: string[]; minRefreshMinutes: number }
+  recentDecisions: AutonomousReplyDecision[]
+  outcomes: {
+    sampleSize: number
+    byIntent: { label: string; sent: number; targetResponses: number; continued: number }[]
+    byTone: { label: string; sent: number; targetResponses: number; continued: number }[]
+    bySourceClass: { label: string; sent: number; targetResponses: number; continued: number }[]
+    byRelationshipStage: { label: string; sent: number; targetResponses: number; continued: number }[]
+    note: string
+  }
+}
+
+export function useAutonomousReplies() {
+  return useQuery({
+    queryKey: ['autonomous-replies'],
+    queryFn: () => fetchApi<AutonomousReplyData>('/autonomous-replies'),
+    staleTime: 10_000,
+  })
+}
+
+export function useAutonomousReplyAction(action: 'configure' | 'start' | 'pause' | 'stop') {
+  const queryClient = useQueryClient()
+  return useMutation<AutonomousReplyData, Error, Record<string, unknown>>({
+    mutationFn: (payload) => postApi(`/autonomous-replies/${action}`, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['autonomous-replies'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversation'] })
+    },
+  })
+}
 
 export interface ConversationListItem {
   key: string
@@ -526,6 +614,7 @@ export interface ConversationListItem {
   draftId: number | null
   draftQualityScore: number | null
   expiresAt: number | null
+  autonomousDecision: AutonomousReplyDecision | null
   relationship: { stage: string; targetScore: number; theirRepliesToUs: number; meaningfulInteractions: number } | null
 }
 
@@ -533,6 +622,7 @@ export interface ConversationsData {
   activeConversations: ConversationListItem[]
   newOpportunities: ConversationListItem[]
   health: { state: string; label: string; explanation: string }
+  autonomous: { grant: AutonomousReplyGrant; runtime: AutonomousReplyData['runtime']; recentDecisions: AutonomousReplyDecision[] }
 }
 
 export function useConversations() {
@@ -599,6 +689,7 @@ export interface ConversationDetailData {
   } | null
   editor: DraftEditorData | null
   health: { state: string; constrained: boolean }
+  autonomousDecision: AutonomousReplyDecision | null
   flags: { canReview: boolean; canApproveSend: boolean; approved: boolean }
 }
 

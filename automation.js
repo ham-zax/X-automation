@@ -5,6 +5,7 @@ import { refreshAllSourceSnapshots } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
 import { publishMainFeedHttp } from './x_http.js';
 import { refreshEngagementOpportunities } from './engagement.js';
+import { getAutonomousReplyGrant, runAutonomousReplyCycle } from './autonomous_reply.js';
 import { rankMainFeedItems } from './scheduler.js';
 import {
   claimQueueItem,
@@ -308,7 +309,7 @@ export async function runCycle() {
   }
   if (research.errors.length) console.log(`[automation] Partial research errors: ${research.errors.join(' | ')}`);
 
-  let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [] };
+  let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [], refreshFailed: false };
   try {
     engagement = await refreshEngagementOpportunities();
     const nextEngagement = engagement.items[0];
@@ -320,7 +321,25 @@ export async function runCycle() {
     if (engagement.errors.length) console.log(`[automation] Partial engagement read errors: ${engagement.errors.join(' | ')}`);
   } catch (error) {
     engagement.errors = [error.message];
+    engagement.refreshFailed = true;
     console.log(`[automation] Engagement refresh failed: ${error.message}`);
+  }
+
+  let autonomousReplies = { active: false, reason: getAutonomousReplyGrant().state, decisions: [] };
+  try {
+    autonomousReplies = await runAutonomousReplyCycle({
+      refreshErrors: [...research.errors, ...engagement.errors],
+      refreshFailed: engagement.refreshFailed,
+    });
+    if (autonomousReplies.active && autonomousReplies.due !== false) {
+      const counts = autonomousReplies.runtime?.lastDecisionCounts || { sent: 0, review: 0, skipped: 0 };
+      console.log(`[automation] Autonomous replies ${autonomousReplies.grant.mode}: ${counts.sent} send candidate(s), ${counts.review} review, ${counts.skipped} skipped.`);
+    } else if (autonomousReplies.active) {
+      console.log(`[automation] Autonomous replies running; next evaluation ${autonomousReplies.runtime?.nextExpectedRefreshAt ? new Date(autonomousReplies.runtime.nextExpectedRefreshAt).toLocaleString() : 'on the next eligible refresh'}.`);
+    }
+  } catch (error) {
+    autonomousReplies = { active: true, error: error.message, decisions: [] };
+    console.log(`[automation] Autonomous reply cycle failed without stopping the daemon: ${error.message}`);
   }
 
   const mainFeed = await processMainFeedQueue();
@@ -360,6 +379,7 @@ export async function runCycle() {
     ...mainFeed,
     top,
     engagement,
+    autonomousReplies,
     measurements,
     publicationBaseline,
     editorialPlanRefresh,

@@ -212,7 +212,7 @@ Preferred operating model:
 - no fixed daily reply quota when there are many genuinely useful human-reviewed conversations;
 - active bidirectional conversation bursts are allowed and should not be slowed merely to look human;
 - high relevance over broad indiscriminate reach;
-- human review for replies, quotes, and sensitive interactions;
+- human review remains the default reply path; live AI-generated autonomous replies require an explicit persisted operator grant, recipient opt-in for the interaction, a recorded clear/easy opt-out mechanism, recorded X written approval, deterministic eligibility, and atomic duplicate-safe claim; quotes and sensitive interactions remain human-reviewed;
 - duplicate prevention and explicit main-feed serialization where self-cannibalization is a concern;
 - no timing jitter or browser tricks whose purpose is to evade detection;
 - no synthetic social graph construction;
@@ -266,7 +266,7 @@ The preferred networking loop is:
 7. **Measure** which topics create follows, substantive replies, shares, bookmarks, and repeat interactions.
 8. **Do more of the useful topic**, not more mechanical engagement actions.
 
-Automation should help with discovery, research, prioritization, drafting, and measurement. Human-reviewed conversation can be frequent when the opportunities are genuinely strong; the system should not manufacture volume merely because capacity exists.
+Automation may also run the bounded autonomous-reply operator when the operator explicitly starts it. Dry-run may evaluate active, momentum, and normal-relevant opportunities continuously without X mutation. Live autonomous replies are narrower: recipient opt-in, a recorded clear/easy opt-out mechanism, and recorded X written AI-reply approval are mandatory in addition to the project gates and operator budget. Cold timeline/momentum discoveries without that authority must become human review or skip, not an unsolicited automated reply. The system should never manufacture volume merely because budget remains.
 
 ---
 

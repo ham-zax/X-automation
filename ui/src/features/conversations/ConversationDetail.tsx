@@ -132,6 +132,25 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         </Disclosure>
       </article>
 
+      {data.autonomousDecision && (
+        <section className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <strong className="text-sky-950">Autonomous decision</strong>
+            <Badge tone={data.autonomousDecision.decision.includes('review') ? 'warning' : data.autonomousDecision.decision.includes('send') || data.autonomousDecision.decision === 'sent' ? 'success' : 'neutral'}>{data.autonomousDecision.decision.replaceAll('_', ' ')}</Badge>
+            <Badge>{data.autonomousDecision.sourceClass.replaceAll('_', ' ')}</Badge>
+            {data.autonomousDecision.intent && <Badge>{data.autonomousDecision.intent.replaceAll('_', ' ')}</Badge>}
+            {data.autonomousDecision.tone && <Badge>{data.autonomousDecision.tone.replaceAll('_', ' ')}</Badge>}
+          </div>
+          {data.autonomousDecision.exactReply && <div className="mt-3 whitespace-pre-wrap text-sm text-slate-800">{data.autonomousDecision.exactReply}</div>}
+          {data.autonomousDecision.reasons.length > 0 && (
+            <div className="mt-3 space-y-1 text-xs text-slate-700">
+              {data.autonomousDecision.reasons.map((reason, index) => <div key={`${reason.code}-${index}`}><strong>{reason.code}</strong> · {reason.reason}</div>)}
+            </div>
+          )}
+          <div className="mt-2 text-xs text-slate-600">Grant revision {data.autonomousDecision.grantRevision} · {data.autonomousDecision.mode === 'dry_run' ? 'dry run; no X mutation' : 'live authority'}.</div>
+        </section>
+      )}
+
       {data.health.constrained && data.status !== 'published' && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <strong>Sending is temporarily unavailable.</strong> Supported account evidence is currently limiting reply approval/sending.

@@ -61,7 +61,7 @@
 - `needs_review` workflow state and explicit dashboard human approval boundary;
 - temporary compatibility bridge where human approval alone sets an associated text draft to `ready`;
 - Phase 1B Relationship Intelligence with strategic profiles, append-only events, TargetScore, and relationship stages;
-- Phase 1C Engage Next with active-conversation/follow-up priority and explicit one-by-one human reply send;
+- Phase 1C Engage Next with active-conversation/follow-up priority and explicit one-by-one human reply send, plus the later A9 off-by-default persistent autonomous-reply operator with separate grant/decision/claim provenance;
 - Phase 1D Account Health with provenance-backed HEALTHY/WATCH/CONSTRAINED evidence and soft saturation/repetition/network diagnostics;
 - Phase 4 fixed 15m/1h/6h/24h publication measurement, follower-quality/attribution context, and content/network experiments;
 - Phase 5 suggested/accepted/retired learned strategy with bounded accepted adjustments;
@@ -777,7 +777,7 @@ The scheduler/account-health layer must not convert any of these observations in
 
 **Interfaces:**
 - Consumes: `audience_profiles`, relationship event history, recent niche/viral candidates, recent posts from priority relationship targets, replies/comments under our own posts when available, and Conversation/Relationship Potential from `opportunity.js`.
-- Produces: strategic `relationship_profiles`, append-only `relationship_events`, target classes/TargetScore/stage, and `queue_items` with `lane = engagement`, `pipeline = reply`, target context, expiry, suggested contribution, reviewable reply draft, and human decision state.
+- Produces: strategic `relationship_profiles`, append-only `relationship_events`, target classes/TargetScore/stage, and `queue_items` with `lane = engagement`, `pipeline = reply`, target context, expiry, suggested contribution, reviewable reply draft, and human decision state. A9 additionally persists autonomous reply grant/runtime state and one durable decision per target tweet without replacing the engagement queue.
 
 **Steps:**
 - [ ] Add strategic relationship profiles separate from raw audience observations.
@@ -789,13 +789,13 @@ The scheduler/account-health layer must not convert any of these observations in
 - [ ] Create an engagement item only when the system can state a concrete contribution such as a result, implementation detail, caveat, comparison, correction, or informed question.
 - [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, contribution archetype, and the reason the reply would be useful.
 - [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and contribution strength rather than follower count alone.
-- [ ] Let AI draft a reply and move it to `needs_review`; require one human approval/send action for each outbound reply.
-- [ ] Do not let the daemon batch-send or automatically send unsolicited replies.
+- [x] Let AI draft a reply and move it to `needs_review`; the human path requires one exact approval/send action for each outbound reply.
+- [x] Keep autonomous replies off by default. When explicitly started, the existing daemon may evaluate newly observed opportunities continuously and process several independently eligible items serially; live automated replies require recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, an explicit remaining operator budget, deterministic eligibility, and an atomic claim. Cold unsolicited discoveries without that authority become human review or skip.
 - [ ] Expire opportunities whose source conversation is no longer timely instead of sending stale replies.
 - [ ] Record successful replies in `candidate_actions` plus `relationship_events`, then feed target responses, conversation continuation, follower/connection changes, and recurring relationships into analytics.
 
 **Acceptance criteria:**
-- The dashboard can explain who is worth engaging, why this particular conversation matters now, what prior relationship exists, and what useful contribution we can make; target responses can re-enter Engage Next as higher-priority follow-ups; no reply is sent merely because it entered the queue.
+- The dashboard can explain who is worth engaging, why this particular conversation matters now, what prior relationship exists, and what useful contribution we can make; target responses can re-enter Engage Next as higher-priority follow-ups. Queue entry alone never grants send authority: the human path needs exact approval, and the autonomous path needs the explicit persisted grant plus its deterministic claim contract.
 - The detailed execution contracts are `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md` and `plans/PHASE_1C_ENGAGE_NEXT.md`.
 
 ### Task 15: Add the Experiment Engine

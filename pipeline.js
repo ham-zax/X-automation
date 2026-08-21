@@ -9,6 +9,9 @@ import {
   getCandidate,
   getDraftByCandidate,
   getEditorialRecommendation,
+  getAccountHealthSummary,
+  getAutonomousReplyDecision,
+  getAutonomousReplyGrantState,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
@@ -589,6 +592,126 @@ function outputTweetIdentity(result, account) {
   return { tweetId, url };
 }
 
+async function sendEngagementReplyTransport({
+  candidate,
+  queueItem,
+  draft,
+  text,
+  authority,
+  authToken,
+  csrfToken,
+  account,
+  transport,
+}) {
+  if (!authToken || !csrfToken) throw new Error('Sending a reply requires AUTH_TOKEN and CT0.');
+  const publishingItem = saveQueueItem({
+    ...queueItem,
+    status: 'publishing',
+    humanApprovedAt: authority.type === 'human' ? queueItem.humanApprovedAt : null,
+    approvedText: authority.type === 'human' ? queueItem.approvedText : null,
+    engagement: {
+      ...(queueItem.engagement || {}),
+      send: { authority, startedAt: Date.now() },
+    },
+  });
+  let result;
+  try {
+    result = await transport(text, { authToken, csrfToken }, { replyTo: publishingItem.targetTweetId });
+  } catch (error) {
+    saveQueueItem({
+      ...publishingItem,
+      status: 'failed',
+      humanApprovedAt: null,
+      approvedText: null,
+      engagement: {
+        ...(publishingItem.engagement || {}),
+        send: { authority, failedAt: Date.now(), error: error.message },
+      },
+    });
+    throw error;
+  }
+
+  const { tweetId, url } = outputTweetIdentity(result, account);
+  if (!tweetId) {
+    saveQueueItem({
+      ...publishingItem,
+      status: 'publishing',
+      outputUrl: url || null,
+      engagement: {
+        ...(publishingItem.engagement || {}),
+        send: { authority, postedAt: Date.now(), recordingError: 'Transport returned no tweet ID.' },
+      },
+    });
+    throw new Error('Reply transport completed but returned no tweet ID; item remains publishing for reconciliation and cannot be retried automatically.');
+  }
+
+  try {
+    const publishedDraft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
+    const publishedItem = saveQueueItem({
+      ...publishingItem,
+      status: 'published',
+      draftId: publishedDraft.id,
+      humanApprovedAt: authority.type === 'human' ? publishingItem.humanApprovedAt : null,
+      approvedText: authority.type === 'human' ? publishingItem.approvedText : null,
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      publishedAt: Date.now(),
+      engagement: {
+        ...(publishingItem.engagement || {}),
+        send: { authority, postedAt: Date.now(), tweetId, url: url || null },
+      },
+    });
+    recordCandidateAction({
+      candidateKey: candidate.key,
+      action: 'reply',
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      commentary: text,
+    });
+    const alreadyRecorded = publishingItem.targetUsername
+      ? listRelationshipEvents(publishingItem.targetUsername, { limit: 1000 })
+        .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId)
+      : false;
+    if (publishingItem.targetUsername && !alreadyRecorded) {
+      recordRelationshipEvent({
+        username: publishingItem.targetUsername,
+        eventType: 'our_reply',
+        candidateKey: candidate.key,
+        sourceTweetId: publishingItem.targetTweetId,
+        ourTweetId: tweetId,
+        topic: candidate.niche?.tags?.[0] || null,
+        occurredAt: Date.now(),
+        metadata: {
+          meaningful: true,
+          replyArchetype: publishingItem.replyArchetype || null,
+          engagementKind: publishingItem.engagementKind || 'initial_reply',
+          replyAuthority: authority.type,
+          ...(authority.type === 'autonomous' ? {
+            autonomousDecisionId: authority.decisionId,
+            autonomousGrantRevision: authority.grantRevision,
+            replyIntent: authority.intent,
+            replyTone: authority.tone,
+            autonomousSourceClass: authority.sourceClass,
+          } : {}),
+        },
+      });
+    }
+    return { queueItem: publishedItem, draft: publishedDraft, tweetId, url: url || null, result };
+  } catch (error) {
+    saveQueueItem({
+      ...publishingItem,
+      status: 'publishing',
+      outputTweetId: tweetId,
+      outputUrl: url || null,
+      engagement: {
+        ...(publishingItem.engagement || {}),
+        send: { authority, postedAt: Date.now(), tweetId, url: url || null, recordingError: error.message },
+      },
+    });
+    throw new Error(`Reply posted as ${tweetId}, but local recording is incomplete: ${error.message}`);
+  }
+}
+
 export async function sendApprovedEngagementReply(key, {
   authToken = process.env.AUTH_TOKEN,
   csrfToken = process.env.CT0,
@@ -611,94 +734,95 @@ export async function sendApprovedEngagementReply(key, {
     saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
     throw new Error('Reply text changed after approval; approval was invalidated.');
   }
-  if (!authToken || !csrfToken) throw new Error('Sending an approved reply requires AUTH_TOKEN and CT0.');
+  return sendEngagementReplyTransport({
+    candidate,
+    queueItem,
+    draft,
+    text: currentText,
+    authority: { type: 'human', humanApprovedAt: queueItem.humanApprovedAt },
+    authToken,
+    csrfToken,
+    account,
+    transport,
+  });
+}
 
-  saveQueueItem({ ...queueItem, status: 'publishing' });
-  let result;
-  try {
-    result = await transport(currentText, { authToken, csrfToken }, { replyTo: queueItem.targetTweetId });
-  } catch (error) {
-    saveQueueItem({
-      ...queueItem,
-      status: 'failed',
-      humanApprovedAt: null,
-      approvedText: null,
-      engagement: {
-        ...(queueItem.engagement || {}),
-        send: { failedAt: Date.now(), error: error.message },
-      },
-    });
-    throw error;
+export async function sendAutonomousEngagementReply(key, {
+  exactReply,
+  decisionId,
+  grantRevision,
+  intent,
+  tone,
+  sourceClass,
+  generatedDraft,
+  authToken = process.env.AUTH_TOKEN,
+  csrfToken = process.env.CT0,
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  transport = postTweetHttp,
+} = {}) {
+  const candidate = requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
+    throw new Error(`Engagement reply not found: ${key}`);
   }
-
-  const { tweetId, url } = outputTweetIdentity(result, account);
-  if (!tweetId) {
-    saveQueueItem({
-      ...queueItem,
-      status: 'publishing',
-      outputUrl: url || null,
-      engagement: {
-        ...(queueItem.engagement || {}),
-        send: { postedAt: Date.now(), recordingError: 'Transport returned no tweet ID.' },
-      },
-    });
-    throw new Error('Reply transport succeeded but returned no tweet ID; item remains publishing for manual reconciliation.');
+  if (queueItem.humanApprovedAt || queueItem.approvedText) {
+    throw new Error('Autonomous reply authority cannot consume or overwrite human approval.');
   }
-
-  try {
-    const publishedDraft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
-    const publishedItem = saveQueueItem({
-      ...queueItem,
-      status: 'published',
-      draftId: publishedDraft.id,
-      outputTweetId: tweetId,
-      outputUrl: url || null,
-      engagement: {
-        ...(queueItem.engagement || {}),
-        send: { postedAt: Date.now(), tweetId, url: url || null },
-      },
-    });
-    recordCandidateAction({
-      candidateKey: key,
-      action: 'reply',
-      outputTweetId: tweetId,
-      outputUrl: url || null,
-      commentary: currentText,
-    });
-    const alreadyRecorded = queueItem.targetUsername
-      ? listRelationshipEvents(queueItem.targetUsername, { limit: 1000 })
-        .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId)
-      : false;
-    if (queueItem.targetUsername && !alreadyRecorded) {
-      recordRelationshipEvent({
-        username: queueItem.targetUsername,
-        eventType: 'our_reply',
-        candidateKey: key,
-        sourceTweetId: queueItem.targetTweetId,
-        ourTweetId: tweetId,
-        topic: candidate.niche?.tags?.[0] || null,
-        occurredAt: Date.now(),
-        metadata: {
-          meaningful: true,
-          replyArchetype: queueItem.replyArchetype || null,
-          engagementKind: queueItem.engagementKind || 'initial_reply',
-        },
-      });
-    }
-    return { queueItem: publishedItem, draft: publishedDraft, tweetId, url: url || null, result };
-  } catch (error) {
-    saveQueueItem({
-      ...queueItem,
-      status: 'publishing',
-      outputTweetId: tweetId,
-      outputUrl: url || null,
-      engagement: {
-        ...(queueItem.engagement || {}),
-        send: { postedAt: Date.now(), tweetId, url: url || null, recordingError: error.message },
-      },
-    });
-    throw new Error(`Reply posted as ${tweetId}, but local recording is incomplete: ${error.message}`);
+  if (!queueItem.targetTweetId) throw new Error('Autonomous engagement reply is missing targetTweetId.');
+  if (hasCandidateAction(key, 'reply') || queueItem.outputTweetId || queueItem.status === 'published') {
+    throw new Error('This target already has a recorded reply; autonomous resend is blocked.');
   }
+  const decision = getAutonomousReplyDecision(Number(decisionId));
+  if (!decision
+    || decision.decision !== 'sending'
+    || decision.candidateKey !== key
+    || decision.targetTweetId !== queueItem.targetTweetId
+    || Number(decision.grantRevision) !== Number(grantRevision)
+    || decision.exactReply !== String(exactReply || '')) {
+    throw new Error('Autonomous reply claim/provenance does not match the exact candidate reply.');
+  }
+  if (decision.checks?.policy?.allowed !== true) {
+    throw new Error('Autonomous reply policy authority is not satisfied for this interaction.');
+  }
+  const currentGrant = getAutonomousReplyGrantState() || {};
+  if (currentGrant.state !== 'running' || currentGrant.mode !== 'live' || Number(currentGrant.revision) !== Number(grantRevision)) {
+    throw new Error('Autonomous reply grant was paused, stopped, or revised after claim; transport is blocked.');
+  }
+  if (getAccountHealthSummary().health.state === 'constrained') {
+    throw new Error('Account Health became constrained after autonomous claim; transport is blocked.');
+  }
+  const text = String(exactReply || '').trim();
+  if (!text) throw new Error('Autonomous reply text cannot be empty.');
+  const draft = saveDraft({
+    ...(generatedDraft || createDraftScaffold(candidate, { pipeline: 'reply' })),
+    candidateKey: key,
+    body: text,
+    status: 'draft',
+  });
+  const preparedItem = saveQueueItem({
+    ...queueItem,
+    draftId: draft.id,
+    humanApprovedAt: null,
+    approvedText: null,
+  });
+  return sendEngagementReplyTransport({
+    candidate,
+    queueItem: preparedItem,
+    draft,
+    text,
+    authority: {
+      type: 'autonomous',
+      decisionId: Number(decisionId),
+      grantRevision: Number(grantRevision),
+      intent: intent || null,
+      tone: tone || null,
+      sourceClass: sourceClass || null,
+    },
+    authToken,
+    csrfToken,
+    account,
+    transport,
+  });
 }
 
 export function ignoreQueueItem(key, reason = '') {

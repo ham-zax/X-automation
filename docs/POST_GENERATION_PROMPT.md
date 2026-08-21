@@ -353,6 +353,10 @@ Do not use a thread to artificially withhold information.
 
 Address the actual source/conversation rather than broadcasting a generic standalone post.
 
+When `replyStrategy` is supplied, treat reply **intent/contribution** and **tone** as separate instructions. Realize only the supplied intent and tone; do not recompute a different strategy. Tone cannot supply evidence or replace useful content. A humorous reply must still make sense if the joke is ignored, must not imitate a specific person, and must not joke about harm, vulnerability, protected characteristics, appearance/identity, private information, serious security incidents, or hostile pile-ons.
+
+Supported intent equivalents include technical insight/implementation detail, useful question, constructive feedback, caveat/edge case, verified correction, comparison, synthesis, useful resource/pointer, and a contextually appropriate lightweight social reaction.
+
 Add exactly the amount needed to contribute one useful thing:
 
 - answer;
@@ -361,7 +365,10 @@ Add exactly the amount needed to contribute one useful thing:
 - caveat;
 - comparison;
 - correction;
-- informed question whose answer would change our understanding.
+- constructive feedback;
+- useful resource/pointer when grounded;
+- informed question whose answer would change our understanding;
+- lightweight social reaction only when the relationship/context makes it independently worthwhile.
 
 Do not write generic praise.
 
