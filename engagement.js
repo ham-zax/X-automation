@@ -733,7 +733,6 @@ export async function refreshEngagementOpportunities({
       if (candidate.source !== 'x') continue;
       const username = sourceUsername(candidate);
       const profile = username ? store.getRelationshipProfile(username) : null;
-      if (!profile) continue;
       persistOpportunity(candidate, profile, {
         source: snapshotKind,
         sourceClass,

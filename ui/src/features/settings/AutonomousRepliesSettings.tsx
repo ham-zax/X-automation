@@ -111,7 +111,7 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
           <div className="mt-2 flex gap-2">
             {(['dry_run', 'live'] as const).map((value) => (
               <button key={value} type="button" onClick={() => setMode(value)} className={`rounded-md border px-3 py-2 text-sm ${mode === value ? 'border-slate-900 bg-slate-50 font-medium' : 'border-slate-200 text-slate-600'}`}>
-                {value === 'dry_run' ? 'Dry run' : 'Live'}
+                {value === 'dry_run' ? 'Dry run' : data.policy.liveTransportReady ? 'Live' : 'Live (transport blocked)'}
               </button>
             ))}
           </div>
@@ -187,7 +187,12 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
         </label>
       </div>
 
-      <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{data.policy.note}</div>
+      <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+        {data.policy.note}
+        {!data.policy.liveTransportReady && (
+          <div className="mt-2 text-xs">Current write transport: {data.policy.currentWriteTransport.replaceAll('_', ' ')}. You can configure Live prerequisites now, but Start remains unavailable until an official X API write transport is installed.</div>
+        )}
+      </div>
 
       <button
         type="button"
@@ -240,12 +245,15 @@ export function AutonomousRepliesSettings() {
             <div className="mt-2 text-sm text-slate-600">Grant revision {data.grant.revision} · budget {data.grant.liveBudget == null ? 'not set' : `${data.grant.budgetUsed}/${data.grant.liveBudget} used`}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => start.mutate({})} disabled={start.isPending || data.grant.state === 'running'} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">Start</button>
+            <button type="button" onClick={() => start.mutate({})} disabled={start.isPending || data.grant.state === 'running' || (data.grant.mode === 'live' && !data.policy.liveTransportReady)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">Start</button>
             <button type="button" onClick={() => pause.mutate({})} disabled={pause.isPending || data.grant.state !== 'running'} className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-40">Pause</button>
             <button type="button" onClick={() => stop.mutate({})} disabled={stop.isPending || data.grant.state === 'stopped'} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40">Stop</button>
           </div>
         </div>
         {actionError && <div className="mt-3 text-sm text-red-700">{actionError}</div>}
+        {data.grant.mode === 'live' && !data.policy.liveTransportReady && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Live autonomous sending is intentionally blocked until the reply publisher uses the official X API. Switch to Dry run to start the persistent operator now.</div>
+        )}
         <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
           <div><strong className="text-slate-800">Last successful refresh</strong><br />{data.runtime.lastSuccessfulRefreshAt ? formatDateTime(data.runtime.lastSuccessfulRefreshAt) : 'Not yet'}</div>
           <div><strong className="text-slate-800">Next expected evaluation</strong><br />{data.runtime.nextExpectedRefreshAt ? formatDateTime(data.runtime.nextExpectedRefreshAt) : data.grant.state === 'running' ? 'Next daemon cycle' : 'Not running'}</div>

@@ -566,7 +566,14 @@ export interface AutonomousReplyData {
     lastError: string
     lastDecisionCounts: { sent: number; review: number; skipped: number }
   }
-  policy: { recipientOptInRequired: boolean; aiReplyApprovalRequired: boolean; note: string }
+  policy: {
+    recipientOptInRequired: boolean
+    aiReplyApprovalRequired: boolean
+    officialApiWriteRequired: boolean
+    liveTransportReady: boolean
+    currentWriteTransport: string
+    note: string
+  }
   options: { sourceClasses: string[]; intents: string[]; tones: string[]; minRefreshMinutes: number }
   recentDecisions: AutonomousReplyDecision[]
   outcomes: {
