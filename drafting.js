@@ -1,4 +1,4 @@
-import { NICHE_LABELS, assessStrategicRelevance } from './strategy.js';
+import { assessStrategicRelevance } from './strategy.js';
 
 const PLACEHOLDER = /\[[^\]]+\]/;
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
@@ -9,13 +9,6 @@ const CANONICAL_ACRONYMS = new Set(['AI', 'API', 'CLI', 'CPU', 'GPU', 'HTTP', 'J
 function ensurePipeline(pipeline = 'original') {
   if (!CONTENT_PIPELINES.has(pipeline)) throw new Error(`Invalid content pipeline: ${pipeline}`);
   return pipeline;
-}
-
-function firstSignal(candidate) {
-  const matches = candidate?.niche?.matches || [];
-  if (matches.length) return matches.slice(0, 2).join(' + ');
-  const words = String(candidate?.text || '').replace(/https?:\/\/\S+/g, '').trim().split(/\s+/).slice(0, 8);
-  return words.join(' ') || 'developer signal';
 }
 
 function threadParts(draft) {
@@ -36,36 +29,17 @@ export function weightedPostLength(text) {
 
 export function createDraftScaffold(candidate, { pipeline = 'original' } = {}) {
   ensurePipeline(pipeline);
-  const primaryTag = candidate?.niche?.tags?.[0];
-  const niche = NICHE_LABELS[primaryTag] || 'Developer/AI';
-  const signal = firstSignal(candidate);
   const draft = {
     candidateKey: candidate.key || candidate.url,
-    hook: `${niche}: ${signal} — [state the non-obvious finding, not the headline]`,
-    insight: '[Explain what changes for a developer workflow, architecture, cost, speed, or product decision.]',
-    evidence: `[Add a primary-source fact, benchmark, command, screenshot, or result.]\nSource: ${candidate.url}`,
-    action: '[Give the developer one concrete thing to try, compare, configure, or avoid.]',
+    hook: '',
+    insight: '',
+    evidence: '',
+    action: '',
+    body: '',
     status: 'draft',
     scheduledAt: null,
   };
-
-  if (pipeline === 'quote') {
-    draft.hook = `${niche}: ${signal} — [Add a consequence, test, comparison, correction, limitation, or informed question; do not summarize the source.]`;
-    draft.insight = '[Explain the distinct developer implication that the visible source does not already provide.]';
-    draft.action = '[Give the developer a concrete implication, decision rule, or useful question.]';
-  } else if (pipeline === 'reply') {
-    draft.hook = '[Address the actual source or conversation directly.]';
-    draft.insight = '[Contribute one concrete implementation detail, caveat, comparison, correction, answer, or informed question.]';
-    draft.evidence = `[Add verified supporting evidence only when it improves the reply.]\nSource: ${candidate.url}`;
-    draft.action = '';
-  } else if (pipeline === 'thread') {
-    draft.threadParts = [
-      '[Post 1: state the complete high-level finding; do not tease or withhold the conclusion.]',
-      '[Post 2: add a distinct evidence or implementation block and end with a developer takeaway/action.]',
-    ];
-  }
-
-  draft.body = pipeline === 'thread' ? '' : composeDraft(draft, { pipeline });
+  if (pipeline === 'thread') draft.threadParts = ['', ''];
   draft.qualityScore = scoreDraft(draft, candidate).score;
   return draft;
 }
@@ -251,6 +225,8 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     followReason: String(writerOutput?.followReason ?? writerOutput?.followValue ?? '').trim(),
     notes: String(writerOutput?.notes ?? '').trim(),
   };
+  const operatorContext = String(draft?.editor?.operatorContext || '').trim();
+  if (operatorContext) editor.operatorContext = operatorContext;
   if (writerOutput?.relationshipValue != null) editor.relationshipValue = String(writerOutput.relationshipValue).trim();
   if (writerOutput?.profileProofValue != null) editor.profileProofValue = String(writerOutput.profileProofValue).trim();
 
@@ -703,11 +679,73 @@ export function evaluateDraftGates(draft, candidate, {
     }
     if (!mediaReady) {
       checks.mediaReady = false;
-      addIssue(failures, 'MEDIA_NOT_READY', 'Required media is not attached/ready; Phase 2 must block approval until the later media path marks it ready or the plan is revised.');
+      addIssue(failures, 'MEDIA_NOT_READY', 'Required media is not attached/ready; attach an image before approval or revise the visual plan so media is no longer required.');
     }
   }
 
   return { passed: failures.length === 0, failures, warnings, checks };
+}
+
+export function reviewGrowthPackaging(draft, candidate, context = {}) {
+  const pipeline = ensurePipeline(context?.pipeline || draft?.editor?.pipeline || 'original');
+  const units = contentUnits(draft, pipeline);
+  const text = units.join('\n\n').trim();
+  const firstLine = String(units[0] || '').split('\n')[0].trim();
+  const editor = draft?.editor || {};
+  const blockers = [];
+  const strategyMode = context.strategyMode ?? null;
+  const strategyLabel = strategyMode === 'apply' ? 'Use for this draft' : strategyMode === 'suggest' ? 'Advice only' : strategyMode === 'off' ? 'No influence' : 'Missing decision';
+  const stoppingClear = usefulText(firstLine, 28);
+  const payoffSignals = [];
+  if (/\b(?:install|try|use|run|configure|download|repo(?:sitory)?|resource|guide|docs|library|package|cli)\b/i.test(text)) payoffSignals.push('useful resource/action');
+  if (/\b(?:choose|avoid|switch|compare|trade-?off|decision|rule of thumb|when to|better for|worse for)\b/i.test(text)) payoffSignals.push('decision support');
+  if (/\b(?:benchmark|measured|tested|result|latency|throughput|cost)\b/i.test(text)) payoffSignals.push('proof/evidence');
+  const sourceSimilarity = similarity(text, candidate?.text || '');
+  if (usefulText(text, 60)
+    && sourceSimilarity < 0.80
+    && /(?:\b(?:means|matters|because|instead|constraint|trade-?off|bottleneck|risk|before|after|if|when|not)\b|—)/i.test(text)) {
+    payoffSignals.push('specific insight');
+  }
+  const hasPublicQuestion = usefulText(text, 24) && /\?/.test(text);
+  if (hasPublicQuestion) payoffSignals.push('useful question');
+  const readerPayoffClear = payoffSignals.length > 0;
+  if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_READER_PAYOFF', message: 'No clear reader payoff is inspectable in the current draft.' });
+
+  const resourcePromise = /\b(?:here(?:'s| is)|check out|try|install|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text);
+  const explicitUrl = /https?:\/\/\S+/i.test(text);
+  const nativeSourcePath = pipeline === 'quote' && candidate?.source === 'x';
+  const sourcePathReady = !resourcePromise || explicitUrl || nativeSourcePath;
+  if (!sourcePathReady) blockers.push({ code: 'RESOURCE_ACTION_PATH_MISSING', message: 'The draft promises a resource/tool but gives the reader no usable source or action path.' });
+  const generationStrategyStale = context.hasGenerationProvenance === true && (
+    context.generationStrategySelectionId == null
+    || Number(context.generationStrategySelectionId) !== Number(context.strategySelectionId)
+    || context.generationStrategyMode !== strategyMode
+  );
+  const strategyRequired = pipeline !== 'reply';
+  if (strategyRequired && !strategyMode) blockers.push({ code: 'STRATEGY_DECISION_MISSING', message: 'Save No influence, Advice only, or Use for this draft before approval.' });
+  else if (strategyRequired && generationStrategyStale) blockers.push({ code: 'STRATEGY_GENERATION_STALE', message: 'This AI generation does not carry the current writing-strategy decision. Regenerate before approval.' });
+
+  const media = editor.media || {};
+  const mediaPublishingAvailable = context.mediaPublishingAvailable === true;
+  const mediaStatus = media.required === true
+    ? mediaPublishingAvailable ? 'planned' : 'unavailable'
+    : media.type && media.type !== 'none' ? mediaPublishingAvailable ? 'planned' : 'unavailable' : 'unnecessary';
+
+  return {
+    ready: blockers.length === 0,
+    blockers,
+    items: {
+      stoppingPower: { status: stoppingClear ? 'clear' : 'review', detail: stoppingClear ? 'The opening states a concrete idea immediately.' : 'The opening is thin or generic; review whether a stranger has an immediate reason to stop.' },
+      readerPayoff: { status: readerPayoffClear ? 'clear' : 'blocked', detail: readerPayoffClear ? [...new Set(payoffSignals)].join(', ') : 'No decision, resource, proof, specific insight, or useful question is evident.' },
+      distributionLeverage: { status: pipeline === 'quote' || pipeline === 'reply' ? 'borrowed_context' : 'owned_only', detail: pipeline === 'quote' ? 'Native Quote can borrow legitimate attention from the source conversation.' : pipeline === 'reply' ? 'Reply participates directly in the source conversation.' : 'Owned-only distribution; a cold-start account gets little graph help from format alone.' },
+      sourceActionPath: { status: sourcePathReady ? (resourcePromise ? 'clear' : 'not_needed') : 'blocked', detail: sourcePathReady ? resourcePromise ? (nativeSourcePath ? 'The native quoted source is the action/source path.' : 'The public copy contains a usable URL/action path.') : 'This draft does not promise a resource/action path.' : 'Add a usable URL/source path or change the copy so it no longer promises a resource.' },
+      interactionOpening: { status: hasPublicQuestion ? 'present' : 'optional', detail: hasPublicQuestion ? 'The public copy contains a question; review whether the answer would be genuinely useful.' : 'No forced question. Add one only if it opens a useful conversation.' },
+      mediaOpportunity: { status: mediaStatus, detail: mediaStatus === 'unavailable' ? 'Media is planned, but the current X transport cannot publish attachments.' : mediaStatus === 'planned' ? 'A real attachment path is available for this media plan.' : 'No media is required for this draft.' },
+      strategyState: pipeline === 'reply'
+        ? { status: 'not_required', mode: null, label: 'Engage Next reply', detail: 'Main-feed Writing Approach is not required for the human reply lane; reply contribution/tone is owned by Engage Next.' }
+        : { status: strategyMode && !generationStrategyStale ? 'clear' : 'blocked', mode: strategyMode, label: strategyLabel, detail: generationStrategyStale ? 'The saved writing choice changed after this AI generation; regenerate before approval.' : strategyMode === 'apply' ? (context.strategyApproach || 'The persisted Apply selection is the active Writer hypothesis.') : strategyMode === 'suggest' ? 'Guidance is visible but does not enter Writer.' : strategyMode === 'off' ? 'Strategy influence is explicitly off.' : 'No human strategy decision is persisted.' },
+    },
+  };
 }
 
 export function scoreDraft(draft, candidate, context = {}) {
@@ -725,26 +763,28 @@ export function scoreDraft(draft, candidate, context = {}) {
   const hasStrongEvidence = Boolean(draft?.editor?.evidenceUsed?.length) || (usefulText(evidenceText, 30)
     && /(\d|benchmark|latency|ms|sec|token|cost|install|npm|pnpm|curl|git |python |node |output|result|tested|measured|source|docs|release notes)/i.test(evidenceText));
   const hasSource = /https?:\/\//i.test(evidenceText) || Boolean(draft?.editor?.evidenceUsed?.length);
-  const evidence = hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 40) ? 4 : 1;
+  const evidence = !evidenceText.trim() ? 0 : hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 40) ? 4 : 1;
   const hasAction = /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|keep|check|measure|benchmark|configure|ship|test)\b)/i.test(finalBlock);
   const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;
   const sourceSimilarity = similarity(body, candidate?.text || '');
-  const originality = sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
+  const originality = !String(body || '').trim() ? 0 : sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
   const rawWritingScore = hook + insight + evidence + action + originality;
   const score = Math.round((rawWritingScore / 40) * 50);
   const weightedLength = pipeline === 'thread'
     ? Math.max(0, ...units.map((part) => weightedPostLength(part)))
     : weightedPostLength(body);
-  const quality = score >= 45 ? 'high-impact' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
+  const quality = score >= 45 ? 'high' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
   const legacyPublishable = score >= 40 && !PLACEHOLDER.test(body) && weightedLength <= 280;
   const gates = gateAware ? evaluateDraftGates(draft, candidate, context) : null;
+  const growthPackaging = gateAware ? reviewGrowthPackaging(draft, candidate, context) : null;
   return {
     score,
     quality,
     breakdown: { hook, insight, evidence, action, originality },
     sourceSimilarity,
     weightedLength,
-    publishable: gateAware ? score >= 40 && gates.passed : legacyPublishable,
+    publishable: gateAware ? score >= 40 && gates.passed && growthPackaging.ready : legacyPublishable,
     ...(gates ? { gates } : {}),
+    ...(growthPackaging ? { growthPackaging } : {}),
   };
 }

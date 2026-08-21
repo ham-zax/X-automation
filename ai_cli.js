@@ -46,6 +46,9 @@ export class AiCliError extends Error {
 
 function classifyCliFailure(stderr = '') {
   const text = String(stderr).toLowerCase();
+  if (/invalid_json_schema|invalid schema for response_format/.test(text)) {
+    return new AiCliError('schema_unsupported', 'AI runtime rejected the structured-output schema.');
+  }
   if (/\b(?:401|403|unauthorized|authentication|not logged in|login required)\b/.test(text)) {
     return new AiCliError('auth', 'AI runtime authentication failed.', { fallbackEligible: true });
   }
@@ -65,6 +68,47 @@ function classifyCliFailure(stderr = '') {
     return new AiCliError('provider_error', 'AI runtime rejected the selected model.');
   }
   return new AiCliError('runtime_error', 'AI runtime execution failed.');
+}
+
+function codexOutputSchema(schema) {
+  if (Array.isArray(schema)) return schema.map(codexOutputSchema);
+  if (!schema || typeof schema !== 'object') return schema;
+
+  const normalized = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (key === 'uniqueItems') continue;
+    if (key === 'enum' && Array.isArray(value) && value.some((item) => typeof item === 'string' && /["\\]/.test(item))) {
+      if (normalized.type == null) normalized.type = 'string';
+      continue;
+    }
+    if (key === 'oneOf') {
+      normalized.anyOf = codexOutputSchema(value);
+      continue;
+    }
+    normalized[key] = codexOutputSchema(value);
+  }
+
+  if (Object.hasOwn(normalized, 'const') && normalized.type == null) {
+    const value = normalized.const;
+    normalized.type = value === null
+      ? 'null'
+      : Array.isArray(value)
+        ? 'array'
+        : Number.isInteger(value)
+          ? 'integer'
+          : typeof value === 'number'
+            ? 'number'
+            : typeof value;
+  }
+  if (Array.isArray(normalized.enum) && normalized.type == null && normalized.enum.length) {
+    const types = [...new Set(normalized.enum.map((value) => value === null
+      ? 'null'
+      : Number.isInteger(value)
+        ? 'integer'
+        : typeof value))];
+    normalized.type = types.length === 1 ? types[0] : types;
+  }
+  return normalized;
 }
 
 function runProcess(command, args, { input = null, timeoutMs = 15_000, maxOutputChars = 16_000, cwd = undefined } = {}) {
@@ -437,7 +481,7 @@ export async function runCliStructuredAI(profile, { prompt, schema, timeoutMs = 
   const resultPath = path.join(dir, 'result.json');
   try {
     const actualModel = await resolveCodexInheritedModel(profile, { timeoutMs: Math.min(timeoutMs, 10_000) });
-    await writeFile(schemaPath, JSON.stringify(schema), 'utf8');
+    await writeFile(schemaPath, JSON.stringify(codexOutputSchema(schema)), 'utf8');
     const args = [
       'exec',
       '--ephemeral',

@@ -40,7 +40,7 @@ function initialTheme(): Theme {
     const saved = window.localStorage.getItem('x-growth-theme')
     if (saved === 'light' || saved === 'dark') return saved
   } catch {}
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return 'light'
 }
 
 const INITIAL_THEME = initialTheme()

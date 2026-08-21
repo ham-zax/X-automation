@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useDraftAction, type DraftEditorData } from '../../api/client'
+import { useDraftAction, useDraftMediaRemove, useDraftMediaUpload, type DraftEditorData, type GrowthPackagingReview } from '../../api/client'
 import {
+  Badge,
   Disclosure,
   GatePanel,
   Pending,
@@ -23,15 +24,58 @@ interface PreviewResult {
   gatesView: { passed: boolean; approvalFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] }
   breakdown: Record<string, number>
   weightedLength: number | null
+  growthPackaging: GrowthPackagingReview | null
 }
 
 function displayRiskFlags(flags: string[], growthFitAllowed: boolean): string {
   return flags
     .filter((flag) => !(growthFitAllowed && /^weak niche fit\.?$/i.test(flag.trim())))
-    .map((flag) => /no verified evidence beyond the source text/i.test(flag)
-      ? 'No additional verified evidence was supplied to this writing pass.'
-      : flag)
+    .filter((flag) => !/no verified evidence beyond the source text/i.test(flag))
     .join(' · ')
+}
+
+function GrowthPackagingPanel({ review }: { review: GrowthPackagingReview | null }) {
+  if (!review) return null
+  const rows = [
+    ['Stopping power', review.items.stoppingPower],
+    ['Reader payoff', review.items.readerPayoff],
+    ['Distribution leverage', review.items.distributionLeverage],
+    ['Source / action path', review.items.sourceActionPath],
+    ['Interaction opening', review.items.interactionOpening],
+    ['Media opportunity', review.items.mediaOpportunity],
+    ['Strategy state', review.items.strategyState],
+  ] as const
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Growth Packaging</div>
+          <div className="mt-1 text-sm text-slate-700">Inspect reader payoff and distribution packaging separately from writing correctness.</div>
+          <div className="mt-1 text-xs text-slate-500">This is not a prediction of engagement, virality, or follower growth.</div>
+        </div>
+        <Badge tone={review.ready ? 'success' : 'warning'}>{review.ready ? 'Ready for approval review' : 'Needs packaging work'}</Badge>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {rows.map(([label, item]) => (
+          <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <strong className="text-sm text-slate-800">{label}</strong>
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.status.replaceAll('_', ' ')}</span>
+            </div>
+            <div className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</div>
+          </div>
+        ))}
+      </div>
+      {review.blockers.length > 0 && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <strong>Approval blockers:</strong>
+          <ul className="mt-1 list-disc space-y-1 pl-5">
+            {review.blockers.map((blocker) => <li key={blocker.code}>{blocker.message}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function DraftEditor({ data }: { data: DraftEditorData }) {
@@ -43,11 +87,21 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     riskFlags?: string[]
     semanticAnchors?: string[]
     evidenceUsed?: string[]
-    media?: { required?: boolean; type?: string; reason?: string; source?: string; altText?: string }
+    operatorContext?: string
+    media?: {
+      required?: boolean
+      type?: string
+      reason?: string
+      source?: string
+      altText?: string
+      attachment?: { fileName?: string; mimeType?: string; size?: number; attachedAt?: number; provenance?: string }
+    }
   }
 
   const [body, setBody] = useState(draft.body)
   const [threadParts, setThreadParts] = useState<string[]>(draft.threadParts?.length ? draft.threadParts : ['', ''])
+  const [operatorContext, setOperatorContext] = useState(editorMeta.operatorContext || '')
+  const [contextDirty, setContextDirty] = useState(false)
   const [mediaRequired, setMediaRequired] = useState(Boolean(editorMeta.media?.required))
   const [mediaType, setMediaType] = useState(editorMeta.media?.type || 'none')
   const [mediaReason, setMediaReason] = useState(editorMeta.media?.reason || '')
@@ -58,9 +112,10 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
   const [confirmReset, setConfirmReset] = useState(0)
   useEffect(() => {
-    if (dirty) return
+    if (dirty || contextDirty) return
     setBody(draft.body)
     setThreadParts(draft.threadParts?.length ? draft.threadParts : ['', ''])
+    setOperatorContext(editorMeta.operatorContext || '')
     setMediaRequired(Boolean(editorMeta.media?.required))
     setMediaType(editorMeta.media?.type || 'none')
     setMediaReason(editorMeta.media?.reason || '')
@@ -84,6 +139,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
   const save = useDraftAction(draft.id, 'save')
   const generate = useDraftAction(draft.id, 'generate')
+  const mediaUpload = useDraftMediaUpload(draft.id)
+  const mediaRemove = useDraftMediaRemove(draft.id)
   const previewMutation = useDraftAction(draft.id, 'preview')
 
   useEffect(() => {
@@ -110,6 +167,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const gatesView = dirty && preview ? preview.gatesView : data.draft.gatesView ?? data.analysis.gatesView
   const score = dirty && preview ? preview.score : data.draft.qualityScore
   const breakdown = dirty && preview ? preview.breakdown : data.analysis.breakdown
+  const growthPackaging = dirty && preview ? preview.growthPackaging : (data.analysis.growthPackaging ?? data.draft.growthPackaging)
   const qualityClass = score >= 40 ? 'bg-emerald-100 text-emerald-800' : score >= 30 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
 
   const hasDraftContent = isThread
@@ -119,17 +177,26 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const markDirty = () => setDirty(true)
 
   const handleSave = () => {
-    save.mutate(previewPayload as never, {
+    save.mutate({ ...previewPayload, operatorContext } as never, {
       onSuccess: () => {
         setDirty(false)
+        setContextDirty(false)
         setConfirmReset((value) => value + 1)
       },
     })
   }
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (dirty && !window.confirm('Regenerate with AI? Your unsaved edits will be replaced by a new generated draft.')) return
     setGenerationOutcome(null)
+    if (contextDirty) {
+      try {
+        await save.mutateAsync({ operatorContext })
+        setContextDirty(false)
+      } catch {
+        return
+      }
+    }
     generate.mutate({} as never, {
       onSuccess: (result) => {
         const generated = result as {
@@ -141,6 +208,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           const nextEditor = (nextDraft.editor || {}) as typeof editorMeta
           setBody(nextDraft.body)
           setThreadParts(nextDraft.threadParts?.length ? nextDraft.threadParts : ['', ''])
+          setOperatorContext(nextEditor.operatorContext || '')
           setMediaRequired(Boolean(nextEditor.media?.required))
           setMediaType(nextEditor.media?.type || 'none')
           setMediaReason(nextEditor.media?.reason || '')
@@ -173,7 +241,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded-full px-3 py-1 text-sm font-semibold ${qualityClass}`}>
-            {readOnly ? 'Recorded quality' : 'Draft quality'} {score}/50 {!readOnly && <>· approval threshold 40 {previewPending && dirty ? '· checking…' : ''}</>}
+            {readOnly ? 'Recorded writing quality' : 'Writing quality / structure'} {score}/50 {!readOnly && <>· approval threshold 40 {previewPending && dirty ? '· checking…' : ''}</>}
           </span>
           {data.candidate.url && (
             <a
@@ -198,6 +266,33 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
       )}
 
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Additional context for AI</div>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Paste thread details, documentation excerpts, corrections, or facts you already know. The Writer uses this as human-supplied context; it does not browse or independently verify it.
+            </p>
+          </div>
+          <span className="text-xs text-slate-400">{operatorContext.length}/12,000</span>
+        </div>
+        <textarea
+          rows={4}
+          value={operatorContext}
+          readOnly={readOnly}
+          maxLength={12000}
+          onChange={(event) => {
+            setOperatorContext(event.target.value)
+            setContextDirty(true)
+          }}
+          placeholder="Optional: add missing context from the thread, docs, release notes, your own knowledge, or a correction before generating."
+          className={`mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
+        />
+        {!readOnly && contextDirty && (
+          <div className="mt-2 text-xs text-amber-700">This context will be saved before the next Generate/Regenerate action.</div>
+        )}
+      </section>
+
       <WritingApproachPanel
         data={data}
         hasDraftContent={hasDraftContent}
@@ -216,9 +311,9 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           {generationOutcome && !generate.isPending && (
             generationOutcome.decision === 'DO_NOT_POST' ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <strong>AI suggestion: don’t post yet.</strong>
-                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
-                <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
+                <strong>AI caution: review this draft.</strong>
+                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The Writer could not find a useful bounded thesis without adding unsupported material.'}</div>
+                <div className="mt-2 text-xs text-amber-800">This is advisory. The Writer uses the supplied source and any context you add above; it does not independently browse or verify the claim.</div>
               </div>
             ) : (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
@@ -229,9 +324,9 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
           {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <strong>AI suggestion: don’t post yet.</strong>
-              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The supplied source and workspace context did not provide enough additive value for a confident post.'}</div>
-              <div className="mt-2 text-xs text-amber-800">This is advisory and based only on the supplied context; this writing pass did not independently research the claim. Review or edit the generated text below and decide what to do.</div>
+              <strong>AI caution: review this draft.</strong>
+              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The Writer could not find a useful bounded thesis without adding unsupported material.'}</div>
+              <div className="mt-2 text-xs text-amber-800">This is advisory. The Writer uses the supplied source and any context you add above; it does not independently browse or verify the claim.</div>
             </div>
           ) : (editorMeta.decision || body) ? (
             <div className="text-sm text-slate-500">
@@ -304,10 +399,10 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
       </div>
 
       <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality / structure</div>
         {readOnly ? (
           <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Recorded quality at completion: <strong>{draft.qualityScore}/50</strong>. Component scores are not shown as historical facts because they are recalculated by the current scorer.
+            Recorded writing quality at completion: <strong>{draft.qualityScore}/50</strong>. Component scores are not shown as historical facts because they are recalculated by the current scorer; this score was never a growth or virality prediction.
           </div>
         ) : hasDraftContent
           ? <QualityBreakdown breakdown={breakdown} />
@@ -318,10 +413,12 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           )}
         {!readOnly && (
           <div className="mt-2 text-xs text-slate-500">
-            The five writing dimensions total 40 raw points and are proportionally normalized to the 50-point Draft quality scale. The approval threshold remains 40/50; Growth fit is evaluated separately.
+            The five writing dimensions total 40 raw points and are proportionally normalized to the 50-point writing-quality scale. This is not predicted engagement, virality, or follower growth; Growth Packaging and Growth fit are evaluated separately.
           </div>
         )}
       </div>
+
+      {!readOnly && <GrowthPackagingPanel review={growthPackaging} />}
 
       {!readOnly && !flags.engagementReply && (
         <Disclosure summary="Visual plan">
@@ -349,11 +446,53 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
               <input value={mediaAltText} onChange={(event) => { markDirty(); setMediaAltText(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
             </label>
           </div>
-          {mediaRequired && (
-            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Visual plans do not attach files yet. Marking a visual as required will block publishing until an attachment path exists.
-            </div>
-          )}
+          <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+            <div className="text-sm font-semibold text-slate-800">Attached image</div>
+            <div className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP, or GIF up to 5 MB. The same authenticated X transport uploads it at publication time and applies the accessibility description above as alt text.</div>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              disabled={mediaUpload.isPending}
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) mediaUpload.mutate(file)
+                event.currentTarget.value = ''
+              }}
+              className="mt-3 block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700"
+            />
+            {mediaUpload.isPending && <div className="mt-2"><Pending label="Attaching image…" /></div>}
+            {mediaUpload.error && <div className="mt-2 text-xs text-red-700">{mediaUpload.error.message}</div>}
+            {editorMeta.media?.attachment && (
+              <div className="mt-3">
+                <img
+                  src={`/api/drafts/${draft.id}/media?v=${editorMeta.media.attachment.attachedAt || 0}`}
+                  alt={mediaAltText || 'Attached draft media preview'}
+                  className="max-h-72 rounded-lg border border-slate-200 object-contain"
+                />
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                  <span>
+                    {editorMeta.media.attachment.fileName || 'Attached image'}
+                    {editorMeta.media.attachment.size ? ` · ${(editorMeta.media.attachment.size / 1024).toFixed(0)} KB` : ''}
+                    {' · operator upload'}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={mediaRemove.isPending}
+                    onClick={() => mediaRemove.mutate()}
+                    className="font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                  >
+                    {mediaRemove.isPending ? 'Removing…' : 'Remove image'}
+                  </button>
+                </div>
+                {mediaRemove.error && <div className="mt-1 text-xs text-red-700">{mediaRemove.error.message}</div>}
+              </div>
+            )}
+            {mediaRequired && !editorMeta.media?.attachment && (
+              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                This visual is required, so approval remains blocked until an image is attached and the visual plan is complete.
+              </div>
+            )}
+          </div>
         </Disclosure>
       )}
 
@@ -376,7 +515,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
         {!readOnly && (
           <div className="flex items-center gap-3">
-            {dirty && <span className="text-xs text-amber-600">Unsaved changes</span>}
+            {(dirty || contextDirty) && <span className="text-xs text-amber-600">Unsaved changes</span>}
             <button
               onClick={handleSave}
               disabled={save.isPending}

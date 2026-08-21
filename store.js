@@ -242,6 +242,7 @@ db.exec(`
     relationship_potential REAL NOT NULL DEFAULT 0,
     recommended_pipeline TEXT NOT NULL DEFAULT '',
     routing_reason TEXT NOT NULL DEFAULT '',
+    routing_decision_json TEXT NOT NULL DEFAULT '{}',
     draft_id INTEGER,
     human_approved_at INTEGER,
     target_username TEXT,
@@ -617,6 +618,7 @@ for (const [name, sql] of [
   ['reply_archetype', "ALTER TABLE queue_items ADD COLUMN reply_archetype TEXT NOT NULL DEFAULT ''"],
   ['engagement_json', "ALTER TABLE queue_items ADD COLUMN engagement_json TEXT NOT NULL DEFAULT '{}'"],
   ['relevance_json', "ALTER TABLE queue_items ADD COLUMN relevance_json TEXT NOT NULL DEFAULT '{}'"],
+  ['routing_decision_json', "ALTER TABLE queue_items ADD COLUMN routing_decision_json TEXT NOT NULL DEFAULT '{}'"],
   ['approved_text', 'ALTER TABLE queue_items ADD COLUMN approved_text TEXT'],
   ['output_tweet_id', 'ALTER TABLE queue_items ADD COLUMN output_tweet_id TEXT'],
   ['output_url', 'ALTER TABLE queue_items ADD COLUMN output_url TEXT'],
@@ -938,6 +940,7 @@ function decodeQueueItem(row) {
     relationshipPotential: Number(row.relationship_potential || 0),
     recommendedPipeline: row.recommended_pipeline || '',
     routingReason: row.routing_reason || '',
+    routingDecision: json(row.routing_decision_json, {}),
     draftId: row.draft_id == null ? null : Number(row.draft_id),
     humanApprovedAt: row.human_approved_at == null ? null : Number(row.human_approved_at),
     targetUsername: row.target_username || '',
@@ -1021,7 +1024,7 @@ export function saveQueueItem(item) {
   db.prepare(`UPDATE queue_items SET
     lane = ?, pipeline = ?, status = ?,
     reach_potential = ?, follow_potential = ?, conversation_potential = ?, relationship_potential = ?,
-    recommended_pipeline = ?, routing_reason = ?, draft_id = ?, human_approved_at = ?,
+    recommended_pipeline = ?, routing_reason = ?, routing_decision_json = ?, draft_id = ?, human_approved_at = ?,
     target_username = ?, target_tweet_id = ?, engagement_kind = ?, parent_our_tweet_id = ?,
     priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
     engagement_json = ?, relevance_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
@@ -1039,6 +1042,7 @@ export function saveQueueItem(item) {
     Number(next.relationshipPotential || 0),
     next.recommendedPipeline || '',
     next.routingReason || '',
+    JSON.stringify(next.routingDecision || {}),
     next.draftId ?? null,
     next.humanApprovedAt ?? null,
     next.targetUsername || null,
@@ -1082,9 +1086,10 @@ function buildMainFeedScheduleItem(queueItem) {
   const draft = queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey);
   const media = draft?.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
   const isRepost = queueItem.pipeline === 'repost';
+  const mediaReady = media.required !== true || Boolean(media?.attachment?.localPath);
   const gatesPassed = isRepost
     ? Boolean(queueItem.humanApprovedAt)
-    : Boolean(draft && draft.status === 'ready' && draft.gates?.passed === true && media.required !== true);
+    : Boolean(draft && draft.status === 'ready' && draft.gates?.passed === true && mediaReady);
   const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
   const body = String(draft?.body || '');
   const text = queueItem.pipeline === 'thread' ? String(threadParts[0] || '') : body;

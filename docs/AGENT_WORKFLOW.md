@@ -331,7 +331,7 @@ JSON
 
 The writer output pipeline must match the currently routed queue item. `apply-writer-output` validates the echoed generation context against both the append-only human selection history and the exact draft revision that `writer-packet` prepared. A successful apply changes that draft revision, so the same packet cannot be replayed to persist a second output; request a fresh `writer-packet` after any draft edit or completed generation. The command persists generation provenance with the draft and returns the item to `drafting`; it never requests review or approval. If the external Writer has inspectable execution metadata, pass it separately as `writerAiExecution`; otherwise execution remains explicitly unavailable for that bridge generation. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
 
-The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media upload/readiness is not implemented in Phase 2.
+The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media planning remains draft/editor metadata; operator-attached JPEG/PNG/WebP/GIF files can now provide real readiness, preview in the dashboard, and upload through the authenticated X transport at publication time. Required media remains approval-blocking until the attachment and media plan are complete.
 
 ### 7. Edit and request review
 
@@ -350,20 +350,21 @@ JSON
 
 The bridge computes the 50-point rubric, saves edited text as `draft`, and interprets `status: ready` as a request to move the workflow item to `needs_review`. The response includes `approvalRequired: true`. The agent never turns the draft itself into `ready`.
 
-Current quality dimensions:
+Current writing-quality dimensions:
 
-- niche fit: 10
 - hook: 8
 - insight: 10
 - evidence: 10
 - action: 7
 - originality vs source: 5
 
+These total 40 raw writing points and are proportionally normalized to the 50-point writing-quality scale. Growth fit and Growth Packaging are separate; the score is not a virality or follower-growth prediction.
+
 Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover explicit factuality confirmation; evidence confirmation when claims require it; niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; first-person evidence; thread rules; and required-media readiness. The dashboard confirmation checkboxes are deliberately unchecked on every review/approval submission, and approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval additionally snapshots the exact reply body; only the explicit Engage send path can consume that snapshot. No bridge command can create either human approval.
 
 ## Queue and automation interaction
 
-The web dashboard now starts on **Today** and groups the existing runtime under **Discover / Conversations / Create / Results / Improve / Advanced**. These labels are a presentation layer only: agents should continue using the stable bridge commands and existing domain owners below. The guided shell must not be interpreted as a change to approval, send, scheduler, Account Health, experiment, or learned-rule authority.
+The web dashboard now uses the provisional H2 shell **Today / Discover / Conversations / Posts / Results / Learn**, with **Settings** as a utility destination. These labels are a presentation layer only: agents should continue using the stable bridge commands and existing domain owners below. The guided shell must not be interpreted as a change to approval, send, scheduler, Account Health, experiment, or learned-rule authority.
 
 Phase 1A workflow is current:
 
@@ -397,7 +398,7 @@ When `AUTO_POST=false`, automation previews the recommendation and performs **no
 
 A successful main-feed transport marks the queue item `published`, stores its root tweet ID/output URL/publication time, updates the associated draft, and records the candidate action. A transport failure after claim becomes `failed` with its error and is not silently retried. If X succeeds but local recording is incomplete, the item remains non-approved/non-retryable with inspectable recording state. A successful Engage Next reply is recorded by the explicit engagement send path instead.
 
-Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next, Phase-1D Account Health, Phase-3 queue-aware main-feed scheduling/claiming plus Original/Quote/Thread HTTP publication, Phase-4 fixed-window measurement/experiments, and Phase-5 human-controlled learned strategy. Actual media upload/attachment readiness remains intentionally separate and required media stays blocked.
+Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next, Phase-1D Account Health, Phase-3 queue-aware main-feed scheduling/claiming plus Original/Quote/Thread HTTP publication, operator-attached image upload/readiness, Phase-4 fixed-window measurement/experiments, and Phase-5 human-controlled learned strategy. Required media remains blocked until a real attachment and complete media plan are present.
 
 Inspect and manage learned strategy without editing SQLite directly:
 

@@ -1,4 +1,4 @@
-import { TwitterHttpClient, GRAPHQL, postThread, postTweet } from 'xactions/scrapers/twitter/http';
+import { DEFAULT_FEATURES, TwitterHttpClient, GRAPHQL, postThread, postTweet, uploadImage } from 'xactions/scrapers/twitter/http';
 
 const HOME_URL = 'https://x.com/home';
 const AUTH_PROBE_URL = 'https://x.com/i/api/1.1/users/recommendations.json?limit=1';
@@ -51,15 +51,75 @@ export async function checkHttpSession(credentials) {
   return { authenticated: true, createTweetQueryId };
 }
 
+function graphQlErrorMessage(value) {
+  const errors = Array.isArray(value?.errors) ? value.errors : [];
+  const details = errors
+    .map((error) => String(error?.message || error?.code || '').trim())
+    .filter(Boolean);
+  return details.length ? details.join('; ') : '';
+}
+
+async function postQuoteTweetHttp(client, text, { quoteTweetId, mediaIds = [] } = {}) {
+  const { queryId, operationName } = GRAPHQL.CreateTweet;
+  const variables = {
+    tweet_text: text,
+    dark_request: false,
+    attachment_url: `https://x.com/i/status/${quoteTweetId}`,
+    media: {
+      media_entities: mediaIds.map((id) => ({ media_id: id, tagged_users: [] })),
+      possibly_sensitive: false,
+    },
+    semantic_annotation_ids: [],
+  };
+  const json = await client.graphql(queryId, operationName, variables, {
+    mutation: true,
+    features: DEFAULT_FEATURES,
+  });
+  const result = json?.data?.create_tweet?.tweet_results?.result
+    ?? json?.data?.create_tweet?.tweet_result?.result
+    ?? json?.data?.create_tweet
+    ?? json;
+  const errorMessage = graphQlErrorMessage(json) || graphQlErrorMessage(result);
+  if (errorMessage && !String(result?.rest_id || result?.legacy?.id_str || result?.tweet?.rest_id || '')) {
+    const error = new Error(`X CreateTweet rejected the Quote: ${errorMessage}`);
+    error.code = 'X_CREATE_TWEET_REJECTED';
+    error.transportResult = result;
+    throw error;
+  }
+  return result;
+}
+
 export async function postTweetHttp(text, credentials, options = {}) {
   const { client } = await createHttpClient(credentials);
-  return postTweet(client, text, options);
+  const { mediaAttachment = null, ...tweetOptions } = options;
+  if (mediaAttachment?.localPath) {
+    const uploaded = await uploadImage(client, mediaAttachment.localPath, {
+      mediaType: mediaAttachment.mimeType || undefined,
+      altText: mediaAttachment.altText || undefined,
+    });
+    tweetOptions.mediaIds = [uploaded.mediaId];
+  }
+  if (tweetOptions.quoteTweetId) {
+    return postQuoteTweetHttp(client, text, {
+      quoteTweetId: tweetOptions.quoteTweetId,
+      mediaIds: tweetOptions.mediaIds || [],
+    });
+  }
+  return postTweet(client, text, tweetOptions);
 }
 
 export async function postThreadHttp(tweets, credentials, options = {}) {
   const { client } = await createHttpClient(credentials);
+  const { mediaAttachment = null, ...threadOptions } = options;
   const normalized = tweets.map((tweet) => (typeof tweet === 'string' ? { text: tweet } : tweet));
-  return postThread(client, normalized, options);
+  if (mediaAttachment?.localPath && normalized.length) {
+    const uploaded = await uploadImage(client, mediaAttachment.localPath, {
+      mediaType: mediaAttachment.mimeType || undefined,
+      altText: mediaAttachment.altText || undefined,
+    });
+    normalized[0] = { ...normalized[0], mediaIds: [uploaded.mediaId] };
+  }
+  return postThread(client, normalized, threadOptions);
 }
 
 function sourceTweetId(item) {
@@ -79,31 +139,46 @@ function outputIdentity(result, account) {
   return { tweetId, url };
 }
 
+function transportResultSummary(result) {
+  try {
+    const json = JSON.stringify(result);
+    return json.length > 1800 ? `${json.slice(0, 1800)}…` : json;
+  } catch {
+    return String(result || '');
+  }
+}
+
 export async function publishMainFeedHttp(item, credentials, {
   account = process.env.X_ACCOUNT || 'ham_zax',
   tweetTransport = postTweetHttp,
   threadTransport = postThreadHttp,
 } = {}) {
   const pipeline = String(item?.pipeline || '');
-  if (item?.media?.required === true) {
-    throw new Error('Required media is not publishable until a real attachment readiness path exists.');
+  const attachment = item?.media?.attachment || null;
+  if (item?.media?.required === true && !attachment?.localPath) {
+    throw new Error('Required media must have an attached image before publishing.');
   }
+  const mediaAttachment = attachment?.localPath ? {
+    localPath: attachment.localPath,
+    mimeType: attachment.mimeType || '',
+    altText: item?.media?.altText || '',
+  } : null;
 
   let result;
   if (pipeline === 'original') {
     const body = String(item?.body || item?.text || '').trim();
     if (!body) throw new Error('Original publication requires final body text.');
-    result = await tweetTransport(body, credentials);
+    result = await tweetTransport(body, credentials, { mediaAttachment });
   } else if (pipeline === 'quote') {
     const body = String(item?.body || item?.text || '').trim();
     const quoteTweetId = sourceTweetId(item);
     if (!body) throw new Error('Quote publication requires final body text.');
     if (!quoteTweetId) throw new Error('Quote publication requires a source tweet ID.');
-    result = await tweetTransport(body, credentials, { quoteTweetId });
+    result = await tweetTransport(body, credentials, { quoteTweetId, mediaAttachment });
   } else if (pipeline === 'thread') {
     const parts = Array.isArray(item?.threadParts) ? item.threadParts.map((part) => String(part).trim()).filter(Boolean) : [];
     if (!parts.length) throw new Error('Thread publication requires approved thread parts.');
-    result = await threadTransport(parts, credentials);
+    result = await threadTransport(parts, credentials, { mediaAttachment });
   } else if (pipeline === 'repost') {
     throw new Error('Automated repost transport is not enabled; repost remains a manual main-feed action.');
   } else {
@@ -112,7 +187,8 @@ export async function publishMainFeedHttp(item, credentials, {
 
   const { tweetId, url } = outputIdentity(result, account);
   if (!tweetId) {
-    const error = new Error(`${pipeline} transport returned no root tweet ID.`);
+    const summary = transportResultSummary(result);
+    const error = new Error(`${pipeline} transport returned no root tweet ID.${summary ? ` Result: ${summary}` : ''}`);
     error.code = 'TRANSPORT_RESULT_NO_TWEET_ID';
     error.transportResult = result;
     throw error;

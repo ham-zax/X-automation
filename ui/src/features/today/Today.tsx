@@ -210,7 +210,12 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
         {!active && recommendation.selection?.draftId && recommendation.pipeline !== 'reply' && <a href={`#/draft/${recommendation.selection.draftId}`} className="text-sm font-medium text-sky-700 hover:underline">Continue selected draft →</a>}
         {!active && recommendation.selection && !recommendation.selection.draftId && recommendation.pipeline !== 'reply' && <a href="#/create" className="text-sm font-medium text-sky-700 hover:underline">Open selected workflow →</a>}
       </div>
-      {(select.isError || dismiss.isError) && <div className="mt-2 text-sm text-red-700">{select.error?.message || dismiss.error?.message}</div>}
+      {(select.isError || dismiss.isError) && (
+        <div className="mt-2 text-sm text-red-700">
+          {select.error?.message || dismiss.error?.message}
+          {select.error?.message.includes('Use anyway') && <>{' '}<a href="#/discover" className="font-semibold underline">Review the source in Discover →</a></>}
+        </div>
+      )}
     </article>
   )
 }

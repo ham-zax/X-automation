@@ -148,13 +148,14 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
   const mainFeedReview = item.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(item.pipeline)
   const canApprove = mainFeedReview && (item.pipeline === 'repost'
     ? item.growthFit.allowed
-    : (item.draft != null && item.draft.qualityScore >= 40 && item.draft.gates?.passed === true))
+    : (item.draft != null && item.draft.qualityScore >= 40 && item.draft.gates?.passed === true && item.draft.growthPackaging?.ready === true))
   const canRequestReview = ['original', 'quote', 'thread', 'reply'].includes(item.pipeline) && ['drafting', 'needs_review'].includes(item.status)
   const choosingType = ['triage', 'researching', 'watching'].includes(item.status)
   const approvalBlockers = item.draft
     ? [
         ...(item.draft.gatesView?.approvalFailures || []).map((failure) => failure.message),
         ...(item.draft.gatesView?.humanConfirmations || []).map((confirmation) => confirmation.message),
+        ...(item.draft.growthPackaging?.blockers || []).map((blocker) => blocker.message),
       ]
     : []
   const evidenceRequired = Boolean(item.draft?.liveAnalysis?.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
@@ -212,8 +213,8 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
         <div className="mt-3">
           {item.status !== 'published' && <GatePanel gates={item.draft.gatesView} />}
           <div className="mt-1 text-xs text-slate-500">
-            {item.status === 'published' ? 'Recorded draft quality' : 'Draft quality'} {item.draft.qualityScore}/50
-            {item.status !== 'published' ? ' · approval threshold 40' : ''}
+            {item.status === 'published' ? 'Recorded writing quality' : 'Writing quality / structure'} {item.draft.qualityScore}/50
+            {item.status !== 'published' ? ' · approval threshold 40 · not a growth/virality prediction' : ''}
           </div>
         </div>
       )}

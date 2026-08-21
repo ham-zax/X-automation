@@ -269,7 +269,12 @@ export function ViralStyles({ embedded = false }: { embedded?: boolean } = {}) {
         <StatCard label="AI intent labeled" value={report.dataset.aiIntentLabeledPosts} note="Confidence ≥ 60% in mature sample" />
       </div>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <details open={!embedded} className={embedded ? 'rounded-xl border border-slate-200 bg-white p-4' : ''}>
+        <summary className={embedded ? 'cursor-pointer list-none text-sm font-semibold text-slate-800' : 'hidden'}>
+          Run or update historical research
+          <span className="ml-2 text-xs font-normal text-slate-500">Adjust scope and AI analysis only when you want to refresh the evidence.</span>
+        </summary>
+        <section className={`rounded-xl border border-slate-200 bg-white p-5 ${embedded ? 'mt-4' : ''}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Run historical research</h3>
@@ -441,7 +446,8 @@ export function ViralStyles({ embedded = false }: { embedded?: boolean } = {}) {
             {!aiReady && intentEnabled && <p className="text-xs text-amber-700">Choose the exact AI profile or runtime model before starting.</p>}
           </div>
         </div>
-      </section>
+        </section>
+      </details>
 
       {job && (
         <section className="rounded-xl border border-slate-200 bg-white p-5">

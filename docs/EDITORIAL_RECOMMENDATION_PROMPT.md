@@ -35,6 +35,7 @@ For both passes:
 - Do not infer that a marketing/announcement source independently proves benchmark, reliability, security, or performance claims.
 - Distinguish supplied primary support from a `source_claim`, contradiction, and unresolved evidence.
 - Missing evidence stays missing. Narrow the thesis, return `RESEARCH_MORE`, or return `SKIP` when a material claim cannot be supported.
+- A short X post does not need to contain the complete underlying story to be usable source material. A coherent supplied source claim may support `source_dependent_commentary` or a narrowly attributed summary/interpretation without independent verification. Do not return `RESEARCH_MORE` merely because the source is brief or because no second source was supplied.
 - Do not generate final publication copy. The writer runs only after a human selects a recommendation.
 - Do not approve, route, schedule, publish, send a reply, complete a repost, dismiss a source, or accept a learned rule.
 
@@ -164,11 +165,13 @@ For `quote`, `reply`, or `repost`, `targetCandidateKey` is required and must be 
 
 A material unresolved claim may not remain `PREPARE` merely because you lower its importance. Narrow the thesis to what the evidence supports, or use `RESEARCH_MORE`/`SKIP`.
 
+Prefer a narrower, source-attributed `PREPARE` recommendation when the supplied source already supports a useful developer takeaway. Additional research is required only when the proposed thesis depends on a material fact that is absent, contradictory, or too ambiguous to state even with attribution.
+
 #### `RESEARCH_MORE`
 
 Use `pipeline = "research"`. Include one or more concrete `researchQuestions` describing what still must be established.
 
-This means **manual/external research required** because the controlled automatic path was insufficient. It does not mean hidden browsing or another search is running. The operator may later attach a URL through the controlled research fetch boundary.
+This means **manual/external research required** because a material fact needed by the proposed thesis is not established by the supplied source/evidence. It does not mean hidden browsing or another search is running. The operator may later attach a URL through the controlled research fetch boundary.
 
 #### `SKIP`
 
@@ -195,6 +198,7 @@ Code independently checks these requirements and may downgrade the returned clas
 - Recent owned content may justify avoiding duplication, but strong ProfileProofCoverage is not itself a ban on a materially new information object.
 - Weak/no ProfileProofCoverage does not justify filler.
 - The recommended format must follow from the thesis/objective and source relationship, not from a generic engagement heuristic.
+- For a cold-start account with little relevant owned distribution, treat distribution access as a real format consideration: a substantive Quote or Reply on a high-momentum relevant X source can legitimately participate in an existing conversation, while an Original starts mostly from the account's own graph. Prefer Quote/Reply when the contribution is genuinely additive; prefer Original when the standalone resource, insight, proof, or decision value is strong enough to own directly. Do not impose format quotas or manufacture replies.
 - Do not output final publication prose, hashtags, hooks, or engagement bait.
 - It is valid for the correct result to contain no `PREPARE` recommendations, including no recommendations at all when there is no strong current action.
 

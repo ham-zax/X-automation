@@ -53,6 +53,20 @@ export interface GatesView {
   warnings: { code: string; message: string }[]
 }
 
+export interface GrowthPackagingReview {
+  ready: boolean
+  blockers: { code: string; message: string }[]
+  items: {
+    stoppingPower: { status: string; detail: string }
+    readerPayoff: { status: string; detail: string }
+    distributionLeverage: { status: string; detail: string }
+    sourceActionPath: { status: string; detail: string }
+    interactionOpening: { status: string; detail: string }
+    mediaOpportunity: { status: string; detail: string }
+    strategyState: { status: string; mode: 'off' | 'suggest' | 'apply' | null; label: string; detail: string }
+  }
+}
+
 export interface StrategicRelevance {
   state: 'core' | 'adjacent' | 'outside' | 'unknown'
   allowed: boolean
@@ -85,6 +99,7 @@ export interface DraftView {
   editor: DraftEditorMetadata
   gates: Record<string, unknown>
   gatesView: GatesView
+  growthPackaging: GrowthPackagingReview | null
   qualityScore: number
   status: string
   scheduledAt: number | null
@@ -96,6 +111,7 @@ export interface DraftView {
     gatesView: GatesView
     breakdown: Record<string, number>
     weightedLength: number | null
+    growthPackaging: GrowthPackagingReview | null
   }
 }
 
@@ -117,6 +133,7 @@ export interface QueueItemView {
   recommendedPipeline: string | null
   recommendedPipelineLabel: string | null
   routingReason: string
+  routingDecision: { accepted?: boolean; decision?: string; reason?: string; actor?: string; at?: number; recommendedPipeline?: string; routingReason?: string }
   expiresAt: number | null
   scheduledAt: number | null
   scheduleUrgency: string
@@ -347,6 +364,10 @@ export function useEditorialSelect() {
       invalidateEditorial(queryClient)
       void queryClient.invalidateQueries({ queryKey: ['create'] })
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
     },
   })
 }
@@ -411,6 +432,7 @@ export interface DiscoveredCandidate {
     title: string
   } | null
   queue: {
+    id: number
     pipeline: string
     pipelineLabel: string
     status: string
@@ -418,6 +440,7 @@ export interface DiscoveredCandidate {
     recommendedPipeline: string | null
     recommendedPipelineLabel: string | null
     routingReason: string
+    routingDecision: { accepted?: boolean; decision?: string; reason?: string; actor?: string; at?: number; recommendedPipeline?: string; routingReason?: string }
     draftId: number | null
     draftQualityScore: number | null
     potentials: { reach: number; follow: number; conversation: number; relationship: number }
@@ -478,6 +501,9 @@ export function useDiscoverTriage() {
       void queryClient.invalidateQueries({ queryKey: ['today'] })
       if (vars.action === 'save' || vars.action === 'unsave' || vars.action === 'ignore' || vars.action === 'discard') return
     },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+    },
   })
 }
 
@@ -525,7 +551,7 @@ export interface DraftEditorData {
   pipelineLabel: string
   queueItem: QueueItemView | null
   growthFit: StrategicRelevance
-  analysis: { score: number; gates: Record<string, unknown>; gatesView: GatesView; breakdown: Record<string, number> }
+  analysis: { score: number; gates: Record<string, unknown>; gatesView: GatesView; breakdown: Record<string, number>; growthPackaging: GrowthPackagingReview | null }
   flags: {
     engagementReply: boolean
     engagementConstrained: boolean
@@ -661,9 +687,52 @@ export function useRelevanceDecision() {
   })
 }
 
+export function useRoutingDecision() {
+  const queryClient = useQueryClient()
+  return useMutation<{ queueItem: QueueItemView }, Error, { queueItemId?: number; key?: string; decision: 'use_anyway' | 'clear_override'; reason?: string }>({
+    mutationFn: (payload) => postApi('/work/routing-decision', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['draft'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+export function useDraftMediaUpload(id: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation<{ draft: DraftView; editor: DraftEditorData }, Error, File>({
+    mutationFn: (file) => request(`/drafts/${id}/media`, {
+      method: 'POST',
+      headers: {
+        'content-type': file.type,
+        'x-file-name': encodeURIComponent(file.name),
+      },
+      body: file,
+    }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['draft', id] })
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+    },
+  })
+}
+
+export function useDraftMediaRemove(id: number | null) {
+  const queryClient = useQueryClient()
+  return useMutation<{ draft: DraftView; editor: DraftEditorData }, Error, void>({
+    mutationFn: () => request(`/drafts/${id}/media`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['draft', id] })
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+    },
+  })
+}
+
 export interface DraftActionPayload {
   body?: string
   threadParts?: string[]
+  operatorContext?: string
   mediaType?: string
   mediaRequired?: boolean
   mediaReason?: string

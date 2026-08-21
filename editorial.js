@@ -723,8 +723,6 @@ export function selectEditorialRecommendation(id, { pipelineOverride = null } = 
     followPotential: Number(recommendation.potentials?.followPotential || 0),
     conversationPotential: Number(recommendation.potentials?.conversationPotential || 0),
     relationshipPotential: Number(recommendation.potentials?.relationshipPotential || 0),
-    recommendedPipeline: recommendation.pipeline || '',
-    routingReason: recommendation.whyThisFormat || recommendation.whyNow || queueItem.routingReason || '',
   });
   const queueSources = linkEditorialSources(queueItem, sources, selected.primarySourceKey);
   const selectedAt = Date.now();

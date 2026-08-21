@@ -176,6 +176,11 @@ html[data-theme="dark"] .app-header {
   box-shadow: 0 14px 44px rgba(0, 0, 0, 0.22);
 }
 
+html[data-theme="dark"] .app-main :is(.rounded-lg, .rounded-xl, .rounded-2xl).bg-white {
+  background-color: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
 html[data-theme="dark"] .app-brand,
 html[data-theme="dark"] .app-nav-link[aria-current="page"],
 html[data-theme="dark"] .app-utility-link[aria-current="page"] {
@@ -212,7 +217,7 @@ html[data-theme="dark"] .text-slate-800 { color: #e2e8f0; }
 html[data-theme="dark"] .text-slate-700 { color: #cbd5e1; }
 html[data-theme="dark"] .text-slate-600 { color: #a8b4c5; }
 html[data-theme="dark"] .text-slate-500 { color: #94a3b8; }
-html[data-theme="dark"] .text-slate-400 { color: #718096; }
+html[data-theme="dark"] .text-slate-400 { color: #8492a6; }
 html[data-theme="dark"] .border-slate-900 { border-color: #f8fafc; }
 html[data-theme="dark"] .border-slate-400 { border-color: rgba(148, 163, 184, 0.46); }
 html[data-theme="dark"] .border-slate-300 { border-color: rgba(148, 163, 184, 0.3); }

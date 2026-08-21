@@ -10,6 +10,7 @@ import {
   getDraftByCandidate,
   getEditorialRecommendation,
   getLatestEditorialSelectionForQueueItem,
+  getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
   getQueueItemByCandidate,
   hasCandidateAction,
@@ -136,8 +137,23 @@ function routeState(pipeline) {
   return { lane: 'main', status: 'drafting' };
 }
 
+function requireCurrentStrategyDecision(queueItem, draft) {
+  const selection = getLatestWritingStrategySelectionForQueueItem(queueItem.id);
+  if (!selection) throw new Error('Save No influence, Advice only, or Use for this draft before approval.');
+  const generation = draft?.editor?.generation;
+  if (generation && (generation.strategySelectionId == null || generation.strategyMode == null)) {
+    throw new Error('This AI draft predates an explicit writing-strategy decision. Regenerate after saving the current writing choice before approval.');
+  }
+  if (generation && Number(generation.strategySelectionId) !== Number(selection.id)) {
+    throw new Error('The writing-strategy choice changed after this AI generation. Regenerate with the current saved choice before approval.');
+  }
+  return selection;
+}
+
 function contentGateContext(candidateKey, pipeline, confirmations = {}) {
   const queueItem = getQueueItemByCandidate(candidateKey);
+  const draft = getDraftByCandidate(candidateKey);
+  const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
   return {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidateKey }),
@@ -147,8 +163,15 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     factualityConfirmed: confirmations.factualityConfirmed === true,
     evidenceConfirmed: confirmations.evidenceConfirmed === true,
     evidence: editorialEvidenceForQueue(queueItem),
-    mediaReady: false,
+    mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
+    mediaPublishingAvailable: true,
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
+    strategyMode: strategySelection?.mode || null,
+    strategySelectionId: strategySelection?.id ?? null,
+    generationStrategySelectionId: draft?.editor?.generation?.strategySelectionId ?? null,
+    generationStrategyMode: draft?.editor?.generation?.strategyMode ?? null,
+    hasGenerationProvenance: Boolean(draft?.editor?.generation),
+    strategyApproach: strategySelection?.guidance?.rationale || '',
     replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
 }
@@ -169,6 +192,11 @@ export function refreshQueueRecommendation(key, context = {}) {
     relevanceOverride: existingQueueItem?.relevance?.humanOverride || null,
   }));
   const recommendedPipeline = actionToPipeline(recommendation.action);
+  const routingDecision = existingQueueItem?.routingDecision?.accepted === true
+    && existingQueueItem.routingDecision.recommendedPipeline === recommendedPipeline
+    && existingQueueItem.routingDecision.routingReason === recommendation.reason
+    ? existingQueueItem.routingDecision
+    : {};
   const queueItem = saveQueueItem({
     candidateKey: key,
     reachPotential: scores.reachPotential,
@@ -177,6 +205,7 @@ export function refreshQueueRecommendation(key, context = {}) {
     relationshipPotential: scores.relationshipPotential,
     recommendedPipeline,
     routingReason: recommendation.reason,
+    routingDecision,
   });
   return { candidate, queueItem, scores, recommendation: { ...recommendation, pipeline: recommendedPipeline } };
 }
@@ -233,6 +262,37 @@ export function setRelevanceDecision(key, { decision, reason = '', actor = 'huma
     queueItem: saved,
     growthFit: assessStrategicRelevance(candidate, { humanOverride }),
   };
+}
+
+export function setRoutingDecision(key, { decision, reason = '', actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('Use-anyway routing decisions require an explicit human action.');
+  requireCandidate(key);
+  ensureQueueItem(key);
+  let queueItem = getQueueItemByCandidate(key);
+  if (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw new Error('Routing decisions cannot be changed after approval or publication.');
+  }
+  refreshQueueRecommendation(key);
+  queueItem = getQueueItemByCandidate(key);
+  if (decision === 'clear_override') return saveQueueItem({ candidateKey: key, routingDecision: {} });
+  if (decision !== 'use_anyway') throw new Error(`Unsupported routing decision: ${decision || 'missing'}.`);
+  if (queueItem.recommendedPipeline !== 'ignore') {
+    throw new Error(`Use anyway is only required when the current recommendation is Ignore; current recommendation is ${queueItem.recommendedPipeline || 'missing'}.`);
+  }
+  const explanation = String(reason || '').trim();
+  if (!explanation) throw new Error('Using an ignored opportunity requires a short human reason.');
+  return saveQueueItem({
+    candidateKey: key,
+    routingDecision: {
+      accepted: true,
+      decision: 'use_anyway',
+      reason: explanation,
+      actor: 'human',
+      at: Date.now(),
+      recommendedPipeline: queueItem.recommendedPipeline,
+      routingReason: queueItem.routingReason,
+    },
+  });
 }
 
 export function inspectWorkflow(key) {
@@ -344,11 +404,28 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
   if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid routing actor: ${actor}`);
 
   ensureQueueItem(key);
-  const previousQueueItem = getQueueItemByCandidate(key);
+  let previousQueueItem = getQueueItemByCandidate(key);
   if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
     throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
   }
+  const existingEngagementReply = pipeline === 'reply'
+    && previousQueueItem.lane === 'engagement'
+    && previousQueueItem.pipeline === 'reply';
+  if (!existingEngagementReply) {
+    refreshQueueRecommendation(key);
+    previousQueueItem = getQueueItemByCandidate(key);
+  }
   if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {
+    if (!existingEngagementReply && previousQueueItem.recommendedPipeline === 'ignore') {
+      const routingDecision = previousQueueItem.routingDecision || {};
+      const currentOverride = routingDecision.accepted === true
+        && routingDecision.actor === 'human'
+        && routingDecision.recommendedPipeline === previousQueueItem.recommendedPipeline
+        && routingDecision.routingReason === previousQueueItem.routingReason;
+      if (!currentOverride) {
+        throw new Error('This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
+      }
+    }
     const growthFit = assessStrategicRelevance(candidate, { humanOverride: previousQueueItem.relevance?.humanOverride || null });
     if (growthFit.state === 'unknown') {
       throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
@@ -385,6 +462,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
     humanApprovedAt: null,
     approvedText: null,
     routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
+    routingDecision: ['ignore', 'watch', 'research'].includes(pipeline) ? {} : (previousQueueItem.routingDecision || {}),
     ...replyTarget,
   });
 }
@@ -426,12 +504,13 @@ export function approveQueueItem(key, confirmations = {}) {
   } else {
     draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    requireCurrentStrategyDecision(queueItem, draft);
     analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
     draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     if (!analysis.publishable) {
-      const firstFailure = analysis.gates?.failures?.[0];
+      const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
       const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-      throw new Error(`Draft is not publishable (${analysis.score}/50).${detail}`);
+      throw new Error(`Draft is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
     }
     draft = saveDraft({ ...draft, status: 'ready' });
   }
@@ -464,9 +543,9 @@ export function approveEngagementQueueItem(key, confirmations = {}, { actor = 'h
   const analysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply', confirmations));
   const checkedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   if (!analysis.publishable) {
-    const firstFailure = analysis.gates?.failures?.[0];
+    const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
     const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-    throw new Error(`Reply is not publishable (${analysis.score}/50).${detail}`);
+    throw new Error(`Reply is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
   }
   const approvedText = String(checkedDraft.body || '');
   if (!approvedText.trim()) throw new Error('Approved reply text cannot be empty.');

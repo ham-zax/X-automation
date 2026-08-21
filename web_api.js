@@ -28,6 +28,7 @@ import {
   resolveEngagementItem,
   routeCandidate,
   setRelevanceDecision,
+  setRoutingDecision,
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
@@ -59,6 +60,7 @@ import {
   getLearningOverview,
   getMainFeedScheduleItem,
   getLatestEditorialSelectionForQueueItem,
+  getLatestWritingStrategySelectionForQueueItem,
   getLatestEditorialPlan,
   getNewFollowerQuality,
   getNicheProfile,
@@ -125,6 +127,14 @@ const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 const SCHEDULABLE_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MEDIA_TYPES = ['none', 'screenshot', 'chart', 'code', 'diagram'];
+const DRAFT_MEDIA_DIR = path.resolve('.x-media');
+const DRAFT_MEDIA_MIME = Object.freeze({
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+});
+const MAX_DRAFT_MEDIA_BYTES = 5 * 1024 * 1024;
 const DISCOVER_FEEDS = new Set(['for-you', 'x', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
 const DISCOVER_SOURCE_KINDS = Object.freeze({ x: 'x_latest', trending: 'x_momentum', github: 'github_trending', hn: 'hn_top' });
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
@@ -554,6 +564,8 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
   relevanceOverride = null,
   growthObjective = null,
 } = {}) {
+  const queueItem = getQueueItemByCandidate(candidate.key);
+  const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
   return scoreDraft(draft, candidate, {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
@@ -561,9 +573,16 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
     factualityConfirmed: confirmations.factualityConfirmed === true,
     evidenceConfirmed: confirmations.evidenceConfirmed === true,
     evidence,
-    mediaReady: !draft.editor?.media?.required,
+    mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
+    mediaPublishingAvailable: true,
     relevanceOverride,
     growthObjective,
+    strategyMode: strategySelection?.mode || null,
+    strategySelectionId: strategySelection?.id ?? null,
+    generationStrategySelectionId: draft?.editor?.generation?.strategySelectionId ?? null,
+    generationStrategyMode: draft?.editor?.generation?.strategyMode ?? null,
+    hasGenerationProvenance: Boolean(draft?.editor?.generation),
+    strategyApproach: strategySelection?.guidance?.rationale || '',
   });
 }
 
@@ -614,6 +633,9 @@ export async function generateDraftCandidate(current) {
   const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
   const editorialContext = writerEditorialContext(candidate, queueItem);
   const strategyGeneration = getWritingStrategyGenerationContext(queueItem.id);
+  if (pipeline !== 'reply' && (!strategyGeneration.selectionId || !strategyGeneration.mode)) {
+    throw new Error('Choose and save No influence, Advice only, or Use for this draft before generating.');
+  }
   const packet = buildWriterPacket({
     candidate,
     queueItem,
@@ -871,15 +893,15 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
     } : null,
     queue: queueItem
       ? {
+          id: queueItem.id,
           pipeline: queueItem.pipeline,
           pipelineLabel: label(PIPELINE_LABELS, queueItem.pipeline),
           status: queueItem.status,
           statusLabel: queueStatusLabel(queueItem),
-          recommendedPipeline: workflow?.recommendation?.pipeline || queueItem.recommendedPipeline || null,
-          recommendedPipelineLabel: workflow?.recommendation?.pipeline
-            ? label(PIPELINE_LABELS, workflow.recommendation.pipeline)
-            : queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
-          routingReason: workflow?.recommendation?.reason || queueItem.routingReason || '',
+          recommendedPipeline: queueItem.recommendedPipeline || null,
+          recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
+          routingReason: queueItem.routingReason || '',
+          routingDecision: queueItem.routingDecision || {},
           draftId: queueItem.draftId ?? null,
           draftQualityScore: draft?.qualityScore ?? null,
           potentials: {
@@ -909,6 +931,22 @@ function formatGates(gates = {}) {
 function formatDraft(draft, { analysis = null } = {}) {
   if (!draft) return null;
   const currentGates = analysis?.gates || draft.gates || {};
+  const attachment = draft.editor?.media?.attachment;
+  const editor = attachment
+    ? {
+        ...(draft.editor || {}),
+        media: {
+          ...(draft.editor?.media || {}),
+          attachment: {
+            fileName: attachment.fileName || '',
+            mimeType: attachment.mimeType || '',
+            size: Number(attachment.size || 0),
+            attachedAt: Number(attachment.attachedAt || 0),
+            provenance: attachment.provenance || '',
+          },
+        },
+      }
+    : (draft.editor || {});
   const payload = {
     id: draft.id,
     candidateKey: draft.candidateKey,
@@ -918,9 +956,10 @@ function formatDraft(draft, { analysis = null } = {}) {
     action: draft.action || '',
     body: draft.body || '',
     threadParts: draft.threadParts || [],
-    editor: draft.editor || {},
+    editor,
     gates: currentGates,
     gatesView: formatGates(currentGates),
+    growthPackaging: analysis?.growthPackaging || null,
     qualityScore: analysis?.score ?? draft.qualityScore ?? 0,
     status: draft.status,
     scheduledAt: draft.scheduledAt || null,
@@ -934,6 +973,7 @@ function formatDraft(draft, { analysis = null } = {}) {
       gatesView: formatGates(analysis.gates),
       breakdown: analysis.breakdown || {},
       weightedLength: analysis.weightedLength ?? null,
+      growthPackaging: analysis.growthPackaging || null,
     };
   }
   return payload;
@@ -973,6 +1013,7 @@ function formatQueueItem(queueItem) {
     recommendedPipeline: queueItem.recommendedPipeline || null,
     recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
     routingReason: queueItem.routingReason || '',
+    routingDecision: queueItem.routingDecision || {},
     expiresAt: queueItem.expiresAt || null,
     scheduledAt: queueItem.scheduledAt || null,
     scheduleUrgency: queueItem.scheduleUrgency || 'evergreen',
@@ -1055,14 +1096,15 @@ function draftEditorPayload(draftId) {
       gates: analysis.gates,
       gatesView: formatGates(analysis.gates),
       breakdown: analysis.breakdown || {},
+      growthPackaging: analysis.growthPackaging || null,
     },
     flags: {
       engagementReply,
       engagementConstrained,
       readOnly,
       canReview: !readOnly && CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status),
-      canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && analysis.score >= 40 && gatesPassed,
-      canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && analysis.score >= 40 && gatesPassed,
+      canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && analysis.score >= 40 && gatesPassed && analysis.growthPackaging?.ready === true,
+      canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && analysis.score >= 40 && gatesPassed && analysis.growthPackaging?.ready === true,
       canSendApproved: engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
       approvedMainFeed: !engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt),
     },
@@ -1474,6 +1516,57 @@ async function readJson(req) {
   const parsed = JSON.parse(body);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Request body must be a JSON object.');
   return parsed;
+}
+
+async function readBinary(req, maxBytes = MAX_DRAFT_MEDIA_BYTES) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) throw new Error(`Image exceeds ${Math.round(maxBytes / 1024 / 1024)} MB limit.`);
+    chunks.push(chunk);
+  }
+  if (!size) throw new Error('Image upload is empty.');
+  return Buffer.concat(chunks, size);
+}
+
+function draftMediaAttachment(draft) {
+  const attachment = draft?.editor?.media?.attachment;
+  if (!attachment || typeof attachment !== 'object') return null;
+  const localPath = path.resolve(String(attachment.localPath || ''));
+  if (!localPath.startsWith(`${DRAFT_MEDIA_DIR}${path.sep}`)) return null;
+  return { ...attachment, localPath };
+}
+
+async function persistDraftMedia(draft, req) {
+  const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  const extension = DRAFT_MEDIA_MIME[mimeType];
+  if (!extension) throw new Error('Attach a JPEG, PNG, WebP, or GIF image.');
+  const buffer = await readBinary(req);
+  await fs.mkdir(DRAFT_MEDIA_DIR, { recursive: true, mode: 0o700 });
+  const rawName = String(req.headers['x-file-name'] || 'image');
+  let fileName = rawName;
+  try { fileName = decodeURIComponent(rawName); } catch {}
+  fileName = path.basename(fileName).slice(0, 180) || `draft-${draft.id}.${extension}`;
+  const localPath = path.join(DRAFT_MEDIA_DIR, `draft-${draft.id}-${Date.now()}.${extension}`);
+  await fs.writeFile(localPath, buffer, { mode: 0o600 });
+
+  const previous = draftMediaAttachment(draft);
+  if (previous?.localPath && previous.localPath !== localPath) await fs.rm(previous.localPath, { force: true }).catch(() => {});
+
+  const media = {
+    ...(draft.editor?.media || {}),
+    required: true,
+    attachment: {
+      localPath,
+      fileName,
+      mimeType,
+      size: buffer.length,
+      attachedAt: Date.now(),
+      provenance: 'operator_upload',
+    },
+  };
+  return saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
 }
 
 function confirmedFlags(body) {
@@ -2034,31 +2127,21 @@ export async function handleApi(req, res, requestUrl) {
       if (['original', 'quote', 'thread', 'repost', 'research', 'watch'].includes(action)) {
         if (action === 'quote' && candidate.source !== 'x') throw new Error('Quote posts require an X source.');
         ensureCandidateWorkflow(key);
-        const priorDraft = getDraftByCandidate(key);
-        const needsInitialGeneration = !priorDraft;
         routeCandidate(key, action, { actor: 'human' });
-        let draft = getDraftByCandidate(key);
-        let generated = null;
-        if (needsInitialGeneration && draft && ['original', 'quote', 'thread'].includes(action)) {
-          generated = await generateDraftCandidate(draft);
-          draft = generated.saved;
-        }
+        const draft = getDraftByCandidate(key);
         const queueItem = getQueueItemByCandidate(key);
         return sendSuccess({
           action,
-          generated: Boolean(generated),
-          draftId: (generated?.saved || draft)?.id ?? null,
+          generated: false,
+          draftId: draft?.id ?? null,
           queueItem: formatQueueItem(queueItem),
         });
       }
       if (action === 'reply') {
-        let draft = getDraftByCandidate(key);
-        const needsInitialGeneration = !draft;
         routeCandidate(key, 'reply', { actor: 'human' });
-        draft = getDraftByCandidate(key);
-        if (needsInitialGeneration && draft) draft = (await generateDraftCandidate(draft)).saved;
+        const draft = getDraftByCandidate(key);
         const queueItem = getQueueItemByCandidate(key);
-        return sendSuccess({ action, generated: needsInitialGeneration, draftId: draft?.id ?? null, queueItem: formatQueueItem(queueItem) });
+        return sendSuccess({ action, generated: false, draftId: draft?.id ?? null, queueItem: formatQueueItem(queueItem) });
       }
       if (action === 'ignore') {
         const queueItem = routeCandidate(key, 'ignore', { actor: 'human', reason: 'Operator ignored this candidate from Discover.' });
@@ -2245,6 +2328,47 @@ export async function handleApi(req, res, requestUrl) {
       return sendSuccess(payload);
     }
 
+    if (segments.length === 3 && segments[0] === 'drafts' && segments[2] === 'media') {
+      const draftId = Number(segments[1]);
+      const draft = getDraft(draftId);
+      if (!draft) throw new Error(`Draft not found: ${draftId}`);
+      const queueItem = getQueueItemByCandidate(draft.candidateKey);
+      const readOnly = draft.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
+
+      if (method === 'GET') {
+        const attachment = draftMediaAttachment(draft);
+        if (!attachment) return sendNotFound('Draft has no attached image.');
+        let image;
+        try { image = await fs.readFile(attachment.localPath); } catch { return sendNotFound('Attached image file is unavailable.'); }
+        res.writeHead(200, {
+          'content-type': attachment.mimeType || 'application/octet-stream',
+          'content-length': image.length,
+          'cache-control': 'no-store',
+          'content-disposition': `inline; filename="${String(attachment.fileName || 'image').replace(/["\\\r\n]/g, '_')}"`,
+        });
+        res.end(image);
+        return;
+      }
+
+      if (method === 'POST') {
+        if (readOnly) throw new Error('Published text is historical record and cannot accept a new attachment.');
+        if (queueItem?.status === 'approved' || queueItem?.humanApprovedAt) throw new Error('Reopen the approved draft before changing its attachment.');
+        const saved = await persistDraftMedia(draft, req);
+        return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
+      }
+
+      if (method === 'DELETE') {
+        if (readOnly) throw new Error('Published text is historical record and cannot remove its attachment.');
+        if (queueItem?.status === 'approved' || queueItem?.humanApprovedAt) throw new Error('Reopen the approved draft before changing its attachment.');
+        const attachment = draftMediaAttachment(draft);
+        if (attachment?.localPath) await fs.rm(attachment.localPath, { force: true }).catch(() => {});
+        const media = { ...(draft.editor?.media || {}) };
+        delete media.attachment;
+        const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+        return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
+      }
+    }
+
     if (method === 'POST' && segments.length === 3 && segments[0] === 'drafts' && segments[1] !== undefined) {
       const draftId = Number(segments[1]);
       const action = segments[2];
@@ -2271,6 +2395,7 @@ export async function handleApi(req, res, requestUrl) {
           gatesView: formatGates(analysis.gates),
           breakdown: analysis.breakdown || {},
           weightedLength: analysis.weightedLength ?? null,
+          growthPackaging: analysis.growthPackaging || null,
         });
       }
 
@@ -2334,6 +2459,19 @@ export async function handleApi(req, res, requestUrl) {
         queueItem: formatQueueItem(result.queueItem),
         growthFit: result.growthFit,
       });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'work' && segments[1] === 'routing-decision') {
+      const payload = await readBody();
+      const queueItem = payload.queueItemId == null ? null : getQueueItem(Number(payload.queueItemId));
+      const key = queueItem?.candidateKey || String(payload.key || '');
+      if (!key) throw new Error('Routing decision requires queueItemId or candidate key.');
+      const saved = setRoutingDecision(key, {
+        decision: String(payload.decision || ''),
+        reason: String(payload.reason || ''),
+        actor: 'human',
+      });
+      return sendSuccess({ queueItem: formatQueueItem(saved) });
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'queue') {
@@ -2676,6 +2814,12 @@ export async function handleApi(req, res, requestUrl) {
 
 function applyEditorPayload(current, payload) {
   const updated = { ...current };
+  if (payload.operatorContext !== undefined) {
+    updated.editor = {
+      ...(updated.editor || {}),
+      operatorContext: String(payload.operatorContext || '').trim().slice(0, 12_000),
+    };
+  }
   if (payload.body !== undefined) {
     updated.body = String(payload.body ?? '');
     updated.editor = { ...(updated.editor || {}), finalText: updated.body };

@@ -292,7 +292,7 @@ export function WritingApproachPanel({
     }, mutationCallbacks)
   }
 
-  const generationBlockedByChoice = select.isPending || localTouched
+  const generationBlockedByChoice = select.isPending || localTouched || (preview?.availability.selectable === true && !currentSelection)
 
   return (
     <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
@@ -526,7 +526,7 @@ export function WritingApproachPanel({
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 pt-4">
           <div className="text-xs text-slate-500">
             {generationBlockedByChoice
-              ? 'Save the writing choice before generating so the server has one unambiguous persisted selection.'
+              ? 'Save an explicit writing choice before generating so the server has one unambiguous persisted strategy state.'
               : currentSelection?.mode === 'apply'
                 ? `Next generation will read the persisted Apply choice: ${approachLabel(currentSelection)}.`
                 : currentSelection?.mode === 'suggest'

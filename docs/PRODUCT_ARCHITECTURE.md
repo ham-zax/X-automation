@@ -98,7 +98,7 @@ Current repository state:
 - Phases 1A, 1B, 1C, 1D, 2, 3, 4, 5, and 6 are implemented.
 - The shared AI runtime/provider layer is implemented: Direct API/OpenRouter/OpenAI-compatible endpoints, Codex, and installed AGY use the common structured boundary; AI Settings owns profile/default/role configuration and safe secret references.
 - `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode uses its documented SDK/server structured-output contract when available; OpenCode 2 remains separately capability-gated rather than being simulated through undocumented output parsing.
-- Media attachment/upload readiness remains separate incomplete work; required proof media must not be treated as attached when it is not.
+- Operator-attached JPEG/PNG/WebP/GIF media now has a real local readiness, preview, and authenticated publication path. Required proof media must still remain blocked until the attachment and media plan are complete; Writer-planned media does not create files by itself.
 
 Phase-6 editorial planning is current runtime behavior, but it remains advisory: human route selection, approval, reply send, repost completion, and publication authority stay separate.
 
@@ -111,7 +111,7 @@ Phase-6 editorial planning is current runtime behavior, but it remains advisory:
 | 1C | Implemented | Engage Next | ranked reply/follow-up opportunities with explicit human send |
 | 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus evidence-backed diagnostics |
 | 2 | Implemented | Content quality and profile proof | writer packet, drafts, hard gates, quality score, human editorial review |
-| 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication |
+| 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
 | 4 | Implemented | Measurement and experiments | 15m/1h/6h/24h outcomes, follower/relationship attribution context, experiment summaries |
 | 5 | Implemented | Learned strategy | suggested/accepted/retired bounded learned rules |
 | 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware ranked editorial recommendations, human selection provenance, writer evidence, outcome context |

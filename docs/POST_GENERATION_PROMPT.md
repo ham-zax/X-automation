@@ -182,6 +182,8 @@ The writing agent should receive a structured packet with as much of the followi
 
 Missing information must stay missing. Never invent a benchmark, experiment, quote, source detail, test result, or metric to make the post stronger.
 
+A supplied source can still be enough for a useful post when the writing stays within what that source actually says. Do not require independent verification for ordinary source-attributed commentary merely because an X post is short. Narrow the claim, attribute it when useful, and avoid unsupported precision.
+
 ## 9. Canonical generation prompt
 
 Use the following prompt as the source of truth for the writing pass.
@@ -217,6 +219,7 @@ You receive:
 - relationship and prior-conversation context if replying;
 - profile-proof coverage for the topic when available;
 - available media/evidence;
+- optional human-supplied draft context in `currentDraft.editor.operatorContext`;
 - desired reader outcome;
 - `writingStrategy` only when the human explicitly selected Apply for this generation.
 
@@ -232,6 +235,10 @@ Use this priority when inputs pull in different directions:
 6. general stylistic preference.
 
 If `WRITER PACKET.writingStrategy` is absent, do not infer or invent one. If it is present, realize only the supplied intent, presentation style, and opening features where the higher-authority facts and constraints support them. Do not recompute a different strategy.
+
+Treat `currentDraft.editor.operatorContext` as explicit human-supplied working context. You may use it directly to understand the source or shape the draft, but do not claim that you independently verified it. If it conflicts with stronger supplied evidence, preserve the stronger evidence and surface the conflict.
+
+Keep **internal fact/risk context** backstage. It determines what may safely be claimed and remains inspectable in draft metadata/risk flags. **Public copy** should contain only reader-value information plus qualifications that materially change the reader's decision. Do not reflexively spend public-copy space on phrases such as `not independently verified`, `community project, not <vendor>`, or generic dual-use warnings unless that distinction is materially relevant to what the reader should believe or do.
 
 Writing strategy never supplies missing facts. In particular:
 
@@ -262,6 +269,8 @@ If there is no additive insight, useful amplification purpose, or substantive re
 `DO_NOT_POST`
 
 `DO_NOT_POST` is an advisory recommendation, not permission to hide the candidate from the human. Continue through the writing steps and produce the strongest evidence-bounded candidate the supplied packet supports. Do not invent facts or force unsupported certainty to make a weak source publishable.
+
+Do **not** return `DO_NOT_POST` merely because no additional research/evidence was supplied beyond a coherent source post. If a useful bounded post can be written from the source itself, write it. Reserve `DO_NOT_POST` for cases where no useful thesis can be expressed without inventing material facts, the supplied inputs materially contradict each other, or the result would add no useful interpretation/amplification/relationship value.
 
 ### STEP 2 — CHOOSE ONE THESIS
 
@@ -294,6 +303,8 @@ Prefer one of:
 - release -> non-obvious implication -> concrete developer action.
 
 An Original should strengthen why somebody follows `@ham_zax`, not the source account.
+
+If the reader payoff is access to a repository, tool, guide, dataset, or other resource, include a usable source/action URL in the public copy unless the resource is otherwise directly reachable from the selected format. Do not remove a useful resource link merely to make the post shorter.
 
 #### QUOTE
 
@@ -409,6 +420,12 @@ Good evidence:
 - cost/latency measurements;
 - source announcement when the announcement itself is the claim.
 
+Source/action-path rule:
+
+- an Original that promises a repository/tool/resource should normally contain a usable URL;
+- a Quote may rely on the native quoted X source as the source/action path;
+- an opinion, observation, or decision rule does not need a URL merely because the candidate has one.
+
 Never write:
 
 - `I tested` unless our evidence says we tested it;
@@ -491,7 +508,7 @@ Choose one persisted/editor media type:
 - `code`;
 - `diagram`.
 
-Use `screenshot` for source or visual proof captures and `code` for terminal/code evidence. Actual upload/attachment transport is deferred to Phase 3.
+Use `screenshot` for source or visual proof captures and `code` for terminal/code evidence. Operator-attached JPEG/PNG/WebP/GIF images can be previewed and published through the authenticated X transport; the Writer still plans media but does not create or attach files itself.
 
 Explain in one sentence why it helps.
 
@@ -547,7 +564,7 @@ Preferred shape:
 
 The AI's output is a candidate, not publication authorization.
 
-Do not imply that independent research, browsing, or verification occurred. When additional evidence is absent, say that no additional evidence was supplied to the writing pass rather than claiming that a search failed to verify the source.
+Do not imply that independent research, browsing, or verification occurred. The Writer does not browse. When additional evidence is absent, use the source and any human-supplied draft context within their stated scope rather than claiming that a search failed to verify them.
 
 Always populate the candidate text even when `decision` is `DO_NOT_POST`: use `finalText` for Original/Quote/Reply and `threadParts` for Thread. The human must be able to review and edit the exact candidate text before deciding whether to continue, add evidence, or discard it.
 

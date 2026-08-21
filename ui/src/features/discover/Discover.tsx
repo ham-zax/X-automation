@@ -3,6 +3,7 @@ import {
   useDiscover,
   useDiscoverRefresh,
   useDiscoverTriage,
+  useRoutingDecision,
   type DiscoveredCandidate,
 } from '../../api/client'
 import { Loading, Error, Empty, Badge, Disclosure, Pending, formatDateTime, formatNumber } from '../../components/primitives'
@@ -89,6 +90,7 @@ function editorialPlanLabel(candidate: DiscoveredCandidate) {
 
 function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; index: number }) {
   const triage = useDiscoverTriage()
+  const routingDecision = useRoutingDecision()
   const pendingAction = triage.variables?.key === candidate.key && triage.isPending ? triage.variables.action : null
   const error = triage.isError && triage.variables?.key === candidate.key ? triage.error : null
 
@@ -123,7 +125,12 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
   const movement = sourceMomentumLine(candidate)
   const planLabel = editorialPlanLabel(candidate)
   const classificationNeedsRefresh = candidate.niche.status !== 'current'
-  const canProceed = candidate.growthFit.allowed
+  const ignoredByRecommendation = queue?.recommendedPipeline === 'ignore'
+  const ignoreOverrideCurrent = queue?.routingDecision?.accepted === true
+    && queue.routingDecision.actor === 'human'
+    && queue.routingDecision.recommendedPipeline === queue.recommendedPipeline
+    && queue.routingDecision.routingReason === queue.routingReason
+  const canProceed = candidate.growthFit.allowed && (!ignoredByRecommendation || ignoreOverrideCurrent)
 
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-6">
@@ -173,10 +180,44 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
           <strong>Rule-based route:</strong> {queue.recommendedPipelineLabel} <span className="text-slate-500">— {queue.routingReason}</span>
         </div>
       )}
+      {!completion && ignoredByRecommendation && queue && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {ignoreOverrideCurrent ? (
+            <>
+              <strong>Human decision: use anyway.</strong> {queue.routingDecision.reason}
+              <button
+                type="button"
+                onClick={() => routingDecision.mutate({ queueItemId: queue.id, decision: 'clear_override' })}
+                disabled={routingDecision.isPending}
+                className="ml-2 text-xs font-semibold underline disabled:opacity-50"
+              >
+                Clear decision
+              </button>
+            </>
+          ) : (
+            <>
+              <strong>Current recommendation: Ignore.</strong> Draft actions stay blocked until you explicitly override this recommendation.
+              <button
+                type="button"
+                onClick={() => {
+                  const reason = window.prompt('Why use this ignored opportunity anyway? This reason will be stored with the routing decision.')?.trim()
+                  if (reason) routingDecision.mutate({ queueItemId: queue.id, decision: 'use_anyway', reason })
+                }}
+                disabled={routingDecision.isPending}
+                className="ml-2 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 disabled:opacity-50"
+              >
+                Use anyway
+              </button>
+            </>
+          )}
+          <div className="mt-1 text-xs text-amber-800">This records human routing provenance only. It does not approve, schedule, or publish anything.</div>
+          {routingDecision.error && <div className="mt-1 text-xs text-red-700">{routingDecision.error.message}</div>}
+        </div>
+      )}
       {!completion && queue?.draftId && (
         <div className="mt-2">
           <a href={`#/draft/${queue.draftId}`} className="text-sm font-medium text-sky-700 hover:underline">
-            Continue draft · quality {queue.draftQualityScore ?? 0}/50 · approval threshold 40 →
+            Continue draft · writing quality {queue.draftQualityScore ?? 0}/50 · approval threshold 40 →
           </a>
         </div>
       )}
@@ -209,7 +250,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
       {pendingAction ? (
         <div className="mt-4">
           {pendingAction === 'original' || pendingAction === 'quote' || pendingAction === 'thread' || pendingAction === 'reply'
-            ? <Pending label="Generating draft…" />
+            ? <Pending label="Opening draft workspace…" />
             : pendingAction === 'discard'
               ? <Pending label="Discarding draft…" />
               : pendingAction === 'ignore'
@@ -242,7 +283,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
             disabled={!canProceed}
             className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
-            {skipped ? 'Reopen as original' : 'Draft original'}
+            {skipped ? 'Reopen as original' : 'Start original draft'}
           </button>
           {isX && (
             <button
@@ -250,7 +291,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
               disabled={!canProceed}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
-              {skipped ? 'Reopen as quote' : 'Draft quote'}
+              {skipped ? 'Reopen as quote' : 'Start quote draft'}
             </button>
           )}
           <button
@@ -258,7 +299,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
             disabled={!canProceed}
             className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
           >
-            {skipped ? 'Reopen as thread' : 'Draft thread'}
+            {skipped ? 'Reopen as thread' : 'Start thread draft'}
           </button>
           {isX && (
             <button
@@ -266,7 +307,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
               disabled={!canProceed}
               className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
             >
-              {skipped ? 'Reopen as reply' : 'Draft reply'}
+              {skipped ? 'Reopen as reply' : 'Start reply draft'}
             </button>
           )}
           <button

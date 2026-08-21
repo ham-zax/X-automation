@@ -619,7 +619,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - [x] Store the Phase-2 media plan inside draft editor metadata: required flag, type, reason, source/local evidence reference, and alt text.
 - [x] Normalize the persisted/editor media enum to `none`, `screenshot`, `chart`, `code`, `diagram`.
 - [x] Default to no media unless it proves or explains something the text cannot; required media blocks approval while readiness is unavailable.
-- [ ] Add actual attachment/media-ID persistence in a dedicated media-upload integration using the available transport; current Phase-3 distribution does not fake readiness or upload media.
+- [x] Add real operator attachment readiness and authenticated media upload through the existing transport; local draft attachment provenance is persisted and required media remains blocked until a complete plan plus attachment exists.
 
 **Acceptance criteria:**
 - An approved item can clearly explain why it needs media, and the publisher can attach an already prepared media ID without changing text workflow responsibility.
@@ -947,7 +947,7 @@ Implemented through the human-review boundary:
 - format-aware Original/Quote/Thread/Reply writing and structured writer packets;
 - deterministic hard gates plus the separate 50-point score;
 - persisted thread/editor/gate metadata and human factuality/evidence confirmation;
-- media-plan state with required media blocked until a real attachment/upload readiness path is implemented;
+- media-plan state plus real operator attachment/readiness; required media stays blocked until the attachment and complete plan exist;
 - recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
 ### Phase 3 — Main-feed distribution — IMPLEMENTED
@@ -962,7 +962,7 @@ Implemented:
 - one-winner atomic claim before enabled transport plus inspectable `published` / `failed` outcomes;
 - format-aware Original/Quote/Thread publication through the existing HTTP transport owner;
 - viral pre-emption without burst dumping, while Repost and engagement replies remain outside autonomous main-feed transport;
-- required media remains blocked because actual attachment/upload readiness is not implemented.
+- operator-attached image readiness and authenticated upload are implemented; required media remains blocked when the attachment or plan is incomplete.
 
 ### Phase 4 — Measurement + content/network experiments — IMPLEMENTED
 

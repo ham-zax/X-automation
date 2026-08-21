@@ -5,5 +5,6 @@ node_modules/
 .interesting-posts.json
 .x-research.sqlite*
 .viral-style-research/
+.x-media/
 .DS_Store
 dashboard.tailwind.generated.css
