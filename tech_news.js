@@ -219,6 +219,30 @@ async function createAuthenticatedXScraper() {
   return scraper;
 }
 
+async function setAuthenticatedXPageCookies(page) {
+  const cookies = [];
+  if (process.env.AUTH_TOKEN) {
+    cookies.push({
+      name: 'auth_token',
+      value: process.env.AUTH_TOKEN,
+      domain: '.x.com',
+      path: '/',
+      httpOnly: true,
+      secure: true,
+    });
+  }
+  if (process.env.CT0) {
+    cookies.push({
+      name: 'ct0',
+      value: process.env.CT0,
+      domain: '.x.com',
+      path: '/',
+      secure: true,
+    });
+  }
+  if (cookies.length) await page.setCookie(...cookies);
+}
+
 function normalizeTargetTweet(tweet, targetUsername) {
   const id = String(tweet?.id || '');
   const authorUsername = String(tweet?.username || targetUsername || '').replace(/^@/, '').toLowerCase();
@@ -304,6 +328,7 @@ export async function fetchXTargetResponses(usernames, ourTweetIds, {
   maxTargets = 20,
   responsesPerTarget = 10,
   since = null,
+  account = process.env.X_ACCOUNT || 'ham_zax',
 } = {}) {
   const normalizedTargets = normalizeTargetUsernames(usernames);
   const targets = normalizedTargets.slice(0, boundedTargetCount(maxTargets, 20, X_TARGET_MAX_TARGETS));
@@ -315,40 +340,77 @@ export async function fetchXTargetResponses(usernames, ourTweetIds, {
   const responses = [];
   const errors = [];
   const seenTweetIds = new Set();
-  if (!targets.length || !parentIds.length) {
+  if (!parentIds.length) {
     return { responses, errors, bounds: { targets: targets.length, parents: parentIds.length, responsesPerTarget: responseLimit }, filters: { since: sinceTimestamp } };
   }
 
-  const scraper = await createAuthenticatedXScraper();
-  const rawPerTarget = Math.min(50, Math.max(responseLimit * 4, 20));
-  for (const targetUsername of targets) {
-    try {
-      let accepted = 0;
-      for await (const tweet of scraper.getTweetsAndReplies(targetUsername, rawPerTarget)) {
-        const response = normalizeTargetTweet(tweet, targetUsername);
-        if (response.isRepost) continue;
-        const replyParent = response.inReplyToStatusId && parentSet.has(response.inReplyToStatusId)
-          ? response.inReplyToStatusId
-          : null;
-        const quoteParent = response.isQuote && response.quotedStatusId && parentSet.has(response.quotedStatusId)
-          ? response.quotedStatusId
-          : null;
-        const parentOurTweetId = replyParent || quoteParent;
+  const cleanAccount = String(account || '').trim().replace(/^@/, '').toLowerCase();
+  if (!cleanAccount) throw new Error('X account username is required to discover direct responses.');
+  const targetSet = targets.length ? new Set(targets) : null;
+  const searchLimit = Math.max(20, responseLimit * Math.max(3, targets.length || 1));
+  const search = await fetchXSearchPosts(`to:${cleanAccount} -from:${cleanAccount}`, searchLimit, 'live', 2);
+  if (search.error) {
+    errors.push({ targetUsername: cleanAccount, error: search.error });
+    return {
+      responses,
+      errors,
+      bounds: { targets: targets.length, parents: parentIds.length, responsesPerTarget: responseLimit, searchLimit },
+      filters: { since: sinceTimestamp, account: cleanAccount },
+    };
+  }
+
+  const candidates = search.posts.filter((post) => {
+    const username = String(post.username || post.author || '').replace(/^@/, '').toLowerCase();
+    if (!username || (targetSet && !targetSet.has(username))) return false;
+    if (sinceTimestamp != null && (!post.timestamp || post.timestamp < sinceTimestamp)) return false;
+    return true;
+  });
+
+  const browser = await createBrowser({ headless: true });
+  try {
+    const page = await createPage(browser);
+    await setAuthenticatedXPageCookies(page);
+    const acceptedByTarget = new Map();
+    for (const post of candidates) {
+      const targetUsername = String(post.username || post.author || '').replace(/^@/, '').toLowerCase();
+      if ((acceptedByTarget.get(targetUsername) || 0) >= responseLimit) continue;
+      const responseId = String(post.id || post.url?.match(/\/status\/(\d+)/)?.[1] || '');
+      if (!responseId || seenTweetIds.has(responseId)) continue;
+      try {
+        await page.goto(post.url, { waitUntil: 'domcontentloaded', timeout: 45_000 });
+        await page.waitForSelector('article[data-testid="tweet"]', { timeout: 10_000 }).catch(() => {});
+        const parentOurTweetId = await page.evaluate(({ focalId, parentIds: allowedParents }) => {
+          const parentSet = new Set(allowedParents);
+          const rows = [...document.querySelectorAll('article[data-testid="tweet"]')].map((article) => {
+            const href = article.querySelector('time')?.closest('a[href*="/status/"]')?.getAttribute('href')
+              || article.querySelector('a[href*="/status/"]')?.getAttribute('href')
+              || '';
+            return { id: href.match(/\/status\/(\d+)/)?.[1] || '' };
+          });
+          const focalIndex = rows.findIndex((row) => row.id === focalId);
+          if (focalIndex <= 0) return null;
+          for (let index = focalIndex - 1; index >= 0; index--) {
+            if (parentSet.has(rows[index].id)) return rows[index].id;
+          }
+          return null;
+        }, { focalId: responseId, parentIds });
         if (!parentOurTweetId) continue;
-        if (sinceTimestamp != null && (!response.timestamp || response.timestamp < sinceTimestamp)) continue;
-        if (response.id && seenTweetIds.has(response.id)) continue;
-        if (response.id) seenTweetIds.add(response.id);
-        responses.push({
-          ...response,
-          responseType: replyParent ? 'reply' : 'quote',
-          parentOurTweetId,
-        });
-        accepted++;
-        if (accepted >= responseLimit) break;
+        const response = normalizeTargetTweet({
+          ...post,
+          id: responseId,
+          username: targetUsername,
+          permanentUrl: post.url,
+          isReply: true,
+        }, targetUsername);
+        seenTweetIds.add(responseId);
+        responses.push({ ...response, responseType: 'reply', parentOurTweetId });
+        acceptedByTarget.set(targetUsername, (acceptedByTarget.get(targetUsername) || 0) + 1);
+      } catch (error) {
+        errors.push({ targetUsername, error: error.message });
       }
-    } catch (error) {
-      errors.push({ targetUsername, error: error.message });
     }
+  } finally {
+    await browser.close().catch(() => {});
   }
 
   return {
@@ -358,10 +420,10 @@ export async function fetchXTargetResponses(usernames, ourTweetIds, {
       targets: targets.length,
       parents: parentIds.length,
       responsesPerTarget: responseLimit,
-      rawPerTarget,
+      searchLimit,
       truncatedTargets: Math.max(0, normalizedTargets.length - targets.length),
     },
-    filters: { since: sinceTimestamp },
+    filters: { since: sinceTimestamp, account: cleanAccount },
   };
 }
 
@@ -598,24 +660,7 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
   const browser = await createBrowser({ headless: true });
   try {
     const page = await createPage(browser);
-    const cookies = [{
-      name: 'auth_token',
-      value: process.env.AUTH_TOKEN,
-      domain: '.x.com',
-      path: '/',
-      httpOnly: true,
-      secure: true,
-    }];
-    if (process.env.CT0) {
-      cookies.push({
-        name: 'ct0',
-        value: process.env.CT0,
-        domain: '.x.com',
-        path: '/',
-        secure: true,
-      });
-    }
-    await page.setCookie(...cookies);
+    await setAuthenticatedXPageCookies(page);
     const queries = Array.isArray(query) ? query : [query];
     const allCollected = new Map();
     const perQueryLimit = Math.max(10, Math.ceil(limit / queries.length));
@@ -676,6 +721,8 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
 
     const posts = [...allCollected.values()].slice(0, limit).map((post) => ({
       source: 'x',
+      id: post.id,
+      username: post.username,
       author: `@${post.username}`,
       text: post.text.replace(/\s+/g, ' ').trim(),
       likes: post.likes,

@@ -42,8 +42,7 @@ export const AUTONOMOUS_REPLY_TONES = Object.freeze(['direct', 'warm', 'conversa
 export const AUTONOMOUS_REPLY_WRITE_TRANSPORT = 'private_web_graphql';
 export const AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY = false;
 
-const POLL_MINUTES = Math.max(1, Number(process.env.POLL_MINUTES || 30));
-export const AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES = Math.max(5, POLL_MINUTES);
+export const AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES = 5;
 const AUTONOMOUS_COLD_PRIORITY_MIN = 60;
 const AUTONOMOUS_ACTIVE_PRIORITY_MIN = 40;
 const HUMOR_TONES = new Set(['light_humor', 'dry_wit']);

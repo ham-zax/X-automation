@@ -403,54 +403,64 @@ export function rankEngagementOpportunities(opportunities = [], { now, learnedRu
     .map(({ result }, index) => ({ ...result, rank: index + 1 }));
 }
 
-function contributionTopic(candidate = {}) {
-  const niche = candidate.niche || {};
-  const explicit = niche.matches?.[0] || niche.tags?.[0];
-  if (explicit) return String(explicit).replaceAll('_', ' ');
-  return String(candidate.text || '').replace(/https?:\/\/\S+/g, '').trim().split(/\s+/).slice(0, 6).join(' ') || 'the technical point';
-}
-
 export function proposeEngagementContribution(candidate = {}, { response = false, directQuestion = false } = {}) {
   const text = String(candidate.text || '');
-  const topic = contributionTopic(candidate);
   if (response) {
     if (directQuestion) {
       return {
         archetype: 'implementation_detail',
-        summary: `Answer the target's direct question about ${topic} with one concrete implementation detail or explicitly verified fact.`,
+        summary: 'Answer the target\'s direct question with one concrete implementation detail or explicitly verified fact.',
         contextAdjustment: -15,
       };
     }
     return {
       archetype: 'synthesis',
-      summary: `Connect the target's response about ${topic} to the prior thread and state one new technical implication.`,
+      summary: 'Acknowledge the target\'s actual point, connect it to the prior thread, and add one genuinely new technical implication or useful follow-up.',
     };
   }
-  if (/\b(?:benchmark|latency|throughput|performance|measured|result(?:s)?)\b/i.test(text)) {
+  const measurementClaim = /\b(?:benchmark|latency|throughput|performance|measured|result(?:s)?)\b/i.test(text)
+    && /(?:\bbenchmark\b|\bmeasured\b|\bresults?\s*:|\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?|%|x\b|tokens?|rps|qps|ops|mb|gb)\b)/i.test(text);
+  if (measurementClaim) {
     return {
       archetype: 'caveat_or_edge_case',
-      summary: `Probe the workload, version, or environment assumptions behind the source's ${topic} result before generalizing it.`,
+      summary: 'Probe the workload, version, or environment assumptions behind the source\'s actual measured result before generalizing it.',
+      contextAdjustment: -10,
+    };
+  }
+  if (/(?:\$\s?\d|\b(?:price|pricing|cost|costs|spent|spend|spending|credits?|budget)\b)/i.test(text)) {
+    return {
+      archetype: 'informed_question',
+      summary: 'Ask a precise question about the cost, usage, or budgeting assumption the source is actually making instead of changing the subject to a generic integration question.',
       contextAdjustment: -10,
     };
   }
   if (/\b(?:compare|comparison|vs\.?|versus|trade-?off|better|worse)\b/i.test(text)) {
     return {
       archetype: 'comparison',
-      summary: `Compare the ${topic} trade-off on one concrete developer constraint such as latency, cost, reliability, or compatibility.`,
+      summary: 'Compare the source\'s stated trade-off on one concrete developer constraint that is actually relevant to the comparison.',
       contextAdjustment: -10,
     };
   }
-  if (/\b(?:api|sdk|cli|config|configuration|install|deploy|repository|repo|code|agent|model)\b/i.test(text)) {
+  if (/(?:github\.com|\b(?:repository|repo|resource|guide|bookmark|list of|websites?)\b)/i.test(text)) {
     return {
       archetype: 'informed_question',
-      summary: `Ask which concrete integration constraint around ${topic} mattered most in the described workflow, and why.`,
+      summary: 'Ask what concrete task made the resource useful, or what important boundary the recommendation leaves out; do not merely repeat the recommendation.',
+      contextAdjustment: -10,
+    };
+  }
+  const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent|model|codex|claude|cursor)\b/i.test(text);
+  const workflowAction = /\b(?:use|using|used|run|running|setup|workflow|integrat\w*|ship\w*|build\w*|adopt\w*|migrat\w*|release\w*|launch\w*)\b/i.test(text);
+  if (workflowTool && workflowAction) {
+    return {
+      archetype: 'informed_question',
+      summary: 'Ask a precise follow-up about one workflow or integration trade-off that the source actually describes.',
       contextAdjustment: -10,
     };
   }
   if (text.includes('?')) {
     return {
       archetype: 'informed_question',
-      summary: `Ask a precise follow-up about the unresolved ${topic} constraint instead of offering generic agreement.`,
+      summary: 'Deepen the source\'s actual question with one concrete technical constraint or answerable follow-up instead of generic agreement.',
       contextAdjustment: -10,
     };
   }
@@ -492,14 +502,7 @@ export async function refreshEngagementOpportunities({
     import('./health.js'),
   ]);
   const coldProfiles = store.listRelationshipProfiles({ minTargetScore, limit: Math.max(1, Math.min(50, Number(targetLimit || 12))) });
-  const allResponseProfiles = store.listRelationshipProfiles({ minTargetScore: 0, limit: 1000 });
-  const responseProfilesByUsername = new Map(allResponseProfiles.map((profile) => [profile.username, profile]));
   const ourPosts = store.listRecentOurConversationPosts({ limit: 100 });
-  const recentResponseUsernames = ourPosts
-    .map((item) => sourceUsername(store.getCandidate(item.candidateKey) || {}))
-    .filter((username) => responseProfilesByUsername.has(username));
-  const responseUsernames = [...new Set([...recentResponseUsernames, ...allResponseProfiles.map((profile) => profile.username)])].slice(0, 20);
-  const responseProfiles = responseUsernames.map((username) => responseProfilesByUsername.get(username)).filter(Boolean);
   const parentById = new Map(ourPosts.map((item) => [item.tweetId, item]));
   const seenItemIds = new Set();
   const createdOrRefreshed = [];
@@ -662,17 +665,16 @@ export async function refreshEngagementOpportunities({
     return item;
   };
 
-  if (ourPosts.length && responseProfiles.length) {
+  if (ourPosts.length) {
     const responseRead = await tech.fetchXTargetResponses(
-      responseProfiles.map((profile) => profile.username),
+      [],
       ourPosts.map((item) => item.tweetId),
-      { maxTargets: responseProfiles.length, responsesPerTarget: 10, since: now - responseSinceHours * 3_600_000 },
+      { responsesPerTarget: 10, since: now - responseSinceHours * 3_600_000 },
     );
     errors.push(...responseRead.errors.map((item) => `response @${item.targetUsername}: ${item.error}`));
     for (const response of responseRead.responses) {
       const parent = parentById.get(response.parentOurTweetId);
       let profile = store.getRelationshipProfile(response.targetUsername);
-      if (!profile) continue;
       const candidate = candidateFromPost(response, profile, true);
       const alreadyRecorded = store.listRelationshipEvents(response.targetUsername, { limit: 1000 })
         .some((event) => String(event.metadata?.responseTweetId || '') === String(response.id));

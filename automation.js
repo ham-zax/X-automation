@@ -1,11 +1,15 @@
 import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
-import { refreshAllSourceSnapshots } from './source_refresh.js';
+import { refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
 import { publishMainFeedHttp } from './x_http.js';
 import { refreshEngagementOpportunities } from './engagement.js';
-import { getAutonomousReplyGrant, runAutonomousReplyCycle } from './autonomous_reply.js';
+import {
+  AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
+  getAutonomousReplyGrant,
+  runAutonomousReplyCycle,
+} from './autonomous_reply.js';
 import { rankMainFeedItems } from './scheduler.js';
 import {
   claimQueueItem,
@@ -26,6 +30,10 @@ import {
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
+const REPLY_POLL_MINUTES = Math.max(
+  AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
+  Number(process.env.REPLY_POLL_MINUTES || AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES),
+);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 export const AUTO_EDITORIAL_PLAN_REFRESH = String(process.env.AUTO_EDITORIAL_PLAN_REFRESH || 'false').toLowerCase() === 'true';
 
@@ -157,6 +165,12 @@ async function refreshResearch() {
   };
 }
 
+async function refreshReplySources() {
+  const results = [];
+  for (const kind of ['x_latest', 'x_momentum']) results.push(await refreshSourceSnapshot(kind));
+  return results.filter((result) => result.error).map((result) => `${result.kind}: ${result.error}`);
+}
+
 export async function refreshBackgroundEditorialPlan({
   enabled = AUTO_EDITORIAL_PLAN_REFRESH,
   planner = refreshEditorialPlan,
@@ -284,6 +298,46 @@ export async function processMainFeedQueue({
   return { action: 'posted', decision, decisions, queueItem, tweetId: output.tweetId, url: output.url || null };
 }
 
+export async function runEngagementAutonomousCycle({ refreshSources = true, researchErrors = [] } = {}) {
+  const sourceErrors = [...researchErrors];
+  if (refreshSources) sourceErrors.push(...await refreshReplySources());
+
+  let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [], refreshFailed: false };
+  try {
+    engagement = await refreshEngagementOpportunities();
+    const nextEngagement = engagement.items[0];
+    if (nextEngagement) {
+      console.log(`[automation] Engage Next leader: ${Math.round(nextEngagement.priority)}/100 @${nextEngagement.targetUsername} ${nextEngagement.engagementKind}.`);
+    } else {
+      console.log('[automation] No actionable Engage Next items this cycle.');
+    }
+    if (engagement.errors.length) console.log(`[automation] Partial engagement read errors: ${engagement.errors.join(' | ')}`);
+  } catch (error) {
+    engagement.errors = [error.message];
+    engagement.refreshFailed = true;
+    console.log(`[automation] Engagement refresh failed: ${error.message}`);
+  }
+
+  let autonomousReplies = { active: false, reason: getAutonomousReplyGrant().state, decisions: [] };
+  try {
+    autonomousReplies = await runAutonomousReplyCycle({
+      refreshErrors: [...sourceErrors, ...engagement.errors],
+      refreshFailed: engagement.refreshFailed,
+    });
+    if (autonomousReplies.active && autonomousReplies.due !== false) {
+      const counts = autonomousReplies.runtime?.lastDecisionCounts || { sent: 0, review: 0, skipped: 0 };
+      console.log(`[automation] Autonomous replies ${autonomousReplies.grant.mode}: ${counts.sent} send candidate(s), ${counts.review} review, ${counts.skipped} skipped.`);
+    } else if (autonomousReplies.active) {
+      console.log(`[automation] Autonomous replies running; next evaluation ${autonomousReplies.runtime?.nextExpectedRefreshAt ? new Date(autonomousReplies.runtime.nextExpectedRefreshAt).toLocaleString() : 'on the next eligible refresh'}.`);
+    }
+  } catch (error) {
+    autonomousReplies = { active: true, error: error.message, decisions: [] };
+    console.log(`[automation] Autonomous reply cycle failed without stopping the daemon: ${error.message}`);
+  }
+
+  return { engagement, autonomousReplies, sourceErrors };
+}
+
 export async function runCycle() {
   let measurements = { due: 0, captured: [], skipped: [], error: null };
   try {
@@ -309,38 +363,10 @@ export async function runCycle() {
   }
   if (research.errors.length) console.log(`[automation] Partial research errors: ${research.errors.join(' | ')}`);
 
-  let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [], refreshFailed: false };
-  try {
-    engagement = await refreshEngagementOpportunities();
-    const nextEngagement = engagement.items[0];
-    if (nextEngagement) {
-      console.log(`[automation] Engage Next leader: ${Math.round(nextEngagement.priority)}/100 @${nextEngagement.targetUsername} ${nextEngagement.engagementKind}.`);
-    } else {
-      console.log('[automation] No actionable Engage Next items this cycle.');
-    }
-    if (engagement.errors.length) console.log(`[automation] Partial engagement read errors: ${engagement.errors.join(' | ')}`);
-  } catch (error) {
-    engagement.errors = [error.message];
-    engagement.refreshFailed = true;
-    console.log(`[automation] Engagement refresh failed: ${error.message}`);
-  }
-
-  let autonomousReplies = { active: false, reason: getAutonomousReplyGrant().state, decisions: [] };
-  try {
-    autonomousReplies = await runAutonomousReplyCycle({
-      refreshErrors: [...research.errors, ...engagement.errors],
-      refreshFailed: engagement.refreshFailed,
-    });
-    if (autonomousReplies.active && autonomousReplies.due !== false) {
-      const counts = autonomousReplies.runtime?.lastDecisionCounts || { sent: 0, review: 0, skipped: 0 };
-      console.log(`[automation] Autonomous replies ${autonomousReplies.grant.mode}: ${counts.sent} send candidate(s), ${counts.review} review, ${counts.skipped} skipped.`);
-    } else if (autonomousReplies.active) {
-      console.log(`[automation] Autonomous replies running; next evaluation ${autonomousReplies.runtime?.nextExpectedRefreshAt ? new Date(autonomousReplies.runtime.nextExpectedRefreshAt).toLocaleString() : 'on the next eligible refresh'}.`);
-    }
-  } catch (error) {
-    autonomousReplies = { active: true, error: error.message, decisions: [] };
-    console.log(`[automation] Autonomous reply cycle failed without stopping the daemon: ${error.message}`);
-  }
+  const { engagement, autonomousReplies } = await runEngagementAutonomousCycle({
+    refreshSources: false,
+    researchErrors: research.errors,
+  });
 
   const mainFeed = await processMainFeedQueue();
   let publicationBaseline = null;
@@ -394,14 +420,22 @@ async function main() {
     return;
   }
 
-  console.log(`[automation] Started. Poll=${POLL_MINUTES}m, scheduler=queue-aware, auto-post=${AUTO_POST}.`);
+  console.log(`[automation] Started. Full poll=${POLL_MINUTES}m, reply poll=${REPLY_POLL_MINUTES}m, scheduler=queue-aware, auto-post=${AUTO_POST}.`);
+  let nextFullCycleAt = 0;
   while (true) {
+    const now = Date.now();
     try {
-      await runCycle();
+      if (now >= nextFullCycleAt) {
+        nextFullCycleAt = now + POLL_MINUTES * 60_000;
+        await runCycle();
+      } else {
+        await runEngagementAutonomousCycle({ refreshSources: true });
+      }
     } catch (error) {
       console.error(`[automation] Cycle failed: ${error.message}`);
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_MINUTES * 60_000));
+    const untilFullCycle = Math.max(1_000, nextFullCycleAt - Date.now());
+    await new Promise((resolve) => setTimeout(resolve, Math.min(REPLY_POLL_MINUTES * 60_000, untilFullCycle)));
   }
 }
 
