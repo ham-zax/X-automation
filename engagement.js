@@ -493,6 +493,7 @@ export async function refreshEngagementOpportunities({
   minTargetScore = 35,
   targetSinceHours = 24,
   responseSinceHours = 72,
+  refreshTargetTimelines = true,
 } = {}) {
   const [store, tech, opportunity, strategy, health] = await Promise.all([
     import('./store.js'),
@@ -501,7 +502,9 @@ export async function refreshEngagementOpportunities({
     import('./strategy.js'),
     import('./health.js'),
   ]);
-  const coldProfiles = store.listRelationshipProfiles({ minTargetScore, limit: Math.max(1, Math.min(50, Number(targetLimit || 12))) });
+  const coldProfiles = refreshTargetTimelines
+    ? store.listRelationshipProfiles({ minTargetScore, limit: Math.max(1, Math.min(50, Number(targetLimit || 12))) })
+    : [];
   const ourPosts = store.listRecentOurConversationPosts({ limit: 100 });
   const parentById = new Map(ourPosts.map((item) => [item.tweetId, item]));
   const seenItemIds = new Set();

@@ -298,13 +298,17 @@ export async function processMainFeedQueue({
   return { action: 'posted', decision, decisions, queueItem, tweetId: output.tweetId, url: output.url || null };
 }
 
-export async function runEngagementAutonomousCycle({ refreshSources = true, researchErrors = [] } = {}) {
+export async function runEngagementAutonomousCycle({
+  refreshSources = true,
+  refreshTargetTimelines = true,
+  researchErrors = [],
+} = {}) {
   const sourceErrors = [...researchErrors];
   if (refreshSources) sourceErrors.push(...await refreshReplySources());
 
   let engagement = { items: [], activeConversations: [], newOpportunities: [], refreshed: 0, rejected: 0, expired: 0, errors: [], refreshFailed: false };
   try {
-    engagement = await refreshEngagementOpportunities();
+    engagement = await refreshEngagementOpportunities({ refreshTargetTimelines });
     const nextEngagement = engagement.items[0];
     if (nextEngagement) {
       console.log(`[automation] Engage Next leader: ${Math.round(nextEngagement.priority)}/100 @${nextEngagement.targetUsername} ${nextEngagement.engagementKind}.`);
@@ -365,6 +369,7 @@ export async function runCycle() {
 
   const { engagement, autonomousReplies } = await runEngagementAutonomousCycle({
     refreshSources: false,
+    refreshTargetTimelines: true,
     researchErrors: research.errors,
   });
 
@@ -429,7 +434,10 @@ async function main() {
         nextFullCycleAt = now + POLL_MINUTES * 60_000;
         await runCycle();
       } else {
-        await runEngagementAutonomousCycle({ refreshSources: true });
+        await runEngagementAutonomousCycle({
+          refreshSources: true,
+          refreshTargetTimelines: false,
+        });
       }
     } catch (error) {
       console.error(`[automation] Cycle failed: ${error.message}`);
