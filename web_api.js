@@ -1922,7 +1922,7 @@ export async function handleApi(req, res, requestUrl) {
           eyebrow: 'Account limitation',
           title: 'Some actions are temporarily limited',
           body: accountHealth.health.explanation || 'Observed account evidence is limiting some actions until it is resolved.',
-          href: '#/results',
+          href: '/legacy?source=health',
           action: 'Review account status',
           tone: 'danger',
         });

@@ -47,7 +47,6 @@ import {
   getExperimentSummary,
   getLearningOverview,
   getLatestEditorialPlan,
-  getNextReadyDraft,
   getMainFeedScheduleItem,
   getNewFollowerQuality,
   getNicheProfile,
@@ -579,7 +578,6 @@ async function main() {
 
   if (command === 'queue') {
     result({
-      next: getNextReadyDraft(Date.now(), Number(payload.minScore || 40)),
       drafts: listDrafts({ status: payload.draftStatus, limit: Number(payload.limit || 20) }),
       queueItems: listQueueItems({ status: payload.status, pipeline: payload.pipeline, lane: payload.lane, limit: Number(payload.limit || 20) }),
     });

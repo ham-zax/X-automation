@@ -3617,14 +3617,6 @@ export function listRecentPublishedContent({ kind = 'main', limit = 20, excludeC
   }).filter((item) => item.text.trim());
 }
 
-export function getNextReadyDraft(now = Date.now(), minScore = 40) {
-  return decodeDraft(db.prepare(`SELECT d.* FROM drafts d
-    LEFT JOIN queue_items q ON q.candidate_key = d.candidate_key
-    WHERE d.status = 'ready' AND d.quality_score >= ? AND (d.scheduled_at IS NULL OR d.scheduled_at <= ?)
-      AND (q.lane IS NULL OR q.lane = 'main')
-    ORDER BY COALESCE(d.scheduled_at, d.updated_at) ASC LIMIT 1`).get(minScore, now));
-}
-
 export function setAppState(key, value) {
   db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, String(value));

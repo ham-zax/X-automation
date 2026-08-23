@@ -23,17 +23,16 @@ const HOST = String(process.env.WEB_HOST || '0.0.0.0');
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const UI_DIST = path.resolve('ui/dist');
 
-const LEGACY_SOURCES = Object.freeze(['advanced', 'relationships', 'health']);
+const LEGACY_SOURCES = Object.freeze(['relationships', 'health']);
 
 // React client routes for the migrated journeys.
 const PRIMARY_NAV = [
-  ['/', 'Today'],
+  ['/#/today', 'Today'],
   ['/#/discover', 'Discover'],
   ['/#/conversations', 'Conversations'],
-  ['/#/create', 'Create'],
+  ['/#/create', 'Posts'],
   ['/#/results', 'Results'],
-  ['/#/improve', 'Improve'],
-  ['/legacy?source=advanced', 'Advanced'],
+  ['/#/learn', 'Learn'],
 ];
 
 function escapeHtml(value) {
@@ -160,31 +159,11 @@ function accountHealthView() {
     <form method="post" action="/health/observe" class="card border-0 shadow-sm mb-4"><div class="card-body"><h3 class="h5">Record observed evidence</h3><div class="row g-2"><div class="col-md-4"><label class="form-label small">Type</label><select class="form-select form-select-sm" name="type">${manualTypes.map((type) => `<option value="${escapeHtml(type)}">${escapeHtml(relationshipLabel(type))}</option>`).join('')}</select></div><div class="col-md-2"><label class="form-label small">Severity</label><select class="form-select form-select-sm" name="severity"><option>info</option><option>warning</option><option>constraint</option></select></div><div class="col-md-3"><label class="form-label small">Source</label><input class="form-control form-control-sm" name="source" required></div><div class="col-md-3"><label class="form-label small">Source ref / path</label><input class="form-control form-control-sm" name="sourceRef" required></div><div class="col-md-4"><label class="form-label small">Label/name when applicable</label><input class="form-control form-control-sm" name="label"></div><div class="col-md-8"><label class="form-label small">Operator note</label><input class="form-control form-control-sm" name="note"></div></div><button class="btn btn-dark btn-sm mt-3" type="submit">Record observation</button><div class="small text-secondary mt-2">Only directly observed evidence belongs here; missing reach, activity, timing, or guessed shadowban/bot/reputation theories are not observations.</div></div></form>`;
 }
 
-function advancedView() {
-  const links = [
-    ['relationships', 'Relationships', 'Strategic relationship profiles, stages, and TargetScore detail.'],
-    ['health', 'Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],
-  ];
-  const reactAreas = [
-    ['/', 'Today', 'What deserves your attention right now.'],
-    ['/#/discover', 'Discover', 'Find useful things worth talking about.'],
-    ['/#/conversations', 'Conversations', 'Continue useful discussions with explicit send control.'],
-    ['/#/create', 'Create', 'The full create lifecycle: idea to published.'],
-    ['/#/results', 'Results', 'Outcomes, account status, and audience quality.'],
-    ['/#/improve', 'Improve', 'Tests and what we have learned.'],
-  ];
-  return `<div class="alert alert-light border mb-4">Daily work lives in the new workspace. These detailed diagnostic views remain available for inspection and advanced operation.</div>
-    <div class="row g-3 mb-4">${reactAreas.map(([href, title, body]) => `<div class="col-md-4"><a class="card border-0 shadow-sm h-100 text-decoration-none text-dark" href="${escapeHtml(href)}"><div class="card-body"><div class="fw-semibold mb-1">${escapeHtml(title)}</div><div class="small text-secondary">${escapeHtml(body)}</div></div></a></div>`).join('')}</div>
-    <h2 class="h5 mb-3">Legacy diagnostics</h2>
-    <div class="row g-3">${links.map(([source, title, body]) => `<div class="col-md-6"><a class="card border-0 shadow-sm h-100 text-decoration-none text-dark" href="/legacy?source=${escapeHtml(source)}"><div class="card-body"><div class="fw-semibold mb-1">${escapeHtml(title)}</div><div class="small text-secondary">${escapeHtml(body)}</div></div></a></div>`).join('')}</div>`;
-}
-
 function sectionMeta(source) {
   return {
-    advanced: ['Advanced', 'Detailed system views and diagnostics for when you need them.'],
     relationships: ['People & relationships', 'Strategic relationship profiles, stages, and relationship-fit detail.'],
     health: ['Account status', 'Health evidence, repetition, saturation, and visibility provenance.'],
-  }[source] || ['Advanced', 'Detailed system views and diagnostics.'];
+  }[source] || ['Settings', 'Detailed system views and diagnostics.'];
 }
 
 function secondaryNavigation(activeSource) {
@@ -198,7 +177,7 @@ function secondaryNavigation(activeSource) {
 }
 
 function primaryNavigation() {
-  return PRIMARY_NAV.map(([href, label]) => `<a data-active="${label === 'Advanced' ? 'true' : 'false'}" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`).join('');
+  return PRIMARY_NAV.map(([href, label]) => `<a data-active="false" href="${escapeHtml(href)}">${escapeHtml(label)}</a>`).join('');
 }
 
 async function renderPage(activeSource, relationshipClass = '', relationshipStage = '') {
@@ -214,15 +193,12 @@ async function renderPage(activeSource, relationshipClass = '', relationshipStag
     const summary = getAccountHealthSummary();
     const stateCopy = summary.health.state === 'healthy' ? 'Everything looks normal.' : summary.health.state === 'watch' ? 'Something deserves attention.' : 'Some actions are temporarily limited.';
     decision = `${stateCopy} ${summary.interactionCounts.meaningfulInteractions7d} useful interactions in the last 7 days.`;
-  } else {
-    decision = 'Detailed system views and diagnostics.';
   }
 
   const [sectionTitle, sectionDescription] = sectionMeta(activeSource);
-  let content;
-  if (activeSource === 'relationships') content = relationshipsView(relationshipClass, relationshipStage);
-  else if (activeSource === 'health') content = accountHealthView();
-  else content = advancedView();
+  const content = activeSource === 'relationships'
+    ? relationshipsView(relationshipClass, relationshipStage)
+    : accountHealthView();
 
   const nav = primaryNavigation();
   const secondaryNav = secondaryNavigation(activeSource);
@@ -235,7 +211,7 @@ async function renderPage(activeSource, relationshipClass = '', relationshipStag
     <header class="app-topbar"><div class="app-container py-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="min-w-0"><div class="app-kicker">Growth workspace</div><div class="app-title">${escapeHtml(sectionTitle)}</div><div class="app-subtitle">${escapeHtml(sectionDescription)} ${escapeHtml(decision)}</div></div>
-        <div class="flex flex-wrap items-center gap-2"><a class="btn btn-outline-dark btn-sm" href="/">Open workspace</a><span class="rounded-full px-3 py-1 text-xs font-semibold ${AUTO_POST ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'}">Automation ${AUTO_POST ? 'on' : 'off'}</span>${nextScheduled ? `<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Next post ${nextScheduled.recommendedAt <= scheduleNow ? 'ready now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
+        <div class="flex flex-wrap items-center gap-2"><a class="btn btn-outline-dark btn-sm" href="/">Open workspace</a><a class="btn btn-dark btn-sm" href="/#/settings">Settings</a><span class="rounded-full px-3 py-1 text-xs font-semibold ${AUTO_POST ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'}">Automation ${AUTO_POST ? 'on' : 'off'}</span>${nextScheduled ? `<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800">Next post ${nextScheduled.recommendedAt <= scheduleNow ? 'ready now' : escapeHtml(new Date(nextScheduled.recommendedAt).toLocaleString())}</span>` : ''}</div>
       </div>
       <nav aria-label="Primary" class="app-nav mt-4">${nav}</nav>
       ${secondaryNav || ''}
@@ -329,6 +305,11 @@ const server = http.createServer(async (req, res) => {
     // React client: the migrated workspace.
     if (req.method === 'GET' && requestUrl.pathname === '/') {
       const source = requestUrl.searchParams.get('source');
+      if (source === 'advanced') {
+        res.writeHead(302, { location: '/#/settings/advanced' });
+        res.end();
+        return;
+      }
       if (source && LEGACY_SOURCES.includes(source)) {
         res.writeHead(302, { location: `/legacy?source=${encodeURIComponent(source)}` });
         res.end();
@@ -342,7 +323,12 @@ const server = http.createServer(async (req, res) => {
 
     // Remaining legacy diagnostic views.
     if (req.method === 'GET' && requestUrl.pathname === '/legacy') {
-      const source = LEGACY_SOURCES.includes(requestUrl.searchParams.get('source')) ? requestUrl.searchParams.get('source') : 'advanced';
+      const source = requestUrl.searchParams.get('source');
+      if (!LEGACY_SOURCES.includes(source)) {
+        res.writeHead(302, { location: '/#/settings/advanced' });
+        res.end();
+        return;
+      }
       const relationshipClass = TARGET_CLASSES.includes(requestUrl.searchParams.get('class')) ? requestUrl.searchParams.get('class') : '';
       const relationshipStage = RELATIONSHIP_STAGES.includes(requestUrl.searchParams.get('stage')) ? requestUrl.searchParams.get('stage') : '';
       const html = await renderPage(source, relationshipClass, relationshipStage);

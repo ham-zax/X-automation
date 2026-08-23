@@ -148,7 +148,9 @@ export function NicheSettings() {
           <button
             type="button"
             disabled={reset.isPending || !data.customized}
-            onClick={() => reset.mutate()}
+            onClick={() => {
+              if (window.confirm('Reset Growth Focus to defaults? This replaces your custom terms and roles and refreshes stored candidate classifications.')) reset.mutate()
+            }}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             {reset.isPending ? 'Resetting…' : 'Reset to defaults'}

@@ -28,11 +28,10 @@ function behaviorLabel(mode: BehaviorMode) {
 
 function approachLabel(value: { intent?: string | null; style?: string | null; openingFeatures?: string[] } | null | undefined) {
   if (!value) return 'No approach selected'
-  const parts = [
-    value.intent ? labelId(value.intent) : '',
-    value.style ? labelId(value.style) : '',
-    ...(value.openingFeatures || []).map(labelId),
-  ].filter(Boolean)
+  const parts = []
+  if (value.intent) parts.push(`Intent: ${labelId(value.intent)}`)
+  if (value.style) parts.push(`Style: ${labelId(value.style)}`)
+  if (value.openingFeatures?.length) parts.push(`Opening: ${value.openingFeatures.map(labelId).join(' + ')}`)
   return parts.join(' · ') || 'No approach selected'
 }
 

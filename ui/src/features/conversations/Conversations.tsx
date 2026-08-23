@@ -99,7 +99,8 @@ export function Conversations() {
 
       {data.health.state === 'constrained' && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          <strong>Some actions are temporarily limited.</strong> Supported account evidence is blocking reply approval/sending until it is resolved.
+          <strong>Some actions are temporarily limited.</strong> Supported account evidence is blocking reply approval/sending until it is resolved.{' '}
+          <a href="/legacy?source=health" className="font-semibold underline">Review account status →</a>
         </div>
       )}
       {data.health.state === 'watch' && (

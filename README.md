@@ -140,10 +140,10 @@ The guided dashboard shell is organized around user goals instead of implementat
 - **Today** — the current AI Editorial Plan above prioritized workflow attention: objective selector, source freshness, evidence-bounded recommendations, explicit refresh/select/dismiss/research-source actions, useful conversations, review work, and account status.
 - **Discover** — source truth and source workflow context: To review, X Latest, X Momentum, Opportunities, GitHub Trending, HN Top Stories, Bookmarks, Handled, and All sources.
 - **Conversations** — active/new conversation opportunities plus relationship and audience context.
-- **Create** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.
+- **Posts** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.
 - **Results** — performance/account-status views plus observational editorial outcome cohorts when real Phase-4 measurements exist.
-- **Improve** — Tests and What we've learned.
-- **Advanced** — direct access to detailed diagnostics plus **AI Settings** for global/per-role profiles, provider/runtime/model selection, connection/catalog checks, secret status, and recent AI-run usage/provenance.
+- **Learn** — external patterns, own-account evidence, explicit tests, and strategy context with provenance lanes kept separate.
+- **Settings** — Growth Focus, AI/runtime configuration, autonomous-reply controls, and advanced diagnostics. Legacy diagnostic detail pages remain reachable from Advanced while they are migrated.
 
 The shell changes presentation only: the existing approval, exact-reply send, scheduler, Account Health, experiment, and learned-rule boundaries remain authoritative. Technical scores/details are progressively disclosed rather than removed.
 
@@ -155,7 +155,7 @@ Another agent should use the bridge rather than editing SQLite or scraping dashb
 
 ```bash
 npm run agent -- research <<<'{"source":"x","limit":10}'
-npm run agent -- queue <<<'{"minScore":40}'
+npm run agent -- queue <<<'{"limit":20}'
 npm run agent -- schedule-next <<<'{}'
 npm run agent -- schedule-inspect <<<'{"key":"https://x.com/example/status/123"}'
 npm run agent -- measurements <<<'{"limit":20}'

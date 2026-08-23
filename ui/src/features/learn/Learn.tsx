@@ -1,4 +1,4 @@
-import { useImprove, useResults, type StrategyOutcomeCohort } from '../../api/client'
+import { useClassifyPublishedContent, useImprove, useResults, type StrategyOutcomeCohort } from '../../api/client'
 import { Badge, Disclosure, Error, Loading, StatCard } from '../../components/primitives'
 import { Improve } from '../improve/Improve'
 import { ViralStyles } from '../viral/ViralStyles'
@@ -25,6 +25,7 @@ function compactGroups(groups: { value: string; summary: StrategyOutcomeCohort }
 
 function YourEvidence() {
   const results = useResults()
+  const classify = useClassifyPublishedContent()
   if (results.isLoading) return <Loading message="Loading own-account evidence..." />
   if (results.error) return <Error message={results.error.message} onRetry={() => results.refetch()} />
   if (!results.data) return <Error message="Own-account evidence is unavailable." />
@@ -41,6 +42,38 @@ function YourEvidence() {
             </p>
           </div>
           <Badge tone="info">Own-account observation</Badge>
+        </div>
+
+        <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-3xl">
+              <div className="font-semibold text-slate-900">Classify the final published text</div>
+              <p className="mt-1 text-sm text-slate-600">
+                Generation provenance records which writing guidance influenced Writer. This separate, explicit AI action labels the text that actually went out so measured publications can also become own-account strategy evidence.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => classify.mutate({ limit: 20 })}
+              disabled={classify.isPending}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-100 disabled:opacity-50"
+            >
+              {classify.isPending ? 'Classifying…' : 'Classify recent published posts'}
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            This may spend AI tokens through the current Editorial scan assignment. Existing labels are reused; each action is bounded to the 20 most recent eligible publications. <a href="#/settings/ai" className="font-medium text-sky-700 hover:underline">AI Settings →</a>
+          </p>
+          {classify.isSuccess && (
+            <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              Classified {classify.data.classified} publication{classify.data.classified === 1 ? '' : 's'} · reused {classify.data.reused} existing label{classify.data.reused === 1 ? '' : 's'}{classify.data.invalid.length ? ` · ${classify.data.invalid.length} could not be labeled` : ''}. Future draft guidance can use labeled posts when matching measurement evidence exists.
+            </div>
+          )}
+          {classify.isError && (
+            <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              Published-text classification failed: {classify.error.message}
+            </div>
+          )}
         </div>
 
         {outcomes.availability === 'available' ? (
@@ -127,9 +160,9 @@ function StrategyEvidence() {
             <div className="mt-1 text-xs text-slate-600">Observational evidence references. {evidenceStateSummary(externalRefs.map((ref) => ref.state))}</div>
           </a>
           <a href="#/learn/evidence" className="rounded-lg border border-slate-200 bg-slate-50 p-4 hover:border-slate-400">
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Own account</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Own account · generation history</div>
             <div className="mt-1 text-2xl font-semibold text-slate-900">{outcomes.observationCount}</div>
-            <div className="mt-1 text-xs text-slate-600">Mature {outcomes.windowMinutes / 60}h publications with recorded generation provenance.</div>
+            <div className="mt-1 text-xs text-slate-600">Mature {outcomes.windowMinutes / 60}h publications with recorded generation provenance. Final published text is classified explicitly in Your evidence before draft guidance can reuse matching measured outcomes.</div>
           </a>
           <a href="#/learn/tests" className="rounded-lg border border-slate-200 bg-slate-50 p-4 hover:border-slate-400">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Test evidence</div>
