@@ -56,6 +56,7 @@ npm run agent -- experiment-assign
 npm run agent -- experiment-summary
 npm run agent -- decide
 npm run agent -- record-action
+npm run agent -- record-disposition
 npm run agent -- relationship-targets
 npm run agent -- relationship-inspect
 npm run agent -- relationship-events
@@ -71,7 +72,7 @@ Commands read JSON from stdin and return JSON to stdout.
 When a user manually supplies an X post or URL:
 
 1. inspect the exact source and surrounding context;
-2. ingest the exact text/metrics available;
+2. persist the exact text/metrics available when the source should enter research memory; for an immediate live action or exact skip/defer, `record-action` / `record-disposition` may capture the live source inline without a separate `ingest` round trip;
 3. verify time-sensitive or technical claims against primary sources;
 4. during First 1,000 operation, use `growth-next` as the fast read-only agent cockpit over the current last-known-good X Latest + X Momentum snapshots: it ranks unhandled candidates, exposes momentum/distribution leverage, and supplies transferable source-style shape; use `growth-refresh` explicitly when source state needs refreshing, but never block next-action selection on a slow refresh; then inspect the exact live X source before acting;
 5. use `decide` plus `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md` to choose DIRECT / QUOTE / REPOST / REPLY / IGNORE; while the account is below 1,000 followers, apply `docs/FIRST_1000_GROWTH_MODE.md` as the higher-priority bootstrap policy when the conservative recommendation conflicts with fresh niche-relevant momentum;
@@ -83,7 +84,7 @@ When a user manually supplies an X post or URL:
 11. request `status: ready` only to move the item to `needs_review`, where deterministic gates are visible;
 12. require explicit human factuality confirmation, evidence confirmation when the gate requires it, and the dashboard approval action before a main-feed text draft becomes compatibility `ready`;
 13. for Engage Next, let `engage-draft` create/update reviewable reply text but never self-approve; only the dashboard human action may snapshot the exact approved reply, and `engage-resolve` may send only that already-approved text;
-14. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path;
+14. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path, and use `record-disposition` for an exact-candidate `skip`/`defer` that should not immediately resurface in `growth-next`;
 15. use `schedule-next` / `schedule-inspect` for read-only main-feed timing decisions; these commands cannot approve, claim, or publish;
 16. use `measurements`, `experiments`, and `experiment-summary` for Phase-4 reads; `experiment-create` and `experiment-assign` require explicit confirmation and assignment remains caller-selected rather than randomized;
 17. use `learning` for learned-rule inspection and `learning-refresh` to compute/update inert suggestions from explicit experiment comparisons; `learning-accept` / `learning-retire` require explicit confirmation and are the only bridge paths that change production learned-rule status;

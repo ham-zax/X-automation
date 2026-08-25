@@ -39,6 +39,7 @@ import {
   getDefaultNicheProfile,
   setActiveNicheProfile,
 } from './strategy.js';
+import { extractViralStyleFeatures } from './viral_style.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -156,8 +157,19 @@ db.exec(`
     output_tweet_id TEXT,
     output_url TEXT,
     commentary TEXT,
+    source_context_json TEXT,
     created_at INTEGER NOT NULL,
     PRIMARY KEY(candidate_key, action),
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key)
+  );
+
+  CREATE TABLE IF NOT EXISTS candidate_dispositions (
+    candidate_key TEXT PRIMARY KEY,
+    state TEXT NOT NULL,
+    reason TEXT NOT NULL DEFAULT '',
+    expires_at INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key)
   );
 
@@ -622,6 +634,11 @@ for (const [name, sql] of [
   ['niche_classified_at', 'ALTER TABLE candidates ADD COLUMN niche_classified_at INTEGER'],
 ]) {
   if (!candidateColumns.has(name)) db.exec(sql);
+}
+
+const candidateActionColumns = new Set(db.prepare('PRAGMA table_info(candidate_actions)').all().map((row) => row.name));
+if (!candidateActionColumns.has('source_context_json')) {
+  db.exec('ALTER TABLE candidate_actions ADD COLUMN source_context_json TEXT');
 }
 
 const draftColumns = new Set(db.prepare('PRAGMA table_info(drafts)').all().map((row) => row.name));
@@ -1774,20 +1791,168 @@ export function countQueueItems({ status, lane } = {}) {
   return Number(db.prepare(`SELECT COUNT(*) AS count FROM queue_items${where.length ? ` WHERE ${where.join(' AND ')}` : ''}`).get(...params).count || 0);
 }
 
-export function recordCandidateAction({ candidateKey: key, action, outputTweetId = null, outputUrl = null, commentary = '' }) {
+function optionalMetric(metrics, ...names) {
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return null;
+  for (const name of names) {
+    if (!Object.hasOwn(metrics, name)) continue;
+    const value = metrics[name];
+    if (value == null || value === '') continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function perThousand(numerator, denominator) {
+  return numerator == null || denominator == null || denominator <= 0
+    ? null
+    : Math.round((numerator / denominator) * 1_000 * 10) / 10;
+}
+
+function latestSourceObservationForCandidate(key) {
+  const row = db.prepare(`SELECT * FROM source_observations
+    WHERE candidate_key = ? ORDER BY observed_at DESC, id DESC LIMIT 1`).get(key);
+  return decodeSourceObservation(row);
+}
+
+function candidateActionSourceContext(key, action, sourceContext, actionAt) {
+  const candidate = getCandidate(key);
+  if (!candidate) throw new Error(`Candidate not found: ${key}`);
+  const supplied = sourceContext && typeof sourceContext === 'object' && !Array.isArray(sourceContext) ? sourceContext : null;
+  const latestObservation = latestSourceObservationForCandidate(key);
+  const sourceKinds = Array.isArray(supplied?.sourceKinds)
+    ? [...new Set(supplied.sourceKinds.map((value) => String(value || '').trim()).filter(Boolean))]
+    : latestObservation?.snapshotKind ? [latestObservation.snapshotKind] : [];
+  const momentumKind = sourceKinds.includes('x_momentum') ? 'x_momentum' : sourceKinds[0] || null;
+  const momentum = momentumKind && SOURCE_SNAPSHOT_KIND_SET.has(momentumKind)
+    ? getSourceMomentum(key, momentumKind)
+    : null;
+  const explicitObservedAt = Number(supplied?.observedAt);
+  const observedAt = Number.isFinite(explicitObservedAt) && explicitObservedAt > 0
+    ? explicitObservedAt
+    : latestObservation?.observedAt || actionAt;
+  const explicitSourceTimestamp = Number(supplied?.sourceTimestamp);
+  const sourceTimestamp = Number.isFinite(explicitSourceTimestamp) && explicitSourceTimestamp > 0
+    ? explicitSourceTimestamp
+    : Number(candidate.timestamp || 0) || null;
+  const metrics = supplied && Object.hasOwn(supplied, 'metrics') ? supplied.metrics : candidate.metrics;
+  const views = optionalMetric(metrics, 'views');
+  const likes = optionalMetric(metrics, 'likes');
+  const reposts = optionalMetric(metrics, 'reposts', 'retweets');
+  const replies = optionalMetric(metrics, 'replies');
+  const bookmarks = optionalMetric(metrics, 'bookmarks');
+  const style = extractViralStyleFeatures({ text: candidate.text || '' });
+  return {
+    actionAt,
+    observedAt,
+    sourceTimestamp,
+    sourceAgeHours: sourceTimestamp == null ? null : Math.round(Math.max(0, (actionAt - sourceTimestamp) / 3_600_000) * 10) / 10,
+    route: action,
+    sourceKinds,
+    source: {
+      key: candidate.key,
+      type: candidate.source,
+      author: candidate.title || '',
+      url: candidate.url || '',
+    },
+    metrics: { views, likes, reposts, replies, bookmarks },
+    density: {
+      repliesPerThousandViews: perThousand(replies, views),
+      bookmarksPerThousandViews: perThousand(bookmarks, views),
+    },
+    momentum: {
+      viralScore: candidate.viral?.score ?? null,
+      viralTier: candidate.viral?.tier ?? null,
+      viewsPerHour: candidate.viral?.viewsPerHour ?? null,
+      engagementsPerHour: candidate.viral?.engagementsPerHour ?? null,
+      observedViewsPerHour: momentum?.deltas?.views?.perHour == null ? null : Number(momentum.deltas.views.perHour),
+      observationIntervalHours: momentum?.intervalHours ?? null,
+    },
+    sourceStyle: {
+      hookLabels: style.hookLabels,
+      styleLabels: style.styleLabels,
+      wordCount: style.wordCount,
+      sentenceCount: style.sentenceCount,
+      paragraphCount: style.paragraphCount,
+      firstLineChars: style.firstLineChars,
+      numberCount: style.numberCount,
+      hashtagCount: style.hashtagCount,
+    },
+  };
+}
+
+function decodeCandidateAction(row) {
+  if (!row) return null;
+  const outputTweetId = row.output_tweet_id ? String(row.output_tweet_id) : null;
+  const latestPostMetrics = outputTweetId
+    ? db.prepare('SELECT * FROM post_metrics WHERE tweet_id = ? ORDER BY captured_at DESC LIMIT 1').get(outputTweetId) || null
+    : null;
+  const queueItem = getQueueItemByCandidate(row.candidate_key);
+  const queueMatchesOutput = queueItem && (!outputTweetId || String(queueItem.outputTweetId || '') === outputTweetId);
+  return {
+    ...row,
+    sourceContext: json(row.source_context_json, null),
+    outcome: {
+      outputTweetId,
+      outputUrl: row.output_url || null,
+      latestPostMetrics,
+      queue: queueMatchesOutput ? {
+        id: queueItem.id,
+        pipeline: queueItem.pipeline,
+        status: queueItem.status,
+        publishedAt: queueItem.publishedAt,
+        outputTweetId: queueItem.outputTweetId,
+        outputUrl: queueItem.outputUrl,
+      } : null,
+      publicationMeasurements: queueMatchesOutput ? getPublicationMeasurements(queueItem.id) : [],
+    },
+  };
+}
+
+export function recordCandidateAction({
+  candidateKey: key,
+  action,
+  outputTweetId = null,
+  outputUrl = null,
+  commentary = '',
+  sourceContext = null,
+  createdAt = Date.now(),
+}) {
   if (!key || !action) throw new Error('candidateKey and action are required.');
-  db.prepare(`INSERT INTO candidate_actions(candidate_key, action, output_tweet_id, output_url, commentary, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  const existing = db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action);
+  const nextTweetId = outputTweetId == null || outputTweetId === '' ? null : String(outputTweetId);
+  const nextUrl = outputUrl == null || outputUrl === '' ? null : String(outputUrl);
+  if (action !== 'repost' && !nextTweetId && !nextUrl && !existing?.output_tweet_id && !existing?.output_url) {
+    throw new Error(`Successful ${action} recording requires the confirmed live output tweet ID or URL.`);
+  }
+  if (existing?.output_tweet_id && nextTweetId && String(existing.output_tweet_id) !== nextTweetId) {
+    throw new Error(`Candidate action ${key} / ${action} is already recorded with a different output tweet ID.`);
+  }
+  if (!existing?.output_tweet_id && existing?.output_url && nextUrl && String(existing.output_url) !== nextUrl) {
+    throw new Error(`Candidate action ${key} / ${action} is already recorded with a different output URL.`);
+  }
+  const timestamp = Number(existing?.created_at || createdAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Candidate action createdAt must be a positive timestamp.');
+  const shouldCaptureContext = !existing || sourceContext != null;
+  const sourceContextJson = shouldCaptureContext
+    ? JSON.stringify(candidateActionSourceContext(key, action, sourceContext, timestamp))
+    : null;
+  db.prepare(`INSERT INTO candidate_actions(
+      candidate_key, action, output_tweet_id, output_url, commentary, source_context_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(candidate_key, action) DO UPDATE SET
-      output_tweet_id = excluded.output_tweet_id,
-      output_url = excluded.output_url,
-      commentary = excluded.commentary,
-      created_at = excluded.created_at`).run(key, action, outputTweetId, outputUrl, commentary, Date.now());
-  return db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action);
+      output_tweet_id = COALESCE(candidate_actions.output_tweet_id, excluded.output_tweet_id),
+      output_url = COALESCE(candidate_actions.output_url, excluded.output_url),
+      commentary = CASE WHEN TRIM(COALESCE(excluded.commentary, '')) <> '' THEN excluded.commentary ELSE candidate_actions.commentary END,
+      source_context_json = COALESCE(candidate_actions.source_context_json, excluded.source_context_json)`).run(
+    key, action, nextTweetId, nextUrl, commentary, sourceContextJson, timestamp,
+  );
+  return decodeCandidateAction(db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action));
 }
 
 export function listCandidateActions(key) {
-  return db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? ORDER BY created_at DESC').all(key);
+  return db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? ORDER BY created_at DESC').all(key).map(decodeCandidateAction);
 }
 
 export function hasCandidateAction(key, action = null) {
@@ -1795,6 +1960,54 @@ export function hasCandidateAction(key, action = null) {
     ? db.prepare('SELECT 1 AS found FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action)
     : db.prepare('SELECT 1 AS found FROM candidate_actions WHERE candidate_key = ? LIMIT 1').get(key);
   return Boolean(row);
+}
+
+function decodeCandidateDisposition(row, now = Date.now()) {
+  if (!row) return null;
+  const expiresAt = row.expires_at == null ? null : Number(row.expires_at);
+  const state = String(row.state || '');
+  return {
+    candidateKey: row.candidate_key,
+    state,
+    reason: row.reason || '',
+    expiresAt,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+    active: ['skip', 'defer'].includes(state) && (expiresAt == null || expiresAt > now),
+  };
+}
+
+export function getCandidateDisposition(key, { now = Date.now() } = {}) {
+  return decodeCandidateDisposition(
+    db.prepare('SELECT * FROM candidate_dispositions WHERE candidate_key = ?').get(key),
+    Number(now),
+  );
+}
+
+export function recordCandidateDisposition({ candidateKey: key, state, reason = '', expiresAt = null }) {
+  if (!key) throw new Error('candidateKey is required.');
+  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  const normalizedState = String(state || '').trim().toLowerCase() === 'clear'
+    ? 'cleared'
+    : String(state || '').trim().toLowerCase();
+  if (!['skip', 'defer', 'cleared'].includes(normalizedState)) throw new Error(`Invalid candidate disposition: ${state || 'missing'}`);
+  const normalizedReason = String(reason || '').trim();
+  if (normalizedState !== 'cleared' && !normalizedReason) throw new Error('Candidate skip/defer requires a reason.');
+  const normalizedExpiresAt = expiresAt == null || expiresAt === '' ? null : Number(expiresAt);
+  if (normalizedExpiresAt != null && (!Number.isFinite(normalizedExpiresAt) || normalizedExpiresAt <= 0)) {
+    throw new Error('Candidate disposition expiresAt must be a positive timestamp when supplied.');
+  }
+  const now = Date.now();
+  db.prepare(`INSERT INTO candidate_dispositions(candidate_key, state, reason, expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(candidate_key) DO UPDATE SET
+      state = excluded.state,
+      reason = CASE WHEN TRIM(excluded.reason) <> '' THEN excluded.reason ELSE candidate_dispositions.reason END,
+      expires_at = excluded.expires_at,
+      updated_at = excluded.updated_at`).run(
+    key, normalizedState, normalizedReason, normalizedState === 'cleared' ? null : normalizedExpiresAt, now, now,
+  );
+  return getCandidateDisposition(key, { now });
 }
 
 export function getPreferenceProfile() {
@@ -3818,7 +4031,7 @@ export function getSourceMomentum(candidateKeyValue, snapshotKindValue) {
       comments: metricDelta(current.metrics, previous.metrics, 'comments'),
     };
   } else {
-    deltas = Object.fromEntries(['views', 'likes', 'reposts', 'replies'].map((key) => {
+    deltas = Object.fromEntries(['views', 'likes', 'reposts', 'replies', 'bookmarks'].map((key) => {
       const delta = metricDelta(current.metrics, previous.metrics, key);
       return [key, { delta, perHour: delta != null && intervalHours ? delta / intervalHours : null }];
     }));

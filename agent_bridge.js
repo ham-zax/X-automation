@@ -41,6 +41,7 @@ import {
   getAiRuntimeSettings,
   getAudienceSummary,
   getCandidate,
+  getCandidateDisposition,
   getDraft,
   getDraftByCandidate,
   getDiscoverSnapshot,
@@ -79,6 +80,7 @@ import {
   listRelationshipProfiles,
   recordAccountHealthObservation,
   recordCandidateAction,
+  recordCandidateDisposition,
   recordUnderTheHoodSnapshot,
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
@@ -126,27 +128,80 @@ function sourceUsername(candidate) {
   return match?.[1]?.toLowerCase() || '';
 }
 
+function observedMetric(metrics, ...names) {
+  if (!metrics || typeof metrics !== 'object' || Array.isArray(metrics)) return undefined;
+  for (const name of names) {
+    if (!Object.hasOwn(metrics, name)) continue;
+    const value = metrics[name];
+    if (value == null || value === '') continue;
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return undefined;
+}
+
 function manualCandidate(payload) {
   const text = String(payload.text || '').trim();
   const url = String(payload.url || '').trim();
   if (!text) throw new Error('ingest requires text.');
   if (!url) throw new Error('ingest requires url.');
   const niche = classifyNiche(text);
+  const metrics = {};
+  for (const [key, value] of [
+    ['views', observedMetric(payload.metrics, 'views')],
+    ['likes', observedMetric(payload.metrics, 'likes')],
+    ['retweets', observedMetric(payload.metrics, 'retweets', 'reposts')],
+    ['replies', observedMetric(payload.metrics, 'replies')],
+    ['bookmarks', observedMetric(payload.metrics, 'bookmarks')],
+  ]) {
+    if (value !== undefined) metrics[key] = value;
+  }
+  const urlAuthor = url.match(/x\.com\/([^/]+)/i)?.[1];
   return {
     key: payload.key || url,
     source: payload.source || 'x',
-    title: payload.author || payload.title || '@manual',
+    title: payload.author || payload.title || (urlAuthor ? `@${urlAuthor}` : '@manual'),
     text,
     url,
     timestamp: payload.timestamp ? Number(payload.timestamp) : 0,
-    score: Number(payload.score || niche.score),
+    score: payload.score == null ? Number(niche.score || 0) : Number(payload.score),
     niche,
-    metrics: {
-      views: Number(payload.metrics?.views || 0),
-      likes: Number(payload.metrics?.likes || 0),
-      retweets: Number(payload.metrics?.retweets || payload.metrics?.reposts || 0),
-      replies: Number(payload.metrics?.replies || 0),
-    },
+    metrics,
+  };
+}
+
+function suppliedOperatorSource(payload) {
+  if (payload.source && typeof payload.source === 'object' && !Array.isArray(payload.source)) return payload.source;
+  return payload.text || payload.url ? payload : null;
+}
+
+function resolveOperatorCandidate(payload) {
+  const supplied = suppliedOperatorSource(payload);
+  if (!supplied) return requireCandidate(payload.key);
+  const normalized = manualCandidate({ ...supplied, key: supplied.key || payload.key });
+  const key = candidateKey(normalized);
+  const existing = getCandidate(key);
+  const candidate = existing ? {
+    ...existing,
+    ...normalized,
+    timestamp: normalized.timestamp || existing.timestamp,
+    metrics: { ...(existing.metrics || {}), ...(normalized.metrics || {}) },
+  } : normalized;
+  upsertCandidates([candidate], { saved: false });
+  return requireCandidate(key);
+}
+
+function operatorSourceContext(payload) {
+  if (payload.sourceContext && typeof payload.sourceContext === 'object' && !Array.isArray(payload.sourceContext)) {
+    return payload.sourceContext;
+  }
+  const source = suppliedOperatorSource(payload);
+  if (!source) return null;
+  return {
+    observedAt: source.observedAt,
+    sourceTimestamp: source.timestamp,
+    sourceKinds: Array.isArray(source.sourceKinds) ? source.sourceKinds : undefined,
+    metrics: source.metrics && typeof source.metrics === 'object' && !Array.isArray(source.metrics) ? source.metrics : {},
   };
 }
 
@@ -173,6 +228,7 @@ function schedulerContext(now) {
 
 function growthOperatorPacket(candidate, sourceKinds = []) {
   const opportunity = inspectGrowthOpportunity(candidate.key);
+  const disposition = getCandidateDisposition(candidate.key);
   const sourceKind = sourceKinds.includes('x_momentum') ? 'x_momentum' : sourceKinds[0] || null;
   const observedMomentum = sourceKind ? getSourceMomentum(candidate.key, sourceKind) : null;
   const style = extractViralStyleFeatures({ text: candidate.text || '' });
@@ -183,9 +239,9 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
   const ageHours = candidate.timestamp ? Math.max(0, (Date.now() - Number(candidate.timestamp)) / 3_600_000) : null;
   const viewsPerHour = candidate.viral?.viewsPerHour == null ? null : Math.round(Number(candidate.viral.viewsPerHour));
   const observedViewsPerHour = observedMomentum?.deltas?.views?.perHour == null ? null : Math.round(Number(observedMomentum.deltas.views.perHour));
-  const sourceViews = Number(candidate.metrics?.views || 0);
-  const sourceReplies = Number(candidate.metrics?.replies || 0);
-  const repliesPerThousandViews = sourceViews > 0
+  const sourceViews = observedMetric(candidate.metrics, 'views') ?? null;
+  const sourceReplies = observedMetric(candidate.metrics, 'replies') ?? null;
+  const repliesPerThousandViews = sourceViews != null && sourceViews > 0 && sourceReplies != null
     ? Math.round((sourceReplies / sourceViews) * 1_000 * 10) / 10
     : null;
   const urgency = recommendation.action === 'ignore'
@@ -254,6 +310,8 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
       numberCount: style.numberCount,
       hashtagCount: style.hashtagCount,
     },
+    disposition,
+    actionable: recommendation.action !== 'ignore' && disposition?.active !== true,
     styleTransfer: {
       principle: 'Transfer structure and information density, never wording.',
       directives: [
@@ -541,7 +599,13 @@ async function main() {
 
   if (command === 'inspect') {
     const workflow = inspectWorkflow(payload.key);
-    result({ candidate: workflow.candidate, growthFit: workflow.growthFit, draft: workflow.draft });
+    result({
+      candidate: workflow.candidate,
+      growthFit: workflow.growthFit,
+      draft: workflow.draft,
+      disposition: getCandidateDisposition(payload.key),
+      actions: listCandidateActions(payload.key),
+    });
     return;
   }
 
@@ -773,10 +837,12 @@ async function main() {
       }
     }
     const includeIgnored = payload.includeIgnored === true;
+    const includeDisposed = payload.includeDisposed === true;
     const items = [...merged.values()]
       .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds))
       .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
       .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
+      .filter((item) => includeDisposed || item.disposition?.active !== true)
       .sort((left, right) => right.operatorPriority - left.operatorPriority)
       .slice(0, Math.max(1, Math.min(50, Number(payload.limit || 12))));
     result({
@@ -799,7 +865,7 @@ async function main() {
       })),
       items,
       readOnlyPlanning: true,
-      nextStep: 'Open the exact source on X, inspect thread context, then act once and verify the live result before record-action.',
+      nextStep: 'Open the exact source on X, inspect thread context, then act once and verify the live result before record-action; use record-disposition for an exact skip/defer.',
     });
     return;
   }
@@ -915,12 +981,18 @@ async function main() {
       strategicRelevance: payload.context?.strategicRelevance ?? workflow.growthFit,
       relevanceOverride: payload.context?.relevanceOverride ?? workflow.queueItem?.relevance?.humanOverride ?? null,
     });
-    result({ candidate, growthFit: workflow.growthFit, existingActions, recommendation: recommendDistributionAction(candidate, context) });
+    result({
+      candidate,
+      growthFit: workflow.growthFit,
+      disposition: getCandidateDisposition(candidate.key),
+      existingActions,
+      recommendation: recommendDistributionAction(candidate, context),
+    });
     return;
   }
 
   if (command === 'record-action') {
-    const candidate = requireCandidate(payload.key);
+    const candidate = resolveOperatorCandidate(payload);
     const action = String(payload.action || '');
     if (!['direct', 'quote', 'repost', 'reply'].includes(action)) throw new Error(`Invalid action: ${action}`);
     const recorded = recordCandidateAction({
@@ -929,8 +1001,27 @@ async function main() {
       outputTweetId: payload.outputTweetId || null,
       outputUrl: payload.outputUrl || null,
       commentary: payload.commentary || '',
+      sourceContext: operatorSourceContext(payload),
+      createdAt: payload.actedAt == null ? Date.now() : Number(payload.actedAt),
     });
-    result({ candidateKey: candidate.key, recorded, actions: listCandidateActions(candidate.key) });
+    result({
+      candidateKey: candidate.key,
+      recorded,
+      disposition: getCandidateDisposition(candidate.key),
+      actions: listCandidateActions(candidate.key),
+    });
+    return;
+  }
+
+  if (command === 'record-disposition') {
+    const candidate = resolveOperatorCandidate(payload);
+    const disposition = recordCandidateDisposition({
+      candidateKey: candidate.key,
+      state: payload.state || payload.disposition,
+      reason: payload.reason || '',
+      expiresAt: payload.expiresAt ?? null,
+    });
+    result({ candidateKey: candidate.key, disposition, actions: listCandidateActions(candidate.key) });
     return;
   }
 
@@ -1123,7 +1214,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

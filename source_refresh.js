@@ -88,6 +88,7 @@ function sourceObservation(kind, candidate, observedAt) {
       likes: numericMetric(metrics.likes),
       reposts: numericMetric(metrics.retweets ?? metrics.reposts),
       replies: numericMetric(metrics.replies),
+      bookmarks: numericMetric(metrics.bookmarks),
       sourceTimestamp: Number(candidate.timestamp || 0) || null,
     },
   };

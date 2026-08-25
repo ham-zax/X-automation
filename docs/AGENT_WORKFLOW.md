@@ -29,7 +29,7 @@ printf '%s' '<json>' | node agent_bridge.js <command>
 Available commands:
 
 - `ingest` - add a manually supplied source post to research memory; classifies niche, creates workflow state only when requested/needed, and bookmarks it only when `saved: true` is explicitly supplied.
-- `inspect` - inspect one stored candidate and its draft.
+- `inspect` - inspect one stored candidate, its draft, current exact-candidate disposition, recorded actions, action-time source context, and available output/outcome evidence.
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
 - `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
@@ -38,7 +38,8 @@ Available commands:
 - `research` - query persisted research candidates.
 - `performance` - read the latest persisted account/post performance snapshot.
 - `decide` - apply the DIRECT / QUOTE / REPOST / REPLY / IGNORE distribution decision method to a stored candidate.
-- `record-action` - persist a successful direct/quote/repost/reply result, including output tweet ID/URL and commentary.
+- `record-action` - persist a successful direct/quote/repost/reply result, including output tweet ID/URL, commentary, and durable action-time source context. It can capture a live source inline when the candidate is not stored yet.
+- `record-disposition` - persist or revise an exact-candidate `skip` / `defer` (or clear it) with a transparent reason and optional expiry; it can also capture a live source inline.
 - `relationship-targets` - list strategic relationship profiles with optional class/stage/min-TargetScore filters.
 - `relationship-inspect` - inspect one relationship profile plus recent append-only event history.
 - `relationship-events` - read bounded recent relationship events for one username.
@@ -97,7 +98,7 @@ cat <<'JSON' | node agent_bridge.js decide
 JSON
 ```
 
-After a successful X action, persist it immediately:
+After a successful X action, persist it immediately. An already-stored source can still be referenced by key:
 
 ```bash
 cat <<'JSON' | node agent_bridge.js record-action
@@ -111,7 +112,38 @@ cat <<'JSON' | node agent_bridge.js record-action
 JSON
 ```
 
-A recorded action makes that source `alreadyUsed` by default for future distribution decisions.
+A live-discovered source that is not stored yet can be captured and reconciled in the same call. Supply only metrics actually observed; omitted metrics remain unknown rather than becoming zero:
+
+```bash
+cat <<'JSON' | node agent_bridge.js record-action
+{
+  "source": {
+    "url": "https://x.com/example/status/123",
+    "author": "@example",
+    "text": "Exact source text",
+    "timestamp": 1787640000000,
+    "observedAt": 1787641800000,
+    "metrics": { "views": 38800, "likes": 920, "reposts": 120, "replies": 4, "bookmarks": 237 }
+  },
+  "action": "reply",
+  "outputTweetId": "456",
+  "outputUrl": "https://x.com/ham_zax/status/456",
+  "commentary": "Exact reply that was published"
+}
+JSON
+```
+
+`record-action` is local reconciliation only: it never sends to X, requires the confirmed live output ID or URL for direct/quote/reply actions, preserves the original action record on idempotent retries, and refuses a conflicting output tweet ID. The stored source context includes the observed/source timestamps, action/route, observed metrics, reply/bookmark density when computable, available momentum fields, and source-style shape. `inspect` returns that context together with the output identity and any existing post/publication measurements.
+
+If the operator intentionally declines an exact source, record the disposition instead of fabricating a successful action:
+
+```bash
+npm run agent -- record-disposition <<'JSON'
+{"key":"https://x.com/example/status/123","state":"defer","reason":"Already covered this exact source angle","expiresAt":1787660000000}
+JSON
+```
+
+Use `state: "clear"` to revise the current disposition back to inactive. Active exact-candidate dispositions are omitted from normal `growth-next`; `includeDisposed: true` exposes them for inspection without changing ranking weights. A recorded successful action still makes that source `alreadyUsed` by default for future distribution decisions.
 
 ## Audience interaction
 

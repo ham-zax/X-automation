@@ -1,6 +1,6 @@
 # Growth OS Momentum Operator
 
-**Status:** active First-1,000 operating design, added 2026-08-25.
+**Status:** active First-1,000 operating design, added 2026-08-25; live feedback-state path repaired 2026-08-25.
 
 This document turns the live First-1,000 observations into an agent-operable Growth OS loop. It complements `FIRST_1000_GROWTH_MODE.md`: that document defines bootstrap policy; this document defines how an operating agent finds the next action without getting stranded between Discover, Viral Styles, routing, and the live X browser.
 
@@ -83,7 +83,7 @@ The structural insight is that **candidate selection, distribution leverage, and
 
 Use this loop during First 1,000 mode:
 
-`refresh when useful -> preserve last good -> growth-next immediately -> inspect exact source -> act once -> verify live -> record -> measure -> learn`
+`refresh when useful -> preserve last good -> growth-next immediately -> inspect exact source -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
 
 ### 1. Refresh without destroying useful state
 
@@ -123,7 +123,8 @@ The response includes:
 - conversation crowding as replies per 1,000 views;
 - observed source metric deltas when repeated snapshots exist;
 - the source post's hook/style shape;
-- transfer guidance for the outbound copy.
+- transfer guidance for the outbound copy;
+- current exact-candidate operator disposition when one exists. Active `skip` / `defer` dispositions are suppressed from the normal actionable result set; `includeDisposed: true` exposes them for inspection.
 
 The operator-priority formula is deliberately inspectable and empirical:
 
@@ -150,6 +151,16 @@ Before a live action:
 7. verify the live result before recording it.
 
 If a consequential click is ambiguous, do not blind-retry. Establish whether the action exists on the source thread, account profile, search, or network mutation result first.
+
+### Record live truth without a manual ingest round trip
+
+`record-action` and `record-disposition` now accept either an existing candidate key or an inline `source` object containing the exact URL/text/identity plus only the metrics actually observed. A live-discovered source can therefore become durable state in the same local recording call after the external X action has already been verified, or in the same disposition call when the operator intentionally skips/defers it.
+
+`record-action` does not publish. It is idempotent local reconciliation for the same candidate/action, requires the confirmed live output ID or URL for direct/quote/reply actions, preserves the original action timestamp/context on ordinary retries, and rejects a conflicting output tweet ID instead of implying a second send. Newly recorded actions snapshot the source conditions known at action time: source/observation timestamps, route, views/likes/reposts/replies/bookmarks when observed, reply/bookmark density when computable, available viral/momentum fields, and the same source-style feature shape exposed by `growth-next`. Missing metrics remain `null`/unknown rather than being manufactured as observed zero.
+
+`record-disposition` stores only exact-candidate operator state (`skip`, `defer`, or cleared) with a visible reason and optional expiry. It is not an author/topic saturation rule. Normal `growth-next` excludes an active disposition; `includeDisposed: true` is an inspection escape hatch.
+
+`inspect` joins the candidate to its disposition and recorded actions. Each action includes its durable source context plus the exact output identity and any already-available owned-post/publication measurement rows, giving later Learn/ranking work one inspectable decision -> action -> outcome path without reconstructing source conditions from browser history.
 
 ## Momentum as leverage
 
@@ -270,14 +281,13 @@ This first run also exposed a useful independent variable: **conversation crowdi
 
 ## Prioritized next OS improvements
 
-Do not respond to this redesign by adding more dashboard surface area. Improve the evidence loop in this order:
+Do not respond to this redesign by adding more dashboard surface area. The action-time source snapshot and inspectable action/outcome join are now in place; improve the evidence loop from that foundation in this order:
 
-1. **Persist source state at action time.** Store source age, views, replies, replies-per-1K-views, viral tier, views/hour, observed acceleration, selected route, and source-style features beside each recorded action. This is the missing join between the decision and later outcome.
-2. **Join output outcomes back to the source state.** Measure impressions, engagements, detail expands, profile visits, author response, follower delta, and follower niche quality by Reply / Quote / Repost / Original and by source momentum at action time.
-3. **Expose claim/media readiness.** A high-momentum candidate should be marked `needs_primary_source`, `needs_media_inspection`, or `clean_to_amplify` before route execution. The live operator currently performs this check manually; the packet should eventually make it explicit.
-4. **Learn reply-density direction before weighting it.** Keep crowding visible now. Only add a ranking bonus after enough outcomes show that lower reply density improves impressions, author responses, or follows for this account.
-5. **Make refresh durable, not blocking.** `growth-refresh` is already separated from `growth-next`. The next runtime step is to let the existing automation/terminal layer refresh snapshots durably while the operator keeps consuming last-known-good state.
-6. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, verified-number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.
+1. **Expand real outcome capture where the platform/runtime exposes it.** Use the joined action-time source context to compare impressions, engagements, detail expands, profile visits, author response, follower delta, and follower niche quality by Reply / Quote / Repost / Original without inventing unavailable metrics.
+2. **Expose claim/media readiness.** A high-momentum candidate should be marked `needs_primary_source`, `needs_media_inspection`, or `clean_to_amplify` before route execution. The live operator currently performs this check manually; the packet should eventually make it explicit.
+3. **Learn reply-density and bookmark-density direction before weighting either.** Keep both as observational evidence. Only add a ranking bonus after enough own-account outcomes show a repeated directional relationship with impressions, author responses, profile visits, or follows.
+4. **Make refresh durable, not blocking.** `growth-refresh` is already separated from `growth-next`. The next runtime step is to let the existing automation/terminal layer refresh snapshots durably while the operator keeps consuming last-known-good state.
+5. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, verified-number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.
 
 ## Agent stopping rule
 
