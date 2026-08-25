@@ -128,11 +128,24 @@ export async function refreshSourceSnapshot(inputKind) {
   try {
     const preference = getPreferenceProfile();
     const { ranked, ordered } = await fetchAndRank(kind, preference);
+    const current = getDiscoverSnapshot(kind);
+    if (!ordered.length && current.candidates.length) {
+      const message = `Source refresh returned no candidates; preserved ${current.candidates.length} last-known-good ${kind} candidates.`;
+      const status = recordDiscoverSnapshotError(kind, message, attemptedAt);
+      return {
+        kind,
+        fetchedAt: current.fetchedAt,
+        candidates: current.candidates,
+        error: status.error,
+        attemptedAt,
+        preservedLastGood: true,
+      };
+    }
     upsertCandidates(ranked);
     const fetchedAt = Date.now();
     const snapshot = saveDiscoverSnapshot(kind, ordered, fetchedAt);
     recordSourceObservations(snapshot.candidates.map((candidate) => sourceObservation(kind, candidate, fetchedAt)));
-    return { kind, fetchedAt, candidates: snapshot.candidates, error: null, attemptedAt };
+    return { kind, fetchedAt, candidates: snapshot.candidates, error: null, attemptedAt, preservedLastGood: false };
   } catch (error) {
     const status = recordDiscoverSnapshotError(kind, error, attemptedAt);
     const current = getDiscoverSnapshot(kind);

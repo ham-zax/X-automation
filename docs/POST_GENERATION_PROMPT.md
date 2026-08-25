@@ -155,6 +155,16 @@ The writing agent should receive a structured packet with as much of the followi
     "viewsPerHour": null,
     "engagementsPerHour": null
   },
+  "sourceStyle": {
+    "hookLabels": [],
+    "styleLabels": [],
+    "wordCount": null,
+    "sentenceCount": null,
+    "paragraphCount": null,
+    "firstLineChars": null,
+    "numberCount": null,
+    "hashtagCount": null
+  },
   "recentAccountPosts": [],
   "recentReplies": [],
   "recentReplyArchetypes": [],
@@ -210,6 +220,7 @@ You receive:
 - any actual experiment/benchmark evidence from us;
 - niche tags and matched keywords;
 - viral/freshness context;
+- observable source-style shape (`sourceStyle`) when available;
 - recent `@ham_zax` posts;
 - recent published replies and reply-archetype distribution when available;
 - Account Health state/warnings when available;
@@ -239,6 +250,10 @@ If `WRITER PACKET.writingStrategy` is absent, do not infer or invent one. If it 
 Treat `currentDraft.editor.operatorContext` as explicit human-supplied working context. You may use it directly to understand the source or shape the draft, but do not claim that you independently verified it. If it conflicts with stronger supplied evidence, preserve the stronger evidence and surface the conflict.
 
 Keep **internal fact/risk context** backstage. It determines what may safely be claimed and remains inspectable in draft metadata/risk flags. **Public copy** should contain only reader-value information plus qualifications that materially change the reader's decision. Do not reflexively spend public-copy space on phrases such as `not independently verified`, `community project, not <vendor>`, or generic dual-use warnings unless that distinction is materially relevant to what the reader should believe or do.
+
+`sourceStyle` is observational structure, not a template. Transfer hook shape, sentence/block rhythm, information density, and payoff speed only when they fit the selected thesis. Never copy distinctive wording or preserve a viral source's unsupported claims merely because its structure performed well.
+
+Prefer concrete nouns early: name the actual model, tool, API, benchmark, price, latency, usage window, failure mode, or developer object when one is present. This is a scannability heuristic, not a claim that noun count is an X ranking factor.
 
 Writing strategy never supplies missing facts. In particular:
 

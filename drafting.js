@@ -1,4 +1,5 @@
 import { assessStrategicRelevance } from './strategy.js';
+import { extractViralStyleFeatures } from './viral_style.js';
 
 const PLACEHOLDER = /\[[^\]]+\]/;
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
@@ -134,6 +135,7 @@ export function buildWriterPacket({
   writingStrategy = null,
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
+  const sourceStyle = extractViralStyleFeatures({ text: candidate?.text || '' });
   return {
     account: {
       identity: 'AI-native developer + builder',
@@ -149,6 +151,16 @@ export function buildWriterPacket({
       niche: candidate?.niche ?? null,
       metrics: candidate?.metrics ?? {},
       viral: candidate?.viral ?? null,
+      sourceStyle: {
+        hookLabels: sourceStyle.hookLabels,
+        styleLabels: sourceStyle.styleLabels,
+        wordCount: sourceStyle.wordCount,
+        sentenceCount: sourceStyle.sentenceCount,
+        paragraphCount: sourceStyle.paragraphCount,
+        firstLineChars: sourceStyle.firstLineChars,
+        numberCount: sourceStyle.numberCount,
+        hashtagCount: sourceStyle.hashtagCount,
+      },
     },
     queue: {
       reachPotential: queueItem?.reachPotential ?? null,

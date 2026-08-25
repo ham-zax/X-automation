@@ -3,8 +3,10 @@ import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from '
 import { refreshEngagementOpportunities } from './engagement.js';
 import { reviewAudienceFollowing, syncAudience } from './audience.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
+import { refreshSourceSnapshot } from './source_refresh.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { classifyNiche, recommendDistributionAction } from './strategy.js';
+import { extractViralStyleFeatures } from './viral_style.js';
 import {
   EDITORIAL_OBJECTIVES,
   dismissEditorialRecommendation,
@@ -14,7 +16,9 @@ import {
 import { attachEditorialResearchSource } from './research.js';
 import {
   ensureCandidateWorkflow,
+  inspectGrowthOpportunity,
   inspectWorkflow,
+  recommendationContext,
   requestQueueReview,
   resolveEngagementItem,
   rescoreCandidateRelevance,
@@ -54,6 +58,7 @@ import {
   getPerformanceSnapshot,
   getQueueItem,
   getRelationshipProfile,
+  getSourceMomentum,
   hasCandidateAction,
   listAudienceProfiles,
   listAcceptedLearnedRules,
@@ -163,6 +168,102 @@ function schedulerContext(now) {
     recentPosts,
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
+  };
+}
+
+function growthOperatorPacket(candidate, sourceKinds = []) {
+  const opportunity = inspectGrowthOpportunity(candidate.key);
+  const sourceKind = sourceKinds.includes('x_momentum') ? 'x_momentum' : sourceKinds[0] || null;
+  const observedMomentum = sourceKind ? getSourceMomentum(candidate.key, sourceKind) : null;
+  const style = extractViralStyleFeatures({ text: candidate.text || '' });
+  const scores = opportunity.scores;
+  const recommendation = opportunity.recommendation;
+  const route = recommendation.pipeline;
+  const borrowedDistribution = ['reply', 'quote', 'repost'].includes(route);
+  const ageHours = candidate.timestamp ? Math.max(0, (Date.now() - Number(candidate.timestamp)) / 3_600_000) : null;
+  const viewsPerHour = candidate.viral?.viewsPerHour == null ? null : Math.round(Number(candidate.viral.viewsPerHour));
+  const observedViewsPerHour = observedMomentum?.deltas?.views?.perHour == null ? null : Math.round(Number(observedMomentum.deltas.views.perHour));
+  const sourceViews = Number(candidate.metrics?.views || 0);
+  const sourceReplies = Number(candidate.metrics?.replies || 0);
+  const repliesPerThousandViews = sourceViews > 0
+    ? Math.round((sourceReplies / sourceViews) * 1_000 * 10) / 10
+    : null;
+  const urgency = recommendation.action === 'ignore'
+    ? 'blocked'
+    : candidate.viral?.tier === 'breakout' || (viewsPerHour != null && viewsPerHour >= 1_000) || (ageHours != null && ageHours <= 3)
+      ? 'now'
+      : ageHours != null && ageHours <= 12
+        ? 'soon'
+        : 'normal';
+  const operatorPriority = Math.round(
+    scores.reachPotential * 0.45
+      + scores.conversationPotential * 0.25
+      + scores.followPotential * 0.20
+      + scores.relationshipPotential * 0.10
+      + (borrowedDistribution ? 8 : 0)
+      + (urgency === 'now' ? 8 : urgency === 'soon' ? 3 : 0)
+      - (recommendation.action === 'ignore' ? 60 : 0)
+  );
+  return {
+    key: candidate.key,
+    url: candidate.url,
+    author: candidate.title,
+    text: candidate.text,
+    sourceKinds,
+    sourceTimestamp: candidate.timestamp || null,
+    metrics: candidate.metrics || {},
+    recommendation,
+    operatorPriority,
+    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution and freshness bonuses. Not an X ranking-law claim.',
+    urgency,
+    distribution: {
+      borrowed: borrowedDistribution,
+      leverage: borrowedDistribution ? 'borrowed_distribution' : 'owned_distribution',
+      reason: borrowedDistribution
+        ? `${route} can enter an existing source/conversation graph while it is active.`
+        : 'Original content builds owned profile proof but receives no source-conversation distribution by format alone.',
+    },
+    crowding: {
+      replies: sourceReplies,
+      views: sourceViews,
+      repliesPerThousandViews,
+      interpretation: 'Lower reply density can indicate a less crowded conversation surface, but this is observational and is not currently used in operatorPriority.',
+    },
+    momentum: {
+      tier: candidate.viral?.tier || null,
+      ageHours: ageHours == null ? null : Math.round(ageHours * 10) / 10,
+      viewsPerHour,
+      engagementsPerHour: candidate.viral?.engagementsPerHour == null ? null : Math.round(Number(candidate.viral.engagementsPerHour) * 10) / 10,
+      observedViewsPerHour,
+      observed: observedMomentum,
+    },
+    potentials: {
+      reach: scores.reachPotential,
+      follow: scores.followPotential,
+      conversation: scores.conversationPotential,
+      relationship: scores.relationshipPotential,
+    },
+    growthFit: opportunity.growthFit,
+    sourceStyle: {
+      hookLabels: style.hookLabels,
+      styleLabels: style.styleLabels,
+      wordCount: style.wordCount,
+      sentenceCount: style.sentenceCount,
+      paragraphCount: style.paragraphCount,
+      firstLineChars: style.firstLineChars,
+      numberCount: style.numberCount,
+      hashtagCount: style.hashtagCount,
+    },
+    styleTransfer: {
+      principle: 'Transfer structure and information density, never wording.',
+      directives: [
+        route === 'reply' ? 'Prefer one compact paragraph with one concrete contribution.' : 'Prefer 2-4 short visual blocks when the idea benefits from vertical scanability.',
+        'Open with a concrete product, result, constraint, or verified number; remove generic setup.',
+        'Put the payoff in the first 1-2 blocks and use short sentences around concrete nouns.',
+        'Use a verified number near the top when it changes the reader decision; never invent one for punch.',
+        'Default to zero hashtags; use 1-2 only when they are canonical and tied to an active topic/search surface.',
+      ],
+    },
   };
 }
 
@@ -637,6 +738,72 @@ async function main() {
     return;
   }
 
+  if (command === 'growth-refresh') {
+    const kinds = payload.kind
+      ? [String(payload.kind)]
+      : ['x_latest', 'x_momentum'];
+    const refreshes = await Promise.all(kinds.map((kind) => refreshSourceSnapshot(kind)));
+    result({
+      refreshed: refreshes.map((refresh) => ({
+        kind: refresh.kind,
+        fetchedAt: refresh.fetchedAt,
+        attemptedAt: refresh.attemptedAt,
+        candidateCount: refresh.candidates.length,
+        preservedLastGood: refresh.preservedLastGood === true,
+        error: refresh.error || null,
+      })),
+      nextStep: 'Run growth-next immediately from the current last-known-good snapshots; do not wait for another refresh before acting.',
+    });
+    return;
+  }
+
+  if (command === 'growth-next') {
+    const refreshes = payload.refresh === true
+      ? await Promise.all(['x_latest', 'x_momentum'].map((kind) => refreshSourceSnapshot(kind)))
+      : [];
+    const snapshots = ['x_latest', 'x_momentum'].map((kind) => getDiscoverSnapshot(kind));
+    const merged = new Map();
+    for (const snapshot of snapshots) {
+      for (const candidate of snapshot.candidates) {
+        if (candidate.source !== 'x' || sourceUsername(candidate) === 'ham_zax') continue;
+        const current = merged.get(candidate.key) || { candidate, sourceKinds: [] };
+        if (snapshot.kind === 'x_momentum') current.candidate = candidate;
+        if (!current.sourceKinds.includes(snapshot.kind)) current.sourceKinds.push(snapshot.kind);
+        merged.set(candidate.key, current);
+      }
+    }
+    const includeIgnored = payload.includeIgnored === true;
+    const items = [...merged.values()]
+      .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds))
+      .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
+      .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
+      .sort((left, right) => right.operatorPriority - left.operatorPriority)
+      .slice(0, Math.max(1, Math.min(50, Number(payload.limit || 12))));
+    result({
+      account: getPerformanceSnapshot(1)?.account || null,
+      refreshed: refreshes.map((refresh) => ({
+        kind: refresh.kind,
+        fetchedAt: refresh.fetchedAt,
+        attemptedAt: refresh.attemptedAt,
+        candidateCount: refresh.candidates.length,
+        preservedLastGood: refresh.preservedLastGood === true,
+        error: refresh.error || null,
+      })),
+      snapshots: snapshots.map((snapshot) => ({
+        kind: snapshot.kind,
+        fetchedAt: snapshot.fetchedAt,
+        lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
+        candidateCount: snapshot.candidates.length,
+        error: snapshot.error,
+        legacyFallback: snapshot.legacyFallback,
+      })),
+      items,
+      readOnlyPlanning: true,
+      nextStep: 'Open the exact source on X, inspect thread context, then act once and verify the live result before record-action.',
+    });
+    return;
+  }
+
   if (command === 'measurements') {
     if (payload.queueItemId != null) {
       result({ queueItemId: Number(payload.queueItemId), measurements: getPublicationMeasurements(Number(payload.queueItemId)) });
@@ -742,12 +909,12 @@ async function main() {
     const candidate = requireCandidate(payload.key);
     const workflow = inspectWorkflow(candidate.key);
     const existingActions = listCandidateActions(candidate.key);
-    const context = {
+    const context = recommendationContext(candidate, workflow.scores, {
       ...(payload.context || {}),
       alreadyUsed: payload.context?.alreadyUsed ?? hasCandidateAction(candidate.key),
       strategicRelevance: payload.context?.strategicRelevance ?? workflow.growthFit,
       relevanceOverride: payload.context?.relevanceOverride ?? workflow.queueItem?.relevance?.humanOverride ?? null,
-    };
+    });
     result({ candidate, growthFit: workflow.growthFit, existingActions, recommendation: recommendDistributionAction(candidate, context) });
     return;
   }
@@ -956,7 +1123,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

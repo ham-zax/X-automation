@@ -47,6 +47,8 @@ npm run agent -- route
 npm run agent -- workflow
 npm run agent -- research
 npm run agent -- performance
+npm run agent -- growth-refresh
+npm run agent -- growth-next
 npm run agent -- measurements
 npm run agent -- experiments
 npm run agent -- experiment-create
@@ -71,20 +73,21 @@ When a user manually supplies an X post or URL:
 1. inspect the exact source and surrounding context;
 2. ingest the exact text/metrics available;
 3. verify time-sensitive or technical claims against primary sources;
-4. use `decide` plus `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md` to choose DIRECT / QUOTE / REPOST / REPLY / IGNORE;
-5. create an original angle rather than paraphrasing the source;
-6. use `docs/POST_GENERATION_PROMPT.md` for the final writing/editing pass when producing outbound text;
-7. use `route` to select the workflow pipeline when a saved signal should move beyond Triage;
-8. obtain `writer-packet` for the routed Original/Quote/Thread/Reply context and apply `docs/POST_GENERATION_PROMPT.md`;
-9. persist structured output with `apply-writer-output`; this always returns edited content to `drafting` and never self-approves;
-10. request `status: ready` only to move the item to `needs_review`, where deterministic gates are visible;
-11. require explicit human factuality confirmation, evidence confirmation when the gate requires it, and the dashboard approval action before a main-feed text draft becomes compatibility `ready`;
-12. for Engage Next, let `engage-draft` create/update reviewable reply text but never self-approve; only the dashboard human action may snapshot the exact approved reply, and `engage-resolve` may send only that already-approved text;
-13. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path;
-14. use `schedule-next` / `schedule-inspect` for read-only main-feed timing decisions; these commands cannot approve, claim, or publish;
-15. use `measurements`, `experiments`, and `experiment-summary` for Phase-4 reads; `experiment-create` and `experiment-assign` require explicit confirmation and assignment remains caller-selected rather than randomized;
-16. use `learning` for learned-rule inspection and `learning-refresh` to compute/update inert suggestions from explicit experiment comparisons; `learning-accept` / `learning-retire` require explicit confirmation and are the only bridge paths that change production learned-rule status;
-17. let `automation.js` capture due read-only measurement windows, refresh real X/Engage Next inputs, run the persisted autonomous-reply operator when explicitly started, and consume the human-approved main-feed queue through `scheduler.js`; `AUTO_POST=false` still stops main-feed publication, while autonomous replies have a separate off-by-default grant and authority path.
+4. during First 1,000 operation, use `growth-next` as the fast read-only agent cockpit over the current last-known-good X Latest + X Momentum snapshots: it ranks unhandled candidates, exposes momentum/distribution leverage, and supplies transferable source-style shape; use `growth-refresh` explicitly when source state needs refreshing, but never block next-action selection on a slow refresh; then inspect the exact live X source before acting;
+5. use `decide` plus `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md` to choose DIRECT / QUOTE / REPOST / REPLY / IGNORE; while the account is below 1,000 followers, apply `docs/FIRST_1000_GROWTH_MODE.md` as the higher-priority bootstrap policy when the conservative recommendation conflicts with fresh niche-relevant momentum;
+6. create an original angle rather than paraphrasing the source when authoring text; a First 1,000 Repost may amplify a strong source without forcing commentary;
+7. use `docs/POST_GENERATION_PROMPT.md` for the final writing/editing pass when producing outbound text; transfer viral structure/information density rather than wording;
+8. use `route` to select the workflow pipeline when a saved signal should move beyond Triage;
+9. obtain `writer-packet` for the routed Original/Quote/Thread/Reply context and apply `docs/POST_GENERATION_PROMPT.md`; its `candidate.sourceStyle` is observational shape evidence, not permission to copy the source;
+10. persist structured output with `apply-writer-output`; this always returns edited content to `drafting` and never self-approves;
+11. request `status: ready` only to move the item to `needs_review`, where deterministic gates are visible;
+12. require explicit human factuality confirmation, evidence confirmation when the gate requires it, and the dashboard approval action before a main-feed text draft becomes compatibility `ready`;
+13. for Engage Next, let `engage-draft` create/update reviewable reply text but never self-approve; only the dashboard human action may snapshot the exact approved reply, and `engage-resolve` may send only that already-approved text;
+14. successful Engage Next sends record their candidate action and `our_reply` relationship event internally; use `record-action` for other successful direct/quote/repost/reply actions that are not already recorded by that path;
+15. use `schedule-next` / `schedule-inspect` for read-only main-feed timing decisions; these commands cannot approve, claim, or publish;
+16. use `measurements`, `experiments`, and `experiment-summary` for Phase-4 reads; `experiment-create` and `experiment-assign` require explicit confirmation and assignment remains caller-selected rather than randomized;
+17. use `learning` for learned-rule inspection and `learning-refresh` to compute/update inert suggestions from explicit experiment comparisons; `learning-accept` / `learning-retire` require explicit confirmation and are the only bridge paths that change production learned-rule status;
+18. let `automation.js` capture due read-only measurement windows, refresh real X/Engage Next inputs, run the persisted autonomous-reply operator when explicitly started, and consume the human-approved main-feed queue through `scheduler.js`; `AUTO_POST=false` still stops main-feed publication, while autonomous replies have a separate off-by-default grant and authority path.
 
 A human-approved main-feed text draft requires >=40/50 and a passing Phase-2 hard-gate result. Compatibility `draft.status=ready` is retained for approved-content integrity but is no longer publication selection authority; the approved main-feed queue row plus scheduler owns automatic publication selection. Factuality is always an explicit human confirmation; evidence confirmation is required when the gate detects evidence-dependent claims. Required media is schedulable only when a real operator-attached image is present and the media plan is complete; the authenticated publication transport uploads that attachment at send time.
 
@@ -97,7 +100,8 @@ A human-approved main-feed text draft requires >=40/50 and a passing Phase-2 har
 - Never turn a source tweet into a near-copy.
 - Never automate likes, follow churn, or mass unsolicited replies as growth tactics.
 - Keep explicit saved-post preferences and actual performance data separate from guessed preferences.
-- Preserve the standards in `docs/CONTENT_OPERATING_STANDARD.md`, `docs/ENGAGEMENT_INTEGRITY.md`, `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`, and `docs/POST_GENERATION_PROMPT.md`.
+- Preserve the standards in `docs/CONTENT_OPERATING_STANDARD.md`, `docs/ENGAGEMENT_INTEGRITY.md`, `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`, and `docs/POST_GENERATION_PROMPT.md`; while the account is below 1,000 followers, `docs/FIRST_1000_GROWTH_MODE.md` has precedence for bootstrap distribution volume and route selection.
+- Do not treat cold `relationshipPotential = 0` or the fallback `No sufficiently additive distribution action yet` as sufficient reasons to ignore a fresh high-momentum niche source during First 1,000 mode. Repost, concise Quote, or useful Reply are valid bootstrap actions subject to the existing factuality, duplicate, relevance, approval, and publication-authority boundaries.
 - Treat `docs/ALGORITHM_EVIDENCE_LEDGER.md` as the authority for whether a growth claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Optimize network recommendations around target relevance, conversation quality, relationship potential, and qualified follower conversion; do not reduce target selection to follower count.
 - Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.

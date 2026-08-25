@@ -543,20 +543,45 @@ export function recommendDistributionAction(candidate, context = {}) {
     return { action: 'ignore', reason: 'Outside current Growth Focus. A human can explicitly choose to use the opportunity anyway.' };
   }
 
+  const accountFollowers = context.accountFollowers == null ? null : Number(context.accountFollowers);
+  const first1000 = accountFollowers != null && Number.isFinite(accountFollowers) && accountFollowers >= 0 && accountFollowers < 1_000;
+  const opportunityScores = context.opportunityScores || {};
+  const reach = opportunityScores.breakdown?.reach || {};
+  const bootstrapFresh = first1000 && candidate?.source === 'x' && Number(reach.freshness || 0) >= 10;
+  const bootstrapMomentum = bootstrapFresh
+    && Number(opportunityScores.reachPotential || 0) >= 50
+    && Number(reach.freshness || 0) >= 10
+    && Number(reach.momentum || 0) >= 10
+    && Number(reach.traction || 0) >= 8;
+
   if (context.originalStandalone || context.ourExperiment || context.multipleSources) {
     return { action: 'direct', reason: 'The insight stands on its own and should build our own author identity.' };
   }
 
-  if (context.canAddReplyValue && context.relationshipValue) {
-    return { action: 'reply', reason: 'A specific useful contribution can start or deepen a relevant relationship.' };
+  if (context.canAddReplyValue && (context.relationshipValue || first1000)) {
+    return {
+      action: 'reply',
+      reason: first1000
+        ? 'First 1,000 mode: a useful contribution can enter this active relevant conversation without requiring prior relationship history.'
+        : 'A specific useful contribution can start or deepen a relevant relationship.',
+    };
   }
 
-  if (candidate?.source === 'x' && context.addsMaterialValue && context.sourceIsEvidence) {
-    return { action: 'quote', reason: 'The source is useful evidence and our commentary creates a new information object.' };
+  if (candidate?.source === 'x' && context.addsMaterialValue && (context.sourceIsEvidence || bootstrapFresh)) {
+    return {
+      action: 'quote',
+      reason: bootstrapFresh && !context.sourceIsEvidence
+        ? 'First 1,000 mode: a distinct concise contribution is enough to quote a relevant source while it is current.'
+        : 'The source is useful evidence and our commentary creates a new information object.',
+    };
   }
 
   if (candidate?.source === 'x' && context.amplificationOnly && Number(candidate?.viral?.score || candidate?.score || 0) >= 70) {
     return { action: 'repost', reason: 'The source is unusually useful and amplification is the point; no commentary is being forced.' };
+  }
+
+  if (bootstrapMomentum) {
+    return { action: 'repost', reason: 'First 1,000 mode: this fresh, high-momentum niche source is worth amplifying while the distribution window is open.' };
   }
 
   return { action: 'ignore', reason: 'No sufficiently additive distribution action yet; research it or wait for a stronger angle.' };

@@ -2,6 +2,8 @@
 
 This document defines how `@ham_zax` turns research signals into distribution and how the account recruits a better AI/developer audience without mechanical engagement farming.
 
+**Bootstrap precedence:** while the account is below 1,000 followers, `FIRST_1000_GROWTH_MODE.md` governs when it conflicts with conservative guidance here. In that phase, fresh niche-relevant momentum can justify immediate Repost, Quote, or Reply even when relationship history is absent or a research-grade additive thesis is not ready yet.
+
 ## 1. Current audience diagnosis
 
 Snapshot captured 2026-08-19:
@@ -66,9 +68,9 @@ Do not quote merely with `this`, `huge`, `wow`, a paraphrase, or generic praise.
 
 ### REPOST
 
-Plain reposts are deliberately rare.
+Outside First 1,000 mode, plain reposts are deliberately rare. During First 1,000 mode, use `FIRST_1000_GROWTH_MODE.md`: timely niche-relevant amplification is a valid bootstrap action and does not need to be exceptional.
 
-Choose **REPOST** only when:
+In normal mode, choose **REPOST** only when:
 
 - the source itself is unusually useful;
 - amplification is genuinely the point;
@@ -154,6 +156,8 @@ Hashtags are not required for keyword relevance. Use them only when they are act
 ## 5. Aggressive growth means high-quality surface area
 
 The account should be aggressive about **useful presence**, not mechanical engagement volume.
+
+The targets below describe normal selective operation. They do **not** cap the First 1,000 bootstrap phase, which is event-driven and permits multiple distinct timely Reposts, Quotes, and Replies when niche-relevant momentum is available.
 
 Starting operating target:
 
@@ -307,7 +311,7 @@ Canonical design:
 
 ## 13. Network-first growth upgrade
 
-When this section conflicts with older account-size or posting-first heuristics in this document, this section governs.
+When this section conflicts with older account-size or posting-first heuristics in this document, this section governs, except that `FIRST_1000_GROWTH_MODE.md` has precedence during the explicit bootstrap phase.
 
 The growth system should be understood as:
 

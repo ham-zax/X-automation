@@ -15,6 +15,7 @@ import {
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
+  getPerformanceSnapshot,
   getQueueItemByCandidate,
   hasCandidateAction,
   listCandidateActions,
@@ -116,12 +117,24 @@ function scoringContext(candidate, context = {}) {
   };
 }
 
-function recommendationContext(candidate, scores, context = {}) {
+export function recommendationContext(candidate, scores, context = {}) {
+  const storedFollowers = context.accountFollowers == null
+    ? Number(getPerformanceSnapshot(1)?.account?.followers)
+    : Number(context.accountFollowers);
+  const accountFollowers = Number.isFinite(storedFollowers) ? storedFollowers : null;
+  const first1000 = accountFollowers != null && accountFollowers >= 0 && accountFollowers < 1_000;
+  const bootstrapReply = first1000
+    && candidate?.source === 'x'
+    && Number(scores.breakdown?.reach?.freshness || 0) >= 10
+    && scores.conversationPotential >= 40;
   return {
     ...context,
+    accountFollowers,
+    opportunityScores: context.opportunityScores ?? scores,
     alreadyUsed: context.alreadyUsed ?? hasCandidateAction(candidate.key),
-    canAddReplyValue: context.canAddReplyValue ?? (scores.conversationPotential >= 50 && scores.relationshipPotential > 0),
-    relationshipValue: context.relationshipValue ?? scores.relationshipPotential >= 20,
+    canAddReplyValue: context.canAddReplyValue
+      ?? (bootstrapReply || (scores.conversationPotential >= 50 && scores.relationshipPotential > 0)),
+    relationshipValue: context.relationshipValue ?? (first1000 || scores.relationshipPotential >= 20),
   };
 }
 
@@ -303,9 +316,29 @@ export function setRoutingDecision(key, { decision, reason = '', actor = 'human'
   });
 }
 
-export function inspectWorkflow(key) {
+export function inspectGrowthOpportunity(key, context = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
+  const scores = scoreOpportunity(candidate, scoringContext(candidate, context));
+  const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem?.relevance?.humanOverride || null });
+  const recommendation = recommendDistributionAction(candidate, recommendationContext(candidate, scores, {
+    ...context,
+    strategicRelevance: growthFit,
+    relevanceOverride: queueItem?.relevance?.humanOverride || null,
+  }));
+  return {
+    candidate,
+    queueItem,
+    actions: listCandidateActions(key),
+    scores,
+    growthFit,
+    recommendation: { ...recommendation, pipeline: actionToPipeline(recommendation.action) },
+  };
+}
+
+export function inspectWorkflow(key) {
+  const opportunity = inspectGrowthOpportunity(key);
+  const { candidate, queueItem, scores, growthFit, recommendation } = opportunity;
   const storedDraft = getDraftByCandidate(key);
   const historicalDraft = storedDraft?.status === 'published'
     || queueItem?.status === 'published'
@@ -319,24 +352,10 @@ export function inspectWorkflow(key) {
     }));
     draft = { ...storedDraft, qualityScore: analysis.score, gates: analysis.gates };
   }
-  const scores = scoreOpportunity(candidate, scoringContext(candidate));
-  const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem?.relevance?.humanOverride || null });
-  const currentRecommendation = queueItem
-    ? recommendDistributionAction(candidate, recommendationContext(candidate, scores, {
-        strategicRelevance: growthFit,
-        relevanceOverride: queueItem?.relevance?.humanOverride || null,
-      }))
-    : null;
   return {
-    candidate,
-    queueItem,
+    ...opportunity,
     draft,
-    actions: listCandidateActions(key),
-    scores,
-    growthFit,
-    recommendation: currentRecommendation
-      ? { ...currentRecommendation, pipeline: actionToPipeline(currentRecommendation.action) }
-      : null,
+    recommendation: queueItem ? recommendation : null,
   };
 }
 
