@@ -1,11 +1,17 @@
 import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { refreshEngagementOpportunities } from './engagement.js';
+import {
+  AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY,
+  AUTONOMOUS_REPLY_WRITE_TRANSPORT,
+  getAutonomousReplyGrant,
+  getAutonomousReplyRuntime,
+} from './autonomous_reply.js';
 import { reviewAudienceFollowing, syncAudience } from './audience.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { classifyNiche, recommendDistributionAction } from './strategy.js';
+import { assessDiscoveryQuality, classifyNiche, recommendDistributionAction } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
 import {
   EDITORIAL_OBJECTIVES,
@@ -36,6 +42,7 @@ import {
   createExperiment,
   clearAiDefaultProfile,
   clearAiRoleBinding,
+  getAccountAnalyticsSnapshot,
   getAccountHealthSummary,
   getAiProfile,
   getAiRuntimeSettings,
@@ -50,6 +57,7 @@ import {
   getEditorialSelectionByRecommendation,
   getExperiment,
   getExperimentSummary,
+  getGrowthOperatorMemoryCheckpoint,
   getLearningOverview,
   getLatestEditorialPlan,
   getMainFeedScheduleItem,
@@ -67,6 +75,7 @@ import {
   listCandidateActions,
   listCandidates,
   listDrafts,
+  listDueMeasurementWindows,
   listEngagementItems,
   listExperimentAssignments,
   listExperiments,
@@ -79,12 +88,17 @@ import {
   listRelationshipEvents,
   listRelationshipProfiles,
   recordAccountHealthObservation,
+  recordAudienceAnalyticsSnapshot,
   recordCandidateAction,
   recordCandidateDisposition,
+  recordGrowthOperatorMemoryReview,
+  recordPerformanceSnapshot,
+  recordRelationshipEvent,
   recordUnderTheHoodSnapshot,
   refreshLearnedRuleSuggestion,
   retireLearnedRule,
   saveDraft,
+  saveQueueItem,
   setAiDefaultProfile,
   setAiRoleBinding,
   upsertCandidates,
@@ -118,6 +132,62 @@ function requireDraft(id) {
   const draft = getDraft(Number(id));
   if (!draft) throw new Error(`Draft not found: ${id}`);
   return draft;
+}
+
+const ACCOUNT_ANALYTICS_CONTENT_TYPES = new Set(['posts', 'replies', 'all']);
+const ACCOUNT_ANALYTICS_AUDIENCE_METRICS = new Set([
+  'likes',
+  'impressions',
+  'bookmarks',
+  'shares',
+  'new_follows',
+  'replies',
+  'reposts',
+  'profile_visits',
+]);
+
+function observedAnalyticsNumber(input, label, aliases, { required = false } = {}) {
+  for (const name of aliases) {
+    if (!Object.hasOwn(input, name)) continue;
+    const value = input[name];
+    if (value == null || value === '' || value === '-') return required ? null : undefined;
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new Error(`Invalid ${label}: ${value}`);
+    return number;
+  }
+  return required ? null : undefined;
+}
+
+function normalizeAccountAnalyticsPost(post, index) {
+  if (!post || typeof post !== 'object' || Array.isArray(post)) throw new Error(`analytics-record post ${index} must be an object.`);
+  const id = String(post.id || post.tweetId || '').trim();
+  if (!id) throw new Error(`analytics-record post ${index} requires id or tweetId.`);
+  const impressions = observedAnalyticsNumber(post, 'impressions', ['impressions', 'views'], { required: true });
+  const likes = observedAnalyticsNumber(post, 'likes', ['likes'], { required: true });
+  const replies = observedAnalyticsNumber(post, 'replies', ['replies'], { required: true });
+  const reposts = observedAnalyticsNumber(post, 'reposts', ['reposts', 'retweets'], { required: true });
+  for (const [label, value] of [['impressions', impressions], ['likes', likes], ['replies', replies], ['reposts', reposts]]) {
+    if (value == null) throw new Error(`analytics-record post ${index} requires observed ${label}; do not convert missing analytics to zero.`);
+  }
+  return {
+    id,
+    text: String(post.text || ''),
+    timestamp: Number(post.publishedAt ?? post.timestamp ?? 0) || 0,
+    views: impressions,
+    likes,
+    replies,
+    retweets: reposts,
+    bookmarks: observedAnalyticsNumber(post, 'bookmarks', ['bookmarks']),
+    shares: observedAnalyticsNumber(post, 'shares', ['shares']),
+    profileVisits: observedAnalyticsNumber(post, 'profile visits', ['profileVisits', 'profile_visits']),
+    newFollows: observedAnalyticsNumber(post, 'new follows', ['newFollows', 'new_follows']),
+    engagementRatePct: observedAnalyticsNumber(post, 'engagement rate', ['engagementRatePct', 'engagement_rate_pct', 'engagementRate']),
+    mediaViews: observedAnalyticsNumber(post, 'media views', ['mediaViews', 'media_views']),
+  };
+}
+
+function normalizeAudienceAnalyticsMetric(value) {
+  return String(value || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 }
 
 function sourceUsername(candidate) {
@@ -205,6 +275,62 @@ function operatorSourceContext(payload) {
   };
 }
 
+function reconcileRecordedActionWorkflow(candidate, action, recorded) {
+  const workflow = inspectWorkflow(candidate.key);
+  const queueItem = workflow.queueItem;
+  if (!queueItem) return null;
+  const compatible = (action === 'reply' && queueItem.pipeline === 'reply')
+    || (action === 'quote' && queueItem.pipeline === 'quote')
+    || (action === 'direct' && queueItem.pipeline === 'original')
+    || (action === 'repost' && queueItem.pipeline === 'repost');
+  if (!compatible) return null;
+  const tweetId = recorded.output_tweet_id ? String(recorded.output_tweet_id) : null;
+  const outputUrl = recorded.output_url || null;
+  if (queueItem.outputTweetId && tweetId && String(queueItem.outputTweetId) !== tweetId) {
+    throw new Error(`Queue item ${queueItem.id} already has a different output tweet ID.`);
+  }
+  const publishedAt = Number(recorded.created_at || Date.now());
+  let draft = workflow.draft;
+  if (draft && tweetId && (draft.status !== 'published' || String(draft.publishedTweetId || '') !== tweetId)) {
+    draft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
+  }
+  const reconciled = queueItem.status === 'published'
+    && (!tweetId || String(queueItem.outputTweetId || '') === tweetId)
+    ? queueItem
+    : saveQueueItem({
+      ...queueItem,
+      status: 'published',
+      draftId: draft?.id ?? queueItem.draftId,
+      outputTweetId: tweetId || queueItem.outputTweetId || null,
+      outputUrl: outputUrl || queueItem.outputUrl || null,
+      publishedAt: queueItem.publishedAt || publishedAt,
+      publishStartedAt: null,
+      publishError: null,
+    });
+  if (action === 'reply' && tweetId && reconciled.targetUsername) {
+    const alreadyRecorded = listRelationshipEvents(reconciled.targetUsername, { limit: 1000 })
+      .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId);
+    if (!alreadyRecorded) {
+      recordRelationshipEvent({
+        username: reconciled.targetUsername,
+        eventType: 'our_reply',
+        candidateKey: candidate.key,
+        sourceTweetId: reconciled.targetTweetId,
+        ourTweetId: tweetId,
+        topic: candidate.niche?.tags?.[0] || null,
+        occurredAt: publishedAt,
+        metadata: {
+          meaningful: true,
+          replyArchetype: reconciled.replyArchetype || null,
+          engagementKind: reconciled.engagementKind || 'initial_reply',
+          replyAuthority: 'manual_reconciliation',
+        },
+      });
+    }
+  }
+  return reconciled;
+}
+
 function result(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
@@ -214,6 +340,67 @@ function engagementPacket(queueItem) {
   const draft = getDraftByCandidate(queueItem.candidateKey);
   const relationship = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
   return { queueItem, candidate, draft, relationship };
+}
+
+function compactEngagementPacket(queueItem) {
+  const candidate = getCandidate(queueItem.candidateKey);
+  return {
+    id: queueItem.id,
+    candidateKey: queueItem.candidateKey,
+    source: {
+      url: candidate?.url || queueItem.candidateKey,
+      text: candidate?.text || '',
+      timestamp: candidate?.timestamp || null,
+    },
+    targetUsername: queueItem.targetUsername || null,
+    targetTweetId: queueItem.targetTweetId || null,
+    engagementKind: queueItem.engagementKind,
+    sourceClass: queueItem.engagement?.sourceClass || null,
+    status: queueItem.status,
+    priority: queueItem.priority,
+    urgency: queueItem.urgency,
+    expiresAt: queueItem.expiresAt,
+    contribution: {
+      summary: queueItem.contributionSummary || '',
+      archetype: queueItem.replyArchetype || '',
+    },
+    recipientOptIn: queueItem.engagement?.recipientOptIn === true,
+  };
+}
+
+function engagementRefreshOptions(payload) {
+  return {
+    targetLimit: Math.max(1, Math.min(50, Number(payload.targetLimit || 12))),
+    postsPerTarget: Math.max(1, Math.min(10, Number(payload.postsPerTarget || 4))),
+    minTargetScore: Number(payload.minTargetScore ?? 35),
+    targetSinceHours: Math.max(1, Number(payload.targetSinceHours || 24)),
+    responseSinceHours: Math.max(1, Number(payload.responseSinceHours || 72)),
+  };
+}
+
+function engagementRead(payload, { refresh = null, compact = false } = {}) {
+  const items = listEngagementItems({
+    status: payload.status || undefined,
+    minPriority: Number(payload.minPriority || 0),
+    includeExpired: Boolean(payload.includeExpired),
+    limit: Math.max(1, Math.min(200, Number(payload.limit || 50))),
+  });
+  const packets = items.map(compact ? compactEngagementPacket : engagementPacket);
+  const kindOf = (item) => compact ? item.engagementKind : item.queueItem.engagementKind;
+  const accountHealth = getAccountHealthSummary();
+  return {
+    refresh: refresh ? {
+      refreshed: refresh.refreshed,
+      rejected: refresh.rejected,
+      expired: refresh.expired,
+      errors: refresh.errors,
+    } : null,
+    accountHealth: compact
+      ? { generatedAt: accountHealth.generatedAt, health: accountHealth.health }
+      : accountHealth,
+    activeConversations: packets.filter((item) => kindOf(item) !== 'initial_reply'),
+    newOpportunities: packets.filter((item) => kindOf(item) === 'initial_reply'),
+  };
 }
 
 function schedulerContext(now) {
@@ -244,6 +431,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
   const repliesPerThousandViews = sourceViews != null && sourceViews > 0 && sourceReplies != null
     ? Math.round((sourceReplies / sourceViews) * 1_000 * 10) / 10
     : null;
+  const discoveryQuality = assessDiscoveryQuality(candidate.text || '');
   const urgency = recommendation.action === 'ignore'
     ? 'blocked'
     : candidate.viral?.tier === 'breakout' || (viewsPerHour != null && viewsPerHour >= 1_000) || (ageHours != null && ageHours <= 3)
@@ -300,6 +488,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
       relationship: scores.relationshipPotential,
     },
     growthFit: opportunity.growthFit,
+    discoveryQuality,
     sourceStyle: {
       hookLabels: style.hookLabels,
       styleLabels: style.styleLabels,
@@ -312,6 +501,20 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
     },
     disposition,
     actionable: recommendation.action !== 'ignore' && disposition?.active !== true,
+    verification: {
+      exactSourceRequired: true,
+      materialClaimsRequired: true,
+      repostInheritsSourceClaims: route === 'repost',
+      reason: route === 'repost'
+        ? 'A Repost republishes the source claims without corrective context; verify every material claim before amplification.'
+        : 'Verify material claims and current thread context before public action.',
+    },
+    execution: {
+      route,
+      automaticMainFeedAfterApproval: ['original', 'quote', 'thread'].includes(route),
+      autonomousReplyCandidate: route === 'reply',
+      manualFinalActionRequired: route === 'repost',
+    },
     styleTransfer: {
       principle: 'Transfer structure and information density, never wording.',
       directives: [
@@ -322,6 +525,159 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
         'Default to zero hashtags; use 1-2 only when they are canonical and tied to an active topic/search surface.',
       ],
     },
+  };
+}
+
+function growthRead(payload = {}) {
+  const snapshots = ['x_latest', 'x_momentum'].map((kind) => getDiscoverSnapshot(kind));
+  const merged = new Map();
+  for (const snapshot of snapshots) {
+    for (const candidate of snapshot.candidates) {
+      if (candidate.source !== 'x' || sourceUsername(candidate) === 'ham_zax') continue;
+      const current = merged.get(candidate.key) || { candidate, sourceKinds: [] };
+      if (snapshot.kind === 'x_momentum') current.candidate = candidate;
+      if (!current.sourceKinds.includes(snapshot.kind)) current.sourceKinds.push(snapshot.kind);
+      merged.set(candidate.key, current);
+    }
+  }
+  const includeIgnored = payload.includeIgnored === true;
+  const includeDisposed = payload.includeDisposed === true;
+  const includeLowSignal = payload.includeLowSignal === true;
+  const items = [...merged.values()]
+    .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds))
+    .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
+    .filter((item) => includeLowSignal || item.discoveryQuality.allowed)
+    .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
+    .filter((item) => includeDisposed || item.disposition?.active !== true)
+    .sort((left, right) => right.operatorPriority - left.operatorPriority)
+    .slice(0, Math.max(1, Math.min(50, Number(payload.limit || 12))));
+  return {
+    snapshots: snapshots.map((snapshot) => ({
+      kind: snapshot.kind,
+      fetchedAt: snapshot.fetchedAt,
+      lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
+      candidateCount: snapshot.candidates.length,
+      error: snapshot.error,
+      legacyFallback: snapshot.legacyFallback,
+    })),
+    items,
+  };
+}
+
+function compactGrowthItem(item) {
+  if (!item) return null;
+  const discoveryQuality = item.discoveryQuality.allowed
+    ? { allowed: true }
+    : item.discoveryQuality;
+  return {
+    key: item.key,
+    url: item.url,
+    author: item.author,
+    text: item.text,
+    recommendation: item.recommendation,
+    operatorPriority: item.operatorPriority,
+    urgency: item.urgency,
+    momentum: {
+      tier: item.momentum.tier,
+      ageHours: item.momentum.ageHours,
+      viewsPerHour: item.momentum.viewsPerHour,
+      engagementsPerHour: item.momentum.engagementsPerHour,
+      observedViewsPerHour: item.momentum.observedViewsPerHour,
+    },
+    potentials: item.potentials,
+    discoveryQuality,
+    verification: item.verification,
+    execution: item.execution,
+  };
+}
+
+function compactScheduleDecision(decision) {
+  if (!decision) return null;
+  return {
+    queueItemId: decision.item.id,
+    candidateKey: decision.item.candidateKey,
+    pipeline: decision.item.pipeline,
+    status: decision.item.status,
+    eligible: decision.eligible,
+    priority: decision.priority,
+    recommendedAt: decision.recommendedAt,
+    reason: decision.reason,
+    blockers: decision.blockers,
+    warnings: decision.warnings,
+  };
+}
+
+function operatorStatus(payload = {}) {
+  const now = payload.now == null ? Date.now() : Number(payload.now);
+  if (!Number.isFinite(now)) throw new Error('operator-status now must be numeric when supplied.');
+  const growth = growthRead({ limit: Math.max(1, Math.min(10, Number(payload.growthLimit || 3))) });
+  const engagementItems = listEngagementItems({ includeExpired: false, limit: Math.max(1, Math.min(20, Number(payload.engagementLimit || 6))) });
+  const activeConversations = engagementItems.filter((item) => item.engagementKind !== 'initial_reply').map(compactEngagementPacket);
+  const newReplies = engagementItems.filter((item) => item.engagementKind === 'initial_reply').map(compactEngagementPacket);
+  const approved = listApprovedMainFeedItems({ automatedOnly: true, limit: 100 });
+  const scheduleDecisions = rankMainFeedItems(approved, schedulerContext(now));
+  const dueMeasurements = listDueMeasurementWindows(now);
+  const replyGrant = getAutonomousReplyGrant();
+  const replyRuntime = getAutonomousReplyRuntime();
+  const remainingReplyBudget = replyGrant.liveBudget == null
+    ? null
+    : Math.max(0, Number(replyGrant.liveBudget) - Number(replyGrant.budgetUsed || 0));
+  const credentialedMainFeed = Boolean(process.env.AUTH_TOKEN && process.env.CT0);
+  const autoPostEnabled = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
+  const accountHealth = getAccountHealthSummary({ now });
+  const integrityWarnings = scheduleDecisions
+    .filter((decision) => decision.item.status === 'approved' && decision.blockers.some((blocker) => blocker.code === 'HARD_GATES_NOT_PASSED'))
+    .map((decision) => ({
+      code: 'APPROVED_ITEM_GATES_FAILED',
+      queueItemId: decision.item.id,
+      candidateKey: decision.item.candidateKey,
+      message: 'Approved queue state exists, but current draft/media hard gates do not pass. Inspect approval integrity before publication.',
+    }));
+  return {
+    generatedAt: now,
+    account: getPerformanceSnapshot(1)?.account || null,
+    accountHealth: { state: accountHealth.health.state, reasons: accountHealth.health.reasons, generatedAt: accountHealth.generatedAt },
+    laneChampions: {
+      activeConversationKey: activeConversations[0]?.candidateKey || null,
+      newReplyKey: newReplies[0]?.candidateKey || null,
+      discoveryKey: growth.items[0]?.key || null,
+      approvedMainFeedQueueItemId: (scheduleDecisions.find((decision) => decision.eligible) || scheduleDecisions[0])?.item.id || null,
+    },
+    scoreBoundary: 'Priorities are comparable only within their lane; arbitrate lane champions by relevance, contribution, urgency, relationship continuity, claim confidence, and execution readiness.',
+    discovery: { snapshots: growth.snapshots, top: growth.items.map(compactGrowthItem) },
+    engagement: { activeConversations, newReplies, cachedRead: true },
+    execution: {
+      mainFeed: {
+        autoPostEnabled,
+        credentialsPresent: credentialedMainFeed,
+        configured: autoPostEnabled && credentialedMainFeed,
+        preflight: 'Run npm run http:check; this read model does not persist or infer preflight success.',
+        next: compactScheduleDecision(scheduleDecisions.find((decision) => decision.eligible)),
+        blocked: scheduleDecisions.filter((decision) => !decision.eligible).slice(0, 5).map(compactScheduleDecision),
+      },
+      autonomousReply: {
+        state: replyGrant.state,
+        mode: replyGrant.mode,
+        remainingBudget: remainingReplyBudget,
+        currentWriteTransport: AUTONOMOUS_REPLY_WRITE_TRANSPORT,
+        liveTransportReady: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY,
+        nextExpectedRefreshAt: replyRuntime.nextExpectedRefreshAt || null,
+        lastError: replyRuntime.lastError || null,
+      },
+      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast memory/humanize state and the enabled x-content extension in their owning runtime.',
+    },
+    measurements: {
+      dueCount: dueMeasurements.length,
+      due: dueMeasurements.slice(0, 10).map((item) => ({
+        queueItemId: item.queueItemId,
+        tweetId: item.tweetId,
+        windowMinutes: item.windowMinutes,
+        dueAt: item.dueAt,
+      })),
+    },
+    memoryCheckpoint: getGrowthOperatorMemoryCheckpoint(),
+    integrityWarnings,
+    readOnly: true,
   };
 }
 
@@ -802,6 +1158,61 @@ async function main() {
     return;
   }
 
+  if (command === 'analytics') {
+    result(getAccountAnalyticsSnapshot({
+      limit: Number(payload.limit || 30),
+      audienceLimit: Number(payload.audienceLimit || 24),
+    }));
+    return;
+  }
+
+  if (command === 'analytics-record') {
+    if (payload.confirmRecord !== true) throw new Error('analytics-record requires confirmRecord=true for the explicit local measurement write.');
+    const capturedAt = payload.capturedAt == null ? Date.now() : Number(payload.capturedAt);
+    if (!Number.isFinite(capturedAt) || capturedAt <= 0) throw new Error('analytics-record capturedAt must be a positive timestamp.');
+    const kind = String(payload.kind || 'content').trim().toLowerCase();
+    if (kind === 'content') {
+      const contentType = String(payload.contentType || payload.type || 'all').trim().toLowerCase();
+      if (!ACCOUNT_ANALYTICS_CONTENT_TYPES.has(contentType)) throw new Error(`Invalid analytics contentType: ${contentType || 'missing'}.`);
+      if (!Array.isArray(payload.posts) || payload.posts.length === 0) throw new Error('analytics-record content requires a non-empty posts array.');
+      const posts = payload.posts.map(normalizeAccountAnalyticsPost);
+      recordPerformanceSnapshot({ posts, capturedAt, metricSource: 'account_analytics' });
+      result({
+        recorded: { kind, contentType, capturedAt, count: posts.length },
+        analytics: getAccountAnalyticsSnapshot({ limit: Number(payload.limit || Math.max(30, posts.length)), audienceLimit: Number(payload.audienceLimit || 24) }),
+      });
+      return;
+    }
+    if (kind === 'audience') {
+      const metric = normalizeAudienceAnalyticsMetric(payload.metric);
+      if (!ACCOUNT_ANALYTICS_AUDIENCE_METRICS.has(metric)) throw new Error(`Invalid audience analytics metric: ${metric || 'missing'}.`);
+      const windowDays = Number(payload.windowDays || 7);
+      const data = payload.data ?? payload.insights ?? {};
+      const snapshot = recordAudienceAnalyticsSnapshot({ metric, windowDays, data, capturedAt });
+      result({
+        recorded: { kind, ...snapshot },
+        analytics: getAccountAnalyticsSnapshot({ limit: Number(payload.limit || 30), audienceLimit: Number(payload.audienceLimit || 24) }),
+      });
+      return;
+    }
+    throw new Error(`Invalid analytics-record kind: ${kind || 'missing'}.`);
+  }
+
+  if (command === 'operator-status') {
+    result(operatorStatus(payload));
+    return;
+  }
+
+  if (command === 'operator-memory-review') {
+    if (payload.confirmReview !== true) throw new Error('operator-memory-review requires confirmReview=true after the memory review is actually complete.');
+    result(recordGrowthOperatorMemoryReview({
+      result: payload.result,
+      note: payload.note || '',
+      reviewedAt: payload.reviewedAt == null ? Date.now() : Number(payload.reviewedAt),
+    }));
+    return;
+  }
+
   if (command === 'growth-refresh') {
     const kinds = payload.kind
       ? [String(payload.kind)]
@@ -825,26 +1236,7 @@ async function main() {
     const refreshes = payload.refresh === true
       ? await Promise.all(['x_latest', 'x_momentum'].map((kind) => refreshSourceSnapshot(kind)))
       : [];
-    const snapshots = ['x_latest', 'x_momentum'].map((kind) => getDiscoverSnapshot(kind));
-    const merged = new Map();
-    for (const snapshot of snapshots) {
-      for (const candidate of snapshot.candidates) {
-        if (candidate.source !== 'x' || sourceUsername(candidate) === 'ham_zax') continue;
-        const current = merged.get(candidate.key) || { candidate, sourceKinds: [] };
-        if (snapshot.kind === 'x_momentum') current.candidate = candidate;
-        if (!current.sourceKinds.includes(snapshot.kind)) current.sourceKinds.push(snapshot.kind);
-        merged.set(candidate.key, current);
-      }
-    }
-    const includeIgnored = payload.includeIgnored === true;
-    const includeDisposed = payload.includeDisposed === true;
-    const items = [...merged.values()]
-      .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds))
-      .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
-      .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
-      .filter((item) => includeDisposed || item.disposition?.active !== true)
-      .sort((left, right) => right.operatorPriority - left.operatorPriority)
-      .slice(0, Math.max(1, Math.min(50, Number(payload.limit || 12))));
+    const growth = growthRead(payload);
     result({
       account: getPerformanceSnapshot(1)?.account || null,
       refreshed: refreshes.map((refresh) => ({
@@ -855,15 +1247,8 @@ async function main() {
         preservedLastGood: refresh.preservedLastGood === true,
         error: refresh.error || null,
       })),
-      snapshots: snapshots.map((snapshot) => ({
-        kind: snapshot.kind,
-        fetchedAt: snapshot.fetchedAt,
-        lastRefreshAttemptAt: snapshot.lastRefreshAttemptAt,
-        candidateCount: snapshot.candidates.length,
-        error: snapshot.error,
-        legacyFallback: snapshot.legacyFallback,
-      })),
-      items,
+      snapshots: growth.snapshots,
+      items: growth.items,
       readOnlyPlanning: true,
       nextStep: 'Open the exact source on X, inspect thread context, then act once and verify the live result before record-action; use record-disposition for an exact skip/defer.',
     });
@@ -1004,9 +1389,11 @@ async function main() {
       sourceContext: operatorSourceContext(payload),
       createdAt: payload.actedAt == null ? Date.now() : Number(payload.actedAt),
     });
+    const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
     result({
       candidateKey: candidate.key,
-      recorded,
+      recorded: listCandidateActions(candidate.key).find((item) => item.action === action) || recorded,
+      reconciledQueue,
       disposition: getCandidateDisposition(candidate.key),
       actions: listCandidateActions(candidate.key),
     });
@@ -1026,25 +1413,18 @@ async function main() {
   }
 
   if (command === 'engage-next') {
-    const refresh = payload.refresh === false ? null : await refreshEngagementOpportunities({
-      targetLimit: Math.max(1, Math.min(50, Number(payload.targetLimit || 12))),
-      postsPerTarget: Math.max(1, Math.min(10, Number(payload.postsPerTarget || 4))),
-      minTargetScore: Number(payload.minTargetScore ?? 35),
-      targetSinceHours: Math.max(1, Number(payload.targetSinceHours || 24)),
-      responseSinceHours: Math.max(1, Number(payload.responseSinceHours || 72)),
-    });
-    const items = listEngagementItems({
-      status: payload.status || undefined,
-      minPriority: Number(payload.minPriority || 0),
-      includeExpired: Boolean(payload.includeExpired),
-      limit: Math.max(1, Math.min(200, Number(payload.limit || 50))),
-    });
-    const packets = items.map(engagementPacket);
+    const refresh = payload.refresh === true
+      ? await refreshEngagementOpportunities(engagementRefreshOptions(payload))
+      : null;
+    result(engagementRead(payload, { refresh, compact: payload.compact === true }));
+    return;
+  }
+
+  if (command === 'engage-refresh') {
+    const refresh = await refreshEngagementOpportunities(engagementRefreshOptions(payload));
     result({
-      refresh: refresh ? { refreshed: refresh.refreshed, rejected: refresh.rejected, expired: refresh.expired, errors: refresh.errors } : null,
-      accountHealth: getAccountHealthSummary(),
-      activeConversations: packets.filter((item) => item.queueItem.engagementKind !== 'initial_reply'),
-      newOpportunities: packets.filter((item) => item.queueItem.engagementKind === 'initial_reply'),
+      ...engagementRead(payload, { refresh, compact: payload.compact !== false }),
+      nextStep: 'Select from the refreshed active-conversation and new-opportunity lane champions; do not refresh again before acting unless live evidence invalidates the result.',
     });
     return;
   }
@@ -1214,7 +1594,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|schedule-next|schedule-inspect|route|workflow|research|performance|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {
