@@ -77,6 +77,8 @@ const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
 const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
 const AUTONOMOUS_REPLY_GRANT_STATE_KEY = 'autonomous_reply_grant';
 const AUTONOMOUS_REPLY_RUNTIME_STATE_KEY = 'autonomous_reply_runtime';
+const GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY = 'growth_operator_memory_review';
+const GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS = new Set(['browser_updated', 'x_content_candidate_added', 'both_updated', 'no_update_needed']);
 const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
 
 const db = new DatabaseSync(DB_FILE);
@@ -135,6 +137,13 @@ db.exec(`
     likes INTEGER NOT NULL DEFAULT 0,
     reposts INTEGER NOT NULL DEFAULT 0,
     replies INTEGER NOT NULL DEFAULT 0,
+    metric_source TEXT NOT NULL DEFAULT 'profile',
+    bookmarks INTEGER,
+    shares INTEGER,
+    profile_visits INTEGER,
+    new_follows INTEGER,
+    engagement_rate_pct REAL,
+    media_views INTEGER,
     PRIMARY KEY(tweet_id, captured_at)
   );
 
@@ -144,6 +153,14 @@ db.exec(`
     following INTEGER NOT NULL DEFAULT 0,
     posts INTEGER NOT NULL DEFAULT 0,
     likes INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE TABLE IF NOT EXISTS audience_analytics_snapshots (
+    captured_at INTEGER NOT NULL,
+    metric TEXT NOT NULL,
+    window_days INTEGER NOT NULL,
+    data_json TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY(captured_at, metric, window_days)
   );
 
   CREATE TABLE IF NOT EXISTS app_state (
@@ -639,6 +656,19 @@ for (const [name, sql] of [
 const candidateActionColumns = new Set(db.prepare('PRAGMA table_info(candidate_actions)').all().map((row) => row.name));
 if (!candidateActionColumns.has('source_context_json')) {
   db.exec('ALTER TABLE candidate_actions ADD COLUMN source_context_json TEXT');
+}
+
+const postMetricColumns = new Set(db.prepare('PRAGMA table_info(post_metrics)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['metric_source', "ALTER TABLE post_metrics ADD COLUMN metric_source TEXT NOT NULL DEFAULT 'profile'"],
+  ['bookmarks', 'ALTER TABLE post_metrics ADD COLUMN bookmarks INTEGER'],
+  ['shares', 'ALTER TABLE post_metrics ADD COLUMN shares INTEGER'],
+  ['profile_visits', 'ALTER TABLE post_metrics ADD COLUMN profile_visits INTEGER'],
+  ['new_follows', 'ALTER TABLE post_metrics ADD COLUMN new_follows INTEGER'],
+  ['engagement_rate_pct', 'ALTER TABLE post_metrics ADD COLUMN engagement_rate_pct REAL'],
+  ['media_views', 'ALTER TABLE post_metrics ADD COLUMN media_views INTEGER'],
+]) {
+  if (!postMetricColumns.has(name)) db.exec(sql);
 }
 
 const draftColumns = new Set(db.prepare('PRAGMA table_info(drafts)').all().map((row) => row.name));
@@ -1887,6 +1917,9 @@ function decodeCandidateAction(row) {
   const latestPostMetrics = outputTweetId
     ? db.prepare('SELECT * FROM post_metrics WHERE tweet_id = ? ORDER BY captured_at DESC LIMIT 1').get(outputTweetId) || null
     : null;
+  const latestAnalyticsMetrics = outputTweetId
+    ? db.prepare("SELECT * FROM post_metrics WHERE tweet_id = ? AND metric_source = 'account_analytics' ORDER BY captured_at DESC LIMIT 1").get(outputTweetId) || null
+    : null;
   const queueItem = getQueueItemByCandidate(row.candidate_key);
   const queueMatchesOutput = queueItem && (!outputTweetId || String(queueItem.outputTweetId || '') === outputTweetId);
   return {
@@ -1896,6 +1929,7 @@ function decodeCandidateAction(row) {
       outputTweetId,
       outputUrl: row.output_url || null,
       latestPostMetrics,
+      latestAnalyticsMetrics,
       queue: queueMatchesOutput ? {
         id: queueItem.id,
         pipeline: queueItem.pipeline,
@@ -3839,6 +3873,49 @@ export function getAppState(key, fallback = null) {
   return db.prepare('SELECT value FROM app_state WHERE key = ?').get(key)?.value ?? fallback;
 }
 
+export function getGrowthOperatorMemoryCheckpoint() {
+  const review = json(getAppState(GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY, null), {}) || {};
+  const lastReviewedAt = Number(review.reviewedAt || 0);
+  const actionFilter = "action IN ('reply', 'quote', 'repost', 'direct')";
+  const interactionCount = Number(db.prepare(`SELECT COUNT(*) AS count FROM candidate_actions
+    WHERE ${actionFilter} AND created_at > ?`).get(lastReviewedAt).count || 0);
+  const recentInteractions = db.prepare(`SELECT candidate_key, action, output_tweet_id, output_url, created_at
+    FROM candidate_actions WHERE ${actionFilter} AND created_at > ?
+    ORDER BY created_at DESC LIMIT 5`).all(lastReviewedAt).map((row) => ({
+    candidateKey: row.candidate_key,
+    action: row.action,
+    outputTweetId: row.output_tweet_id || null,
+    outputUrl: row.output_url || null,
+    createdAt: Number(row.created_at || 0),
+  }));
+  return {
+    interactionCount,
+    reviewState: interactionCount >= 5 ? 'required' : interactionCount >= 4 ? 'check_now' : 'not_due',
+    lastReview: lastReviewedAt ? {
+      reviewedAt: lastReviewedAt,
+      result: review.result || null,
+      note: review.note || '',
+    } : null,
+    recentInteractions,
+  };
+}
+
+export function recordGrowthOperatorMemoryReview({ result, note = '', reviewedAt = Date.now() } = {}) {
+  const normalizedResult = String(result || '');
+  if (!GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS.has(normalizedResult)) {
+    throw new Error(`Invalid memory review result: ${normalizedResult || 'missing'}.`);
+  }
+  const timestamp = Number(reviewedAt);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Memory review reviewedAt must be a positive timestamp.');
+  if (timestamp > Date.now()) throw new Error('Memory review reviewedAt cannot be in the future.');
+  setAppState(GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY, JSON.stringify({
+    reviewedAt: timestamp,
+    result: normalizedResult,
+    note: String(note || '').trim(),
+  }));
+  return getGrowthOperatorMemoryCheckpoint();
+}
+
 export function getNicheProfile() {
   const stored = db.prepare('SELECT value FROM app_state WHERE key = ?').get(NICHE_PROFILE_STATE_KEY)?.value;
   let updatedAt = null;
@@ -4301,9 +4378,17 @@ export function ensureEditorialCandidate(recommendationId) {
   return getCandidate(key);
 }
 
-export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Date.now() }) {
+export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Date.now(), metricSource = 'profile' }) {
   const timestamp = Number(capturedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Performance snapshot capturedAt must be a positive timestamp.');
+  const source = String(metricSource || '').trim();
+  if (!source) throw new Error('Performance snapshot metricSource is required.');
+  const optionalNumber = (value) => {
+    if (value == null || value === '' || value === '-') return null;
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new Error(`Invalid optional performance metric: ${value}`);
+    return number;
+  };
   db.exec('BEGIN');
   try {
     if (profile) {
@@ -4317,13 +4402,21 @@ export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Da
       );
     }
     const insert = db.prepare(`INSERT OR REPLACE INTO post_metrics(
-      tweet_id, captured_at, text, published_at, views, likes, reposts, replies
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+      tweet_id, captured_at, text, published_at, views, likes, reposts, replies,
+      metric_source, bookmarks, shares, profile_visits, new_follows, engagement_rate_pct, media_views
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     for (const post of posts) {
       if (!post.id) continue;
       insert.run(
         String(post.id), timestamp, post.text || '', Number(post.timestamp || 0) || null,
         Number(post.views || 0), Number(post.likes || 0), Number(post.retweets || 0), Number(post.replies || 0),
+        source,
+        optionalNumber(post.bookmarks),
+        optionalNumber(post.shares),
+        optionalNumber(post.profileVisits),
+        optionalNumber(post.newFollows),
+        optionalNumber(post.engagementRatePct),
+        optionalNumber(post.mediaViews),
       );
     }
     db.exec('COMMIT');
@@ -4332,6 +4425,38 @@ export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Da
     throw error;
   }
   return timestamp;
+}
+
+export function recordAudienceAnalyticsSnapshot({ metric, windowDays, data = {}, capturedAt = Date.now() }) {
+  const timestamp = Number(capturedAt);
+  const days = Number(windowDays);
+  const normalizedMetric = String(metric || '').trim().toLowerCase();
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Audience analytics capturedAt must be a positive timestamp.');
+  if (!Number.isInteger(days) || days <= 0) throw new Error('Audience analytics windowDays must be a positive integer.');
+  if (!normalizedMetric) throw new Error('Audience analytics metric is required.');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Audience analytics data must be an object.');
+  db.prepare(`INSERT OR REPLACE INTO audience_analytics_snapshots(captured_at, metric, window_days, data_json)
+    VALUES (?, ?, ?, ?)`).run(timestamp, normalizedMetric, days, JSON.stringify(data));
+  return { capturedAt: timestamp, metric: normalizedMetric, windowDays: days, data };
+}
+
+export function getAccountAnalyticsSnapshot({ limit = 30, audienceLimit = 24 } = {}) {
+  const postLimit = Math.max(1, Math.min(500, Number(limit || 30)));
+  const audienceBound = Math.max(1, Math.min(200, Number(audienceLimit || 24)));
+  const posts = db.prepare(`SELECT p.* FROM post_metrics p
+    JOIN (SELECT tweet_id, MAX(captured_at) AS latest FROM post_metrics
+      WHERE metric_source = 'account_analytics' GROUP BY tweet_id) x
+      ON x.tweet_id = p.tweet_id AND x.latest = p.captured_at
+    WHERE p.metric_source = 'account_analytics'
+    ORDER BY p.captured_at DESC, p.published_at DESC LIMIT ?`).all(postLimit);
+  const audience = db.prepare(`SELECT captured_at, metric, window_days, data_json
+    FROM audience_analytics_snapshots ORDER BY captured_at DESC LIMIT ?`).all(audienceBound).map((row) => ({
+      capturedAt: Number(row.captured_at),
+      metric: row.metric,
+      windowDays: Number(row.window_days),
+      data: json(row.data_json, {}),
+    }));
+  return { posts, audience };
 }
 
 export function getPerformanceSnapshot(limit = 30) {
