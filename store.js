@@ -30,6 +30,7 @@ import {
   reviewLearnedRules,
   transitionLearnedRule,
 } from './learning.js';
+import { createHash } from 'node:crypto';
 import {
   CANDIDATE_CLASSIFIER_VERSION,
   GROWTH_FOCUS_OBJECTIVES,
@@ -83,6 +84,26 @@ const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral',
 
 const db = new DatabaseSync(DB_FILE);
 db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
+
+export function runStoreTransaction(operation) {
+  if (typeof operation !== 'function') throw new Error('runStoreTransaction requires a function.');
+  const ownsTransaction = !db.isTransaction;
+  if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = operation();
+    if (result && typeof result.then === 'function') {
+      throw new Error('runStoreTransaction supports synchronous store operations only.');
+    }
+    if (ownsTransaction) db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    if (ownsTransaction && db.isTransaction) {
+      try { db.exec('ROLLBACK'); } catch {}
+    }
+    throw error;
+  }
+}
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS candidates (
     key TEXT PRIMARY KEY,
@@ -301,11 +322,30 @@ db.exec(`
     experiment_variant_id INTEGER,
     experiment_assigned_at INTEGER,
     experiment_assignment_json TEXT NOT NULL DEFAULT '{}',
+    approval_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    approval_invalidated_at INTEGER,
+    approval_invalidation_reason TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
     FOREIGN KEY(candidate_key) REFERENCES candidates(key),
     FOREIGN KEY(draft_id) REFERENCES drafts(id)
   );
+
+  CREATE TABLE IF NOT EXISTS queue_approval_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    queue_item_id INTEGER NOT NULL,
+    candidate_key TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL DEFAULT '{}',
+    reason TEXT NOT NULL DEFAULT '',
+    actor TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id),
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_queue_approval_events_queue ON queue_approval_events(queue_item_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_queue_approval_events_candidate ON queue_approval_events(candidate_key, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS autonomous_reply_decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -714,6 +754,9 @@ for (const [name, sql] of [
   ['experiment_variant_id', 'ALTER TABLE queue_items ADD COLUMN experiment_variant_id INTEGER'],
   ['experiment_assigned_at', 'ALTER TABLE queue_items ADD COLUMN experiment_assigned_at INTEGER'],
   ['experiment_assignment_json', "ALTER TABLE queue_items ADD COLUMN experiment_assignment_json TEXT NOT NULL DEFAULT '{}'"],
+  ['approval_snapshot_json', "ALTER TABLE queue_items ADD COLUMN approval_snapshot_json TEXT NOT NULL DEFAULT '{}'"],
+  ['approval_invalidated_at', 'ALTER TABLE queue_items ADD COLUMN approval_invalidated_at INTEGER'],
+  ['approval_invalidation_reason', "ALTER TABLE queue_items ADD COLUMN approval_invalidation_reason TEXT NOT NULL DEFAULT ''"],
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
@@ -946,6 +989,14 @@ export function rescoreCandidateClassifications({ staleOnly = false } = {}) {
 
 rescoreCandidateClassifications({ staleOnly: true });
 
+// One-time fail-closed migration: legacy approved items without snapshot must re-approval
+try {
+  const legacyApproved = db.prepare(`SELECT candidate_key FROM queue_items WHERE status = 'approved' AND (approval_snapshot_json IS NULL OR trim(approval_snapshot_json) = '' OR trim(approval_snapshot_json) = '{}')`).all();
+  for (const row of legacyApproved) {
+    try { invalidateQueueApproval(row.candidate_key, { actor: 'system', reason: 'legacy approved item predates snapshot binding — requires re-approval' }); } catch {}
+  }
+} catch {}
+
 export function getCandidate(key) {
   return decodeCandidate(db.prepare('SELECT * FROM candidates WHERE key = ?').get(key));
 }
@@ -1049,6 +1100,9 @@ function decodeQueueItem(row) {
     experimentVariantId: row.experiment_variant_id == null ? null : Number(row.experiment_variant_id),
     experimentAssignedAt: row.experiment_assigned_at == null ? null : Number(row.experiment_assigned_at),
     experimentAssignment: json(row.experiment_assignment_json, {}),
+    approvalSnapshot: json(row.approval_snapshot_json, {}),
+    approvalInvalidatedAt: row.approval_invalidated_at == null ? null : Number(row.approval_invalidated_at),
+    approvalInvalidationReason: row.approval_invalidation_reason || '',
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0),
   };
@@ -1112,7 +1166,7 @@ export function saveQueueItem(item) {
     schedule_urgency = ?, scheduled_at = ?, schedule_source = ?, publish_started_at = ?,
     publish_error = ?, published_at = ?, measurement_baseline_at = ?, measurement_baseline_followers = ?,
     experiment_variant_id = ?, experiment_assigned_at = ?,
-    experiment_assignment_json = ?, updated_at = ?
+    experiment_assignment_json = ?, approval_snapshot_json = ?, approval_invalidated_at = ?, approval_invalidation_reason = ?, updated_at = ?
     WHERE id = ?`).run(
     next.lane,
     next.pipeline,
@@ -1151,10 +1205,166 @@ export function saveQueueItem(item) {
     next.experimentVariantId ?? null,
     next.experimentAssignedAt ?? null,
     JSON.stringify(next.experimentAssignment || {}),
+    JSON.stringify(next.approvalSnapshot || {}),
+    next.approvalInvalidatedAt ?? null,
+    next.approvalInvalidationReason || '',
     Date.now(),
     current.id,
   );
   return getQueueItem(current.id);
+}
+
+function stableStringify(value) {
+  if (value == null) return 'null';
+  if (typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
+}
+
+function hashCanonical(value) {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function canonicalPublicationMaterial(queueItem, draft, candidate = null) {
+  const pipeline = String(queueItem?.pipeline || '');
+  const media = draft?.editor?.media || {};
+  const attachment = media?.attachment || null;
+  const mediaMaterial = {
+    required: Boolean(media.required),
+    type: String(media.type || 'none'),
+    attachment: attachment ? {
+      fileName: String(attachment.fileName || ''),
+      mimeType: String(attachment.mimeType || ''),
+      size: Number(attachment.size || 0),
+      altText: String(media.altText || ''),
+    } : null,
+  };
+  let contentMaterial;
+  if (pipeline === 'thread') {
+    const parts = Array.isArray(draft?.threadParts) ? draft.threadParts.map((p) => String(p || '').trim()) : [];
+    contentMaterial = { pipeline, threadParts: parts };
+  } else if (pipeline === 'repost') {
+    const cand = candidate || getCandidate(queueItem.candidateKey);
+    contentMaterial = { pipeline, sourceUrl: String(cand?.url || cand?.key || '') };
+  } else {
+    contentMaterial = { pipeline, body: String(draft?.body || '').trim() };
+    if (pipeline === 'quote') {
+      const cand = candidate || getCandidate(queueItem.candidateKey);
+      const url = String(cand?.url || '');
+      const match = url.match(/\/status\/(\d+)/);
+      contentMaterial.quoteTweetId = match ? match[1] : '';
+    }
+  }
+  return { content: contentMaterial, media: mediaMaterial };
+}
+
+export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
+  const material = canonicalPublicationMaterial(queueItem, draft, candidate);
+  const gateMaterial = draft?.gates || {};
+  const writingSelection = queueItem?.id ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
+  return {
+    contentHash: hashCanonical(material.content),
+    mediaHash: hashCanonical(material.media),
+    gateHash: hashCanonical(gateMaterial),
+    writingStrategySelectionId: writingSelection?.id ?? null,
+    material,
+  };
+}
+
+export function buildApprovalSnapshot(queueItem, draft, candidate = null) {
+  const fp = computeApprovalFingerprint(queueItem, draft, candidate);
+  return {
+    queueItemId: Number(queueItem.id),
+    candidateKey: queueItem.candidateKey,
+    pipeline: String(queueItem.pipeline || ''),
+    draftId: draft?.id ?? queueItem.draftId ?? null,
+    contentHash: fp.contentHash,
+    mediaHash: fp.mediaHash,
+    gateHash: fp.gateHash,
+    writingStrategySelectionId: fp.writingStrategySelectionId,
+    growthFocusRevision: getNicheProfileRevision(),
+    approvedAt: Date.now(),
+    material: fp.material,
+  };
+}
+
+export function getQueueApprovalEvents(queueItemId, { limit = 50 } = {}) {
+  const bounded = Math.max(1, Math.min(200, Number(limit || 50)));
+  return db.prepare(`SELECT * FROM queue_approval_events WHERE queue_item_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`)
+    .all(Number(queueItemId), bounded).map((row) => ({
+      id: Number(row.id),
+      queueItemId: Number(row.queue_item_id),
+      candidateKey: row.candidate_key,
+      eventType: row.event_type,
+      snapshot: json(row.snapshot_json, {}),
+      reason: row.reason || '',
+      actor: row.actor || '',
+      createdAt: Number(row.created_at || 0),
+    }));
+}
+
+export function getQueueApprovalEventsByCandidate(candidateKey, { limit = 50 } = {}) {
+  const bounded = Math.max(1, Math.min(200, Number(limit || 50)));
+  return db.prepare(`SELECT * FROM queue_approval_events WHERE candidate_key = ? ORDER BY created_at DESC, id DESC LIMIT ?`)
+    .all(String(candidateKey), bounded).map((row) => ({
+      id: Number(row.id),
+      queueItemId: Number(row.queue_item_id),
+      candidateKey: row.candidate_key,
+      eventType: row.event_type,
+      snapshot: json(row.snapshot_json, {}),
+      reason: row.reason || '',
+      actor: row.actor || '',
+      createdAt: Number(row.created_at || 0),
+    }));
+}
+
+function recordQueueApprovalEvent(queueItemId, candidateKey, eventType, snapshot, reason = '', actor = 'system') {
+  const ts = Date.now();
+  db.prepare(`INSERT INTO queue_approval_events(queue_item_id, candidate_key, event_type, snapshot_json, reason, actor, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
+    Number(queueItemId), String(candidateKey), String(eventType), JSON.stringify(snapshot || {}), String(reason || ''), String(actor || ''), ts,
+  );
+  return ts;
+}
+
+export function invalidateQueueApproval(candidateKey, { actor = 'system', reason = 'content changed after approval' } = {}) {
+  return runStoreTransaction(() => {
+    const queueItem = getQueueItemByCandidate(String(candidateKey));
+    if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+    const isApproved = queueItem.status === 'approved' && queueItem.humanApprovedAt != null;
+    if (!isApproved) return queueItem;
+    const snapshot = queueItem.approvalSnapshot && Object.keys(queueItem.approvalSnapshot).length ? queueItem.approvalSnapshot : {};
+    recordQueueApprovalEvent(queueItem.id, queueItem.candidateKey, 'invalidated', snapshot, reason, actor);
+    const invalidatedAt = Date.now();
+    return saveQueueItem({
+      ...queueItem,
+      status: 'needs_review',
+      humanApprovedAt: null,
+      approvedText: null,
+      approvalInvalidatedAt: invalidatedAt,
+      approvalInvalidationReason: String(reason || ''),
+      approvalSnapshot: snapshot,
+    });
+  });
+}
+
+export function captureQueueApproval(candidateKey, { actor = 'human', reason = 'approved' } = {}) {
+  return runStoreTransaction(() => {
+    const queueItem = getQueueItemByCandidate(String(candidateKey));
+    if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+    const draft = getDraftByCandidate(candidateKey);
+    const candidate = getCandidate(candidateKey);
+    const snapshot = buildApprovalSnapshot(queueItem, draft, candidate);
+    const saved = saveQueueItem({
+      ...queueItem,
+      approvalSnapshot: snapshot,
+      approvalInvalidatedAt: null,
+      approvalInvalidationReason: '',
+    });
+    recordQueueApprovalEvent(saved.id, saved.candidateKey, 'approved', snapshot, reason, actor);
+    return { queueItem: saved, snapshot };
+  });
 }
 
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
@@ -1174,6 +1384,33 @@ function buildMainFeedScheduleItem(queueItem) {
   const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
   const body = String(draft?.body || '');
   const text = queueItem.pipeline === 'thread' ? String(threadParts[0] || '') : body;
+  // Defensive snapshot validation
+  let approvalSnapshotMismatch = false;
+  let approvalMismatchReason = '';
+  let currentFingerprint = null;
+  const snapshot = queueItem.approvalSnapshot && Object.keys(queueItem.approvalSnapshot).length ? queueItem.approvalSnapshot : null;
+  if (queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+    if (queueItem.approvalInvalidatedAt != null) {
+      approvalSnapshotMismatch = true;
+      approvalMismatchReason = `APPROVAL_INVALIDATED: ${queueItem.approvalInvalidationReason || 'content changed after approval'}`;
+    } else if (snapshot && snapshot.contentHash) {
+      currentFingerprint = computeApprovalFingerprint(queueItem, draft, candidate);
+      if (currentFingerprint.contentHash !== snapshot.contentHash || currentFingerprint.mediaHash !== snapshot.mediaHash || currentFingerprint.gateHash !== snapshot.gateHash) {
+        approvalSnapshotMismatch = true;
+        approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISMATCH: current publication material or approval gates differ from approved snapshot';
+      } else if (snapshot.writingStrategySelectionId != null) {
+        const currentSelection = getLatestWritingStrategySelectionForQueueItem(queueItem.id);
+        if (!currentSelection || Number(currentSelection.id) !== Number(snapshot.writingStrategySelectionId)) {
+          approvalSnapshotMismatch = true;
+          approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISMATCH: writing strategy selection changed after approval';
+        }
+      }
+    } else if (snapshot == null) {
+      // Approved but no snapshot (legacy row) — require re-approval after this feature
+      approvalSnapshotMismatch = true;
+      approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISSING: approved item predates snapshot binding, requires re-approval';
+    }
+  }
   return {
     ...queueItem,
     priority: null,
@@ -1190,6 +1427,9 @@ function buildMainFeedScheduleItem(queueItem) {
     media,
     candidate,
     draft,
+    approvalSnapshotMismatch,
+    approvalMismatchReason,
+    currentFingerprint,
   };
 }
 
@@ -1443,15 +1683,26 @@ export function recordWritingStrategySelection(input = {}) {
   if (!WRITING_STRATEGY_SOURCES.has(selectionSource)) throw new Error(`Unsupported writing strategy selection source: ${selectionSource || 'missing'}.`);
   if (selectedBy !== 'human') throw new Error('Writing strategy selection requires selectedBy=human.');
   if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new Error('Writing strategy selectedAt must be a positive timestamp.');
-  const inserted = db.prepare(`INSERT INTO writing_strategy_selections(
-    queue_item_id, draft_id, mode, intent, style, opening_features_json,
-    guidance_json, selection_source, selected_by, selected_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    queueItem.id, draftId, mode, input.intent == null ? null : String(input.intent),
-    input.style == null ? null : String(input.style), JSON.stringify(input.openingFeatures || []),
-    JSON.stringify(input.guidance || {}), selectionSource, selectedBy, selectedAt,
-  );
-  return getWritingStrategySelection(Number(inserted.lastInsertRowid));
+  return runStoreTransaction(() => {
+    const inserted = db.prepare(`INSERT INTO writing_strategy_selections(
+      queue_item_id, draft_id, mode, intent, style, opening_features_json,
+      guidance_json, selection_source, selected_by, selected_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      queueItem.id, draftId, mode, input.intent == null ? null : String(input.intent),
+      input.style == null ? null : String(input.style), JSON.stringify(input.openingFeatures || []),
+      JSON.stringify(input.guidance || {}), selectionSource, selectedBy, selectedAt,
+    );
+    const selection = getWritingStrategySelection(Number(inserted.lastInsertRowid));
+    const refreshedQueue = getQueueItem(queueItem.id);
+    if (refreshedQueue && refreshedQueue.status === 'approved' && refreshedQueue.humanApprovedAt != null) {
+      const snapshot = refreshedQueue.approvalSnapshot || {};
+      const snapshotSelectionId = snapshot.writingStrategySelectionId;
+      if (snapshotSelectionId == null || Number(snapshotSelectionId) !== Number(selection.id)) {
+        invalidateQueueApproval(refreshedQueue.candidateKey, { actor: 'human', reason: 'writing strategy selection changed after approval' });
+      }
+    }
+    return selection;
+  });
 }
 
 export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human' } = {}) {
@@ -1486,6 +1737,14 @@ export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human
 export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('claimQueueItem requires a numeric now timestamp.');
+  // Fail-closed: approved content must still match its snapshot at claim time
+  const preItem = getQueueItem(Number(id));
+  if (preItem && preItem.status === 'approved' && preItem.humanApprovedAt != null) {
+    const scheduleCheck = buildMainFeedScheduleItem(preItem);
+    if (scheduleCheck?.approvalSnapshotMismatch || scheduleCheck?.approvalInvalidatedAt != null || preItem.approvalInvalidatedAt != null) {
+      return null;
+    }
+  }
   const params = [timestamp, timestamp, Number(id), timestamp];
   let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
     WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
@@ -3786,33 +4045,53 @@ function decodeDraft(row) {
   };
 }
 
-export function saveDraft(draft) {
-  const now = Date.now();
-  const existing = draft.id
-    ? db.prepare('SELECT id, created_at FROM drafts WHERE id = ?').get(draft.id)
-    : db.prepare('SELECT id, created_at FROM drafts WHERE candidate_key = ?').get(draft.candidateKey);
-  if (existing) {
-    db.prepare(`UPDATE drafts SET hook = ?, insight = ?, evidence = ?, action = ?, body = ?,
-      thread_parts_json = ?, editor_json = ?, gate_json = ?, quality_score = ?, status = ?,
-      scheduled_at = ?, published_tweet_id = ?, updated_at = ? WHERE id = ?`).run(
-      draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '', draft.body || '',
-      JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
-      Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
-      draft.publishedTweetId || null, now, existing.id,
-    );
-    return getDraft(existing.id);
+function draftApprovalInvalidationReason(queueItem, draft) {
+  if (!queueItem || queueItem.status !== 'approved' || queueItem.humanApprovedAt == null) return '';
+  const snapshot = queueItem.approvalSnapshot || {};
+  if (!snapshot.contentHash || !snapshot.mediaHash || !snapshot.gateHash) {
+    return 'approved draft changed without a complete approval snapshot';
   }
+  const fingerprint = computeApprovalFingerprint(queueItem, draft, getCandidate(queueItem.candidateKey));
+  if (fingerprint.contentHash !== snapshot.contentHash) return 'draft text or thread changed after approval';
+  if (fingerprint.mediaHash !== snapshot.mediaHash) return 'draft media changed after approval';
+  if (fingerprint.gateHash !== snapshot.gateHash) return 'draft approval gates changed after approval';
+  return '';
+}
 
-  const result = db.prepare(`INSERT INTO drafts (
-    candidate_key, hook, insight, evidence, action, body, thread_parts_json, editor_json, gate_json,
-    quality_score, status, scheduled_at, published_tweet_id, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    draft.candidateKey, draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '',
-    draft.body || '', JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
-    Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
-    draft.publishedTweetId || null, now, now,
-  );
-  return getDraft(Number(result.lastInsertRowid));
+export function saveDraft(draft) {
+  return runStoreTransaction(() => {
+    const now = Date.now();
+    const existing = draft.id
+      ? db.prepare('SELECT id, created_at FROM drafts WHERE id = ?').get(draft.id)
+      : db.prepare('SELECT id, created_at FROM drafts WHERE candidate_key = ?').get(draft.candidateKey);
+    const queueItem = getQueueItemByCandidate(draft.candidateKey);
+    const invalidationReason = draftApprovalInvalidationReason(queueItem, draft);
+    if (invalidationReason) {
+      invalidateQueueApproval(draft.candidateKey, { actor: 'system', reason: invalidationReason });
+    }
+    if (existing) {
+      db.prepare(`UPDATE drafts SET hook = ?, insight = ?, evidence = ?, action = ?, body = ?,
+        thread_parts_json = ?, editor_json = ?, gate_json = ?, quality_score = ?, status = ?,
+        scheduled_at = ?, published_tweet_id = ?, updated_at = ? WHERE id = ?`).run(
+        draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '', draft.body || '',
+        JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
+        Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
+        draft.publishedTweetId || null, now, existing.id,
+      );
+      return getDraft(existing.id);
+    }
+
+    const result = db.prepare(`INSERT INTO drafts (
+      candidate_key, hook, insight, evidence, action, body, thread_parts_json, editor_json, gate_json,
+      quality_score, status, scheduled_at, published_tweet_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      draft.candidateKey, draft.hook || '', draft.insight || '', draft.evidence || '', draft.action || '',
+      draft.body || '', JSON.stringify(draft.threadParts || []), JSON.stringify(draft.editor || {}), JSON.stringify(draft.gates || {}),
+      Number(draft.qualityScore || 0), draft.status || 'draft', draft.scheduledAt || null,
+      draft.publishedTweetId || null, now, now,
+    );
+    return getDraft(Number(result.lastInsertRowid));
+  });
 }
 
 export function getDraft(id) {

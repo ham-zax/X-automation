@@ -3,6 +3,7 @@ import { scoreOpportunity } from './opportunity.js';
 import { postTweetHttp } from './x_http.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
+  captureQueueApproval,
   deleteDraft,
   ensureQueueItem,
   getAudienceProfile,
@@ -18,6 +19,7 @@ import {
   getPerformanceSnapshot,
   getQueueItemByCandidate,
   hasCandidateAction,
+  invalidateQueueApproval,
   listCandidateActions,
   listAcceptedLearnedRules,
   listQueueItems,
@@ -29,6 +31,7 @@ import {
   recordCandidateAction,
   recordRelationshipEvent,
   rescoreCandidateClassifications,
+  runStoreTransaction,
   saveDraft,
   saveQueueItem,
 } from './store.js';
@@ -380,6 +383,9 @@ export function discardCandidateDraft(key) {
   if (queueItem && (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
     throw new Error('Publishing or published work cannot be discarded.');
   }
+  if (queueItem && queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+    invalidateQueueApproval(key, { actor: 'human', reason: 'draft discarded after approval' });
+  }
   if (queueItem) {
     const engagement = queueItem.lane === 'engagement';
     saveQueueItem({
@@ -426,93 +432,105 @@ export function recordManualRepost(key, { actor = 'human' } = {}) {
 }
 
 export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } = {}) {
-  const candidate = requireCandidate(key);
-  if (!PIPELINES.includes(pipeline)) throw new Error(`Invalid pipeline: ${pipeline}`);
-  if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid routing actor: ${actor}`);
+  return runStoreTransaction(() => {
+    const candidate = requireCandidate(key);
+    if (!PIPELINES.includes(pipeline)) throw new Error(`Invalid pipeline: ${pipeline}`);
+    if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid routing actor: ${actor}`);
 
-  ensureQueueItem(key);
-  let previousQueueItem = getQueueItemByCandidate(key);
-  if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
-    throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
-  }
-  const existingEngagementReply = pipeline === 'reply'
-    && previousQueueItem.lane === 'engagement'
-    && previousQueueItem.pipeline === 'reply';
-  if (!existingEngagementReply) {
-    refreshQueueRecommendation(key);
-    previousQueueItem = getQueueItemByCandidate(key);
-  }
-  if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {
-    if (!existingEngagementReply && previousQueueItem.recommendedPipeline === 'ignore') {
-      const routingDecision = previousQueueItem.routingDecision || {};
-      const currentOverride = routingDecision.accepted === true
-        && routingDecision.actor === 'human'
-        && routingDecision.recommendedPipeline === previousQueueItem.recommendedPipeline
-        && routingDecision.routingReason === previousQueueItem.routingReason;
-      if (!currentOverride) {
-        throw new Error('This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
+    ensureQueueItem(key);
+    let previousQueueItem = getQueueItemByCandidate(key);
+    if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
+      throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
+    }
+    if (previousQueueItem.status === 'approved' && previousQueueItem.humanApprovedAt != null) {
+      invalidateQueueApproval(key, { actor, reason: `route changed from ${previousQueueItem.pipeline} to ${pipeline} after approval` });
+      previousQueueItem = getQueueItemByCandidate(key);
+    }
+    const existingEngagementReply = pipeline === 'reply'
+      && previousQueueItem.lane === 'engagement'
+      && previousQueueItem.pipeline === 'reply';
+    if (!existingEngagementReply) {
+      refreshQueueRecommendation(key);
+      previousQueueItem = getQueueItemByCandidate(key);
+    }
+    if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {
+      if (!existingEngagementReply && previousQueueItem.recommendedPipeline === 'ignore') {
+        const routingDecision = previousQueueItem.routingDecision || {};
+        const currentOverride = routingDecision.accepted === true
+          && routingDecision.actor === 'human'
+          && routingDecision.recommendedPipeline === previousQueueItem.recommendedPipeline
+          && routingDecision.routingReason === previousQueueItem.routingReason;
+        if (!currentOverride) {
+          throw new Error('This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
+        }
+      }
+      const growthFit = assessStrategicRelevance(candidate, { humanOverride: previousQueueItem.relevance?.humanOverride || null });
+      if (growthFit.state === 'unknown') {
+        throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
+      }
+      if (!growthFit.allowed) {
+        throw new Error('This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
       }
     }
-    const growthFit = assessStrategicRelevance(candidate, { humanOverride: previousQueueItem.relevance?.humanOverride || null });
-    if (growthFit.state === 'unknown') {
-      throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
+    const state = routeState(pipeline);
+    let draft = getDraftByCandidate(key);
+    if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
+    let draftId = null;
+    if (TEXT_PIPELINES.has(pipeline)) {
+      const draftPipeline = draft?.editor?.pipeline || (TEXT_PIPELINES.has(previousQueueItem?.pipeline) ? previousQueueItem.pipeline : '');
+      if (draft && draftPipeline && draftPipeline !== pipeline) {
+        draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key, editor: { pipeline } });
+      }
+      draft ||= saveDraft({ ...createDraftScaffold(candidate, { pipeline }), editor: { pipeline } });
+      draftId = draft.id;
     }
-    if (!growthFit.allowed) {
-      throw new Error('This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
-    }
-  }
-  const state = routeState(pipeline);
-  let draft = getDraftByCandidate(key);
-  if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
-  let draftId = null;
-  if (TEXT_PIPELINES.has(pipeline)) {
-    const draftPipeline = draft?.editor?.pipeline || (TEXT_PIPELINES.has(previousQueueItem?.pipeline) ? previousQueueItem.pipeline : '');
-    if (draft && draftPipeline && draftPipeline !== pipeline) {
-      draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key, editor: { pipeline } });
-    }
-    draft ||= saveDraft({ ...createDraftScaffold(candidate, { pipeline }), editor: { pipeline } });
-    draftId = draft.id;
-  }
 
-  const replyTarget = pipeline === 'reply' ? {
-    targetUsername: previousQueueItem?.targetUsername || sourceUsername(candidate) || null,
-    targetTweetId: previousQueueItem?.targetTweetId || sourceTweetId(candidate) || null,
-    engagementKind: previousQueueItem?.engagementKind || 'initial_reply',
-  } : {};
+    const replyTarget = pipeline === 'reply' ? {
+      targetUsername: previousQueueItem?.targetUsername || sourceUsername(candidate) || null,
+      targetTweetId: previousQueueItem?.targetTweetId || sourceTweetId(candidate) || null,
+      engagementKind: previousQueueItem?.engagementKind || 'initial_reply',
+    } : {};
 
-  return saveQueueItem({
-    candidateKey: key,
-    lane: state.lane,
-    pipeline,
-    status: state.status,
-    draftId,
-    humanApprovedAt: null,
-    approvedText: null,
-    routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
-    routingDecision: ['ignore', 'watch', 'research'].includes(pipeline) ? {} : (previousQueueItem.routingDecision || {}),
-    ...replyTarget,
+    return saveQueueItem({
+      candidateKey: key,
+      lane: state.lane,
+      pipeline,
+      status: state.status,
+      draftId,
+      humanApprovedAt: null,
+      approvedText: null,
+      routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
+      routingDecision: ['ignore', 'watch', 'research'].includes(pipeline) ? {} : (previousQueueItem.routingDecision || {}),
+      ...replyTarget,
+    });
   });
 }
 
 export function requestQueueReview(key, confirmations = {}) {
-  const candidate = requireCandidate(key);
-  const queueItem = getQueueItemByCandidate(key);
-  if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+  return runStoreTransaction(() => {
+    const candidate = requireCandidate(key);
+    let queueItem = getQueueItemByCandidate(key);
+    if (!queueItem) throw new Error(`Queue item not found: ${key}`);
 
-  if (queueItem.pipeline === 'repost') {
-    return saveQueueItem({ candidateKey: key, status: 'needs_review' });
-  }
-  if (!TEXT_PIPELINES.has(queueItem.pipeline)) throw new Error(`Pipeline ${queueItem.pipeline} cannot request content review.`);
+    if (queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+      invalidateQueueApproval(key, { actor: 'system', reason: 'review requested after approval' });
+      queueItem = getQueueItemByCandidate(key);
+    }
+    if (queueItem.pipeline === 'repost') {
+      return saveQueueItem({ candidateKey: key, status: 'needs_review' });
+    }
+    if (!TEXT_PIPELINES.has(queueItem.pipeline)) throw new Error(`Pipeline ${queueItem.pipeline} cannot request content review.`);
 
-  const draft = getDraftByCandidate(key);
-  if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
-  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
-  const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
-  return {
-    queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id, humanApprovedAt: null, approvedText: null }),
-    draft: savedDraft,
-    analysis,
-  };
+    const draft = getDraftByCandidate(key);
+    if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
+    const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+    return {
+      queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id, humanApprovedAt: null, approvedText: null }),
+      draft: savedDraft,
+      analysis,
+    };
+  });
 }
 
 export function approveQueueItem(key, confirmations = {}) {
@@ -542,17 +560,22 @@ export function approveQueueItem(key, confirmations = {}) {
     draft = saveDraft({ ...draft, status: 'ready' });
   }
 
-  return {
-    queueItem: saveQueueItem({
+  const captured = runStoreTransaction(() => {
+    saveQueueItem({
       candidateKey: key,
       status: 'approved',
       draftId: draft?.id ?? null,
       humanApprovedAt: Date.now(),
       publishStartedAt: null,
       publishError: null,
-    }),
+    });
+    return captureQueueApproval(key, { actor: 'human', reason: 'approved' });
+  });
+  return {
+    queueItem: captured.queueItem,
     draft,
     analysis,
+    approvalSnapshot: captured.snapshot,
   };
 }
 
@@ -577,16 +600,21 @@ export function approveEngagementQueueItem(key, confirmations = {}, { actor = 'h
   const approvedText = String(checkedDraft.body || '');
   if (!approvedText.trim()) throw new Error('Approved reply text cannot be empty.');
   const readyDraft = saveDraft({ ...checkedDraft, status: 'ready' });
-  return {
-    queueItem: saveQueueItem({
+  const captured = runStoreTransaction(() => {
+    saveQueueItem({
       candidateKey: key,
       status: 'approved',
       draftId: readyDraft.id,
       humanApprovedAt: Date.now(),
       approvedText,
-    }),
+    });
+    return captureQueueApproval(key, { actor, reason: 'approved' });
+  });
+  return {
+    queueItem: captured.queueItem,
     draft: readyDraft,
     analysis,
+    approvalSnapshot: captured.snapshot,
   };
 }
 

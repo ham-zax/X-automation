@@ -1561,8 +1561,6 @@ async function persistDraftMedia(draft, req) {
   await fs.writeFile(localPath, buffer, { mode: 0o600 });
 
   const previous = draftMediaAttachment(draft);
-  if (previous?.localPath && previous.localPath !== localPath) await fs.rm(previous.localPath, { force: true }).catch(() => {});
-
   const media = {
     ...(draft.editor?.media || {}),
     required: true,
@@ -1575,7 +1573,14 @@ async function persistDraftMedia(draft, req) {
       provenance: 'operator_upload',
     },
   };
-  return saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+  try {
+    const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+    if (previous?.localPath && previous.localPath !== localPath) await fs.rm(previous.localPath, { force: true }).catch(() => {});
+    return saved;
+  } catch (error) {
+    await fs.rm(localPath, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 function confirmedFlags(body) {
@@ -2384,19 +2389,17 @@ export async function handleApi(req, res, requestUrl) {
 
       if (method === 'POST') {
         if (readOnly) throw new Error('Published text is historical record and cannot accept a new attachment.');
-        if (queueItem?.status === 'approved' || queueItem?.humanApprovedAt) throw new Error('Reopen the approved draft before changing its attachment.');
         const saved = await persistDraftMedia(draft, req);
         return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
       }
 
       if (method === 'DELETE') {
         if (readOnly) throw new Error('Published text is historical record and cannot remove its attachment.');
-        if (queueItem?.status === 'approved' || queueItem?.humanApprovedAt) throw new Error('Reopen the approved draft before changing its attachment.');
         const attachment = draftMediaAttachment(draft);
-        if (attachment?.localPath) await fs.rm(attachment.localPath, { force: true }).catch(() => {});
         const media = { ...(draft.editor?.media || {}) };
         delete media.attachment;
         const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+        if (attachment?.localPath) await fs.rm(attachment.localPath, { force: true }).catch(() => {});
         return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
       }
     }

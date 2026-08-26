@@ -202,6 +202,21 @@ export function evaluateScheduleEligibility(item, context = {}) {
     addIssue(blockers, 'HARD_GATES_NOT_PASSED', 'Required content hard gates must be explicitly represented as passing.');
   }
 
+  if (item?.approvalSnapshotMismatch === true) {
+    addIssue(blockers, 'APPROVAL_SNAPSHOT_MISMATCH', item?.approvalMismatchReason || 'Current publication material differs from approved snapshot.');
+  }
+
+  if (item?.approvalInvalidatedAt != null || field(item, 'approvalInvalidatedAt', 'approval_invalidated_at') != null) {
+    const reason = item?.approvalInvalidationReason || field(item, 'approvalInvalidationReason', 'approval_invalidation_reason') || 'content changed after approval';
+    if (!blockers.some((b) => b.code === 'APPROVAL_SNAPSHOT_MISMATCH')) {
+      addIssue(blockers, 'APPROVAL_INVALIDATED', `Approval invalidated: ${reason}`);
+    }
+  }
+
+  if (item?.approvalSnapshot && Object.keys(item.approvalSnapshot).length === 0 && item?.status === 'approved' && approvedAtOf(item) != null) {
+    addIssue(blockers, 'APPROVAL_SNAPSHOT_MISSING', 'Approved item predates snapshot binding, requires re-approval.');
+  }
+
   const expiresAt = expiresAtOf(item);
   if (expiresAt != null && expiresAt <= now) {
     addIssue(blockers, 'EXPIRED', 'Item expiry is at or before the current scheduler time.');
