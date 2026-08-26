@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import { Scraper, createBrowser, createPage } from 'xactions';
+import { Scraper, createPage } from 'xactions';
 import { TwitterHttpClient, unfollowUser as unfollowUserHttp } from 'xactions/scrapers/twitter/http';
+import { createBrowser } from './x_browser.js';
 import { classifyAudienceProfile, getActiveNicheProfile } from './strategy.js';
 import { runStructuredAI } from './ai_runtime.js';
 import {

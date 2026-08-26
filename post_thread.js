@@ -2,7 +2,8 @@ import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { createBrowser, createPage, loginWithCookie, postComposer } from 'xactions';
+import { createPage, loginWithCookie, postComposer } from 'xactions';
+import { createBrowser } from './x_browser.js';
 import { checkHttpSession, postThreadHttp } from './x_http.js';
 
 // ============================================================================
