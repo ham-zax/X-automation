@@ -66,6 +66,16 @@ const DEFAULT_CONTENT_ROLES = Object.freeze({
   business: 'adjacent',
 });
 
+const DISCOVERY_CRYPTO_SIGNALS = [
+  'crypto', 'cryptocurrency', 'blockchain', 'web3', 'defi', 'nft', 'memecoin', 'on-chain', 'airdrop', 'tokenomics',
+];
+const DISCOVERY_CRYPTO_PROMOTION_SIGNALS = [
+  'currency', 'token', 'miners', 'validators', 'staking', 'presale', 'holders', 'buy now',
+];
+const DISCOVERY_JOB_AD_SIGNALS = [
+  'we are hiring', 'hiring now', 'job opening', 'open role', 'open roles', 'apply now', 'join our team',
+];
+
 export const AUDIENCE_NICHE_GROUPS = [
   {
     tag: 'agents',
@@ -299,6 +309,25 @@ function containsTerm(haystack, term) {
     TERM_PATTERNS.set(term, pattern);
   }
   return pattern.test(haystack);
+}
+
+export function assessDiscoveryQuality(text) {
+  const haystack = String(text || '').toLowerCase();
+  const cryptoMatches = DISCOVERY_CRYPTO_SIGNALS.filter((term) => containsTerm(haystack, term));
+  const cryptoPromotionMatches = DISCOVERY_CRYPTO_PROMOTION_SIGNALS.filter((term) => containsTerm(haystack, term));
+  const tokenTicker = String(text || '').match(/\$[a-z][a-z0-9]{1,9}\b/i)?.[0] || null;
+  const jobAdMatches = DISCOVERY_JOB_AD_SIGNALS.filter((term) => containsTerm(haystack, term));
+  const reasonCodes = [];
+  if (cryptoMatches.length && (cryptoPromotionMatches.length || tokenTicker)) reasonCodes.push('CRYPTO_PROMOTION');
+  if (jobAdMatches.length) reasonCodes.push('JOB_AD');
+  return {
+    allowed: reasonCodes.length === 0,
+    reasonCodes,
+    matches: [...new Set([...cryptoMatches, ...cryptoPromotionMatches, ...jobAdMatches, ...(tokenTicker ? [tokenTicker] : [])])],
+    explanation: reasonCodes.length
+      ? `Discovery filter excluded ${reasonCodes.join(', ').toLowerCase().replaceAll('_', ' ')} content from the growth opportunity set.`
+      : 'No hard discovery-quality exclusion matched.',
+  };
 }
 
 export function classifyNiche(text) {
