@@ -3,19 +3,19 @@ export const NICHE_GROUPS = [
     tag: 'agents',
     label: 'AI coding & agents',
     weight: 18,
-    terms: ['coding agent', 'claude code', 'codex', 'cursor', 'opencode', 'mcp', 'agentic', 'developer agent', 'ai pair programmer', 'vibe coding'],
+    terms: ['coding agent', 'coding agents', 'ai agent', 'ai agents', 'claude code', 'codex', 'cursor', 'opencode', 'windsurf', 'copilot', 'github copilot', 'cline', 'roo code', 'aider', 'zed', 'vs code', 'mcp', 'model context protocol', 'agentic', 'software agent', 'software agents', 'developer agent', 'subagents', 'multi-agent', 'agent orchestration', 'agent framework', 'agent runtime', 'agent host', 'agent protocol', 'agent memory', 'tool calling', 'computer use', 'browser agent', 'terminal agent', 'code review agent', 'autonomous coding', 'agent skills', 'skill file', 'ide agents', 'ai ide', 'ai pair programmer', 'vibe coding'],
   },
   {
     tag: 'models',
     label: 'Models & inference',
     weight: 16,
-    terms: ['llm', 'ai model', 'open source model', 'qwen', 'deepseek', 'glm', 'llama', 'inference', 'context window', 'quantization', 'fine-tuning', 'ollama', 'vllm'],
+    terms: ['llm', 'ai model', 'open source model', 'reasoning model', 'coding model', 'open model', 'open weights', 'local llm', 'local model', 'openai', 'anthropic', 'claude', 'gemini', 'grok', 'qwen', 'deepseek', 'glm', 'minimax', 'mistral', 'llama', 'inference', 'inference speed', 'tokens per second', 'context window', 'long context', 'structured output', 'function calling', 'tool use', 'multimodal', 'benchmark', 'terminal-bench', 'swe-bench', 'quantization', 'fine-tuning', 'ollama', 'vllm'],
   },
   {
     tag: 'devtools',
     label: 'Developer tools',
     weight: 16,
-    terms: ['developer tool', 'devtools', 'developer experience', 'sdk', 'cli', 'github', 'vercel', 'supabase', 'open source', 'typescript', 'node.js', 'python', 'ide'],
+    terms: ['developer tool', 'devtools', 'developer experience', 'sdk', 'cli', 'github', 'vercel', 'supabase', 'open source', 'typescript', 'node.js', 'python', 'vscode', 'vs code', 'ide'],
   },
   {
     tag: 'infra',
@@ -47,7 +47,7 @@ export const NICHE_GROUPS = [
 ];
 
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 1;
+export const CANDIDATE_CLASSIFIER_VERSION = 3;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
@@ -331,7 +331,7 @@ export function assessDiscoveryQuality(text) {
 }
 
 export function classifyNiche(text) {
-  const haystack = String(text || '').toLowerCase();
+  const haystack = String(text || '').toLowerCase().replace(/([a-z])(?=\d)/g, '$1 ');
   const hasTechnicalContext = TECHNICAL_ANCHORS.some((term) => containsTerm(haystack, term));
   const tags = [];
   const matches = [];
