@@ -33,6 +33,8 @@ Available commands:
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
 - `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
+- `operator-status` - read the compact cross-lane cockpit: account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
+- `operator-memory-review` - record a completed Browser/`x-content` memory checkpoint and reset the interaction window; requires `confirmReview: true` and an exact result.
 - `route` - select/override Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore for a candidate; agents cannot approve.
 - `workflow` - inspect one candidate's queue row, draft, actions, current score breakdown, and stored recommendation.
 - `research` - query persisted research candidates.
@@ -43,7 +45,8 @@ Available commands:
 - `relationship-targets` - list strategic relationship profiles with optional class/stage/min-TargetScore filters.
 - `relationship-inspect` - inspect one relationship profile plus recent append-only event history.
 - `relationship-events` - read bounded recent relationship events for one username.
-- `engage-next` - refresh/read ranked actionable engagement items, grouped into Active Conversations and New Opportunities.
+- `engage-next` - read cached ranked actionable engagement items, grouped into Active Conversations and New Opportunities; pass `refresh: true` only for compatibility with an intentional inline refresh.
+- `engage-refresh` - explicitly refresh engagement sources, then return refreshed Active Conversations and New Opportunities; compact output is the default.
 - `engage-draft` - create/update a Phase-2 reply draft and optionally request review; it never approves or sends.
 - `engage-resolve` - ignore/expire an item or explicitly send an already human-approved exact reply; it cannot approve one.
 - `audience-sync` - refresh the authenticated follower/following audience snapshot and strategic state for currently observed relevant profiles.
@@ -194,10 +197,11 @@ Phase 1C uses a separate `queue_items(lane=engagement, pipeline=reply)` workflow
 
 Every actionable item exposes target relationship context, Conversation Potential, Relationship Potential, TargetScore, freshness/expiry, per-post ReplyVisibility, EngagePriority, the concrete proposed contribution, and `initial_reply` / `follow_up` / `own_post_response` kind. If the current source cannot support a concrete contribution, it is not queued. Saturation/repetition are bounded soft modifiers; active/direct-response evidence can neutralize them.
 
-Inspect/refresh:
+Inspect cached state first, then refresh only when freshness can change the selected action:
 
 ```bash
-npm run agent -- engage-next <<<'{"refresh":true,"minPriority":40,"limit":30}'
+npm run agent -- engage-next <<<'{"compact":true,"minPriority":40,"limit":30}'
+npm run agent -- engage-refresh <<<'{"minPriority":40,"limit":30}'
 ```
 
 Create or update reviewable reply text without approving it:

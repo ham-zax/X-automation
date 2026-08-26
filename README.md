@@ -29,6 +29,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
 - [`docs/FIRST_1000_GROWTH_MODE.md`](docs/FIRST_1000_GROWTH_MODE.md) — implemented bootstrap policy: why cold high-momentum sources previously fell through to Ignore and how runtime routing now prioritizes fast niche-relevant participation before 1,000 followers.
 - [`docs/GROWTH_OS_MOMENTUM_OPERATOR.md`](docs/GROWTH_OS_MOMENTUM_OPERATOR.md) — live 2026-08-25 findings plus the agent-facing `growth-next` loop: last-known-good source refresh, momentum/urgency, borrowed distribution, and viral-structure transfer.
+- [`docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md`](docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md) — reusable persistent-session invocation contract: qualified-growth reward hierarchy, anti-drift checks, operational completion criteria, authority boundaries, and continuation behavior.
 - [`docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`](docs/NETWORK_GROWTH_OPERATING_SYSTEM.md) — strategic source of truth for conversation insertion, relationship conversion, owned-content conversion, target classes, network metrics, and the two-lane operating model.
 - [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — implemented target scoring, relationship profiles/events/stages, Engage Next discovery/follow-up workflow, and network analytics contracts.
 - [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — implemented HEALTHY/WATCH/CONSTRAINED observability, provenance-preserving Under-the-Hood snapshots, soft saturation/repetition diagnostics, Network Quality, and InteractionYield.
@@ -156,6 +157,8 @@ The implemented AI runtime layer supports Direct OpenAI/OpenRouter/OpenAI-compat
 Another agent should use the bridge rather than editing SQLite or scraping dashboard HTML:
 
 ```bash
+npm run agent -- operator-status <<<'{}'
+npm run agent -- operator-memory-review <<<'{"result":"no_update_needed","note":"Reviewed after five reconciled interactions; no stable reusable pattern yet.","confirmReview":true}'
 npm run agent -- research <<<'{"source":"x","limit":10}'
 npm run agent -- queue <<<'{"limit":20}'
 npm run agent -- schedule-next <<<'{}'
@@ -171,7 +174,8 @@ npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
 npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
-npm run agent -- engage-next <<<'{"refresh":true,"limit":30}'
+npm run agent -- engage-next <<<'{"compact":true,"limit":30}'
+npm run agent -- engage-refresh <<<'{"limit":30}'
 npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123"}'
 npm run agent -- engage-resolve <<<'{"key":"https://x.com/example/status/123","action":"ignore"}'
 npm run agent -- editorial-plan <<<'{"objective":"qualified_growth"}'

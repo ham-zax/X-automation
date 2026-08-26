@@ -4,6 +4,8 @@
 
 This document turns the live First-1,000 observations into an agent-operable Growth OS loop. It complements `FIRST_1000_GROWTH_MODE.md`: that document defines bootstrap policy; this document defines how an operating agent finds the next action without getting stranded between Discover, Viral Styles, routing, and the live X browser.
 
+To start or resume a continuous operating session, use [`PERSISTENT_GROWTH_OPERATOR_PROMPT.md`](PERSISTENT_GROWTH_OPERATOR_PROMPT.md). It defines the invocation contract, reward hierarchy, anti-drift checks, completion criteria, authority boundaries, and continuation behavior; this document remains the design and evidence reference for momentum operation.
+
 ## Live findings that triggered the redesign
 
 The 2026-08-25 operating session produced a useful contrast.
@@ -83,7 +85,7 @@ The structural insight is that **candidate selection, distribution leverage, and
 
 Use this loop during First 1,000 mode:
 
-`refresh when useful -> preserve last good -> growth-next immediately -> inspect exact source -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
+`operator-status -> select lane champions -> refresh only when useful -> preserve last good -> inspect exact source -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
 
 ### 1. Refresh without destroying useful state
 
@@ -93,7 +95,15 @@ The refresh status still records the problem. Stale data is visible as stale; it
 
 ### 2. Ask Growth OS for the next actions
 
-Use:
+Start with the compact, network-independent cross-lane cockpit:
+
+```bash
+npm run agent -- operator-status <<<'{}'
+```
+
+It exposes cached discovery and engagement champions, approved-main-feed readiness, autonomous-reply transport state, due measurements, the durable 4–5 interaction memory checkpoint, and approved-item gate mismatches without returning full workflow packets. Priorities remain lane-local; the operator arbitrates lane champions rather than comparing unlike scores.
+
+Then use the detailed discovery view when that lane is competitive:
 
 ```bash
 npm run agent -- growth-next <<<'{"limit":12}'
@@ -125,6 +135,9 @@ The response includes:
 - the source post's hook/style shape;
 - transfer guidance for the outbound copy;
 - current exact-candidate operator disposition when one exists. Active `skip` / `defer` dispositions are suppressed from the normal actionable result set; `includeDisposed: true` exposes them for inspection.
+- explicit claim exposure, including whether a Repost inherits source claims without corrective context;
+- execution-path facts: automatic main-feed after approval, autonomous-reply candidacy, or manual final action.
+- hard discovery-quality exclusions for crypto promotion and direct job ads; `includeLowSignal: true` exposes them for inspection without making them normal growth candidates.
 
 The operator-priority formula is deliberately inspectable and empirical:
 
@@ -142,7 +155,7 @@ This is an internal attention-allocation heuristic, not a claim about X's rankin
 
 Before a live action:
 
-1. open the exact source post in the authenticated Windows X session;
+1. open the exact source post through authenticated Linux `browser-fast` on the persistent humanized Clearcote profile;
 2. read the full post and relevant thread context;
 3. confirm the visible metrics and timestamp are still materially current;
 4. confirm we have not already acted on the source;
@@ -284,7 +297,7 @@ This first run also exposed a useful independent variable: **conversation crowdi
 Do not respond to this redesign by adding more dashboard surface area. The action-time source snapshot and inspectable action/outcome join are now in place; improve the evidence loop from that foundation in this order:
 
 1. **Expand real outcome capture where the platform/runtime exposes it.** Use the joined action-time source context to compare impressions, engagements, detail expands, profile visits, author response, follower delta, and follower niche quality by Reply / Quote / Repost / Original without inventing unavailable metrics.
-2. **Expose claim/media readiness.** A high-momentum candidate should be marked `needs_primary_source`, `needs_media_inspection`, or `clean_to_amplify` before route execution. The live operator currently performs this check manually; the packet should eventually make it explicit.
+2. **Deepen claim/media readiness.** `growth-next` now marks Repost claim exposure and requires exact-source/material-claim verification. A later evidence-backed classifier may distinguish `needs_primary_source`, `needs_media_inspection`, and `clean_to_amplify`; until then the live operator owns that judgment.
 3. **Learn reply-density and bookmark-density direction before weighting either.** Keep both as observational evidence. Only add a ranking bonus after enough own-account outcomes show a repeated directional relationship with impressions, author responses, profile visits, or follows.
 4. **Make refresh durable, not blocking.** `growth-refresh` is already separated from `growth-next`. The next runtime step is to let the existing automation/terminal layer refresh snapshots durably while the operator keeps consuming last-known-good state.
 5. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, verified-number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.

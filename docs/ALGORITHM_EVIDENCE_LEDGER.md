@@ -1,6 +1,6 @@
 # X Algorithm Evidence Ledger
 
-Last reviewed: **2026-08-19**.
+Last reviewed: **2026-08-25**.
 
 This document prevents the growth system from confusing platform code, official product statements, third-party observations, and our own experiments.
 
@@ -475,9 +475,23 @@ Experiment by content archetype.
 
 ### Hashtag count
 
-Default remains zero for style/scannability.
+**2026-08-25 account observation:** live profile reconciliation identified the latest three relevant main-feed originals:
 
-The claim that exactly `<=2` is algorithmically optimal remains an experiment variable.
+- `https://x.com/ham_zax/status/2092100349234684010` — two canonical hashtags (`#OxAlpha #OpenRouter`) — **161 impressions** at about 8h;
+- `https://x.com/ham_zax/status/2092091703268417739` — zero hashtags — **8 impressions** at about 8h;
+- `https://x.com/ham_zax/status/2092164596266410464` — zero hashtags — **13 impressions** at about 3h.
+
+The 161-vs-8 pair is especially notable because X displayed both at roughly the same post age. Treat it as a strong candidate signal, not a causal result. The sample is only `n=3`; topic momentum (`Ox Alpha` / `OpenRouter`), wording, timing, and other distribution factors remain plausible explanations, and the 13-impression post has a shorter observation window.
+
+Operationally, move hashtag count from a passive variable to an active first-1,000 experiment:
+
+- test **0 vs 1 vs 2** canonical topical hashtags on comparable main-feed originals;
+- because the positive observation used two hashtags, do not rewrite the evidence into a one-hashtag rule;
+- compare impressions at the same post-age window, then add follow/profile-conversion evidence when observable;
+- keep replies at zero hashtags by default unless the hashtag is part of the actual conversation;
+- never use generic hashtag blocks as a substitute for semantic specificity.
+
+The claim that hashtags universally improve X distribution, or that one or two is the universally optimal count, remains an `EMPIRICAL_VARIABLE` until a larger controlled account cohort supports it.
 
 ### Media frequency
 

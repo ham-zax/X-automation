@@ -410,6 +410,8 @@ Evidence classes:
 
 Current strategy treats mutual-follow original-post reply boosting, multi-action predicted scoring, author diversity, in-/out-of-network mechanics, Phoenix/Thunder retrieval, and the separate labeling/visibility-filtering path as code-backed mechanisms. Exact reply timing, posting gaps, hashtag counts, media frequency, link placement, reply quotas, target saturation thresholds, archetype-repetition thresholds, and target-size ranges remain empirical variables until account evidence supports a stronger rule.
 
+The 2026-08-25 three-post account micro-cohort is enough to make **hashtag count an active first-1,000 experiment**, not enough to make it a platform invariant. Live reconciliation shows the 161-impression post used two canonical hashtags (`#OxAlpha #OpenRouter`), versus an 8-impression zero-hashtag post at the same displayed age and a 13-impression zero-hashtag post at a shorter age. Test 0 vs 1 vs 2 natural topical hashtags on comparable main-feed originals and judge the next cohort at matched observation windows.
+
 ## 18. Performance-first documentation boundary
 
 Growth documentation should concentrate on distribution, conversion, relationship compounding, research, and measurement. Platform/safety constraints are centralized in `ENGAGEMENT_INTEGRITY.md`, `AGENTS.md`, and the human-approval boundaries in implementation plans rather than repeated as moral commentary throughout the strategy.

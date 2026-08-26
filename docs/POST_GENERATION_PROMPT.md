@@ -107,11 +107,17 @@ Precise product/task vocabulary is more useful than repeating generic terms such
 
 ## 6. Hashtags
 
-Default: **zero hashtags**.
+For the current first-1,000 growth phase, treat **0 vs 1 vs 2 canonical topical hashtags on main-feed posts as an active account experiment**. The current positive treatment used two natural tags. Replies still default to zero hashtags unless the tag is part of the actual conversation.
 
-Prefer **0–1**. Allow **2** when both are directly relevant/canonical and materially improve context or discoverability; do not add a second hashtag merely because it is allowed.
+Live profile reconciliation on 2026-08-25 identified the three posts behind the current signal:
 
-The exact optimal hashtag count is an empirical variable, not an X ranking law.
+- `2092100349234684010` — `#OxAlpha #OpenRouter` — **161 impressions** at about 8h;
+- `2092091703268417739` — zero hashtags — **8 impressions** at about 8h;
+- `2092164596266410464` — zero hashtags — **13 impressions** at about 3h.
+
+The same-age 161-vs-8 contrast is large enough to stop hard-defaulting to zero hashtags, but it does **not** isolate hashtag count: topic momentum, wording, timing, and distribution can explain some or all of the difference, and the 13-impression post has a shorter observation window.
+
+For treatment posts, use **1–2 canonical hashtags only when they are natural to the topic**; the strongest current observation used two. Keep comparable zero- and one-hashtag controls and compare them at matched post-age windows. Do not add a second hashtag merely because it is allowed.
 
 Do not append generic hashtag blocks such as:
 
@@ -512,9 +518,10 @@ Do not repeat them for SEO-like density.
 
 ### STEP 10 — HASHTAGS / EMOJI
 
-- zero hashtags by default;
-- prefer at most one meaningful canonical hashtag;
-- a second directly relevant canonical hashtag is allowed when it improves context;
+- for current first-1,000 main-feed output, actively test 0 vs 1 vs 2 meaningful canonical topical hashtags;
+- when choosing a treatment rather than a control, 1–2 natural tags are allowed; the strongest current account observation used two (`#OxAlpha #OpenRouter`);
+- compare treatment/control posts at matched post-age windows before promoting a count rule;
+- replies default to zero hashtags unless the tag is part of the actual conversation;
 - zero emoji by default;
 - at most one meaningful emoji.
 
