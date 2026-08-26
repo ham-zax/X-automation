@@ -177,6 +177,13 @@ const X_TARGET_MAX_TARGETS = 20;
 const X_TARGET_MAX_POSTS_PER_TARGET = 10;
 const X_TARGET_MAX_RAW_PER_TARGET = 30;
 
+function xReadErrorMessage(error, { credentialed = false } = {}) {
+  const message = String(error?.message || error || 'Unknown X read error.');
+  if (!/(?:\b429\b|rate limit)/i.test(message)) return message;
+  const reset = message.match(/Reset:\s*(.+)$/i)?.[1]?.trim();
+  return `${credentialed ? 'Credentialed X read' : 'X read'} was rate limited (429). Use cached state and retry after the platform reset window${reset ? ` (${reset})` : ''}.`;
+}
+
 function boundedTargetCount(value, fallback, max) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return fallback;
@@ -303,7 +310,7 @@ export async function fetchXTargetRecentPosts(usernames, {
         if (accepted >= perTargetLimit) break;
       }
     } catch (error) {
-      errors.push({ targetUsername, error: error.message });
+      errors.push({ targetUsername, error: xReadErrorMessage(error, { credentialed: Boolean(process.env.AUTH_TOKEN) }) });
     }
   }
 
@@ -406,7 +413,7 @@ export async function fetchXTargetResponses(usernames, ourTweetIds, {
         responses.push({ ...response, responseType: 'reply', parentOurTweetId });
         acceptedByTarget.set(targetUsername, (acceptedByTarget.get(targetUsername) || 0) + 1);
       } catch (error) {
-        errors.push({ targetUsername, error: error.message });
+        errors.push({ targetUsername, error: xReadErrorMessage(error, { credentialed: true }) });
       }
     }
   } finally {
@@ -461,7 +468,7 @@ export async function fetchXPostContext(inputUrl) {
     }
     return { post, context, error: null };
   } catch (error) {
-    return { post: null, context: [], error: error.message };
+    return { post: null, context: [], error: xReadErrorMessage(error, { credentialed: Boolean(process.env.AUTH_TOKEN) }) };
   }
 }
 
@@ -499,7 +506,7 @@ export async function fetchAccountPerformance(username = 'ham_zax', limit = 20) 
     }
     return { profile, posts, error: null };
   } catch (error) {
-    return { profile: null, posts: [], error: error.message };
+    return { profile: null, posts: [], error: xReadErrorMessage(error, { credentialed: Boolean(process.env.AUTH_TOKEN) }) };
   }
 }
 
@@ -734,8 +741,9 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
     }));
     return { posts, error: null };
   } catch (error) {
-    console.warn(`[x] niche search failed: ${error.message}`);
-    return { posts: [], error: error.message };
+    const message = xReadErrorMessage(error, { credentialed: true });
+    console.warn(`[x] niche search failed: ${message}`);
+    return { posts: [], error: message };
   } finally {
     await browser.close();
   }
