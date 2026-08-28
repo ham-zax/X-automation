@@ -204,13 +204,14 @@ function objective() {
   return getNicheProfile().profile.defaultObjective || 'qualified_growth';
 }
 
-function activeHashtagExperiment() {
+function activeExperimentForDimension(dimension) {
   const active = listExperiments({ status: 'active', limit: 100 })
-    .filter((experiment) => experiment.dimension === 'hashtag_count');
-  return active.length === 1 ? active[0] : null;
+    .filter((experiment) => experiment.dimension === dimension);
+  if (active.length > 1) throw new Error(`Autonomous main-feed preparation requires at most one active ${dimension} experiment.`);
+  return active[0] || null;
 }
 
-function balancedHashtagVariant(experiment) {
+function balancedExperimentVariant(experiment) {
   const counts = new Map((experiment?.variants || []).map((variant) => [variant.label, 0]));
   for (const assignment of listExperimentAssignments(experiment.id)) {
     counts.set(assignment.variantLabel, Number(counts.get(assignment.variantLabel) || 0) + 1);
@@ -220,14 +221,31 @@ function balancedHashtagVariant(experiment) {
     .sort((left, right) => left.count - right.count || left.index - right.index)[0]?.variant || null;
 }
 
-function assignHashtagExperimentIfEligible(queueItem) {
+function assignContentExperimentIfEligible(queueItem) {
   if (queueItem.experimentVariantId != null) return queueItem;
-  const experiment = activeHashtagExperiment();
-  if (!experiment) return queueItem;
-  const variant = balancedHashtagVariant(experiment);
+
+  const hookExperiment = activeExperimentForDimension('hook_type');
+  if (hookExperiment) {
+    const variant = balancedExperimentVariant(hookExperiment);
+    const patternId = String(variant?.config?.patternId ?? variant?.config?.pattern_id ?? variant?.label ?? '').trim();
+    const hookInstructions = String(variant?.config?.hookInstructions ?? variant?.config?.hook_instructions ?? '').trim();
+    const openingFeatures = Array.isArray(variant?.config?.openingFeatures ?? variant?.config?.opening_features)
+      ? [...(variant.config.openingFeatures ?? variant.config.opening_features)]
+      : [];
+    if (!variant || !patternId || !hookInstructions) {
+      throw new Error('Active hook_type experiment variants require patternId and hookInstructions.');
+    }
+    return assignExperimentVariant(queueItem.candidateKey, hookExperiment.id, variant.label, {
+      context: { hookPattern: patternId, hookInstructions, openingFeatures },
+    });
+  }
+
+  const hashtagExperiment = activeExperimentForDimension('hashtag_count');
+  if (!hashtagExperiment) return queueItem;
+  const variant = balancedExperimentVariant(hashtagExperiment);
   const hashtagCount = Number(variant?.config?.hashtagCount ?? variant?.config?.hashtag_count);
   if (!variant || !Number.isInteger(hashtagCount) || hashtagCount < 0 || hashtagCount > 2) return queueItem;
-  return assignExperimentVariant(queueItem.candidateKey, experiment.id, variant.label, {
+  return assignExperimentVariant(queueItem.candidateKey, hashtagExperiment.id, variant.label, {
     context: { hashtagCount },
   });
 }
@@ -359,7 +377,7 @@ export async function prepareAutonomousMainFeed({
   if (!draft) throw new Error(`Mission-owned queue item ${queueItem.id} has no draft.`);
 
   requirePreparationAuthority(grantRevision);
-  queueItem = assignHashtagExperimentIfEligible(queueItem);
+  queueItem = assignContentExperimentIfEligible(queueItem);
 
   requirePreparationAuthority(grantRevision);
   let strategySelection = currentMissionStrategy(queueItem, grantRevision);

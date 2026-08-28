@@ -480,6 +480,7 @@ export function evaluateDraftGates(draft, candidate, {
     noPlaceholders: true,
     length: true,
     ctaIntegrity: true,
+    audienceIntegrity: true,
     recentDuplicate: true,
     hashtagCount: true,
     emojiCount: true,
@@ -691,6 +692,16 @@ export function evaluateDraftGates(draft, candidate, {
   }
   if (units.some((part) => /\bfollow(?: me)? for more\b/i.test(part))) {
     addIssue(warnings, 'FOLLOW_CTA_WARNING', 'A follow-for-more CTA is present; human review should normally remove it unless contextually justified after substantial value.');
+  }
+
+  const fabricatedExclusivityPatterns = [
+    /\b(?:90|95|99)%\s+(?:of\s+)?(?:developers|devs|people)\s+(?:do not|don't|never)\s+(?:know|understand|notice)\b/i,
+    /\bonly\s+(?:smart|senior|real)\s+(?:developers|devs)\s+(?:know|understand|notice)\b/i,
+    /\bsecret\s+(?:that\s+)?(?:nobody|no one)\s+(?:knows|understands)\b/i,
+  ];
+  if (fabricatedExclusivityPatterns.some((pattern) => units.some((part) => pattern.test(part)))) {
+    checks.audienceIntegrity = false;
+    addIssue(failures, 'FABRICATED_EXCLUSIVITY', 'Draft uses unsupported exclusivity or superiority language. Reward the reader with a real insight instead of fake scarcity.');
   }
 
   const foundHashtags = hashtags(combinedText);

@@ -23,6 +23,7 @@ import {
   invalidateQueueApproval,
   listCandidateActions,
   listAcceptedLearnedRules,
+  listExperiments,
   listQueueItems,
   listQueueSources,
   listResearchEvidence,
@@ -201,6 +202,29 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     strategyApproach: strategySelection?.guidance?.rationale || '',
     replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
+}
+
+function requireMissionHookExperimentAssignment(queueItem) {
+  const queueCreatedAt = Number(queueItem?.createdAt || 0);
+  const activeExperiments = listExperiments({ status: 'active', limit: 100 })
+    .filter((experiment) => experiment.dimension === 'hook_type')
+    .filter((experiment) => queueCreatedAt >= Number(experiment.startedAt || experiment.createdAt || 0));
+  if (!activeExperiments.length) return null;
+
+  const assignment = queueItem?.experimentAssignment || {};
+  const experiment = activeExperiments.find((candidate) => Number(candidate.id) === Number(assignment.experimentId));
+  if (!experiment) {
+    throw new Error('Mission-agent approval requires assignment to the active hook_type experiment before approval.');
+  }
+  const variant = (experiment.variants || []).find((candidate) => String(candidate.label) === String(assignment.variantLabel));
+  if (!variant) throw new Error('Mission-agent hook experiment assignment references an unknown variant.');
+
+  const patternId = String(assignment.context?.hookPattern ?? variant.config?.patternId ?? variant.config?.pattern_id ?? '').trim();
+  const hookInstructions = String(assignment.context?.hookInstructions ?? variant.config?.hookInstructions ?? variant.config?.hook_instructions ?? '').trim();
+  if (!patternId || !hookInstructions) {
+    throw new Error('Mission-agent hook experiment assignment requires hookPattern and hookInstructions.');
+  }
+  return { experiment, variant, patternId, hookInstructions };
 }
 
 function normalizeMissionVerificationProvenance(provenance = {}) {
@@ -630,6 +654,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before mission-agent approval.');
 
   requireLiveFirst1000MainFeedMissionGrant(grantRevision);
+  requireMissionHookExperimentAssignment(queueItem);
   const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
   let draft = getDraftByCandidate(key);
   if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);

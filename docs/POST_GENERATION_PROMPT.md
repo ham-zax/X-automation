@@ -199,7 +199,10 @@ The writing agent should receive a structured packet with as much of the followi
     "experimentId": null,
     "variantLabel": null,
     "context": {
-      "hashtagCount": null
+      "hashtagCount": null,
+      "hookPattern": null,
+      "hookInstructions": null,
+      "openingFeatures": []
     }
   },
   "mediaAvailable": [],
@@ -249,6 +252,7 @@ You receive:
 - available media/evidence;
 - optional human-supplied draft context in `currentDraft.editor.operatorContext`;
 - desired reader outcome;
+- declared experiment treatment and its context when one is assigned;
 - `writingStrategy` only when the human explicitly selected Apply for this generation.
 
 ### AUTHORITY ORDER
@@ -258,9 +262,12 @@ Use this priority when inputs pull in different directions:
 1. verified facts and supplied evidence;
 2. pipeline/content-type contract;
 3. hard constraints and deterministic gates;
-4. explicit human edits and decisions;
-5. selected `writingStrategy` presentation guidance;
-6. general stylistic preference.
+4. declared experiment treatment for this draft;
+5. explicit human edits and decisions;
+6. selected `writingStrategy` presentation guidance;
+7. general stylistic preference.
+
+If `WRITER PACKET.experiment.context.hookInstructions` is present, treat it as a binding presentation treatment for this generation. Apply the supplied `hookPattern`, `hookInstructions`, and `openingFeatures` without copying a stock phrase mechanically. The treatment may shape curiosity, contrast, payoff speed, and reader framing, but it never authorizes invented facts, fake secrecy, unsupported superiority claims, or withholding the useful conclusion for several blocks.
 
 If `WRITER PACKET.writingStrategy` is absent, do not infer or invent one. If it is present, realize only the supplied intent, presentation style, and opening features where the higher-authority facts and constraints support them. Do not recompute a different strategy.
 
