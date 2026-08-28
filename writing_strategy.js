@@ -14,6 +14,7 @@ import {
   getDraft,
   getEditorialRecommendation,
   getExperimentSummary,
+  getFirst1000MainFeedMissionGrant,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPublishedMainFeedContent,
@@ -25,6 +26,7 @@ import {
   listPublicationMeasurementSeries,
   listPublishedMainFeedContent,
   recordWritingStrategySelection,
+  runStoreTransaction,
   saveContentStyleLabel,
 } from './store.js';
 
@@ -642,6 +644,88 @@ export async function recommendWritingStrategy(queueItemId, { profile = null } =
       aiExecution: null,
     };
   }
+}
+
+function missionSelectionAuthority(grantRevision) {
+  return {
+    type: 'mission_agent',
+    mission: 'first_1000_main_feed',
+    grantRevision: Number(grantRevision),
+  };
+}
+
+function requireLiveMissionGrant(grantRevision) {
+  const revision = Number(grantRevision);
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw new Error('Mission-agent writing strategy selection requires a positive grant revision.');
+  }
+  const grant = getFirst1000MainFeedMissionGrant();
+  if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
+    throw new Error('First-1,000 main-feed mission authority changed before writing-strategy selection.');
+  }
+  return grant;
+}
+
+export async function selectWritingStrategyAsMissionAgent(queueItemId, {
+  grantRevision,
+  draftId = null,
+} = {}) {
+  const revision = Number(grantRevision);
+  requireLiveMissionGrant(revision);
+  const queueItem = getQueueItem(Number(queueItemId));
+  if (!queueItem) throw new Error(`Queue item not found: ${queueItemId}`);
+  if (!['original', 'quote', 'thread'].includes(String(queueItem.pipeline || ''))) {
+    throw new Error('Mission-agent writing strategy selection is limited to Original, Quote, and Thread drafts.');
+  }
+  if (draftId != null) {
+    const draft = getDraft(Number(draftId));
+    if (!draft || draft.candidateKey !== queueItem.candidateKey) throw new Error('draftId must belong to the selected queue item.');
+  }
+
+  const preview = await getWritingStrategyPreview(queueItem.id);
+  if (!preview.availability.selectable) throw new Error(preview.availability.reason || 'Writing strategy is not selectable for this queue item.');
+  const option = preview.shortlist.status === 'applicable' ? (preview.shortlist.options?.[0] || null) : null;
+  const authority = missionSelectionAuthority(revision);
+  const selection = option ? {
+    mode: 'apply',
+    intent: option.intent,
+    style: option.style,
+    openingFeatures: [...(option.openingFeatures || [])],
+    guidance: {
+      ...option.selectionSnapshot,
+      selectionAuthority: authority,
+    },
+    selectionSource: 'recommended',
+  } : {
+    mode: 'off',
+    intent: null,
+    style: null,
+    openingFeatures: [],
+    guidance: {
+      selectionSource: 'mission_agent',
+      context: preview.context,
+      rationale: 'No current deterministic writing-strategy option is available; Writer influence is explicitly off.',
+      externalEvidence: [],
+      internalEvidence: [],
+      experimentEvidence: [],
+      learnedRuleContext: [],
+      limitations: [preview.shortlist.reason || preview.availability.reason || 'No deterministic option is currently available.'],
+      provenance: { taxonomyVersion: VIRAL_STYLE_TAXONOMY_VERSION },
+      selectionAuthority: authority,
+    },
+    selectionSource: 'mission_agent',
+  };
+
+  return runStoreTransaction(() => {
+    requireLiveMissionGrant(revision);
+    return recordWritingStrategySelection({
+      queueItemId: queueItem.id,
+      draftId,
+      ...selection,
+      selectedBy: 'mission_agent',
+      selectedAt: Date.now(),
+    });
+  });
 }
 
 export async function selectWritingStrategy(input = {}) {

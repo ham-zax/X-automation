@@ -8,6 +8,13 @@ import {
   getAutonomousReplyRuntime,
 } from './autonomous_reply.js';
 import { reviewAudienceFollowing, syncAudience } from './audience.js';
+import {
+  acquireOperatorLease,
+  getOperatorLeaseStatus,
+  releaseOperatorLease,
+  renewOperatorLease,
+} from './operator_lease.js';
+import { getAutonomousMainFeedMissionStatus } from './autonomous_main_feed.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
@@ -45,6 +52,7 @@ import {
   getAccountAnalyticsSnapshot,
   getAccountHealthSummary,
   getAiProfile,
+  getAppState,
   getAiRuntimeSettings,
   getAudienceSummary,
   getCandidate,
@@ -607,6 +615,59 @@ function compactScheduleDecision(decision) {
   };
 }
 
+const AUTOMATION_RUNTIME_STATE_KEY = 'automation_runtime';
+
+function automationRuntimeStatus(now) {
+  const configuredPollMinutes = Number(process.env.POLL_MINUTES || 30);
+  const pollMinutes = Number.isFinite(configuredPollMinutes) && configuredPollMinutes > 0 ? configuredPollMinutes : 30;
+  const staleAfterMinutes = pollMinutes * 2;
+  const staleAfterMs = staleAfterMinutes * 60_000;
+  let heartbeat = null;
+  try {
+    const raw = getAppState(AUTOMATION_RUNTIME_STATE_KEY, null);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) heartbeat = parsed;
+  } catch {
+    heartbeat = null;
+  }
+
+  if (!heartbeat) {
+    return {
+      heartbeatRecorded: false,
+      status: 'not_recorded',
+      stale: null,
+      inProgress: false,
+      cycleStartedAt: null,
+      cycleFinishedAt: null,
+      lastHealthyCompletionAt: null,
+      latestError: null,
+      staleAfterMinutes,
+    };
+  }
+
+  const cycleStartedAt = Number(heartbeat.cycleStartedAt) || null;
+  const cycleFinishedAt = Number(heartbeat.cycleFinishedAt) || null;
+  const lastHealthyCompletionAt = Number(heartbeat.lastHealthyCompletionAt) || null;
+  const inProgress = heartbeat.inProgress === true;
+  const stale = lastHealthyCompletionAt == null || now - lastHealthyCompletionAt > staleAfterMs;
+  let status = 'healthy';
+  if (inProgress) status = 'in_progress';
+  else if (heartbeat.latestError) status = 'error';
+  else if (stale) status = 'stale';
+
+  return {
+    heartbeatRecorded: true,
+    status,
+    stale,
+    inProgress,
+    cycleStartedAt,
+    cycleFinishedAt,
+    lastHealthyCompletionAt,
+    latestError: heartbeat.latestError || null,
+    staleAfterMinutes,
+  };
+}
+
 function operatorStatus(payload = {}) {
   const now = payload.now == null ? Date.now() : Number(payload.now);
   if (!Number.isFinite(now)) throw new Error('operator-status now must be numeric when supplied.');
@@ -646,6 +707,11 @@ function operatorStatus(payload = {}) {
     scoreBoundary: 'Priorities are comparable only within their lane; arbitrate lane champions by relevance, contribution, urgency, relationship continuity, claim confidence, and execution readiness.',
     discovery: { snapshots: growth.snapshots, top: growth.items.map(compactGrowthItem) },
     engagement: { activeConversations, newReplies, cachedRead: true },
+    runtime: {
+      automation: automationRuntimeStatus(now),
+      operatorLease: getOperatorLeaseStatus({ now }),
+    },
+    first1000Mission: getAutonomousMainFeedMissionStatus({ now }),
     execution: {
       mainFeed: {
         autoPostEnabled,
@@ -1203,6 +1269,21 @@ async function main() {
     return;
   }
 
+  if (command === 'operator-lease-acquire') {
+    result(acquireOperatorLease());
+    return;
+  }
+
+  if (command === 'operator-lease-renew') {
+    result(renewOperatorLease(payload.leaseId));
+    return;
+  }
+
+  if (command === 'operator-lease-release') {
+    result(releaseOperatorLease(payload.leaseId));
+    return;
+  }
+
   if (command === 'operator-memory-review') {
     if (payload.confirmReview !== true) throw new Error('operator-memory-review requires confirmReview=true after the memory review is actually complete.');
     result(recordGrowthOperatorMemoryReview({
@@ -1594,7 +1675,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

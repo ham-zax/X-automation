@@ -50,6 +50,7 @@ import {
   createExperiment,
   createAiProfile,
   clearAiDefaultProfile,
+  configureFirst1000MainFeedMissionGrant,
   clearAiRoleBinding,
   countAiProfilesUsingSecretRef,
   deleteAiProfile,
@@ -64,6 +65,7 @@ import {
   getEditorialSelectionByRecommendation,
   getExperiment,
   getExperimentSummary,
+  getFirst1000MainFeedMissionGrant,
   getLearningOverview,
   getMainFeedScheduleItem,
   getLatestEditorialSelectionForQueueItem,
@@ -105,6 +107,9 @@ import {
   saveDraft,
   saveGrowthFocusObjective,
   saveNicheProfile,
+  startFirst1000MainFeedMission,
+  pauseFirst1000MainFeedMission,
+  stopFirst1000MainFeedMission,
   setAiDefaultProfile,
   setAiProfileEnabled,
   setAiRoleBinding,
@@ -1590,6 +1595,13 @@ function confirmedFlags(body) {
   };
 }
 
+function first1000MissionView() {
+  return {
+    grant: getFirst1000MainFeedMissionGrant(),
+    autoPost: AUTO_POST,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // API entrypoint
 // ---------------------------------------------------------------------------
@@ -2162,6 +2174,21 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
       }
       throw new Error(`Unknown triage action: ${action || '(missing)'}`);
+    }
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'first-1000-mission') {
+      return sendSuccess(first1000MissionView());
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'first-1000-mission') {
+      const action = segments[1];
+      const payload = await readBody();
+      if (action === 'configure') configureFirst1000MainFeedMissionGrant(payload, { actor: 'human' });
+      else if (action === 'start') startFirst1000MainFeedMission({ actor: 'human' });
+      else if (action === 'pause') pauseFirst1000MainFeedMission({ actor: 'human' });
+      else if (action === 'stop') stopFirst1000MainFeedMission({ actor: 'human' });
+      else throw new Error(`Unknown First-1,000 mission action: ${action}.`);
+      return sendSuccess(first1000MissionView());
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'autonomous-replies') {

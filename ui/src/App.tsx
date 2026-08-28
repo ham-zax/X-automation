@@ -13,6 +13,7 @@ import { Learn } from './features/learn/Learn'
 import { Advanced } from './features/advanced/Advanced'
 import { AISettings } from './features/settings/AISettings'
 import { AutonomousRepliesSettings } from './features/settings/AutonomousRepliesSettings'
+import { First1000MissionSettings } from './features/settings/First1000MissionSettings'
 import { NicheSettings } from './features/settings/NicheSettings'
 import { Settings } from './features/settings/Settings'
 
@@ -64,6 +65,7 @@ function RouteContent() {
   if (first === 'viral') return <Learn section="external" />
   if (first === 'improve') return <Learn section="tests" />
   if (first === 'settings' && second === 'growth-focus') return <NicheSettings />
+  if (first === 'settings' && second === 'first-1000-mission') return <First1000MissionSettings />
   if (first === 'settings' && second === 'ai') return <AISettings />
   if (first === 'settings' && second === 'autonomous-replies') return <AutonomousRepliesSettings />
   if (first === 'settings' && second === 'advanced') return <Advanced />

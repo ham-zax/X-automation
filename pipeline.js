@@ -13,6 +13,7 @@ import {
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
+  getFirst1000MainFeedMissionGrant,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
@@ -64,6 +65,7 @@ export const QUEUE_STATUSES = [
 
 const TEXT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 
 function requireCandidate(key) {
   const candidate = getCandidate(key);
@@ -198,6 +200,41 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     strategyApproach: strategySelection?.guidance?.rationale || '',
     replyArchetype: pipeline === 'reply' ? (queueItem?.replyArchetype || '') : '',
   };
+}
+
+function normalizeMissionVerificationProvenance(provenance = {}) {
+  if (String(provenance.authorityType || '') !== 'mission_agent') {
+    throw new Error('Mission-agent approval requires verificationProvenance.authorityType=mission_agent.');
+  }
+  const normalizeReferences = (value, field, required = false) => {
+    if (value === undefined && !required) return [];
+    if (!Array.isArray(value)) throw new Error(`Mission-agent approval requires verificationProvenance.${field} to be an array.`);
+    const references = [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))];
+    if (required && references.length === 0) {
+      throw new Error(`Mission-agent approval requires at least one concrete verificationProvenance.${field} reference.`);
+    }
+    return references;
+  };
+  return {
+    authorityType: 'mission_agent',
+    sourceReferences: normalizeReferences(provenance.sourceReferences, 'sourceReferences', true),
+    evidenceReferences: normalizeReferences(provenance.evidenceReferences, 'evidenceReferences'),
+  };
+}
+
+function requireLiveFirst1000MainFeedMissionGrant(grantRevision) {
+  const revision = Number(grantRevision);
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw new Error('Mission-agent approval requires a positive integer grantRevision.');
+  }
+  const grant = getFirst1000MainFeedMissionGrant();
+  if (grant.state !== 'running' || grant.mode !== 'live') {
+    throw new Error('First-1,000 main-feed mission must be running in live mode for mission-agent approval.');
+  }
+  if (Number(grant.revision) !== revision) {
+    throw new Error('First-1,000 main-feed mission revision is stale or has been revoked.');
+  }
+  return grant;
 }
 
 export function refreshQueueRecommendation(key, context = {}) {
@@ -383,7 +420,7 @@ export function discardCandidateDraft(key) {
   if (queueItem && (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
     throw new Error('Publishing or published work cannot be discarded.');
   }
-  if (queueItem && queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+  if (queueItem?.status === 'approved') {
     invalidateQueueApproval(key, { actor: 'human', reason: 'draft discarded after approval' });
   }
   if (queueItem) {
@@ -442,7 +479,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
     if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
       throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
     }
-    if (previousQueueItem.status === 'approved' && previousQueueItem.humanApprovedAt != null) {
+    if (previousQueueItem.status === 'approved') {
       invalidateQueueApproval(key, { actor, reason: `route changed from ${previousQueueItem.pipeline} to ${pipeline} after approval` });
       previousQueueItem = getQueueItemByCandidate(key);
     }
@@ -512,7 +549,7 @@ export function requestQueueReview(key, confirmations = {}) {
     let queueItem = getQueueItemByCandidate(key);
     if (!queueItem) throw new Error(`Queue item not found: ${key}`);
 
-    if (queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+    if (queueItem.status === 'approved') {
       invalidateQueueApproval(key, { actor: 'system', reason: 'review requested after approval' });
       queueItem = getQueueItemByCandidate(key);
     }
@@ -576,6 +613,64 @@ export function approveQueueItem(key, confirmations = {}) {
     draft,
     analysis,
     approvalSnapshot: captured.snapshot,
+  };
+}
+
+export function approveQueueItemAsMissionAgent(key, { grantRevision, verificationProvenance } = {}) {
+  const candidate = requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+  if (!['main', 'main_feed'].includes(queueItem.lane) || !AUTOMATED_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) {
+    throw new Error('Mission-agent approval is limited to automated main-feed Original, Quote, and Thread items.');
+  }
+  if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before mission-agent approval.');
+
+  requireLiveFirst1000MainFeedMissionGrant(grantRevision);
+  const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
+  let draft = getDraftByCandidate(key);
+  if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+  requireCurrentStrategyDecision(queueItem, draft);
+  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, {
+    factualityConfirmed: provenance.sourceReferences.length > 0,
+    evidenceConfirmed: provenance.evidenceReferences.length > 0,
+  }));
+  draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+  if (!analysis.publishable) {
+    const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
+    const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
+    throw new Error(`Draft is not mission-agent approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+  }
+  draft = saveDraft({ ...draft, status: 'ready' });
+
+  const result = runStoreTransaction(() => {
+    const grant = requireLiveFirst1000MainFeedMissionGrant(grantRevision);
+    saveQueueItem({
+      candidateKey: key,
+      status: 'approved',
+      draftId: draft.id,
+      humanApprovedAt: null,
+      publishStartedAt: null,
+      publishError: null,
+    });
+    const captured = captureQueueApproval(key, {
+      actor: 'agent',
+      reason: 'approved by delegated First-1,000 main-feed mission agent',
+      authority: {
+        type: 'mission_agent',
+        mission: 'first_1000_main_feed',
+        grantRevision: grant.revision,
+        targetFollowers: grant.targetFollowers,
+      },
+      verificationProvenance: provenance,
+    });
+    return { captured, grant };
+  });
+  return {
+    queueItem: result.captured.queueItem,
+    draft,
+    analysis,
+    approvalSnapshot: result.captured.snapshot,
+    missionGrant: result.grant,
   };
 }
 

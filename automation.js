@@ -12,8 +12,13 @@ import {
 } from './autonomous_reply.js';
 import { rankMainFeedItems } from './scheduler.js';
 import {
+  prepareAutonomousMainFeed,
+  refreshFirst1000MissionFollowerState,
+} from './autonomous_main_feed.js';
+import {
   claimQueueItem,
   getAccountHealthSummary,
+  getAppState,
   getPublicationFollowerBaseline,
   listDueMeasurementWindows,
   listAcceptedLearnedRules,
@@ -27,6 +32,7 @@ import {
   recordPublicationMeasurement,
   saveDraft,
   saveQueueItem,
+  setAppState,
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
@@ -36,6 +42,59 @@ const REPLY_POLL_MINUTES = Math.max(
 );
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 export const AUTO_EDITORIAL_PLAN_REFRESH = String(process.env.AUTO_EDITORIAL_PLAN_REFRESH || 'false').toLowerCase() === 'true';
+
+const AUTOMATION_RUNTIME_STATE_KEY = 'automation_runtime';
+
+function readAutomationRuntimeState() {
+  try {
+    const raw = getAppState(AUTOMATION_RUNTIME_STATE_KEY, null);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function updateAutomationRuntimeState(patch) {
+  try {
+    setAppState(AUTOMATION_RUNTIME_STATE_KEY, JSON.stringify({
+      ...readAutomationRuntimeState(),
+      ...patch,
+    }));
+  } catch (error) {
+    console.log(`[automation] Runtime heartbeat write failed without changing cycle behavior: ${error.message}`);
+  }
+}
+
+function recordAutomationCycleStart() {
+  updateAutomationRuntimeState({
+    cycleStartedAt: Date.now(),
+    inProgress: true,
+  });
+}
+
+function recordAutomationCycleSuccess() {
+  const finishedAt = Date.now();
+  updateAutomationRuntimeState({
+    cycleFinishedAt: finishedAt,
+    lastHealthyCompletionAt: finishedAt,
+    latestError: null,
+    inProgress: false,
+  });
+}
+
+function recordAutomationCycleFailure(error) {
+  const finishedAt = Date.now();
+  updateAutomationRuntimeState({
+    cycleFinishedAt: finishedAt,
+    latestError: {
+      at: finishedAt,
+      message: error instanceof Error ? error.message : String(error),
+    },
+    inProgress: false,
+  });
+}
 
 function compactMeasurementContext(summary) {
   const components = summary.networkQuality?.components || {};
@@ -205,6 +264,7 @@ export async function processMainFeedQueue({
   csrfToken = process.env.CT0,
   account = process.env.X_ACCOUNT || 'ham_zax',
   transport = publishMainFeedHttp,
+  missionPublicationReady = null,
 } = {}) {
   const currentTime = Number(now);
   if (!Number.isFinite(currentTime)) throw new Error('processMainFeedQueue requires a numeric now timestamp.');
@@ -215,6 +275,7 @@ export async function processMainFeedQueue({
     recentPosts,
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
+    missionPublicationReady,
   });
   const decision = decisions.find((item) => item.eligible) || null;
   if (!decision) return { action: items.length ? 'blocked' : 'no-main-feed', decision: null, decisions };
@@ -342,7 +403,7 @@ export async function runEngagementAutonomousCycle({
   return { engagement, autonomousReplies, sourceErrors };
 }
 
-export async function runCycle() {
+async function runCycleBody() {
   let measurements = { due: 0, captured: [], skipped: [], error: null };
   try {
     measurements = await captureDuePublicationMeasurements();
@@ -352,6 +413,19 @@ export async function runCycle() {
     measurements.error = error.message;
     console.log(`[automation] Measurement capture failed: ${error.message}`);
   }
+  let missionFollowers;
+  try {
+    missionFollowers = await refreshFirst1000MissionFollowerState();
+    if (missionFollowers.completed) {
+      console.log(`[automation] First-1,000 mission completed at ${missionFollowers.followers.count} followers.`);
+    } else if (missionFollowers.required && missionFollowers.error) {
+      console.log(`[automation] First-1,000 follower refresh skipped delegated publication/preparation: ${missionFollowers.error}`);
+    }
+  } catch (error) {
+    missionFollowers = { required: true, fresh: false, completed: false, error: error.message };
+    console.log(`[automation] First-1,000 follower refresh failed without stopping the daemon: ${error.message}`);
+  }
+
   const research = await refreshResearch();
   const editorialPlanRefresh = await refreshBackgroundEditorialPlan();
   if (editorialPlanRefresh.refreshed) {
@@ -373,7 +447,27 @@ export async function runCycle() {
     researchErrors: research.errors,
   });
 
-  const mainFeed = await processMainFeedQueue();
+  let autonomousMainFeedPreparation;
+  try {
+    autonomousMainFeedPreparation = await prepareAutonomousMainFeed({
+      freshFollowerState: missionFollowers,
+      editorialAlreadyRefreshed: editorialPlanRefresh.refreshed,
+    });
+    if (autonomousMainFeedPreparation.action === 'approved') {
+      console.log(`[automation] Delegated First-1,000 preparation approved queue item ${autonomousMainFeedPreparation.queueItemId}.`);
+    } else if (!['noop', 'review_required'].includes(autonomousMainFeedPreparation.action)) {
+      console.log(`[automation] Delegated First-1,000 preparation: ${autonomousMainFeedPreparation.reason}.`);
+    } else if (autonomousMainFeedPreparation.action === 'review_required') {
+      console.log(`[automation] Delegated First-1,000 item ${autonomousMainFeedPreparation.queueItemId} remains non-publication: ${autonomousMainFeedPreparation.error || autonomousMainFeedPreparation.reason}.`);
+    }
+  } catch (error) {
+    autonomousMainFeedPreparation = { action: 'error', reason: 'mission_preparation_failed', error: error.message };
+    console.log(`[automation] Delegated First-1,000 preparation failed without stopping the daemon: ${error.message}`);
+  }
+
+  const missionPublicationReady = missionFollowers?.required !== true
+    || (missionFollowers.fresh === true && missionFollowers.authorityChanged !== true);
+  const mainFeed = await processMainFeedQueue({ missionPublicationReady });
   let publicationBaseline = null;
   const publicationReachedPublishedState = ['posted', 'posted-recording-incomplete'].includes(mainFeed.action)
     && mainFeed.queueItem?.status === 'published'
@@ -414,8 +508,28 @@ export async function runCycle() {
     measurements,
     publicationBaseline,
     editorialPlanRefresh,
-    errors: [...research.errors, ...engagement.errors, ...(measurements.error ? [measurements.error] : [])],
+    missionFollowers,
+    autonomousMainFeedPreparation,
+    errors: [
+      ...research.errors,
+      ...engagement.errors,
+      ...(measurements.error ? [measurements.error] : []),
+      ...(missionFollowers?.error ? [missionFollowers.error] : []),
+      ...(autonomousMainFeedPreparation?.error ? [autonomousMainFeedPreparation.error] : []),
+    ],
   };
+}
+
+export async function runCycle() {
+  recordAutomationCycleStart();
+  try {
+    const cycleResult = await runCycleBody();
+    recordAutomationCycleSuccess();
+    return cycleResult;
+  } catch (error) {
+    recordAutomationCycleFailure(error);
+    throw error;
+  }
 }
 
 async function main() {

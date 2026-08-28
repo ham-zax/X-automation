@@ -508,6 +508,48 @@ export function useDiscoverTriage() {
 }
 
 // ---------------------------------------------------------------------------
+// First-1,000 mission
+// ---------------------------------------------------------------------------
+
+export interface First1000MissionGrant {
+  state: 'stopped' | 'running' | 'paused' | 'completed'
+  mode: 'dry_run' | 'live'
+  targetFollowers: number
+  revision: number
+  updatedAt: number | null
+  startedAt: number | null
+  startedBy: string | null
+  pausedAt: number | null
+  stoppedAt: number | null
+  completedAt: number | null
+  completedBy: string | null
+}
+
+export interface First1000MissionData {
+  grant: First1000MissionGrant
+  autoPost: boolean
+}
+
+export function useFirst1000Mission() {
+  return useQuery({
+    queryKey: ['first-1000-mission'],
+    queryFn: () => fetchApi<First1000MissionData>('/first-1000-mission'),
+    staleTime: 10_000,
+  })
+}
+
+export function useFirst1000MissionAction(action: 'configure' | 'start' | 'pause' | 'stop') {
+  const queryClient = useQueryClient()
+  return useMutation<First1000MissionData, Error, Record<string, unknown>>({
+    mutationFn: (payload) => postApi(`/first-1000-mission/${action}`, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['first-1000-mission'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+    },
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Autonomous replies / Conversations
 // ---------------------------------------------------------------------------
 

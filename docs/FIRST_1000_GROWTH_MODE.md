@@ -169,7 +169,7 @@ Current bootstrap heuristics are deliberately explicit and empirical:
 - a momentum-only Repost may qualify when `reachPotential >= 50`, freshness is at least `10`, momentum is at least `10`, and traction is at least `8`;
 - at 1,000 followers, the normal conservative recommendation behavior resumes;
 - already-used candidates, stale low-value sources, and candidates outside Growth Focus remain skippable;
-- factuality, duplicate prevention, review/approval, and publication authority are unchanged;
+- factuality, duplicate prevention, hard review gates, scheduler integrity, and publication transport are unchanged; a separately started `live` First-1,000 mission may delegate Original / Quote / Thread approval to the mission agent with concrete stored verification provenance, while replies, Reposts, human approval, and `AUTO_POST` remain separate authority paths;
 - the explicit human `Use anyway` override remains available for genuinely ignored candidates.
 
 These numeric thresholds are bootstrap heuristics, not claimed X platform laws. They should be revised from observed account outcomes, not folklore.

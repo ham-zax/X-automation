@@ -1,0 +1,12 @@
+[Unit]
+Description=X Test automation
+
+[Service]
+Type=simple
+WorkingDirectory=/home/hamza/repo/x_test
+ExecStart=/bin/bash -c 'source /home/hamza/.nvm/nvm.sh && exec npm run automation'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

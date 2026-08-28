@@ -12,6 +12,7 @@ import {
   getDiscoverSnapshot,
   getEditorialRecommendation,
   getEditorialSelectionByRecommendation,
+  getFirst1000MainFeedMissionGrant,
   getPreferenceProfile,
   getQueueItem,
   getQueueItemByCandidate,
@@ -29,6 +30,7 @@ import {
   listRecentMainFeedPublications,
   listResearchEvidence,
   recordEditorialSelection,
+  runStoreTransaction,
   saveEditorialRecommendation,
   saveQueueItem,
   setEditorialRecommendationStatus,
@@ -680,7 +682,11 @@ function selectedEditorialResult(recommendation, selection, { idempotent = false
   };
 }
 
-export function selectEditorialRecommendation(id, { pipelineOverride = null } = {}) {
+function selectEditorialRecommendationWithAuthority(id, {
+  pipelineOverride = null,
+  selectedBy = 'human',
+  grantRevision = null,
+} = {}) {
   let recommendation = getEditorialRecommendation(id);
   if (!recommendation) throw new Error(`Editorial recommendation not found: ${id}`);
   const existing = getEditorialSelectionByRecommendation(recommendation.id);
@@ -714,8 +720,10 @@ export function selectEditorialRecommendation(id, { pipelineOverride = null } = 
   }
 
   let queueItem = routeCandidate(selected.candidate.key, selectedPipeline, {
-    actor: 'human',
-    reason: `Human selected editorial recommendation ${recommendation.id}.`,
+    actor: selectedBy === 'mission_agent' ? 'agent' : 'human',
+    reason: selectedBy === 'mission_agent'
+      ? `Delegated First-1,000 mission agent selected editorial recommendation ${recommendation.id}.`
+      : `Human selected editorial recommendation ${recommendation.id}.`,
   });
   queueItem = saveQueueItem({
     ...queueItem,
@@ -730,10 +738,40 @@ export function selectEditorialRecommendation(id, { pipelineOverride = null } = 
     editorialRecommendationId: recommendation.id,
     queueItemId: queueItem.id,
     selectedPipeline,
+    selectedBy,
+    grantRevision,
     selectedAt,
   });
   recommendation = setEditorialRecommendationStatus(recommendation.id, 'selected', { at: selectedAt });
   return { ...selectedEditorialResult(recommendation, selection), queueSources };
+}
+
+export function selectEditorialRecommendation(id, { pipelineOverride = null } = {}) {
+  return selectEditorialRecommendationWithAuthority(id, { pipelineOverride });
+}
+
+export function selectEditorialRecommendationAsMissionAgent(id, { grantRevision } = {}) {
+  const revision = Number(grantRevision);
+  if (!Number.isInteger(revision) || revision < 1) {
+    throw new Error('Mission-agent editorial selection requires a positive grant revision.');
+  }
+  return runStoreTransaction(() => {
+    const grant = getFirst1000MainFeedMissionGrant();
+    if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
+      throw new Error('First-1,000 main-feed mission authority changed before editorial selection.');
+    }
+    const recommendation = getEditorialRecommendation(Number(id));
+    if (!recommendation || recommendation.status !== 'suggested' || recommendation.decision !== 'PREPARE') {
+      throw new Error('Mission-agent editorial selection requires a current suggested PREPARE recommendation.');
+    }
+    if (!['original', 'quote', 'thread'].includes(String(recommendation.pipeline || ''))) {
+      throw new Error('Mission-agent editorial selection is limited to Original, Quote, and Thread recommendations.');
+    }
+    return selectEditorialRecommendationWithAuthority(id, {
+      selectedBy: 'mission_agent',
+      grantRevision: revision,
+    });
+  });
 }
 
 export function dismissEditorialRecommendation(id) {

@@ -62,7 +62,7 @@ Live X may correct stale observations. It does not override Growth OS approval/q
 Establish the minimum state needed for this invocation, then enter the loop:
 
 1. Inspect HEAD and working-tree status in `/home/hamza/repo/x_test`; preserve all existing work.
-2. Run `npm run agent -- operator-status <<<'{}'` for the compact last-known-good Growth OS cockpit. Inspect lane champions, approved-queue readiness, due measurements, account health, autonomous-reply state, and integrity warnings before requesting any refresh.
+2. Run `npm run agent -- operator-status <<<'{}'` for the compact last-known-good Growth OS cockpit. Inspect lane champions, approved-queue readiness, due measurements, account health, autonomous-reply state, the unified First-1,000 grant/follower/lease/preparation blocker state, and integrity warnings before requesting any refresh.
 3. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`, then capture the live profile, notifications, and recent-output baseline. Do not restate or override its backend, Browser memory, tab/ref, credential, or recovery mechanics here.
 4. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
 5. When a main-feed publication route may be exercised, use the preflight exposed by the repository's current publication owner when that owner requires one. Do not hard-code a transport-specific preflight in this orchestration prompt.
@@ -175,9 +175,9 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 
 ### Require the designated human boundary
 
-- Factuality confirmation
-- Evidence confirmation when the hard gate requires it
-- Dashboard approval of main-feed text and human-reviewed replies
+- Human factuality/evidence confirmation and dashboard approval remain the ordinary main-feed authority path.
+- A running `live` First-1,000 main-feed grant is the narrow exception: the mission agent may approve only Original / Quote / Thread using concrete stored verification provenance, without setting `humanApprovedAt`.
+- Human-reviewed replies remain human-authorized; autonomous replies continue under their separate grant. Reposts are never covered by the main-feed mission grant.
 - Creation/assignment of experiments when repository policy requires confirmation
 - Changing `AUTO_POST=false` to `true`
 - Password, MFA, CAPTCHA, challenge, or missing credential entry

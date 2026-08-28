@@ -3,6 +3,7 @@ import { applyAcceptedLearnedRules } from './learning.js';
 const HOUR_MS = 3_600_000;
 const MAIN_FEED_LANES = new Set(['main', 'main_feed']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
 const URGENCY_MODIFIERS = { evergreen: 0, timely: 7, viral: 15 };
 const SEMANTIC_CONFLICT_THRESHOLD = 0.50;
 
@@ -66,6 +67,15 @@ function publishedAtOf(item) {
 
 function approvedAtOf(item) {
   return finiteNumber(field(item, 'humanApprovedAt', 'human_approved_at'));
+}
+
+function approvalRecordedAtOf(item) {
+  return approvedAtOf(item) ?? finiteNumber(item?.approvalSnapshot?.approvedAt);
+}
+
+function approvalAuthorityOf(item) {
+  if (approvedAtOf(item) != null) return { type: 'human' };
+  return item?.approvalAuthority ?? item?.approvalSnapshot?.authority ?? null;
 }
 
 function humanOverrideAtOf(item) {
@@ -192,8 +202,42 @@ export function evaluateScheduleEligibility(item, context = {}) {
   if (item?.status !== 'approved') {
     addIssue(blockers, 'NOT_APPROVED', `Status ${item?.status || 'missing'} is not approved.`);
   }
+  const authority = approvalAuthorityOf(item);
   if (approvedAtOf(item) == null) {
-    addIssue(blockers, 'MISSING_HUMAN_APPROVAL', 'A non-null human approval timestamp is required.');
+    if (authority?.type !== 'mission_agent') {
+      addIssue(blockers, 'MISSING_APPROVAL_AUTHORITY', 'A valid human or delegated mission-agent approval is required.');
+    } else {
+      const snapshot = item?.approvalSnapshot || {};
+      const verification = snapshot.verificationProvenance || {};
+      const sourceReferences = Array.isArray(verification.sourceReferences)
+        ? verification.sourceReferences.filter((value) => String(value || '').trim())
+        : [];
+      const grantRevision = Number(authority.grantRevision);
+      const grant = item?.missionGrant || null;
+      if (!AUTOMATED_MAIN_FEED_PIPELINES.has(pipeline) || authority.mission !== 'first_1000_main_feed') {
+        addIssue(blockers, 'MISSION_APPROVAL_SCOPE_INVALID', 'Delegated First-1,000 authority is limited to automated Original, Quote, and Thread main-feed items.');
+      }
+      if (!Number.isInteger(grantRevision) || grantRevision < 1) {
+        addIssue(blockers, 'MISSION_APPROVAL_REVISION_INVALID', 'Mission-agent approval must carry a positive grant revision.');
+      }
+      if (verification.authorityType !== 'mission_agent' || sourceReferences.length === 0 || !Array.isArray(verification.evidenceReferences)) {
+        addIssue(blockers, 'MISSION_VERIFICATION_PROVENANCE_MISSING', 'Mission-agent approval requires inspectable source/evidence verification provenance.');
+      }
+      if (!grant || grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== grantRevision) {
+        addIssue(blockers, 'MISSION_AUTHORITY_STALE', 'The First-1,000 mission grant is missing, paused, stopped, completed, non-live, or at a different revision.');
+      } else {
+        if (item?.missionAccountHealth?.state === 'constrained') {
+          addIssue(blockers, 'MISSION_ACCOUNT_HEALTH_CONSTRAINED', 'Delegated First-1,000 publication is blocked while Account Health is constrained.');
+        }
+        const missionFollowers = finiteNumber(item?.missionFollowers);
+        if (missionFollowers != null && missionFollowers >= Number(grant.targetFollowers)) {
+          addIssue(blockers, 'MISSION_TARGET_REACHED', 'Delegated First-1,000 publication is blocked because the stored follower target has been reached.');
+        }
+        if (context.missionPublicationReady === false) {
+          addIssue(blockers, 'MISSION_FRESH_FOLLOWER_REQUIRED', 'Delegated First-1,000 publication requires a fresh follower observation in the current automation cycle.');
+        }
+      }
+    }
   }
   if (!MAIN_FEED_PIPELINES.has(pipeline)) {
     addIssue(blockers, 'UNSUPPORTED_PIPELINE', `Pipeline ${pipeline || 'missing'} is not a main-feed publication format.`);
@@ -365,7 +409,7 @@ export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
 
 export function recommendMainFeedSchedule(item, context = {}) {
   const now = requireNow(context);
-  const eligibility = evaluateScheduleEligibility(item, { now });
+  const eligibility = evaluateScheduleEligibility(item, { ...context, now });
   const priorityBreakdown = calculateSchedulePriority(item, { ...context, now });
   const blockers = [...eligibility.blockers];
   const warnings = [];
@@ -530,8 +574,8 @@ export function rankMainFeedItems(items = [], context = {}) {
     const aExpiry = expiresAtOf(a.item) ?? Infinity;
     const bExpiry = expiresAtOf(b.item) ?? Infinity;
     if (aExpiry !== bExpiry) return aExpiry - bExpiry;
-    const aApproved = approvedAtOf(a.item) ?? Infinity;
-    const bApproved = approvedAtOf(b.item) ?? Infinity;
+    const aApproved = approvalRecordedAtOf(a.item) ?? Infinity;
+    const bApproved = approvalRecordedAtOf(b.item) ?? Infinity;
     if (aApproved !== bApproved) return aApproved - bApproved;
     return stableKey(a.item).localeCompare(stableKey(b.item));
   });

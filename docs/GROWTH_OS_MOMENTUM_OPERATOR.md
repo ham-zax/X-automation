@@ -136,7 +136,7 @@ The response includes:
 - transfer guidance for the outbound copy;
 - current exact-candidate operator disposition when one exists. Active `skip` / `defer` dispositions are suppressed from the normal actionable result set; `includeDisposed: true` exposes them for inspection.
 - explicit claim exposure, including whether a Repost inherits source claims without corrective context;
-- execution-path facts: automatic main-feed after approval, autonomous-reply candidacy, or manual final action.
+- execution-path facts: scheduler-owned main-feed after valid human or Live First-1,000 mission-agent approval, autonomous-reply candidacy under its separate grant, or manual final action.
 - hard discovery-quality exclusions for crypto promotion and direct job ads; `includeLowSignal: true` exposes them for inspection without making them normal growth candidates.
 
 The operator-priority formula is deliberately inspectable and empirical:

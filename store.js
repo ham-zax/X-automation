@@ -78,6 +78,9 @@ const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
 const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
 const AUTONOMOUS_REPLY_GRANT_STATE_KEY = 'autonomous_reply_grant';
 const AUTONOMOUS_REPLY_RUNTIME_STATE_KEY = 'autonomous_reply_runtime';
+const FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY = 'first_1000_main_feed_mission_grant';
+const FIRST_1000_MAIN_FEED_MISSION_STATES = new Set(['running', 'paused', 'stopped', 'completed']);
+const FIRST_1000_MAIN_FEED_MISSION_MODES = new Set(['dry_run', 'live']);
 const GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY = 'growth_operator_memory_review';
 const GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS = new Set(['browser_updated', 'x_content_candidate_added', 'both_updated', 'no_update_needed']);
 const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
@@ -621,6 +624,8 @@ db.exec(`
     editorial_recommendation_id INTEGER NOT NULL UNIQUE,
     queue_item_id INTEGER NOT NULL,
     selected_pipeline TEXT NOT NULL,
+    selected_by TEXT NOT NULL DEFAULT 'human',
+    grant_revision INTEGER,
     selected_at INTEGER NOT NULL,
     FOREIGN KEY(editorial_recommendation_id) REFERENCES editorial_recommendations(id),
     FOREIGN KEY(queue_item_id) REFERENCES queue_items(id)
@@ -760,6 +765,14 @@ for (const [name, sql] of [
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
+const editorialSelectionColumns = new Set(db.prepare('PRAGMA table_info(editorial_selections)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['selected_by', "ALTER TABLE editorial_selections ADD COLUMN selected_by TEXT NOT NULL DEFAULT 'human'"],
+  ['grant_revision', 'ALTER TABLE editorial_selections ADD COLUMN grant_revision INTEGER'],
+]) {
+  if (!editorialSelectionColumns.has(name)) db.exec(sql);
+}
+
 const publicationMeasurementColumns = new Set(db.prepare('PRAGMA table_info(publication_measurements)').all().map((row) => row.name));
 for (const [name, sql] of [
   ['bookmarks', 'ALTER TABLE publication_measurements ADD COLUMN bookmarks INTEGER'],
@@ -1272,7 +1285,7 @@ export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
   };
 }
 
-export function buildApprovalSnapshot(queueItem, draft, candidate = null) {
+export function buildApprovalSnapshot(queueItem, draft, candidate = null, { authority = null, verificationProvenance = null } = {}) {
   const fp = computeApprovalFingerprint(queueItem, draft, candidate);
   return {
     queueItemId: Number(queueItem.id),
@@ -1286,7 +1299,21 @@ export function buildApprovalSnapshot(queueItem, draft, candidate = null) {
     growthFocusRevision: getNicheProfileRevision(),
     approvedAt: Date.now(),
     material: fp.material,
+    ...(authority ? { authority } : {}),
+    ...(verificationProvenance ? { verificationProvenance } : {}),
   };
+}
+
+export function getQueueApprovalAuthority(queueItem) {
+  if (!queueItem || queueItem.status !== 'approved') return null;
+  if (queueItem.humanApprovedAt != null) {
+    return { type: 'human', humanApprovedAt: Number(queueItem.humanApprovedAt) };
+  }
+  const authority = queueItem.approvalSnapshot?.authority;
+  if (authority?.type !== 'mission_agent' || authority?.mission !== 'first_1000_main_feed') return null;
+  const grantRevision = Number(authority.grantRevision);
+  if (!Number.isInteger(grantRevision) || grantRevision < 1) return null;
+  return { ...authority, grantRevision };
 }
 
 export function getQueueApprovalEvents(queueItemId, { limit = 50 } = {}) {
@@ -1332,7 +1359,7 @@ export function invalidateQueueApproval(candidateKey, { actor = 'system', reason
   return runStoreTransaction(() => {
     const queueItem = getQueueItemByCandidate(String(candidateKey));
     if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
-    const isApproved = queueItem.status === 'approved' && queueItem.humanApprovedAt != null;
+    const isApproved = getQueueApprovalAuthority(queueItem) != null;
     if (!isApproved) return queueItem;
     const snapshot = queueItem.approvalSnapshot && Object.keys(queueItem.approvalSnapshot).length ? queueItem.approvalSnapshot : {};
     recordQueueApprovalEvent(queueItem.id, queueItem.candidateKey, 'invalidated', snapshot, reason, actor);
@@ -1349,13 +1376,18 @@ export function invalidateQueueApproval(candidateKey, { actor = 'system', reason
   });
 }
 
-export function captureQueueApproval(candidateKey, { actor = 'human', reason = 'approved' } = {}) {
+export function captureQueueApproval(candidateKey, {
+  actor = 'human',
+  reason = 'approved',
+  authority = null,
+  verificationProvenance = null,
+} = {}) {
   return runStoreTransaction(() => {
     const queueItem = getQueueItemByCandidate(String(candidateKey));
     if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
     const draft = getDraftByCandidate(candidateKey);
     const candidate = getCandidate(candidateKey);
-    const snapshot = buildApprovalSnapshot(queueItem, draft, candidate);
+    const snapshot = buildApprovalSnapshot(queueItem, draft, candidate, { authority, verificationProvenance });
     const saved = saveQueueItem({
       ...queueItem,
       approvalSnapshot: snapshot,
@@ -1378,8 +1410,9 @@ function buildMainFeedScheduleItem(queueItem) {
   const media = draft?.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
   const isRepost = queueItem.pipeline === 'repost';
   const mediaReady = media.required !== true || Boolean(media?.attachment?.localPath);
+  const approvalAuthority = getQueueApprovalAuthority(queueItem);
   const gatesPassed = isRepost
-    ? Boolean(queueItem.humanApprovedAt)
+    ? approvalAuthority?.type === 'human'
     : Boolean(draft && draft.status === 'ready' && draft.gates?.passed === true && mediaReady);
   const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
   const body = String(draft?.body || '');
@@ -1389,7 +1422,7 @@ function buildMainFeedScheduleItem(queueItem) {
   let approvalMismatchReason = '';
   let currentFingerprint = null;
   const snapshot = queueItem.approvalSnapshot && Object.keys(queueItem.approvalSnapshot).length ? queueItem.approvalSnapshot : null;
-  if (queueItem.status === 'approved' && queueItem.humanApprovedAt != null) {
+  if (queueItem.status === 'approved' && approvalAuthority != null) {
     if (queueItem.approvalInvalidatedAt != null) {
       approvalSnapshotMismatch = true;
       approvalMismatchReason = `APPROVAL_INVALIDATED: ${queueItem.approvalInvalidationReason || 'content changed after approval'}`;
@@ -1405,10 +1438,10 @@ function buildMainFeedScheduleItem(queueItem) {
           approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISMATCH: writing strategy selection changed after approval';
         }
       }
-    } else if (snapshot == null) {
-      // Approved but no snapshot (legacy row) — require re-approval after this feature
+    } else {
+      // Approved but no complete snapshot — require re-approval.
       approvalSnapshotMismatch = true;
-      approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISSING: approved item predates snapshot binding, requires re-approval';
+      approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISSING: approved item lacks a complete snapshot and requires re-approval';
     }
   }
   return {
@@ -1430,6 +1463,10 @@ function buildMainFeedScheduleItem(queueItem) {
     approvalSnapshotMismatch,
     approvalMismatchReason,
     currentFingerprint,
+    approvalAuthority,
+    missionGrant: approvalAuthority?.type === 'mission_agent' ? getFirst1000MainFeedMissionGrant() : null,
+    missionAccountHealth: approvalAuthority?.type === 'mission_agent' ? getAccountHealthSummary().health : null,
+    missionFollowers: approvalAuthority?.type === 'mission_agent' ? (getPerformanceSnapshot(1)?.account?.followers ?? null) : null,
   };
 }
 
@@ -1633,7 +1670,8 @@ export function saveContentStyleLabel(input = {}) {
 }
 
 const WRITING_STRATEGY_MODES = new Set(['off', 'suggest', 'apply']);
-const WRITING_STRATEGY_SOURCES = new Set(['recommended', 'manual']);
+const WRITING_STRATEGY_SOURCES = new Set(['recommended', 'manual', 'mission_agent']);
+const WRITING_STRATEGY_ACTORS = new Set(['human', 'mission_agent']);
 
 function decodeWritingStrategySelection(row) {
   return row ? {
@@ -1657,14 +1695,14 @@ export function getWritingStrategySelection(id) {
 
 export function getLatestWritingStrategySelectionForQueueItem(queueItemId) {
   return decodeWritingStrategySelection(db.prepare(`SELECT * FROM writing_strategy_selections
-    WHERE queue_item_id = ? AND selected_by = 'human' ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
+    WHERE queue_item_id = ? AND selected_by IN ('human', 'mission_agent') ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
 }
 
 export function getWritingStrategySelectionForQueueItemAt(queueItemId, selectedAt) {
   const timestamp = Number(selectedAt);
   if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Writing strategy selection lookup requires a positive timestamp.');
   return decodeWritingStrategySelection(db.prepare(`SELECT * FROM writing_strategy_selections
-    WHERE queue_item_id = ? AND selected_by = 'human' AND selected_at <= ? ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId), timestamp));
+    WHERE queue_item_id = ? AND selected_by IN ('human', 'mission_agent') AND selected_at <= ? ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId), timestamp));
 }
 
 export function recordWritingStrategySelection(input = {}) {
@@ -1681,7 +1719,20 @@ export function recordWritingStrategySelection(input = {}) {
   const selectedAt = Number(input.selectedAt || Date.now());
   if (!WRITING_STRATEGY_MODES.has(mode)) throw new Error(`Unsupported writing strategy mode: ${mode || 'missing'}.`);
   if (!WRITING_STRATEGY_SOURCES.has(selectionSource)) throw new Error(`Unsupported writing strategy selection source: ${selectionSource || 'missing'}.`);
-  if (selectedBy !== 'human') throw new Error('Writing strategy selection requires selectedBy=human.');
+  if (!WRITING_STRATEGY_ACTORS.has(selectedBy)) throw new Error(`Unsupported writing strategy actor: ${selectedBy || 'missing'}.`);
+  if (selectedBy === 'human' && selectionSource === 'mission_agent') throw new Error('Human writing strategy selection cannot use mission_agent provenance.');
+  if (selectedBy === 'mission_agent' && selectionSource === 'manual') throw new Error('Mission-agent writing strategy selection cannot claim manual human provenance.');
+  if (selectedBy === 'mission_agent') {
+    const authority = input.guidance?.selectionAuthority || {};
+    const revision = Number(authority.grantRevision);
+    const grant = getFirst1000MainFeedMissionGrant();
+    if (authority.type !== 'mission_agent' || authority.mission !== 'first_1000_main_feed' || !Number.isInteger(revision) || revision < 1) {
+      throw new Error('Mission-agent writing strategy selection requires inspectable First-1,000 grant provenance.');
+    }
+    if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
+      throw new Error('Mission-agent writing strategy selection requires the exact current live First-1,000 grant revision.');
+    }
+  }
   if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new Error('Writing strategy selectedAt must be a positive timestamp.');
   return runStoreTransaction(() => {
     const inserted = db.prepare(`INSERT INTO writing_strategy_selections(
@@ -1694,11 +1745,14 @@ export function recordWritingStrategySelection(input = {}) {
     );
     const selection = getWritingStrategySelection(Number(inserted.lastInsertRowid));
     const refreshedQueue = getQueueItem(queueItem.id);
-    if (refreshedQueue && refreshedQueue.status === 'approved' && refreshedQueue.humanApprovedAt != null) {
+    if (getQueueApprovalAuthority(refreshedQueue)) {
       const snapshot = refreshedQueue.approvalSnapshot || {};
       const snapshotSelectionId = snapshot.writingStrategySelectionId;
       if (snapshotSelectionId == null || Number(snapshotSelectionId) !== Number(selection.id)) {
-        invalidateQueueApproval(refreshedQueue.candidateKey, { actor: 'human', reason: 'writing strategy selection changed after approval' });
+        invalidateQueueApproval(refreshedQueue.candidateKey, {
+          actor: selectedBy === 'mission_agent' ? 'agent' : 'human',
+          reason: 'writing strategy selection changed after approval',
+        });
       }
     }
     return selection;
@@ -1737,26 +1791,49 @@ export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human
 export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('claimQueueItem requires a numeric now timestamp.');
-  // Fail-closed: approved content must still match its snapshot at claim time
-  const preItem = getQueueItem(Number(id));
-  if (preItem && preItem.status === 'approved' && preItem.humanApprovedAt != null) {
+  return runStoreTransaction(() => {
+    const preItem = getQueueItem(Number(id));
+    if (!preItem || preItem.status !== 'approved') return null;
+    const authority = getQueueApprovalAuthority(preItem);
+    if (!authority) return null;
+
     const scheduleCheck = buildMainFeedScheduleItem(preItem);
     if (scheduleCheck?.approvalSnapshotMismatch || scheduleCheck?.approvalInvalidatedAt != null || preItem.approvalInvalidatedAt != null) {
       return null;
     }
-  }
-  const params = [timestamp, timestamp, Number(id), timestamp];
-  let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
-    WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
-      AND pipeline IN ('original', 'quote', 'thread') AND human_approved_at IS NOT NULL
-      AND (expires_at IS NULL OR expires_at > ?)
-      AND published_at IS NULL AND output_tweet_id IS NULL`;
-  if (expectedUpdatedAt != null) {
-    sql += ' AND updated_at = ?';
-    params.push(Number(expectedUpdatedAt));
-  }
-  const result = db.prepare(sql).run(...params);
-  return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+
+    if (authority.type === 'mission_agent') {
+      if (!AUTOMATED_MAIN_FEED_PIPELINES.has(preItem.pipeline)) return null;
+      const verification = preItem.approvalSnapshot?.verificationProvenance || {};
+      const sourceReferences = Array.isArray(verification.sourceReferences)
+        ? verification.sourceReferences.filter((value) => String(value || '').trim())
+        : [];
+      if (verification.authorityType !== 'mission_agent' || sourceReferences.length === 0 || !Array.isArray(verification.evidenceReferences)) {
+        return null;
+      }
+      const grant = getFirst1000MainFeedMissionGrant();
+      if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(authority.grantRevision)) {
+        return null;
+      }
+      if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') return null;
+      const storedFollowers = Number(getPerformanceSnapshot(1)?.account?.followers);
+      if (Number.isFinite(storedFollowers) && storedFollowers >= Number(grant.targetFollowers)) return null;
+    }
+
+    const params = [timestamp, timestamp, Number(id), timestamp];
+    let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
+      WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
+        AND pipeline IN ('original', 'quote', 'thread')
+        AND (expires_at IS NULL OR expires_at > ?)
+        AND published_at IS NULL AND output_tweet_id IS NULL`;
+    sql += authority.type === 'human' ? ' AND human_approved_at IS NOT NULL' : ' AND human_approved_at IS NULL';
+    if (expectedUpdatedAt != null) {
+      sql += ' AND updated_at = ?';
+      params.push(Number(expectedUpdatedAt));
+    }
+    const result = db.prepare(sql).run(...params);
+    return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+  });
 }
 
 export function markQueuePublished(id, tweetId, outputUrl = null, { publishedAt = Date.now() } = {}) {
@@ -2021,6 +2098,105 @@ export function getAutonomousReplyGrantState() {
 export function saveAutonomousReplyGrantState(grant) {
   setAppState(AUTONOMOUS_REPLY_GRANT_STATE_KEY, JSON.stringify(grant || {}));
   return getAutonomousReplyGrantState();
+}
+
+function defaultFirst1000MainFeedMissionGrant() {
+  return {
+    state: 'stopped',
+    mode: 'dry_run',
+    targetFollowers: 1000,
+    revision: 0,
+    updatedAt: null,
+    startedAt: null,
+    startedBy: null,
+    pausedAt: null,
+    stoppedAt: null,
+    completedAt: null,
+    completedBy: null,
+  };
+}
+
+function saveFirst1000MainFeedMissionGrant(grant) {
+  setAppState(FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY, JSON.stringify(grant));
+  return getFirst1000MainFeedMissionGrant();
+}
+
+export function getFirst1000MainFeedMissionGrant() {
+  const stored = json(getAppState(FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY, null), {});
+  const grant = { ...defaultFirst1000MainFeedMissionGrant(), ...(stored || {}) };
+  grant.revision = Number.isInteger(Number(grant.revision)) ? Number(grant.revision) : 0;
+  grant.targetFollowers = Number.isInteger(Number(grant.targetFollowers)) && Number(grant.targetFollowers) > 0
+    ? Number(grant.targetFollowers)
+    : 1000;
+  return grant;
+}
+
+export function configureFirst1000MainFeedMissionGrant(input = {}, { actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('First-1,000 main-feed mission configuration requires an explicit human action.');
+  const current = getFirst1000MainFeedMissionGrant();
+  const mode = input.mode === undefined ? current.mode : String(input.mode);
+  const targetFollowers = input.targetFollowers === undefined ? current.targetFollowers : Number(input.targetFollowers);
+  if (!FIRST_1000_MAIN_FEED_MISSION_MODES.has(mode)) throw new Error(`Unsupported First-1,000 mission mode: ${mode}.`);
+  if (!Number.isInteger(targetFollowers) || targetFollowers <= 0) throw new Error('First-1,000 mission targetFollowers must be a positive whole number.');
+  if (mode === current.mode && targetFollowers === current.targetFollowers) return current;
+  return saveFirst1000MainFeedMissionGrant({
+    ...current,
+    mode,
+    targetFollowers,
+    revision: current.revision + 1,
+    updatedAt: Date.now(),
+  });
+}
+
+function transitionFirst1000MainFeedMission(action, { actor = 'human' } = {}) {
+  if (action === 'start' && actor !== 'human') {
+    throw new Error('First-1,000 main-feed mission Start requires an explicit human action.');
+  }
+  if (['pause', 'stop'].includes(action) && actor !== 'human') {
+    throw new Error(`First-1,000 main-feed mission ${action} requires an explicit human action.`);
+  }
+  if (action === 'complete' && !['human', 'agent'].includes(actor)) {
+    throw new Error('First-1,000 main-feed mission completion requires actor=human or actor=agent.');
+  }
+  const current = getFirst1000MainFeedMissionGrant();
+  const nextState = action === 'start' ? 'running' : action === 'pause' ? 'paused' : action === 'stop' ? 'stopped' : action === 'complete' ? 'completed' : '';
+  if (!FIRST_1000_MAIN_FEED_MISSION_STATES.has(nextState)) throw new Error(`Unsupported First-1,000 mission transition: ${action}.`);
+  if (current.state === nextState) return current;
+  if (action === 'pause' && current.state !== 'running') throw new Error('Only a running First-1,000 main-feed mission can be paused.');
+  const now = Date.now();
+  return saveFirst1000MainFeedMissionGrant({
+    ...current,
+    state: nextState,
+    revision: current.revision + 1,
+    updatedAt: now,
+    ...(action === 'start' ? {
+      startedAt: ['stopped', 'completed'].includes(current.state) || current.startedAt == null ? now : current.startedAt,
+      startedBy: ['stopped', 'completed'].includes(current.state) || current.startedBy == null ? 'human' : current.startedBy,
+      pausedAt: null,
+      stoppedAt: null,
+      completedAt: null,
+      completedBy: null,
+    } : {}),
+    ...(action === 'pause' ? { pausedAt: now } : {}),
+    ...(action === 'stop' ? { stoppedAt: now, pausedAt: null } : {}),
+    ...(action === 'complete' ? { completedAt: now, completedBy: actor, pausedAt: null } : {}),
+  });
+}
+
+export function startFirst1000MainFeedMission(options = {}) {
+  return transitionFirst1000MainFeedMission('start', options);
+}
+
+export function pauseFirst1000MainFeedMission(options = {}) {
+  return transitionFirst1000MainFeedMission('pause', options);
+}
+
+export function stopFirst1000MainFeedMission(options = {}) {
+  return transitionFirst1000MainFeedMission('stop', options);
+}
+
+export function completeFirst1000MainFeedMission(options = {}) {
+  return transitionFirst1000MainFeedMission('complete', options);
 }
 
 export function getAutonomousReplyRuntimeState() {
@@ -4046,7 +4222,7 @@ function decodeDraft(row) {
 }
 
 function draftApprovalInvalidationReason(queueItem, draft) {
-  if (!queueItem || queueItem.status !== 'approved' || queueItem.humanApprovedAt == null) return '';
+  if (!getQueueApprovalAuthority(queueItem)) return '';
   const snapshot = queueItem.approvalSnapshot || {};
   if (!snapshot.contentHash || !snapshot.mediaHash || !snapshot.gateHash) {
     return 'approved draft changed without a complete approval snapshot';
@@ -4613,18 +4789,44 @@ export function listQueueSources(queueItemId) {
 function decodeEditorialSelection(row) {
   return row ? {
     id: Number(row.id), editorialRecommendationId: Number(row.editorial_recommendation_id), queueItemId: Number(row.queue_item_id),
-    selectedPipeline: row.selected_pipeline, selectedAt: Number(row.selected_at),
+    selectedPipeline: row.selected_pipeline,
+    selectedBy: row.selected_by || 'human',
+    grantRevision: row.grant_revision == null ? null : Number(row.grant_revision),
+    selectedAt: Number(row.selected_at),
   } : null;
 }
 
-export function recordEditorialSelection({ editorialRecommendationId, queueItemId, selectedPipeline, selectedAt = Date.now() } = {}) {
+export function recordEditorialSelection({
+  editorialRecommendationId,
+  queueItemId,
+  selectedPipeline,
+  selectedBy = 'human',
+  grantRevision = null,
+  selectedAt = Date.now(),
+} = {}) {
   const recommendation = getEditorialRecommendation(editorialRecommendationId);
   if (!recommendation) throw new Error(`Editorial recommendation not found: ${editorialRecommendationId}`);
   if (!getQueueItem(queueItemId)) throw new Error(`Queue item not found: ${queueItemId}`);
+  const actor = String(selectedBy || '');
+  if (!['human', 'mission_agent'].includes(actor)) throw new Error(`Unsupported editorial selection actor: ${actor || 'missing'}.`);
+  const revision = grantRevision == null ? null : Number(grantRevision);
+  if (actor === 'mission_agent' && (!Number.isInteger(revision) || revision < 1)) {
+    throw new Error('Mission-agent editorial selection requires a positive grant revision.');
+  }
+  if (actor === 'mission_agent') {
+    const grant = getFirst1000MainFeedMissionGrant();
+    if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
+      throw new Error('Mission-agent editorial selection requires the exact current live First-1,000 grant revision.');
+    }
+  }
+  if (actor === 'human' && revision != null) throw new Error('Human editorial selection cannot carry a mission grant revision.');
   const existing = getEditorialSelectionByRecommendation(editorialRecommendationId);
   if (existing) return existing;
-  db.prepare(`INSERT INTO editorial_selections(editorial_recommendation_id, queue_item_id, selected_pipeline, selected_at)
-    VALUES (?, ?, ?, ?)`).run(Number(editorialRecommendationId), Number(queueItemId), String(selectedPipeline || ''), Number(selectedAt));
+  db.prepare(`INSERT INTO editorial_selections(
+    editorial_recommendation_id, queue_item_id, selected_pipeline, selected_by, grant_revision, selected_at
+  ) VALUES (?, ?, ?, ?, ?, ?)`).run(
+    Number(editorialRecommendationId), Number(queueItemId), String(selectedPipeline || ''), actor, revision, Number(selectedAt),
+  );
   return getEditorialSelectionByRecommendation(editorialRecommendationId);
 }
 
