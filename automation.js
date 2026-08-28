@@ -295,6 +295,18 @@ export async function processMainFeedQueue({
   try {
     output = await transport(decision.item, { authToken, csrfToken }, { account });
   } catch (error) {
+    if (error?.code === 'TRANSPORT_PARTIAL_THREAD') {
+      const tweetId = String(error.rootTweetId || '').trim() || null;
+      const url = tweetId ? `https://x.com/${account}/status/${tweetId}` : null;
+      const queueItem = saveQueueItem({
+        ...claimed,
+        status: 'publishing',
+        outputTweetId: tweetId,
+        outputUrl: url,
+        publishError: `Thread partially published; manual reconciliation required: ${error.message}`,
+      });
+      return { action: 'posted-recording-incomplete', decision, decisions, queueItem, tweetId, url, error: queueItem.publishError };
+    }
     if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
       const queueItem = saveQueueItem({
         ...claimed,

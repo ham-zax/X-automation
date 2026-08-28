@@ -1,4 +1,4 @@
-import { DEFAULT_FEATURES, TwitterHttpClient, GRAPHQL, postThread, postTweet, uploadImage } from 'xactions/scrapers/twitter/http';
+import { DEFAULT_FEATURES, TwitterHttpClient, GRAPHQL, postTweet, uploadImage } from 'xactions/scrapers/twitter/http';
 
 const HOME_URL = 'https://x.com/home';
 const AUTH_PROBE_URL = 'https://x.com/i/api/1.1/users/recommendations.json?limit=1';
@@ -119,7 +119,46 @@ export async function postThreadHttp(tweets, credentials, options = {}) {
     });
     normalized[0] = { ...normalized[0], mediaIds: [uploaded.mediaId] };
   }
-  return postThread(client, normalized, threadOptions);
+
+  const results = [];
+  let previousTweetId = null;
+  for (let index = 0; index < normalized.length; index++) {
+    const tweet = normalized[index];
+    let result;
+    try {
+      result = await postTweet(client, tweet.text, {
+        ...threadOptions,
+        mediaIds: tweet.mediaIds || [],
+        ...(previousTweetId ? { replyTo: previousTweetId } : {}),
+      });
+    } catch (error) {
+      if (!results.length) throw error;
+      const partial = new Error(`Thread publication stopped after ${results.length} part(s): ${error.message}`);
+      partial.code = 'TRANSPORT_PARTIAL_THREAD';
+      partial.rootTweetId = outputIdentity(results[0], '').tweetId;
+      partial.transportResult = results;
+      throw partial;
+    }
+
+    const tweetId = outputIdentity(result, '').tweetId;
+    if (!tweetId) {
+      const errorMessage = graphQlErrorMessage(result);
+      const error = new Error(errorMessage
+        ? `X CreateTweet rejected Thread part ${index + 1}: ${errorMessage}`
+        : `Thread part ${index + 1} returned no tweet ID.`);
+      error.code = results.length ? 'TRANSPORT_PARTIAL_THREAD' : 'X_CREATE_TWEET_REJECTED';
+      error.rootTweetId = results.length ? outputIdentity(results[0], '').tweetId : null;
+      error.transportResult = [...results, result];
+      throw error;
+    }
+
+    results.push(result);
+    previousTweetId = tweetId;
+    if (index < normalized.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000));
+    }
+  }
+  return results;
 }
 
 function sourceTweetId(item) {
