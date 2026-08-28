@@ -25,6 +25,7 @@ import {
   dismissEditorialRecommendation,
   refreshEditorialPlan,
   selectEditorialRecommendation,
+  selectEditorialRecommendationAsMissionAgent,
 } from './editorial.js';
 import { attachEditorialResearchSource } from './research.js';
 import {
@@ -885,9 +886,11 @@ async function main() {
   }
 
   if (command === 'editorial-select') {
-    const selected = selectEditorialRecommendation(Number(payload.recommendationId), {
-      pipelineOverride: payload.pipelineOverride == null || payload.pipelineOverride === '' ? null : String(payload.pipelineOverride),
-    });
+    const selected = payload.selectedBy === 'mission_agent'
+      ? selectEditorialRecommendationAsMissionAgent(Number(payload.recommendationId), { grantRevision: payload.grantRevision })
+      : selectEditorialRecommendation(Number(payload.recommendationId), {
+        pipelineOverride: payload.pipelineOverride == null || payload.pipelineOverride === '' ? null : String(payload.pipelineOverride),
+      });
     result({
       recommendation: bridgeEditorialRecommendation(selected.recommendation),
       selection: selected.selection,
