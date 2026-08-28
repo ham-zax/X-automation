@@ -121,6 +121,8 @@ The same-age 161-vs-8 contrast is large enough to stop hard-defaulting to zero h
 
 For treatment posts, use **1–2 canonical hashtags only when they are natural to the topic**; the strongest current observation used two. Keep comparable zero- and one-hashtag controls and compare them at matched post-age windows. Do not add a second hashtag merely because it is allowed.
 
+When the input packet includes `constraints.hashtagExperimentCount`, that value is the declared treatment for this post. For an Original, Quote, or Thread, produce exactly that many canonical topical hashtags across the final publication. If the assigned treatment is greater than zero and no genuinely canonical tag fits the topic, return `DO_NOT_POST` rather than substituting a generic tag. Replies continue to default to zero unless their separate workflow explicitly says otherwise.
+
 Do not append generic hashtag blocks such as:
 
 ```text
@@ -192,6 +194,13 @@ The writing agent should receive a structured packet with as much of the followi
     "topic": null,
     "coverage": null,
     "supportingPostIds": []
+  },
+  "experiment": {
+    "experimentId": null,
+    "variantLabel": null,
+    "context": {
+      "hashtagCount": null
+    }
   },
   "mediaAvailable": [],
   "desiredReaderOutcome": null

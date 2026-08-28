@@ -136,6 +136,10 @@ export function buildWriterPacket({
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
   const sourceStyle = extractViralStyleFeatures({ text: candidate?.text || '' });
+  const hashtagExperimentCount = Number(queueItem?.experimentAssignment?.context?.hashtagCount);
+  const hasHashtagExperiment = Number.isInteger(hashtagExperimentCount)
+    && hashtagExperimentCount >= 0
+    && hashtagExperimentCount <= 2;
   return {
     account: {
       identity: 'AI-native developer + builder',
@@ -190,12 +194,18 @@ export function buildWriterPacket({
       supportingPostIds: Array.isArray(profileProof?.supportingPostIds) ? [...profileProof.supportingPostIds] : [],
       reason: profileProof?.reason ?? '',
     },
+    experiment: queueItem?.experimentAssignment?.experimentId ? {
+      experimentId: queueItem.experimentAssignment.experimentId,
+      variantLabel: queueItem.experimentAssignment.variantLabel || null,
+      context: queueItem.experimentAssignment.context || {},
+    } : null,
     ...(writingStrategy ? { writingStrategy } : {}),
     currentDraft: writerCurrentDraft(draft),
     constraints: {
       singlePostWeightedLimit: 280,
       hashtagsPreferredMax: 1,
       hashtagsHardMax: 2,
+      ...(hasHashtagExperiment ? { hashtagExperimentCount } : {}),
       emojiMax: 1,
       semanticAnchorsTarget: [1, 3],
     },

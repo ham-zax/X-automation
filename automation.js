@@ -15,6 +15,7 @@ import {
   prepareAutonomousMainFeed,
   refreshFirst1000MissionFollowerState,
 } from './autonomous_main_feed.js';
+import { classifyPublishedContent } from './writing_strategy.js';
 import {
   claimQueueItem,
   getAccountHealthSummary,
@@ -412,6 +413,19 @@ async function runCycleBody() {
     measurements.error = error.message;
     console.log(`[automation] Measurement capture failed: ${error.message}`);
   }
+  let styleClassification = { requested: 0, classified: 0, reused: 0, error: null };
+  if (measurements.captured.length) {
+    const queueItemIds = [...new Set(measurements.captured.map((measurement) => Number(measurement.queueItemId)).filter(Number.isFinite))];
+    try {
+      const classified = await classifyPublishedContent({ queueItemIds, limit: queueItemIds.length || 1 });
+      styleClassification = { ...classified, error: null };
+      if (classified.classified) console.log(`[automation] Classified ${classified.classified} measured publication style(s) for own-account learning.`);
+    } catch (error) {
+      styleClassification.error = error.message;
+      console.log(`[automation] Publication style classification skipped without changing measurement state: ${error.message}`);
+    }
+  }
+
   let missionFollowers;
   try {
     missionFollowers = await refreshFirst1000MissionFollowerState();
@@ -505,6 +519,7 @@ async function runCycleBody() {
     engagement,
     autonomousReplies,
     measurements,
+    styleClassification,
     publicationBaseline,
     editorialPlanRefresh,
     missionFollowers,
@@ -513,6 +528,7 @@ async function runCycleBody() {
       ...research.errors,
       ...engagement.errors,
       ...(measurements.error ? [measurements.error] : []),
+      ...(styleClassification.error ? [styleClassification.error] : []),
       ...(missionFollowers?.error ? [missionFollowers.error] : []),
       ...(autonomousMainFeedPreparation?.error ? [autonomousMainFeedPreparation.error] : []),
     ],

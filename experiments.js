@@ -5,7 +5,7 @@ const HOUR_MS = 3_600_000;
 const CONFIDENCE_ORDER = ['low', 'medium', 'high'];
 
 export const EXPERIMENT_DIMENSIONS = Object.freeze({
-  content: Object.freeze(['style', 'hook_type', 'media_type', 'format']),
+  content: Object.freeze(['style', 'hook_type', 'media_type', 'format', 'hashtag_count']),
   timing: Object.freeze(['timing_bucket']),
   network: Object.freeze([
     'target_class',
@@ -61,6 +61,7 @@ const CONTENT_CONFOUNDER_FIELDS = [
   'topicTags',
   'format',
   'mediaType',
+  'hashtagCount',
   'timingBucket',
   'healthState',
 ];
@@ -96,6 +97,7 @@ const POPULATION_ALIASES = Object.freeze({
   archetypeRepetitionBucket: ['archetypeRepetitionBucket', 'archetype_repetition_bucket'],
   timingBucket: ['timingBucket', 'timing_bucket'],
   mediaType: ['mediaType', 'media_type'],
+  hashtagCount: ['hashtagCount', 'hashtag_count'],
   healthState: ['healthState', 'health_state', 'health.state'],
   targetUsername: ['targetUsername', 'target_username', 'username'],
 });

@@ -11,6 +11,7 @@ import {
 } from './pipeline.js';
 import { rankMainFeedItems } from './scheduler.js';
 import {
+  assignExperimentVariant,
   completeFirst1000MainFeedMission,
   getAccountHealthSummary,
   getCandidate,
@@ -27,6 +28,8 @@ import {
   listAcceptedLearnedRules,
   listApprovedMainFeedItems,
   listEditorialRecommendations,
+  listExperimentAssignments,
+  listExperiments,
   listQueueItems,
   listQueueSources,
   listRecentMainFeedPublications,
@@ -199,6 +202,34 @@ function objective() {
   return getNicheProfile().profile.defaultObjective || 'qualified_growth';
 }
 
+function activeHashtagExperiment() {
+  const active = listExperiments({ status: 'active', limit: 100 })
+    .filter((experiment) => experiment.dimension === 'hashtag_count');
+  return active.length === 1 ? active[0] : null;
+}
+
+function balancedHashtagVariant(experiment) {
+  const counts = new Map((experiment?.variants || []).map((variant) => [variant.label, 0]));
+  for (const assignment of listExperimentAssignments(experiment.id)) {
+    counts.set(assignment.variantLabel, Number(counts.get(assignment.variantLabel) || 0) + 1);
+  }
+  return (experiment?.variants || [])
+    .map((variant, index) => ({ variant, index, count: Number(counts.get(variant.label) || 0) }))
+    .sort((left, right) => left.count - right.count || left.index - right.index)[0]?.variant || null;
+}
+
+function assignHashtagExperimentIfEligible(queueItem) {
+  if (queueItem.experimentVariantId != null) return queueItem;
+  const experiment = activeHashtagExperiment();
+  if (!experiment) return queueItem;
+  const variant = balancedHashtagVariant(experiment);
+  const hashtagCount = Number(variant?.config?.hashtagCount ?? variant?.config?.hashtag_count);
+  if (!variant || !Number.isInteger(hashtagCount) || hashtagCount < 0 || hashtagCount > 2) return queueItem;
+  return assignExperimentVariant(queueItem.candidateKey, experiment.id, variant.label, {
+    context: { hashtagCount },
+  });
+}
+
 function usableRecommendation(recommendations = []) {
   return [...recommendations]
     .filter((item) => item.status === 'suggested' && item.decision === 'PREPARE' && MISSION_PIPELINES.has(item.pipeline))
@@ -313,6 +344,9 @@ export async function prepareAutonomousMainFeed({
   let queueItem = getQueueItem(work.queueItem.id);
   let draft = getDraftByCandidate(queueItem.candidateKey);
   if (!draft) throw new Error(`Mission-owned queue item ${queueItem.id} has no draft.`);
+
+  requirePreparationAuthority(grantRevision);
+  queueItem = assignHashtagExperimentIfEligible(queueItem);
 
   requirePreparationAuthority(grantRevision);
   let strategySelection = currentMissionStrategy(queueItem, grantRevision);

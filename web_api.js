@@ -481,7 +481,7 @@ export const EVIDENCE_LABELS = Object.freeze({
 });
 
 export const EXPERIMENT_DIMENSION_LABELS = Object.freeze({
-  style: 'Writing style', hook_type: 'Opening / hook', media_type: 'Media type', format: 'Content format', timing_bucket: 'Publishing time',
+  style: 'Writing style', hook_type: 'Opening / hook', media_type: 'Media type', format: 'Content format', hashtag_count: 'Canonical hashtag count', timing_bucket: 'Publishing time',
   target_class: 'Type of person/account', target_score_bucket: 'Relationship fit', target_size_bucket: 'Account size', reply_age_bucket: 'How fresh the conversation is',
   conversation_saturation_bucket: 'Recent interaction level', reply_archetype: 'Reply style', relationship_stage: 'Relationship stage',
   interaction_volume_bucket: 'Interaction volume', target_concentration_bucket: 'Target concentration', archetype_repetition_bucket: 'Reply-style repetition',

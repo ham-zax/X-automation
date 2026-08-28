@@ -122,19 +122,45 @@ function reusableOwnedStyleLabels() {
 
 function ownAccountOutcomes(labels) {
   const labelByQueue = new Map(labels.map((label) => [label.queueItemId, label]));
-  const outcomes = [];
+  const measured = [];
   for (const series of listPublicationMeasurementSeries({ limit: 200 })) {
     const label = labelByQueue.get(series.queueItem.id);
     if (!label || !series.measurements.length) continue;
     const measurement = [...series.measurements].sort((left, right) => right.windowMinutes - left.windowMinutes)[0];
+    measured.push({ series, label, measurement });
+  }
+
+  const byWindow = new Map();
+  for (const item of measured) {
+    const key = Number(item.measurement.windowMinutes);
+    if (!byWindow.has(key)) byWindow.set(key, []);
+    byWindow.get(key).push(item);
+  }
+
+  const outcomes = [];
+  for (const { series, label, measurement } of measured) {
+    const cohort = byWindow.get(Number(measurement.windowMinutes)) || [];
+    const reachValues = cohort.map((item) => Number(item.measurement.viewsPerHour)).filter(Number.isFinite).sort((a, b) => a - b);
+    const medianReach = reachValues.length
+      ? reachValues[Math.floor(reachValues.length / 2)]
+      : null;
+    const followsPer1000 = Number(measurement.associatedFollowsPer1000Views);
+    const reachesComparableMedian = cohort.length >= 3
+      && Number.isFinite(Number(measurement.viewsPerHour))
+      && Number.isFinite(medianReach)
+      && Number(measurement.viewsPerHour) >= medianReach;
+    const hasObservedFollowConversion = Number.isFinite(followsPer1000) && followsPer1000 > 0;
+    const evidenceState = reachesComparableMedian || hasObservedFollowConversion ? 'directional' : 'insufficient';
     outcomes.push({
       id: `owned:${series.queueItem.id}:${label.contentHash}:${measurement.windowMinutes}`,
-      evidenceState: 'directional',
+      evidenceState,
       primaryIntent: label.primaryIntent,
       semanticStyle: label.semanticStyle,
       sampleSize: 1,
-      rationale: `Observed own-account outcome at ${measurement.windowMinutes}m: views/hour ${round(measurement.viewsPerHour)}, associated follows/1k views ${round(measurement.associatedFollowsPer1000Views)}, replies/1k views ${round(measurement.repliesPer1000Views)}; attribution ${measurement.attributionConfidence}.`,
-      limitations: ['Single-post own-account outcomes are observational and are not treated as causal or repeated evidence.'],
+      rationale: `Observed own-account outcome at ${measurement.windowMinutes}m: views/hour ${round(measurement.viewsPerHour)}${medianReach == null ? '' : ` vs matched-age median ${round(medianReach)}`}, associated follows/1k views ${round(measurement.associatedFollowsPer1000Views)}, replies/1k views ${round(measurement.repliesPer1000Views)}; attribution ${measurement.attributionConfidence}.`,
+      limitations: [cohort.length >= 3
+        ? 'Single-post own-account evidence is directional only when it reaches the matched-age account median or has observed follow conversion; underperforming styles do not become positive production guidance.'
+        : 'Fewer than three matched-age own-account observations exist, so this single-post style outcome is not used as positive production guidance.'],
     });
   }
   return outcomes;
