@@ -121,6 +121,7 @@ import {
   getWritingStrategyPreview,
   recommendWritingStrategy,
   selectWritingStrategy,
+  selectWritingStrategyAsMissionAgent,
   validateWritingStrategyGenerationContext,
 } from './writing_strategy.js';
 
@@ -946,6 +947,13 @@ async function main() {
   }
 
   if (command === 'writing-strategy-select') {
+    if (payload.selectedBy === 'mission_agent') {
+      result({ selection: await selectWritingStrategyAsMissionAgent(Number(payload.queueItemId), {
+        grantRevision: payload.grantRevision,
+        draftId: payload.draftId ?? null,
+      }) });
+      return;
+    }
     if (payload.confirmSelect !== true) throw new Error('writing-strategy-select requires confirmSelect=true for the explicit human strategy selection.');
     result({ selection: await selectWritingStrategy(payload) });
     return;
