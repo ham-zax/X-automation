@@ -193,8 +193,11 @@ async function quotePostUi(page, postUrl, commentary, mediaAttachment = null) {
   const quoteMenuItem = page.getByRole('menuitem', { name: 'Quote', exact: true });
   await quoteMenuItem.waitFor({ state: 'visible', timeout: 15_000 });
   await quoteMenuItem.click();
-  await page.waitForSelector('[data-testid="tweetTextarea_0"]', { timeout: 15_000 });
-  await page.click('[data-testid="tweetTextarea_0"]');
+  await page.waitForURL((url) => url.pathname === '/compose/post', { timeout: 15_000 });
+  const quoteDialog = page.getByRole('dialog').last();
+  const quoteText = quoteDialog.getByRole('textbox', { name: 'Post text' });
+  await quoteText.waitFor({ state: 'visible', timeout: 15_000 });
+  await quoteText.click();
   await page.keyboard.type(commentary, { delay: 30 });
 
   if (mediaAttachment?.localPath) {
@@ -211,7 +214,9 @@ async function quotePostUi(page, postUrl, commentary, mediaAttachment = null) {
     }
   }
 
-  await page.click('[data-testid="tweetButton"]');
+  const postButton = quoteDialog.getByRole('button', { name: 'Post', exact: true });
+  await postButton.waitFor({ state: 'visible', timeout: 15_000 });
+  await postButton.click();
   await page.waitForTimeout(3_000);
 }
 
