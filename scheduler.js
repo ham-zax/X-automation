@@ -52,8 +52,15 @@ function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
 }
 
+function missionBreakout(item) {
+  return approvalAuthorityOf(item)?.type === 'mission_agent'
+    && String(item?.candidate?.viral?.tier || '').toLowerCase() === 'breakout';
+}
+
 function urgencyOf(item) {
   const urgency = String(item?.urgency || '').toLowerCase();
+  if (Object.hasOwn(URGENCY_MODIFIERS, urgency) && urgency !== 'evergreen') return urgency;
+  if (missionBreakout(item)) return 'viral';
   return Object.hasOwn(URGENCY_MODIFIERS, urgency) ? urgency : 'evergreen';
 }
 
@@ -502,10 +509,10 @@ export function recommendMainFeedSchedule(item, context = {}) {
   }
 
   const viralPreemption = urgency === 'viral'
-    && (item?.accelerating === true || item?.isAccelerating === true || (expiresAt != null && expiresAt - now <= 3 * HOUR_MS));
+    && (missionBreakout(item) || item?.accelerating === true || item?.isAccelerating === true || (expiresAt != null && expiresAt - now <= 3 * HOUR_MS));
   if (viralPreemption && recommendedAt > now) {
     recommendedAt = now;
-    addIssue(warnings, 'VIRAL_PREEMPTION', 'Approved viral content with caller-supplied acceleration/short shelf-life is recommended now despite advisory coverage spacing.');
+    addIssue(warnings, 'VIRAL_PREEMPTION', 'Approved viral content with observed breakout momentum or short shelf-life is recommended now despite advisory coverage spacing.');
     if (latest.publishedAt != null) {
       addIssue(warnings, 'COVERAGE_OVERLAP', 'Immediate viral publication overlaps the ordinary coverage-spacing window.');
     }
