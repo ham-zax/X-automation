@@ -24,6 +24,7 @@ import {
   listCandidateActions,
   listAcceptedLearnedRules,
   listQueueItems,
+  listQueueSources,
   listResearchEvidence,
   listRecentOurConversationPosts,
   listRecentPublishedContent,
@@ -240,15 +241,18 @@ function requireLiveFirst1000MainFeedMissionGrant(grantRevision) {
 export function refreshQueueRecommendation(key, context = {}) {
   const candidate = requireCandidate(key);
   ensureQueueItem(key);
-  const scoreContext = scoringContext(candidate, context);
-  const scores = scoreOpportunity(candidate, scoreContext);
   const existingQueueItem = getQueueItemByCandidate(key);
+  const effectiveContext = context.multipleSources == null
+    ? { ...context, multipleSources: listQueueSources(existingQueueItem.id).length > 1 }
+    : context;
+  const scoreContext = scoringContext(candidate, effectiveContext);
+  const scores = scoreOpportunity(candidate, scoreContext);
   const growthFit = assessStrategicRelevance(candidate, {
-    objective: context.objective,
+    objective: effectiveContext.objective,
     humanOverride: existingQueueItem?.relevance?.humanOverride || null,
   });
   const recommendation = recommendDistributionAction(candidate, recommendationContext(candidate, scores, {
-    ...context,
+    ...effectiveContext,
     strategicRelevance: growthFit,
     relevanceOverride: existingQueueItem?.relevance?.humanOverride || null,
   }));
