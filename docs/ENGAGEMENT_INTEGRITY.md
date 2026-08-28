@@ -243,12 +243,12 @@ Official references:
 
 ### Important implementation risk
 
-The current `x_test` publisher uses X's private web GraphQL interface rather than the official X API. That achieved direct HTTP publishing in our local implementation, but it is **not the same thing as an officially supported API integration**. X's current automation rules explicitly warn that non-API automation can lead to enforcement.
+The current `x_test` publisher uses the humanized Clearcote browser UI rather than X's private web GraphQL interface or the official X API. Browser-UI publishing is **not the same thing as an officially supported API integration** and does not expand autonomous-reply authority.
 
 Therefore:
 
 - do not expand the private-GraphQL path into automated likes, follows, unsolicited replies, DMs, or bulk engagement;
-- autonomous Dry run may continuously evaluate opportunities, but **Live autonomous reply Start is blocked while the write transport remains private web GraphQL**;
+- autonomous Dry run may continuously evaluate opportunities, but **Live autonomous reply Start is blocked while the write transport remains browser UI rather than the official X API**;
 - an official X API write transport is a required production boundary before unattended autonomous replies can be enabled, in addition to recipient opt-in, opt-out, and written X AI-reply approval.
 
 ---
@@ -266,7 +266,7 @@ The preferred networking loop is:
 7. **Measure** which topics create follows, substantive replies, shares, bookmarks, and repeat interactions.
 8. **Do more of the useful topic**, not more mechanical engagement actions.
 
-Automation may also run the bounded autonomous-reply operator when the operator explicitly starts it. Dry-run may evaluate active, momentum, and normal-relevant opportunities continuously without X mutation. Live autonomous replies are narrower: recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, and an official X API write transport are mandatory in addition to the project gates and operator budget. The current private web GraphQL publisher does not satisfy that transport boundary, so Live autonomous Start remains blocked. Cold timeline/momentum discoveries without recipient opt-in must become human review or skip, not an unsolicited automated reply. The system should never manufacture volume merely because budget remains.
+Automation may also run the bounded autonomous-reply operator when the operator explicitly starts it. Dry-run may evaluate active, momentum, and normal-relevant opportunities continuously without X mutation. Live autonomous replies are narrower: recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, and an official X API write transport are mandatory in addition to the project gates and operator budget. The current Clearcote browser-UI publisher does not satisfy that transport boundary, so Live autonomous Start remains blocked. Cold timeline/momentum discoveries without recipient opt-in must become human review or skip, not an unsolicited automated reply. The system should never manufacture volume merely because budget remains.
 
 ---
 

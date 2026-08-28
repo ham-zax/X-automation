@@ -6,7 +6,7 @@
   "scripts": {
     "news": "node tech_news.js --ranked --to-post",
     "post": "node post_thread.js",
-    "http:check": "node post_thread.js --http-check",
+    "browser:check": "node post_thread.js --browser-check",
     "start": "npm run web",
     "web": "npm run ui:build && node dashboard.js",
     "agent": "node agent_bridge.js",

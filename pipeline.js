@@ -1,6 +1,6 @@
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { scoreOpportunity } from './opportunity.js';
-import { postTweetHttp } from './x_http.js';
+import { postTweetBrowser } from './x_browser_publish.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
   captureQueueApproval,
@@ -750,11 +750,10 @@ async function sendEngagementReplyTransport({
   text,
   authority,
   authToken,
-  csrfToken,
   account,
   transport,
 }) {
-  if (!authToken || !csrfToken) throw new Error('Sending a reply requires AUTH_TOKEN and CT0.');
+  if (!authToken) throw new Error('Sending a reply through the browser requires AUTH_TOKEN.');
   const publishingItem = saveQueueItem({
     ...queueItem,
     status: 'publishing',
@@ -767,8 +766,21 @@ async function sendEngagementReplyTransport({
   });
   let result;
   try {
-    result = await transport(text, { authToken, csrfToken }, { replyTo: publishingItem.targetTweetId });
+    result = await transport(text, { authToken }, { account, replyTo: publishingItem.targetTweetId });
   } catch (error) {
+    if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
+      saveQueueItem({
+        ...publishingItem,
+        status: 'publishing',
+        humanApprovedAt: authority.type === 'human' ? publishingItem.humanApprovedAt : null,
+        approvedText: authority.type === 'human' ? publishingItem.approvedText : null,
+        engagement: {
+          ...(publishingItem.engagement || {}),
+          send: { authority, postedAt: Date.now(), recordingError: error.message },
+        },
+      });
+      throw new Error(`Reply browser publication is ambiguous and requires reconciliation: ${error.message}`);
+    }
     saveQueueItem({
       ...publishingItem,
       status: 'failed',
@@ -865,9 +877,8 @@ async function sendEngagementReplyTransport({
 
 export async function sendApprovedEngagementReply(key, {
   authToken = process.env.AUTH_TOKEN,
-  csrfToken = process.env.CT0,
   account = process.env.X_ACCOUNT || 'ham_zax',
-  transport = postTweetHttp,
+  transport = postTweetBrowser,
 } = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
@@ -892,7 +903,6 @@ export async function sendApprovedEngagementReply(key, {
     text: currentText,
     authority: { type: 'human', humanApprovedAt: queueItem.humanApprovedAt },
     authToken,
-    csrfToken,
     account,
     transport,
   });
@@ -907,9 +917,8 @@ export async function sendAutonomousEngagementReply(key, {
   sourceClass,
   generatedDraft,
   authToken = process.env.AUTH_TOKEN,
-  csrfToken = process.env.CT0,
   account = process.env.X_ACCOUNT || 'ham_zax',
-  transport = postTweetHttp,
+  transport = postTweetBrowser,
 } = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
@@ -970,7 +979,6 @@ export async function sendAutonomousEngagementReply(key, {
       sourceClass: sourceClass || null,
     },
     authToken,
-    csrfToken,
     account,
     transport,
   });

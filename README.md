@@ -1,11 +1,11 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, proposes evidence-backed learned strategy rules, and can publish approved queued drafts through authenticated HTTP GraphQL.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, proposes evidence-backed learned strategy rules, and publishes approved queued drafts through the authenticated Clearcote browser UI.
 
 ## Components
 
-- `x_http.js` — validates the cookie session, discovers the live `CreateTweet` operation ID from X's current web bundle, and performs HTTP GraphQL writes.
-- `post_thread.js` — dry-run, HTTP session check, HTTP thread publishing, or explicit `--browser` publishing.
+- `x_browser_publish.js` — owns authenticated Clearcote browser-UI writes for Original/Quote/Thread and human-reviewed replies, with rendered tweet-ID verification before local publication reconciliation.
+- `post_thread.js` — browser-session preflight, dry-run validation, and browser-only thread publishing.
 - `strategy.js` — executable niche taxonomy, keyword lanes, classification, saved-preference ranking boost, and Direct/Quote/Repost/Reply/Ignore decision method.
 - `audience.js` — authenticated follower/following sync with niche relevance scoring, legacy-crypto downranking, and non-destructive Relationship Intelligence refresh for observed relevant accounts.
 - `relationship.js` — target classes, transparent TargetScore components, bounded reach modifier, event aggregation, and derived relationship stages.
@@ -72,13 +72,13 @@ Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed an evidence-
 
 ## Setup
 
-Copy the non-secret settings you want from `.env.example` into `.env`. HTTP writes require both `AUTH_TOKEN` and `CT0`.
+Copy the non-secret settings you want from `.env.example` into `.env`. Browser publication requires `AUTH_TOKEN`; `CT0` is not a publication prerequisite.
 
 ```bash
-npm run http:check
+npm run browser:check
 ```
 
-That command validates the authenticated HTTP session and resolves X's current `CreateTweet` GraphQL operation without publishing anything.
+That command launches the Clearcote browser, authenticates the X UI session, verifies the configured account profile, and publishes nothing.
 
 ## Research
 
@@ -101,11 +101,11 @@ Research candidates are persisted in `.x-research.sqlite`, but live source snaps
 # Validate only; no X write
 node post_thread.js --dry-run "preview only"
 
-# Direct authenticated HTTP GraphQL (default)
+# Clearcote browser UI only
 node post_thread.js "first post" "reply in the thread"
 
-# Explicit browser fallback
-node post_thread.js --browser "browser-mode post"
+# Optional visible browser window
+node post_thread.js --headless=false "visible browser-mode post"
 ```
 
 HTTP mode fails closed if the session or live operation discovery cannot be validated. It does not silently switch to browser automation.

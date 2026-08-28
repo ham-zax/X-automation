@@ -683,7 +683,7 @@ function operatorStatus(payload = {}) {
   const remainingReplyBudget = replyGrant.liveBudget == null
     ? null
     : Math.max(0, Number(replyGrant.liveBudget) - Number(replyGrant.budgetUsed || 0));
-  const credentialedMainFeed = Boolean(process.env.AUTH_TOKEN && process.env.CT0);
+  const credentialedMainFeed = Boolean(process.env.AUTH_TOKEN);
   const autoPostEnabled = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
   const accountHealth = getAccountHealthSummary({ now });
   const integrityWarnings = scheduleDecisions
@@ -717,7 +717,7 @@ function operatorStatus(payload = {}) {
         autoPostEnabled,
         credentialsPresent: credentialedMainFeed,
         configured: autoPostEnabled && credentialedMainFeed,
-        preflight: 'Run npm run http:check; this read model does not persist or infer preflight success.',
+        preflight: 'Run npm run browser:check; this read model does not persist or infer preflight success.',
         next: compactScheduleDecision(scheduleDecisions.find((decision) => decision.eligible)),
         blocked: scheduleDecisions.filter((decision) => !decision.eligible).slice(0, 5).map(compactScheduleDecision),
       },

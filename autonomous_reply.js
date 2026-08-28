@@ -40,7 +40,7 @@ export const AUTONOMOUS_REPLY_INTENTS = Object.freeze([
   'social_reaction',
 ]);
 export const AUTONOMOUS_REPLY_TONES = Object.freeze(['direct', 'warm', 'conversational', 'light_humor', 'dry_wit']);
-export const AUTONOMOUS_REPLY_WRITE_TRANSPORT = 'private_web_graphql';
+export const AUTONOMOUS_REPLY_WRITE_TRANSPORT = 'clearcote_browser_ui';
 export const AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY = false;
 
 export const AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES = 5;
@@ -160,7 +160,7 @@ function transitionGrant(action, { actor = 'human' } = {}) {
   if (action === 'start') {
     if (current.mode === 'live') {
       if (!AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY) {
-        throw new Error('Live autonomous replies are disabled until reply sending uses the official X API. The current private web GraphQL transport remains available only for human-reviewed sends; use Dry run for autonomous operation.');
+        throw new Error('Live autonomous replies are disabled until reply sending uses the official X API. The current Clearcote browser-UI transport remains available only for human-reviewed sends; use Dry run for autonomous operation.');
       }
       if (!Number.isInteger(Number(current.liveBudget)) || Number(current.liveBudget) <= 0) {
         throw new Error('Set an explicit positive live safety budget before starting live autonomous replies.');
@@ -743,7 +743,7 @@ export function getAutonomousReplyReadModel({ limit = 50 } = {}) {
       currentWriteTransport: AUTONOMOUS_REPLY_WRITE_TRANSPORT,
       note: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY
         ? 'Cold momentum/normal opportunities may be evaluated, but live AI auto-send requires recipient opt-in for that interaction, a recorded clear opt-out mechanism, and recorded X written approval.'
-        : 'Dry run can evaluate active, momentum, and normal opportunities continuously. Live autonomous sending is disabled until reply transport uses the official X API; the current private web GraphQL transport is not used for unattended autonomous replies.',
+        : 'Dry run can evaluate active, momentum, and normal opportunities continuously. Live autonomous sending is disabled until reply transport uses the official X API; the current Clearcote browser-UI transport is not used for unattended autonomous replies.',
     },
     options: {
       sourceClasses: [...AUTONOMOUS_REPLY_SOURCE_CLASSES],

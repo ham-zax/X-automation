@@ -2,8 +2,8 @@ import { launch as launchClearcote } from 'clearcote';
 
 const CLEARCOTE_FINGERPRINT = 'x-test-growth-os';
 const WAIT_UNTIL = Object.freeze({
-  networkidle0: 'networkidle',
-  networkidle2: 'networkidle',
+  networkidle0: 'domcontentloaded',
+  networkidle2: 'domcontentloaded',
 });
 
 function bindMethod(target, property) {

@@ -717,7 +717,7 @@ Advanced retains detailed diagnostics. AI Settings owns runtime/provider/model c
 | Confirm factuality/evidence | No final authority | No | Human confirms |
 | Approve main-feed item | No | No | Human only |
 | Send human-reviewed reply | No | No | Human exact approval/send |
-| Send autonomous reply | AI may choose allowed intent/tone and exact text | Live send requires an explicitly started persisted grant, deterministic eligibility, recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X AI-reply approval, remaining operator budget, atomic claim, and an official X API write transport. The current private web GraphQL publisher keeps Live Start blocked; Dry run is available. | Human configures/pauses/stops/revokes the grant; autonomous decisions never create `humanApprovedAt` |
+| Send autonomous reply | AI may choose allowed intent/tone and exact text | Live send requires an explicitly started persisted grant, deterministic eligibility, recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X AI-reply approval, remaining operator budget, atomic claim, and an official X API write transport. The current Clearcote browser-UI publisher keeps Live Start blocked; Dry run is available. | Human configures/pauses/stops/revokes the grant; autonomous decisions never create `humanApprovedAt` |
 | Complete repost | No | No | Human records manual action |
 | Schedule suggestion | Yes | Yes, advisory calculation | Human can override |
 | Publish approved main-feed item | No recommendation authority | Existing automation may transport an already approved eligible item when enabled | Approval remains human authority |

@@ -191,7 +191,7 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 - Never use likes, follow churn, mass unsolicited replies, or artificial engagement as growth tactics.
 - Never bypass the approved main-feed queue for ordinary automatic publication.
 - Never silently change `AUTO_POST` or weaken a content/health gate.
-- Never use private web GraphQL, Puppeteer, or scripted website interaction for unattended autonomous Replies.
+- Never use browser-UI automation or any other non-official write transport for unattended autonomous Replies.
 - Never use `post_thread.js --browser` as a Growth OS fallback; it launches a separate browser path and bypasses queue authority, persistent Browser memory, and the harness-owned managed browser profile.
 - Never invent source text, metrics, evidence, approval, test results, or publication success.
 - Never turn missing data into zero.

@@ -4,7 +4,7 @@
 
 **Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, one learned-strategy owner, one Phase-6 editorial owner above per-source routing, and one shared AI runtime/provider boundary. AI may classify, cluster, research through controlled retrieval, recommend, draft, score, surface target/conversation opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
 
-**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, existing XActions/private X transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_http.js`; structured AI execution is provider-independent through the implemented `runStructuredAI()` layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
+**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, Clearcote/XActions browser UI transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_browser_publish.js`; structured AI execution is provider-independent through the implemented `runStructuredAI()` layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
 
 ## Global Constraints
 
@@ -477,7 +477,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - `drafting.js` — format-aware drafting and hard gates.
 - `agent_bridge.js` — queue/routing/review, opportunity, engagement, and experiment commands without exposing raw SQLite writes.
 - `automation.js` — scheduler-driven queue consumption, read-only engagement-opportunity refresh, fixed-window outcome capture, and experiment/follower-conversion measurement.
-- `x_http.js` — format-aware quote/thread/media publication using already available transport capabilities.
+- `x_browser_publish.js` — format-aware quote/thread/media publication through the Clearcote browser UI.
 - `README.md` — user-facing workflow once each capability is actually implemented.
 - `AGENTS.md` and `docs/AGENT_WORKFLOW.md` — agent contract once new bridge commands exist.
 
@@ -609,7 +609,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - Modify: `store.js`
 - Modify: `pipeline.js`
 - Modify: `dashboard.js`
-- Modify: `x_http.js`
+- Modify: `x_browser_publish.js`
 
 **Interfaces:**
 - Consumes: candidate evidence and final draft.
@@ -671,17 +671,18 @@ The scheduler/account-health layer must not convert any of these observations in
 ### Task 10: Add format-aware publication
 
 **Files:**
-- Modify: `x_http.js`
+- Modify: `x_browser_publish.js`
 - Modify: `automation.js`
 
 **Interfaces:**
-- Consumes: scheduled queue item, finalized draft, source tweet ID when quoting, thread parts, media IDs.
-- Produces: published X IDs and URLs.
+- Consumes: scheduled queue item, finalized draft, source tweet ID when quoting, thread parts, media attachments.
+- Produces: rendered and verified X IDs and URLs.
 
 **Steps:**
-- [x] Route `original` to ordinary post creation through the existing HTTP owner.
-- [x] Route `quote` to CreateTweet with the stored source tweet ID.
-- [x] Route `thread` to the existing thread transport with the approved thread parts.
+- [x] Route `original` through the authenticated Clearcote compose UI.
+- [x] Route `quote` through the X quote composer with the stored source tweet ID/URL.
+- [x] Route `thread` through the X thread composer with the approved thread parts.
+- [x] Verify the rendered public tweet identity before reconciling local publication state.
 - [x] Keep `reply` as a separately approved interaction path rather than ordinary autonomous queue publication.
 - [x] Keep `repost` rare, scheduler-visible, and manual because no stable automated repost transport is enabled in the current owner.
 
@@ -790,7 +791,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, contribution archetype, and the reason the reply would be useful.
 - [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and contribution strength rather than follower count alone.
 - [x] Let AI draft a reply and move it to `needs_review`; the human path requires one exact approval/send action for each outbound reply.
-- [x] Keep autonomous replies off by default. When explicitly started in Dry run, the existing daemon may evaluate newly observed opportunities continuously and process several independently eligible items serially. Live automated replies require recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, an explicit remaining operator budget, deterministic eligibility, an atomic claim, and an official X API write transport. Because the current publisher uses private web GraphQL, Live autonomous Start is intentionally blocked. Cold unsolicited discoveries without recipient opt-in become human review or skip.
+- [x] Keep autonomous replies off by default. When explicitly started in Dry run, the existing daemon may evaluate newly observed opportunities continuously and process several independently eligible items serially. Live automated replies require recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, an explicit remaining operator budget, deterministic eligibility, an atomic claim, and an official X API write transport. Because the current publisher uses the Clearcote browser UI rather than the official X API, Live autonomous Start is intentionally blocked. Cold unsolicited discoveries without recipient opt-in become human review or skip.
 - [ ] Expire opportunities whose source conversation is no longer timely instead of sending stale replies.
 - [ ] Record successful replies in `candidate_actions` plus `relationship_events`, then feed target responses, conversation continuation, follower/connection changes, and recurring relationships into analytics.
 

@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
 import { refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
-import { publishMainFeedHttp } from './x_http.js';
+import { publishMainFeedBrowser } from './x_browser_publish.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
@@ -261,9 +261,8 @@ export async function processMainFeedQueue({
   now = Date.now(),
   autoPost = AUTO_POST,
   authToken = process.env.AUTH_TOKEN,
-  csrfToken = process.env.CT0,
   account = process.env.X_ACCOUNT || 'ham_zax',
-  transport = publishMainFeedHttp,
+  transport = publishMainFeedBrowser,
   missionPublicationReady = null,
 } = {}) {
   const currentTime = Number(now);
@@ -283,7 +282,7 @@ export async function processMainFeedQueue({
     return { action: 'scheduled-wait', decision, decisions };
   }
   if (!autoPost) return { action: 'preview', decision, decisions };
-  if (!authToken || !csrfToken) throw new Error('AUTO_POST=true requires AUTH_TOKEN and CT0.');
+  if (!authToken) throw new Error('AUTO_POST=true browser publication requires AUTH_TOKEN.');
 
   const claimed = claimQueueItem(decision.item.id, {
     expectedUpdatedAt: decision.item.updatedAt,
@@ -293,20 +292,8 @@ export async function processMainFeedQueue({
 
   let output;
   try {
-    output = await transport(decision.item, { authToken, csrfToken }, { account });
+    output = await transport(decision.item, { authToken }, { account });
   } catch (error) {
-    if (error?.code === 'TRANSPORT_PARTIAL_THREAD') {
-      const tweetId = String(error.rootTweetId || '').trim() || null;
-      const url = tweetId ? `https://x.com/${account}/status/${tweetId}` : null;
-      const queueItem = saveQueueItem({
-        ...claimed,
-        status: 'publishing',
-        outputTweetId: tweetId,
-        outputUrl: url,
-        publishError: `Thread partially published; manual reconciliation required: ${error.message}`,
-      });
-      return { action: 'posted-recording-incomplete', decision, decisions, queueItem, tweetId, url, error: queueItem.publishError };
-    }
     if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
       const queueItem = saveQueueItem({
         ...claimed,
