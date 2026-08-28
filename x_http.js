@@ -146,7 +146,9 @@ export async function postThreadHttp(tweets, credentials, options = {}) {
       const error = new Error(errorMessage
         ? `X CreateTweet rejected Thread part ${index + 1}: ${errorMessage}`
         : `Thread part ${index + 1} returned no tweet ID.`);
-      error.code = results.length ? 'TRANSPORT_PARTIAL_THREAD' : 'X_CREATE_TWEET_REJECTED';
+      error.code = results.length
+        ? 'TRANSPORT_PARTIAL_THREAD'
+        : errorMessage ? 'X_CREATE_TWEET_REJECTED' : 'TRANSPORT_RESULT_NO_TWEET_ID';
       error.rootTweetId = results.length ? outputIdentity(results[0], '').tweetId : null;
       error.transportResult = [...results, result];
       throw error;
