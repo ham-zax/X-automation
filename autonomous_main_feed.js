@@ -40,6 +40,8 @@ import { selectWritingStrategyAsMissionAgent } from './writing_strategy.js';
 
 const MISSION_PIPELINES = new Set(['original', 'quote', 'thread']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
+const MISSION_REPAIRABLE_GATE_CODES = new Set(['EVIDENCE_CLAIM_SCOPE_MISMATCH', 'THREAD_PART_TOO_LONG']);
+const MISSION_REVIEW_CONFIRMATION_GATE_CODES = new Set(['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED']);
 
 function compactGrant(grant) {
   return {
@@ -236,6 +238,17 @@ function usableRecommendation(recommendations = []) {
     .sort((left, right) => Number(left.rank || 0) - Number(right.rank || 0) || Number(left.id) - Number(right.id))[0] || null;
 }
 
+function missionRepairableDraft(draft) {
+  const generations = Array.isArray(draft?.editor?.generationHistory) ? draft.editor.generationHistory : [];
+  const failures = Array.isArray(draft?.gates?.failures) ? draft.gates.failures : [];
+  const writerFailures = failures.filter((failure) => !MISSION_REVIEW_CONFIRMATION_GATE_CODES.has(String(failure?.code || '')));
+  return generations.length === 1
+    && writerFailures.length > 0
+    && writerFailures.every((failure) => MISSION_REPAIRABLE_GATE_CODES.has(String(failure?.code || '')))
+    && failures.every((failure) => MISSION_REPAIRABLE_GATE_CODES.has(String(failure?.code || ''))
+      || MISSION_REVIEW_CONFIRMATION_GATE_CODES.has(String(failure?.code || '')));
+}
+
 function resumableMissionSelection(grantRevision) {
   return listEditorialRecommendations({ status: 'selected', limit: 100 })
     .map((recommendation) => ({ recommendation, selection: getEditorialSelectionByRecommendation(recommendation.id) }))
@@ -384,6 +397,18 @@ export async function prepareAutonomousMainFeed({
 
   requirePreparationAuthority(grantRevision);
   if (queueItem.status !== 'needs_review') {
+    const reviewed = requestQueueReview(queueItem.candidateKey);
+    queueItem = reviewed.queueItem;
+    draft = reviewed.draft;
+  }
+
+  if (missionRepairableDraft(draft)) {
+    requirePreparationAuthority(grantRevision);
+    const { generateDraftCandidate } = await import('./web_api.js');
+    const repaired = await generateDraftCandidate(draft);
+    draft = repaired.saved;
+    queueItem = repaired.queueItem;
+    requirePreparationAuthority(grantRevision);
     const reviewed = requestQueueReview(queueItem.candidateKey);
     queueItem = reviewed.queueItem;
     draft = reviewed.draft;
