@@ -724,6 +724,7 @@ function selectEditorialRecommendationWithAuthority(id, {
     reason: selectedBy === 'mission_agent'
       ? `Delegated First-1,000 mission agent selected editorial recommendation ${recommendation.id}.`
       : `Human selected editorial recommendation ${recommendation.id}.`,
+    routeContext: { multipleSources: sources.length > 1 },
   });
   queueItem = saveQueueItem({
     ...queueItem,

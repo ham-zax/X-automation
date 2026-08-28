@@ -468,7 +468,7 @@ export function recordManualRepost(key, { actor = 'human' } = {}) {
   return { queueItem: saved, action };
 }
 
-export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } = {}) {
+export function routeCandidate(key, pipeline, { actor = 'human', reason = '', routeContext = {} } = {}) {
   return runStoreTransaction(() => {
     const candidate = requireCandidate(key);
     if (!PIPELINES.includes(pipeline)) throw new Error(`Invalid pipeline: ${pipeline}`);
@@ -487,7 +487,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '' } =
       && previousQueueItem.lane === 'engagement'
       && previousQueueItem.pipeline === 'reply';
     if (!existingEngagementReply) {
-      refreshQueueRecommendation(key);
+      refreshQueueRecommendation(key, routeContext);
       previousQueueItem = getQueueItemByCandidate(key);
     }
     if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {

@@ -901,8 +901,7 @@ const upsertCandidateStatement = db.prepare(`
 export function upsertCandidates(candidates = [], { saved = false } = {}) {
   const now = Date.now();
   const profileRevision = getNicheProfileRevision();
-  db.exec('BEGIN');
-  try {
+  return runStoreTransaction(() => {
     for (const candidate of candidates) {
       const key = candidateKey(candidate);
       if (!key) continue;
@@ -931,11 +930,7 @@ export function upsertCandidates(candidates = [], { saved = false } = {}) {
         now,
       );
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
+  });
 }
 
 const rescoreCandidateStatement = db.prepare(`UPDATE candidates SET

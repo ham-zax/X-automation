@@ -679,7 +679,9 @@ export async function generateDraftCandidate(current) {
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });
   const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
-  routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+  if (queueItem.status !== 'drafting' || queueItem.pipeline !== pipeline) {
+    routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+  }
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 

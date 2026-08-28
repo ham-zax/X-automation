@@ -357,6 +357,8 @@ Better principle:
 
 Use only when compression into one post would remove necessary reasoning/evidence.
 
+Use 2-6 posts. Each post must contain at most 4 newline-separated text blocks.
+
 Post 1 must provide the complete high-level finding and remain useful if the reader never opens the thread.
 
 Each subsequent post must add a distinct block such as:
