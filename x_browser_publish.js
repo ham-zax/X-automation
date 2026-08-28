@@ -186,29 +186,28 @@ async function postThreadUi(page, parts, mediaAttachment = null) {
 }
 
 async function quotePostUi(page, postUrl, commentary, mediaAttachment = null) {
-  if (!mediaAttachment?.localPath) {
-    await postComposer.quotePost(page, postUrl, commentary);
-    return;
-  }
-
   await page.goto(postUrl, { waitUntil: 'networkidle2' });
   await page.waitForSelector('[data-testid="retweet"]', { timeout: 15_000 });
   await page.click('[data-testid="retweet"]');
   await page.waitForTimeout(700);
-  await page.click('[data-testid="quoteTweet"]');
+  const quoteMenuItem = page.getByRole('menuitem', { name: 'Quote', exact: true });
+  await quoteMenuItem.waitFor({ state: 'visible', timeout: 15_000 });
+  await quoteMenuItem.click();
   await page.waitForSelector('[data-testid="tweetTextarea_0"]', { timeout: 15_000 });
   await page.click('[data-testid="tweetTextarea_0"]');
   await page.keyboard.type(commentary, { delay: 30 });
 
-  const input = await page.$('[data-testid="fileInput"]');
-  if (!input) throw new Error('Quote media input is unavailable in the X composer.');
-  await input.uploadFile(mediaAttachment.localPath);
-  await page.waitForTimeout(2_000);
-  if (mediaAttachment.altText) {
-    const alt = await page.$('[data-testid="altTextInput"]');
-    if (alt) {
-      await page.click('[data-testid="altTextInput"]');
-      await page.keyboard.type(mediaAttachment.altText);
+  if (mediaAttachment?.localPath) {
+    const input = await page.$('[data-testid="fileInput"]');
+    if (!input) throw new Error('Quote media input is unavailable in the X composer.');
+    await input.uploadFile(mediaAttachment.localPath);
+    await page.waitForTimeout(2_000);
+    if (mediaAttachment.altText) {
+      const alt = await page.$('[data-testid="altTextInput"]');
+      if (alt) {
+        await page.click('[data-testid="altTextInput"]');
+        await page.keyboard.type(mediaAttachment.altText);
+      }
     }
   }
 
