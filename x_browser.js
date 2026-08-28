@@ -72,9 +72,11 @@ export async function createBrowser(options = {}) {
     fingerprint: CLEARCOTE_FINGERPRINT,
     platform: 'linux',
     brand: 'Chrome',
+    ephemeralProfile: options.ephemeralProfile ?? false,
   });
 }
 
 export async function createPage(browser) {
-  return wrapPage(await browser.newPage());
+  const context = typeof browser.newPage === 'function' ? browser : await browser.newContext();
+  return wrapPage(await context.newPage());
 }
