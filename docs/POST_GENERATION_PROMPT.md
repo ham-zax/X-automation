@@ -55,6 +55,8 @@ Avoid:
 
 For a normal single post:
 
+Use at most 4 newline-separated text blocks.
+
 1. Put the concrete object/finding in the first line.
 2. Prefer a first line around 6-14 words when that can be done naturally.
 3. Use short paragraphs separated by line breaks.
