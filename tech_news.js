@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { Scraper, createPage } from 'xactions';
-import { createBrowser } from './x_browser.js';
+import { Scraper } from 'xactions';
+import { createBrowser, createPage } from './x_browser.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { X_DISCOVERY_QUERIES, X_VIRAL_QUERIES, classifyNiche } from './strategy.js';

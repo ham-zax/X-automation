@@ -2,8 +2,8 @@ import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { createPage, loginWithCookie, postComposer } from 'xactions';
-import { createBrowser } from './x_browser.js';
+import { loginWithCookie, postComposer } from 'xactions';
+import { createBrowser, createPage } from './x_browser.js';
 import { checkHttpSession, postThreadHttp } from './x_http.js';
 
 // ============================================================================
@@ -97,10 +97,10 @@ async function postThreadViaHttp(tweets, creds) {
 }
 
 // ============================================================================
-// Mode 2: Puppeteer Stealth Browser Mode (Simulates real browser user)
+// Mode 2: Clearcote Browser Mode
 // ============================================================================
 async function postThreadViaBrowser(tweets, creds, headless = true) {
-  console.log(`🌐 Launching Stealth Browser (headless: ${headless})...`);
+  console.log(`🌐 Launching Clearcote browser (headless: ${headless})...`);
   const browser = await createBrowser({ headless });
   const page = await createPage(browser);
 

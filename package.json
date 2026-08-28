@@ -25,6 +25,7 @@
     "@opencode-ai/sdk": "^1.18.18",
     "@tailwindcss/cli": "^4.3.3",
     "bootstrap": "^5.3.8",
+    "clearcote": "^0.27.0",
     "dotenv": "^17.4.2",
     "tailwindcss": "^4.3.3",
     "xactions": "^3.5.0"

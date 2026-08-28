@@ -2,8 +2,8 @@ import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Scraper } from 'xactions/client';
-import { createPage, scrapeTweets, searchTweets } from 'xactions';
-import { createBrowser } from './x_browser.js';
+import { scrapeTweets, searchTweets } from 'xactions';
+import { createBrowser, createPage } from './x_browser.js';
 import { fetchXViralPosts } from './tech_news.js';
 import {
   buildViralStyleReportRows,
