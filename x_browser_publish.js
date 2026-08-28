@@ -214,9 +214,7 @@ async function quotePostUi(page, postUrl, commentary, mediaAttachment = null) {
     }
   }
 
-  const postButton = quoteDialog.getByRole('button', { name: 'Post', exact: true });
-  await postButton.waitFor({ state: 'visible', timeout: 15_000 });
-  await postButton.click();
+  await quoteText.press('Control+Enter');
   await page.waitForTimeout(3_000);
 }
 
