@@ -26,6 +26,8 @@ export const CONTENT_METRICS = Object.freeze([
   'replies_per_1000_views',
   'reposts_per_1000_views',
   'visible_engagement_per_1000_views',
+  'profile_visits_per_1000_views',
+  'post_attributed_follows_per_1000_views',
   'associated_follows_per_1000_views',
 ]);
 
@@ -408,6 +410,14 @@ export function normalizeContentMeasurement(measurement = {}) {
   const replies = nonNegative(measurement.replies);
   const suppliedBookmarks = finiteNumber(measurement.bookmarks ?? measurement.bookmarkCount ?? measurement.bookmark_count);
   const bookmarks = suppliedBookmarks == null ? null : Math.max(0, suppliedBookmarks);
+  const suppliedProfileVisits = finiteNumber(measurement.profileVisits ?? measurement.profile_visits);
+  const profileVisits = suppliedProfileVisits == null ? null : Math.max(0, suppliedProfileVisits);
+  const suppliedPostAttributedFollows = finiteNumber(
+    measurement.postAttributedFollows ?? measurement.post_attributed_follows ?? measurement.newFollows ?? measurement.new_follows,
+  );
+  const postAttributedFollows = suppliedPostAttributedFollows == null ? null : Math.max(0, suppliedPostAttributedFollows);
+  const suppliedPostAnalyticsViews = finiteNumber(measurement.postAnalyticsViews ?? measurement.post_analytics_views);
+  const postAnalyticsViews = suppliedPostAnalyticsViews == null ? views : Math.max(0, suppliedPostAnalyticsViews);
   const followerDelta = finiteNumber(measurement.followerDelta ?? measurement.follower_delta) ?? 0;
   const elapsedHours = elapsedHoursOf(measurement);
   const visibleEngagement = likes + reposts + replies;
@@ -418,6 +428,9 @@ export function normalizeContentMeasurement(measurement = {}) {
       reposts,
       replies,
       bookmarks,
+      profileVisits,
+      postAttributedFollows,
+      postAnalyticsViews,
       followerDelta,
       visibleEngagement,
       elapsedHours,
@@ -428,6 +441,8 @@ export function normalizeContentMeasurement(measurement = {}) {
       reposts_per_1000_views: per1000(reposts, views),
       bookmarks_per_1000_views: bookmarks == null ? null : per1000(bookmarks, views),
       visible_engagement_per_1000_views: per1000(visibleEngagement, views),
+      profile_visits_per_1000_views: profileVisits == null ? null : per1000(profileVisits, postAnalyticsViews),
+      post_attributed_follows_per_1000_views: postAttributedFollows == null ? null : per1000(postAttributedFollows, postAnalyticsViews),
       associated_follows_per_1000_views: per1000(followerDelta, views),
     },
     attribution: calculateAttributionConfidence({ ...measurement, ...(measurement.attribution || {}) }),
@@ -524,6 +539,16 @@ export function summarizeContentCohort(observations = [], options = {}) {
       acc.bookmarkViews += row.raw.views;
       acc.bookmarkObservationCount += 1;
     }
+    if (row.raw.profileVisits != null) {
+      acc.profileVisits += row.raw.profileVisits;
+      acc.profileVisitViews += row.raw.postAnalyticsViews;
+      acc.profileVisitObservationCount += 1;
+    }
+    if (row.raw.postAttributedFollows != null) {
+      acc.postAttributedFollows += row.raw.postAttributedFollows;
+      acc.postAttributedFollowViews += row.raw.postAnalyticsViews;
+      acc.postAttributedFollowObservationCount += 1;
+    }
     acc.followerDelta += row.raw.followerDelta;
     acc.visibleEngagement += row.raw.visibleEngagement;
     if (row.raw.elapsedHours != null) {
@@ -540,6 +565,12 @@ export function summarizeContentCohort(observations = [], options = {}) {
     bookmarks: 0,
     bookmarkViews: 0,
     bookmarkObservationCount: 0,
+    profileVisits: 0,
+    profileVisitViews: 0,
+    profileVisitObservationCount: 0,
+    postAttributedFollows: 0,
+    postAttributedFollowViews: 0,
+    postAttributedFollowObservationCount: 0,
     followerDelta: 0,
     visibleEngagement: 0,
     elapsedHours: 0,
@@ -557,6 +588,10 @@ export function summarizeContentCohort(observations = [], options = {}) {
       reposts_per_1000_views: per1000(totals.reposts, totals.views),
       bookmarks_per_1000_views: totals.bookmarkObservationCount > 0 ? per1000(totals.bookmarks, totals.bookmarkViews) : null,
       visible_engagement_per_1000_views: per1000(totals.visibleEngagement, totals.views),
+      profile_visits_per_1000_views: totals.profileVisitObservationCount > 0 ? per1000(totals.profileVisits, totals.profileVisitViews) : null,
+      post_attributed_follows_per_1000_views: totals.postAttributedFollowObservationCount > 0
+        ? per1000(totals.postAttributedFollows, totals.postAttributedFollowViews)
+        : null,
       associated_follows_per_1000_views: per1000(totals.followerDelta, totals.views),
     },
     attributionConfidence: distribution(normalized.map((row) => row.attribution.confidence || 'unknown')),
@@ -787,7 +822,12 @@ export function summarizeExperiment(definition, observations = []) {
       return;
     }
     if (!observationCompleted(observation)) {
-      rejected.push({ index, variantLabel, reason: 'not_completed' });
+      rejected.push({
+        index,
+        variantLabel,
+        reason: observation?.completionReason || 'not_completed',
+        ...(observation?.completionDetails ? { details: observation.completionDetails } : {}),
+      });
       return;
     }
     cohorts[variantLabel].push(observation);

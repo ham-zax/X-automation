@@ -110,6 +110,8 @@ import {
   saveQueueItem,
   setAiDefaultProfile,
   setAiRoleBinding,
+  setExperimentMinimumCompletedPerVariant,
+  setExperimentSecondaryMetrics,
   upsertCandidates,
   resolveAiProfileForRole,
 } from './store.js';
@@ -1396,6 +1398,24 @@ async function main() {
     return;
   }
 
+  if (command === 'experiment-update') {
+    if (payload.confirmUpdate !== true) throw new Error('experiment-update requires confirmUpdate=true for the explicit experiment configuration write.');
+    if (payload.id == null) throw new Error('experiment-update requires id.');
+    if (payload.minimumCompletedPerVariant == null && payload.secondaryMetrics == null) {
+      throw new Error('experiment-update requires minimumCompletedPerVariant and/or secondaryMetrics.');
+    }
+    let experiment = getExperiment(Number(payload.id));
+    if (!experiment) throw new Error(`Experiment not found: ${payload.id}`);
+    if (payload.minimumCompletedPerVariant != null) {
+      experiment = setExperimentMinimumCompletedPerVariant(experiment.id, Number(payload.minimumCompletedPerVariant));
+    }
+    if (payload.secondaryMetrics != null) {
+      experiment = setExperimentSecondaryMetrics(experiment.id, payload.secondaryMetrics);
+    }
+    result({ experiment });
+    return;
+  }
+
   if (command === 'experiment-summary') {
     if (payload.id == null) throw new Error('experiment-summary requires id.');
     result(getExperimentSummary(Number(payload.id), { windowMinutes: payload.windowMinutes == null ? null : Number(payload.windowMinutes) }));
@@ -1686,7 +1706,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

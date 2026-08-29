@@ -108,6 +108,7 @@ Return at most **8** stories. It is valid to return fewer or none.
 - Do not provide numeric Reach/Follow/Conversation/Relationship/Authority/objective-fit values.
 - Do not decide final recommendation order.
 - Mark uncertainty explicitly in `summary` or `researchQuestions` rather than filling gaps.
+- Treat `candidate.distribution` as code-owned current route context. A candidate with `routable=false` should not consume scarce research attention ahead of comparable routable candidates merely because it is novel or fresh; it can still belong to a broader real multi-source story.
 - `initialFormatCandidates` are advisory possibilities only; they do not route workflow state.
 - Do not write hooks, tweets, thread copy, replies, or other publication prose.
 
@@ -195,9 +196,11 @@ Code independently checks these requirements and may downgrade the returned clas
 - Keep factual claims within the scope of their cited evidence.
 - Surface contradiction or unresolved material evidence in `riskFlags` and the decision/thesis.
 - Account-health constraints and already-handled/duplicate-source state are hard validation/decision context when supplied; do not hide them inside scoring prose.
+- Treat each story candidate's `distribution` object as the live distribution owner's current read for the story context supplied by code. Do not return `PREPARE` around a selected candidate with `routable=false`; choose a different viable object, `RESEARCH_MORE`, or `SKIP`. This does not grant `Use anyway` authority.
 - Recent owned content may justify avoiding duplication, but strong ProfileProofCoverage is not itself a ban on a materially new information object.
 - Weak/no ProfileProofCoverage does not justify filler.
 - The recommended format must follow from the thesis/objective and source relationship, not from a generic engagement heuristic.
+- When `distributionSurfaceOutcomes` is supplied, use it only as matched-age descriptive evidence. It already excludes captures that crossed into a later nominal window. Keep format evidence separate from hook treatment, treat missing profile-visit or post-attributed-follow analytics as unknown rather than zero, and do not prefer a surface from isolated or very small cohorts.
 - For a cold-start account with little relevant owned distribution, treat distribution access as a real format consideration: a substantive Quote or Reply on a high-momentum relevant X source can legitimately participate in an existing conversation, while an Original starts mostly from the account's own graph. Prefer Quote/Reply when the contribution is genuinely additive; prefer Original when the standalone resource, insight, proof, or decision value is strong enough to own directly. Do not impose format quotas or manufacture replies.
 - Do not output final publication prose, hashtags, hooks, or engagement bait.
 - It is valid for the correct result to contain no `PREPARE` recommendations, including no recommendations at all when there is no strong current action.

@@ -253,6 +253,7 @@ function assignContentExperimentIfEligible(queueItem) {
 function selectUsableRecommendation(recommendations = [], grantRevision) {
   const candidates = [...recommendations]
     .filter((item) => item.status === 'suggested' && item.decision === 'PREPARE' && MISSION_PIPELINES.has(item.pipeline))
+    .filter((item) => item.potentials?.distributionRoutable !== false)
     .sort((left, right) => Number(left.rank || 0) - Number(right.rank || 0) || Number(left.id) - Number(right.id));
 
   for (const recommendation of candidates) {

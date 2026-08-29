@@ -119,8 +119,9 @@ export function getWritingStrategyOutcomeSummary({ windowMinutes = FINAL_WINDOW_
   const window = Number(windowMinutes);
   if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new Error(`Unsupported writing-strategy outcome window: ${windowMinutes}.`);
   const measurements = listPublicationMeasurements({ windowMinutes: window, limit });
+  const usableMeasurements = measurements.filter((measurement) => measurement.captureTiming?.ageAppropriate !== false);
   const totalMeasurementCount = countPublicationMeasurements({ windowMinutes: window });
-  const resolved = measurements.map(strategyObservation);
+  const resolved = usableMeasurements.map(strategyObservation);
   const observations = resolved.filter((entry) => !entry.unavailable);
   const applied = observations.filter((observation) => observation.strategyApplied);
   const unavailable = resolved.filter((entry) => entry.unavailable);
@@ -133,6 +134,7 @@ export function getWritingStrategyOutcomeSummary({ windowMinutes = FINAL_WINDOW_
         ? 'generation_provenance_unavailable'
         : 'no_measurements',
     measurementCount: measurements.length,
+    excludedLateMeasurementCount: measurements.length - usableMeasurements.length,
     totalMeasurementCount,
     truncated: totalMeasurementCount > measurements.length,
     observationCount: observations.length,
@@ -165,7 +167,7 @@ export function getWritingStrategyOutcomeSummary({ windowMinutes = FINAL_WINDOW_
     comparisonEvidenceState: null,
     causalClaimAllowed: false,
     limitations: [
-      'Cohorts use one fixed publication window and are descriptive associations, not causal effectiveness estimates.',
+      'Cohorts use one fixed publication window, exclude captures that crossed into a later nominal window, and are descriptive associations rather than causal effectiveness estimates.',
       'Intent, style, and opening-feature cohorts include only generations where strategyApplied=true.',
       'Suggest, Off, and no-selection cohorts describe generation modes; Suggest does not imply Writer influence.',
       'New-follower quality uses period associations from getNewFollowerQuality(); overlapping publication windows may count the same newly observed follower in more than one cohort observation.',

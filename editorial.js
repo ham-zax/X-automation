@@ -1,8 +1,8 @@
 import { scoreOpportunity } from './opportunity.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { classifyResearchStory, matchResearchTopics } from './research_topics.js';
-import { routeCandidate } from './pipeline.js';
-import { GROWTH_FOCUS_OBJECTIVES } from './strategy.js';
+import { recommendationContext, routeCandidate } from './pipeline.js';
+import { GROWTH_FOCUS_OBJECTIVES, recommendDistributionAction } from './strategy.js';
 import {
   SOURCE_SNAPSHOT_KINDS,
   createEditorialRun,
@@ -10,6 +10,7 @@ import {
   getAccountHealthSummary,
   getCandidate,
   getDiscoverSnapshot,
+  getEditorialOutcomeSummary,
   getEditorialRecommendation,
   getEditorialSelectionByRecommendation,
   getFirst1000MainFeedMissionGrant,
@@ -109,6 +110,15 @@ function candidatePotentials(candidate) {
     followPotential: finitePotential(source.followPotential, 'followPotential'),
     conversationPotential: finitePotential(source.conversationPotential, 'conversationPotential'),
     relationshipPotential: finitePotential(source.relationshipPotential, 'relationshipPotential'),
+  };
+}
+
+function distributionRead(candidate, opportunity, context = {}) {
+  const recommendation = recommendDistributionAction(candidate, recommendationContext(candidate, opportunity, context));
+  return {
+    action: recommendation.action,
+    reason: recommendation.reason,
+    routable: recommendation.action !== 'ignore',
   };
 }
 
@@ -301,9 +311,12 @@ export function scoreStoryPreResearch({
       snapshotKinds,
       observedAt: observedAt(candidate),
       potentials,
+      distribution: candidate?.distribution || null,
+      distributionRoutable: candidate?.distribution?.routable !== false,
       objectiveFit: calculateObjectiveFit({ objective, potentials, authorityValue: authority.value }),
     };
-  }).sort((left, right) => right.objectiveFit - left.objectiveFit
+  }).sort((left, right) => Number(right.distributionRoutable) - Number(left.distributionRoutable)
+    || right.objectiveFit - left.objectiveFit
     || right.observedAt - left.observedAt
     || left.candidateKey.localeCompare(right.candidateKey));
 
@@ -314,6 +327,8 @@ export function scoreStoryPreResearch({
     primaryCandidateKey: primary.candidateKey,
     preResearchAuthority: authority,
     candidateFits,
+    distributionRoutable: primary.distributionRoutable,
+    distribution: primary.distribution,
     distinctSnapshotKinds: new Set(candidateFits.flatMap((candidate) => candidate.snapshotKinds || [candidate.snapshotKind]).filter(Boolean)).size,
     latestObservationAt: Math.max(...candidateFits.map((candidate) => candidate.observedAt)),
   };
@@ -321,7 +336,8 @@ export function scoreStoryPreResearch({
 
 export function rankPreResearchStories(stories = []) {
   return [...(Array.isArray(stories) ? stories : [])].sort((left, right) =>
-    Number(right?.storyPreResearchFit || 0) - Number(left?.storyPreResearchFit || 0)
+    Number(right?.distributionRoutable !== false) - Number(left?.distributionRoutable !== false)
+    || Number(right?.storyPreResearchFit || 0) - Number(left?.storyPreResearchFit || 0)
     || Number(right?.distinctSnapshotKinds || 0) - Number(left?.distinctSnapshotKinds || 0)
     || Number(right?.latestObservationAt || 0) - Number(left?.latestObservationAt || 0)
     || String(left?.storyKey || '').localeCompare(String(right?.storyKey || '')));
@@ -527,7 +543,9 @@ export function scoreFinalRecommendation({
 
 export function rankEditorialRecommendations(recommendations = []) {
   return [...(Array.isArray(recommendations) ? recommendations : [])].sort((left, right) =>
-    Number(right?.objectiveFit || 0) - Number(left?.objectiveFit || 0)
+    Number(!(right?.decision === 'PREPARE' && right?.distribution?.routable === false))
+      - Number(!(left?.decision === 'PREPARE' && left?.distribution?.routable === false))
+    || Number(right?.objectiveFit || 0) - Number(left?.objectiveFit || 0)
     || Number(right?.storyPreResearchFit || 0) - Number(left?.storyPreResearchFit || 0)
     || String(left?.storyKey || '').localeCompare(String(right?.storyKey || '')));
 }
@@ -882,6 +900,7 @@ function editorialCandidate(candidate, { snapshotKind = '', snapshotFetchedAt = 
     sourceMomentumBySnapshot: snapshotKind ? { [snapshotKind]: getSourceMomentum(candidate.key, snapshotKind) } : {},
     workflow: workflowState(candidate.key),
     opportunity,
+    distribution: distributionRead(candidate, opportunity),
     potentials: {
       reachPotential: opportunity.reachPotential,
       followPotential: opportunity.followPotential,
@@ -982,6 +1001,10 @@ export function buildEditorialContext({ objective = 'qualified_growth', now = Da
     recentOwnedContent: { published: recentPublished, approved: approvedMainFeed },
     publishedProfileProofSource: publishedMainFeed.map(compactPublished),
     measurementSummary: listPublicationMeasurementSeries({ limit: 10 }),
+    distributionSurfaceOutcomes: Object.fromEntries([60, 360, 1440].map((windowMinutes) => [
+      windowMinutes,
+      getEditorialOutcomeSummary({ windowMinutes, limit: 200 }),
+    ])),
     acceptedLearnedRules: learnedRules.map(compactLearnedRule),
     algorithmEvidence,
   };
@@ -1017,7 +1040,11 @@ function sourceSnapshotRecord(context, refreshResult) {
 }
 
 function storyFromCluster(cluster, candidatesByKey, objective, publishedMainFeed) {
-  const candidates = cluster.candidateKeys.map((key) => candidatesByKey.get(key)).filter(Boolean);
+  const rawCandidates = cluster.candidateKeys.map((key) => candidatesByKey.get(key)).filter(Boolean);
+  const candidates = rawCandidates.map((candidate) => ({
+    ...candidate,
+    distribution: distributionRead(candidate, candidate.opportunity, { multipleSources: rawCandidates.length > 1 }),
+  }));
   const classification = classifyResearchStory(candidates);
   const researchTopic = classification.primaryTopic;
   const profileProof = calculateProfileProofCoverage({
@@ -1107,6 +1134,7 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
       algorithmMechanisms: context.algorithmEvidence.available,
       accountHealth: context.accountHealth,
       recentOwnedContent: context.recentOwnedContent,
+      distributionSurfaceOutcomes: context.distributionSurfaceOutcomes,
       acceptedLearnedRules: context.acceptedLearnedRules,
     };
     const finalResult = await runEditorialFinal(finalPacket);
@@ -1144,7 +1172,11 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
         evidence: referencedEvidence,
         supportingSourceFamilies: referencedEvidence.map((item) => item.sourceFamily),
       });
-      scored.push({ ...recommendation, ...scoredRecommendation, story });
+      const selectedCandidate = findStoryCandidate(story, scoredRecommendation.candidateKey);
+      const distribution = selectedCandidate
+        ? distributionRead(selectedCandidate, selectedCandidate.opportunity, { multipleSources: story.candidates.length > 1 })
+        : { action: 'ignore', reason: 'Selected source candidate is unavailable.', routable: false };
+      scored.push({ ...recommendation, ...scoredRecommendation, distribution, story });
     }
 
     const ordered = rankEditorialRecommendations(scored).slice(0, 5);
@@ -1168,12 +1200,15 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
         objectiveFit: item.objectiveFit,
         storyPreResearchFit: item.storyPreResearchFit,
         potentialInterpretation: item.potentialInterpretation || {},
+        distributionRoutable: item.distribution?.routable !== false,
+        distributionAction: item.distribution?.action || '',
+        distributionReason: item.distribution?.reason || '',
       },
       authority: item.authority,
       profileProof: item.story.profileProof,
       evidenceIds: item.evidenceIds,
       algorithmEvidence: recommendationAlgorithmEvidence(item.algorithmMechanisms, context.algorithmEvidence.available),
-      learnedContext: { empiricalContext: item.empiricalContext || [] },
+      learnedContext: { angleClass: item.angleClass, empiricalContext: item.empiricalContext || [] },
       aiExecution: finalResult.execution,
       risks: item.riskFlags || [],
       alternatives: item.alternatives || [],

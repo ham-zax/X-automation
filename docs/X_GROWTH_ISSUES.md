@@ -12,20 +12,22 @@ This is not an implementation plan. Each issue should be fixed only after its ow
 
 | ID | Issue | Class | Priority |
 | --- | --- | --- | --- |
-| XG-01 | Editorial can select work the distribution owner will reject | observed defect | P0 |
-| XG-02 | Measurement is stronger on engagement than follower conversion | observed gap | P0 |
+| XG-01 | Editorial can select work the distribution owner will reject | observed defect | P1 |
+| XG-02 | Follower conversion attribution is incomplete and inconsistently observable | observed gap | P0 |
 | XG-03 | Hook experiment exists but lacks enough formal samples | observed gap | P0 |
 | XG-04 | Owned technical proof is underrepresented relative to commentary | strategic hypothesis | P1 |
-| XG-05 | Hooks optimize attention more clearly than follow intent | strategic hypothesis | P1 |
+| XG-05 | Hook experiments optimize attention more clearly than follow intent | strategic hypothesis | P1 |
 | XG-06 | Writer/reply voice can drift into lecturer mode | observed quality failure | P1 |
 | XG-07 | Source selection can spend expensive reasoning on weak distribution objects | observed efficiency problem | P1 |
 | XG-08 | Engagement volume can outrun relationship value | observed operating risk | P1 |
-| XG-09 | Late or collapsed measurement windows weaken experiment interpretation | observed measurement problem | P1 |
+| XG-09 | Late or collapsed measurement windows weaken experiment interpretation | observed measurement problem | P0 |
+| XG-10 | Live autonomous replies are blocked by the current X-compliant transport boundary | observed external constraint | P1 |
+| XG-11 | Bootstrap distribution surface is not sufficiently tested | observed strategic gap | P0 |
 
 ## XG-01 — Editorial can select work the distribution owner will reject
 
 **Class:** observed defect  
-**Priority:** P0  
+**Priority:** P1  
 **Primary owner:** `editorial.js` / autonomous main-feed selection boundary; live distribution recommendation remains owned by `pipeline.js` / strategy scoring.
 
 ### Problem
@@ -48,8 +50,9 @@ This prevents a dead-end recommendation from blocking all preparation, but it do
 
 - Editorial spends reasoning and research budget on work that cannot enter production.
 - A high-ranked but unroutable recommendation can displace stronger candidates during selection.
-- Writer throughput falls even when fresh sources exist.
 - The operator has to reason about two conflicting recommendation systems.
+
+The `cdb2f86` mitigation removed the production-deadlock consequence, so this is now an efficiency/selection defect rather than a current P0 throughput blocker.
 
 ### Desired condition
 
@@ -57,7 +60,7 @@ Editorial and live distribution may still disagree, but the disagreement must be
 
 ---
 
-## XG-02 — Measurement is stronger on engagement than follower conversion
+## XG-02 — Follower conversion attribution is incomplete and inconsistently observable
 
 **Class:** observed gap  
 **Priority:** P0  
@@ -65,13 +68,13 @@ Editorial and live distribution may still disagree, but the disagreement must be
 
 ### Problem
 
-The mission objective is qualified follower growth, but the easiest currently available measurements are often views, likes, replies, reposts, and derived engagement density.
+The mission objective is qualified follower growth. Growth OS already stores profile visits, new follows, publication follower baselines, follower deltas, and `associated_follows_per_1000_views`, but those later-funnel signals are not consistently available or attributable to a specific output.
 
 The useful funnel is:
 
 `impressions -> engagement -> profile visits -> new follows -> qualified follower / relationship outcome`
 
-The later stages are not captured consistently enough to evaluate every important post on the mission objective.
+The gap is therefore not absence of follower-conversion machinery. It is incomplete observation and weak attribution, especially when account-level follower changes cannot be tied confidently to one post.
 
 ### Evidence
 
@@ -93,7 +96,7 @@ Those signals can distinguish a dead post from an engaging post, but they do not
 
 ### Desired condition
 
-For important recent outputs and active experiments, Growth OS should be able to compare matched-age observations across impressions, engagements, profile visits, and new follows without treating missing analytics fields as zero.
+For important recent outputs and active experiments, Growth OS should compare matched-age impressions, engagements, profile visits, and follows without treating missing analytics fields as zero. It should distinguish account-level follower delta from post-attributed follows and, where audience observation supports it, record whether new followers are qualified for the target niche.
 
 ---
 
@@ -133,7 +136,7 @@ These posts differ in source, format, timing, hashtag treatment, and measurement
 
 ### Desired condition
 
-Reach at least two completed formal posts per treatment and compare them at matched 60m, 360m, and 1440m windows before promoting a winner. If evidence remains mixed, continue balanced exploration.
+Collect 3–5 completed formal posts per treatment at matched 60m, 360m, and 1440m windows before making an initial directional production adjustment. Do not name or promote a winner from this sample: assignments are caller-selected and the posts remain observationally confounded. The experiment engine's 20-completed-per-variant threshold remains the bar for repeated observational evidence, still not causal proof. If the 3–5-post read is mixed, continue balanced exploration.
 
 ---
 
@@ -165,7 +168,7 @@ The main-feed mix contains enough verified owned technical evidence to compare i
 
 ---
 
-## XG-05 — Hooks optimize attention more clearly than follow intent
+## XG-05 — Hook experiments optimize attention more clearly than follow intent
 
 **Class:** strategic hypothesis  
 **Priority:** P1  
@@ -191,7 +194,7 @@ Future experiments can distinguish scroll-stopping performance from profile/foll
 
 **Class:** observed quality failure  
 **Priority:** P1  
-**Primary owner:** `docs/POST_GENERATION_PROMPT.md` + `x-content` account voice memory.
+**Primary owner:** `docs/POST_GENERATION_PROMPT.md`; `x-content` account voice memory may reinforce the same contract but is not the repository source of truth.
 
 ### Problem
 
@@ -243,7 +246,9 @@ The Xcode/headless-MCP source was the clearest example: the topic was highly rel
 
 ### Desired condition
 
-Low-distribution sources should win expensive Editorial attention only when they offer unusually strong owned-proof value, primary evidence, or a durable Original that does not depend on borrowed distribution. Otherwise, source momentum and routability should lower their effective production priority earlier.
+After a candidate is eligible to route, low-distribution sources should win expensive Editorial attention only when they offer unusually strong owned-proof value, primary evidence, or a durable Original that does not depend on borrowed distribution. Otherwise, source momentum should lower their effective production priority earlier.
+
+This is distinct from XG-01: XG-01 is a contract disagreement about whether a candidate can route at all; XG-07 is ranking efficiency among candidates that can legitimately proceed.
 
 ---
 
@@ -269,14 +274,14 @@ Account Health was also in `WATCH` with weak author-response / conversation-cont
 
 ### Desired condition
 
-Engagement decisions should favor repeated interaction with relevant builders, maintainers, researchers, and tool authors, and should evaluate author response, continuation, profile visits, follows, and relationship-stage movement rather than reply count alone.
+Engagement decisions should favor repeated interaction with relevant builders, maintainers, researchers, and tool authors, and should evaluate author response, continuation, profile visits, follows, and relationship-stage movement rather than reply count alone. Engagement and publishing budgets are ceilings, not fill targets; weak opportunities should be skipped rather than manufactured to consume capacity.
 
 ---
 
 ## XG-09 — Late or collapsed measurement windows weaken experiment interpretation
 
 **Class:** observed measurement problem  
-**Priority:** P1  
+**Priority:** P0  
 **Primary owner:** publication measurement scheduling/capture.
 
 ### Problem
@@ -287,25 +292,80 @@ For example, queue `3245` recorded multiple nominal windows from one late shared
 
 ### Impact
 
-- Views/hour can be misleading when the actual capture age differs from the nominal window.
-- A/B/C comparisons become less trustworthy.
+- A/B/C comparisons become less trustworthy when several nominal windows come from one actual observation.
 - Repeated rows can look like a time series when they are one observation copied into several due windows.
+- Experiment summaries currently count the presence of each nominal-window row as a completed observation even when several rows share one late capture.
+
+`views_per_hour` itself already uses actual elapsed time from `capturedAt - publishedAt` when those timestamps are present, so the problem is not its denominator.
 
 ### Desired condition
 
-Measurement records must preserve actual capture time and make late/collapsed windows explicit. Experiment comparison should use real matched-age observations where available and downgrade evidence quality when windows were missed.
+Keep the existing actual capture timestamp, but classify capture lateness and collapsed observations explicitly. Matched-window experiment comparisons should use genuinely distinct age-appropriate observations where available and exclude or downgrade nominal windows satisfied by the same late capture.
+
+## XG-10 — Live autonomous replies are blocked by the current X-compliant transport boundary
+
+**Class:** observed external constraint  
+**Priority:** P1  
+**Primary owner:** autonomous reply transport / operator authority.
+
+### Problem
+
+The autonomous reply operator can continuously discover, score, draft, gate, deduplicate, claim, and record reply decisions, but Live send remains blocked while the write transport is the Clearcote browser UI.
+
+That boundary is deliberate. X's current automation rules prohibit non-API website scripting for automated activity, require recipient opt-in plus an easy opt-out for automated replies/mentions, and require prior written explicit approval from X for AI-powered automated reply bots. The current browser publisher therefore cannot be treated as a compliant unattended autonomous-reply transport.
+
+### Impact
+
+- Dry run can evaluate growth opportunities but cannot execute them autonomously.
+- Cold discovery replies cannot legally become unattended automated sends merely because they pass internal quality/value gates.
+- Reply strategy and relationship learning can outrun the executable authority available to the operator.
+
+### Desired condition
+
+Keep autonomous discovery, writing, quality gates, dedupe, Account Health checks, atomic claims, and explicit live budgets. Add an X-supported API write transport for autonomous replies and enable Live only when the existing recipient opt-in/opt-out and X AI-reply approval requirements are satisfied. Main-feed Clearcote browser publication can remain a separate transport decision.
+
+This constraint should not block the current growth mission. Human/browser-mediated engagement remains the executable path until the external authority and transport requirements are satisfied.
+
+## XG-11 — Bootstrap distribution surface is not sufficiently tested
+
+**Class:** observed strategic gap  
+**Priority:** P0  
+**Primary owner:** Editorial / experiment design / distribution strategy.
+
+### Problem
+
+At the current account size, format and distribution surface may affect reach more than fine-grained hook treatment. Existing First-1,000 observations already show large differences between standalone Originals and Quotes, but those samples are confounded by topic, timing, copy, momentum, and other variables.
+
+Owned proof and borrowed distribution are separate decisions. A technically original contribution does not have to be published as a standalone Original; it can also be delivered through a high-momentum Quote or another borrowed-distribution surface.
+
+### Evidence
+
+`docs/FIRST_1000_GROWTH_MODE.md` records one standalone Original at roughly 2 impressions after about 32 minutes, another no-hashtag Original at 8 impressions / 1 engagement after roughly 14 hours, and a Quote at 67 impressions / 6 engagements / 3 detail expands after roughly 9 hours.
+
+Those observations do not establish causality, but they are strong enough to make distribution surface an explicit production variable rather than assuming all formats provide comparable discovery.
+
+### Impact
+
+- Hook experiments can optimize copy inside a weak distribution surface.
+- More owned technical proof can be misread as a reason to publish more standalone Originals even if borrowed distribution is currently more effective.
+- Small-account reach can remain the binding constraint while the system spends effort tuning downstream copy variables.
+
+### Desired condition
+
+Run explicit matched-age comparisons across distribution surfaces such as Original, Quote, and other eligible main-feed formats. Track reach, profile visits, follows, and qualified-follower outcomes separately from hook treatment. Do not promote a preferred surface from isolated posts; require repeated directional evidence under reasonably comparable conditions.
 
 ## Dependency order
 
 The issues should not be attacked as one refactor. The current dependency order is:
 
-1. XG-01 — stop Editorial/distribution disagreement from wasting production selection.
-2. XG-02 and XG-09 — make the mission reward and measurement windows trustworthy.
-3. XG-03 — collect enough formal A/B/C evidence to change writing decisions.
-4. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses.
-5. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
-6. XG-07 — reduce wasted candidate reasoning after the production and measurement contracts are stable.
+1. XG-02 and XG-09 — make the mission reward and measurement windows trustworthy.
+2. XG-11 — learn which distribution surfaces can reliably earn bootstrap reach and conversion.
+3. XG-03 — collect enough formal A/B/C evidence to change writing decisions inside those surfaces.
+4. XG-01 and XG-07 — remove avoidable Editorial/distribution disagreement and wasted candidate reasoning.
+5. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses without conflating proof ownership with distribution surface.
+6. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
 7. XG-08 — optimize engagement for relationship outcomes rather than volume.
+8. XG-10 — pursue autonomous reply transport only when the external API/approval/recipient-authority conditions are actually satisfiable; it must not block the current mission.
 
 This order is a triage view, not authorization to implement all items.
 
@@ -314,7 +374,6 @@ This order is a triage view, not authorization to implement all items.
 Do not reopen these without new evidence:
 
 - Clearcote browser publication plumbing simply because growth is slow;
-- the 20-authored-post hard cap;
 - mission-agent approval snapshots;
 - the A/B/C hook assignment gate;
 - the explicit prohibition on fabricated exclusivity;

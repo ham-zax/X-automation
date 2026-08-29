@@ -489,7 +489,8 @@ export const EXPERIMENT_DIMENSION_LABELS = Object.freeze({
 
 export const EXPERIMENT_METRIC_LABELS = Object.freeze({
   views_per_hour: 'Views per hour', replies_per_1000_views: 'Replies per 1,000 views', reposts_per_1000_views: 'Reposts per 1,000 views',
-  visible_engagement_per_1000_views: 'Visible engagement per 1,000 views', associated_follows_per_1000_views: 'Associated follows per 1,000 views',
+  visible_engagement_per_1000_views: 'Visible engagement per 1,000 views', profile_visits_per_1000_views: 'Profile visits per 1,000 views',
+  post_attributed_follows_per_1000_views: 'Post-attributed follows per 1,000 views', associated_follows_per_1000_views: 'Associated account follows per 1,000 views',
   author_response_rate: 'People who respond', conversation_continuation_rate: 'Conversations that continue', relationship_stage_progression: 'Relationship progression',
   connected_target_conversion: 'New connected relationships', recurring_relationship_conversion: 'New recurring relationships', mutual_relationship_count: 'New mutual relationships',
   interaction_yield: 'Useful outcomes per interaction', target_diversity: 'Target diversity', class_diversity: 'Audience-class diversity', topic_diversity: 'Topic diversity',

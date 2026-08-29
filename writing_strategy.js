@@ -125,8 +125,9 @@ function ownAccountOutcomes(labels) {
   const measured = [];
   for (const series of listPublicationMeasurementSeries({ limit: 200 })) {
     const label = labelByQueue.get(series.queueItem.id);
-    if (!label || !series.measurements.length) continue;
-    const measurement = [...series.measurements].sort((left, right) => right.windowMinutes - left.windowMinutes)[0];
+    const usableMeasurements = (series.measurements || []).filter((measurement) => measurement.captureTiming?.ageAppropriate !== false);
+    if (!label || !usableMeasurements.length) continue;
+    const measurement = [...usableMeasurements].sort((left, right) => right.windowMinutes - left.windowMinutes)[0];
     measured.push({ series, label, measurement });
   }
 

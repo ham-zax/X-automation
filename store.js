@@ -3208,9 +3208,77 @@ function decodePublicationMeasurement(row) {
   };
 }
 
+function publicationMeasurementTiming(measurement, queueItem) {
+  const publishedAt = Number(queueItem?.publishedAt);
+  const capturedAt = Number(measurement?.capturedAt);
+  const windowMinutes = Number(measurement?.windowMinutes);
+  const index = PUBLICATION_MEASUREMENT_WINDOWS.indexOf(windowMinutes);
+  if (![publishedAt, capturedAt].every(Number.isFinite) || index < 0) return null;
+  const storedDueAt = Number(measurement?.metadata?.dueAt);
+  const dueAt = Number.isFinite(storedDueAt) ? storedDueAt : publishedAt + windowMinutes * 60_000;
+  const nextWindowMinutes = PUBLICATION_MEASUREMENT_WINDOWS[index + 1] ?? null;
+  const nextDueAt = nextWindowMinutes == null ? null : publishedAt + nextWindowMinutes * 60_000;
+  const crossedLaterWindows = PUBLICATION_MEASUREMENT_WINDOWS
+    .slice(index + 1)
+    .filter((laterWindow) => capturedAt >= publishedAt + laterWindow * 60_000);
+  return {
+    targetWindowMinutes: windowMinutes,
+    actualAgeMinutes: Math.max(0, (capturedAt - publishedAt) / 60_000),
+    delayMinutes: Math.max(0, (capturedAt - dueAt) / 60_000),
+    dueAt,
+    nextWindowMinutes,
+    nextDueAt,
+    crossedLaterWindows,
+    ageAppropriate: crossedLaterWindows.length === 0,
+    classification: crossedLaterWindows.length ? 'collapsed_past_later_window' : (nextWindowMinutes == null ? 'terminal_window' : 'within_nominal_interval'),
+  };
+}
+
+function matchedPublicationAnalytics(tweetId, timing) {
+  if (!tweetId || !timing?.dueAt) return null;
+  const select = `SELECT captured_at, views, profile_visits, new_follows FROM post_metrics
+    WHERE tweet_id = ? AND metric_source = 'account_analytics'
+      AND captured_at >= ?
+      AND (profile_visits IS NOT NULL OR new_follows IS NOT NULL)`;
+  const row = timing.nextDueAt == null
+    ? db.prepare(`${select} ORDER BY captured_at ASC LIMIT 1`).get(String(tweetId), timing.dueAt)
+    : db.prepare(`${select} AND captured_at < ? ORDER BY captured_at ASC LIMIT 1`).get(String(tweetId), timing.dueAt, timing.nextDueAt);
+  if (!row) return null;
+  return {
+    capturedAt: Number(row.captured_at),
+    views: Number(row.views || 0),
+    profileVisits: row.profile_visits == null ? null : Number(row.profile_visits),
+    postAttributedFollows: row.new_follows == null ? null : Number(row.new_follows),
+    source: 'account_analytics',
+  };
+}
+
+function decoratePublicationMeasurement(measurement) {
+  if (!measurement) return null;
+  const queueItem = getQueueItem(measurement.queueItemId);
+  const captureTiming = publicationMeasurementTiming(measurement, queueItem);
+  const postAnalytics = matchedPublicationAnalytics(measurement.tweetId, captureTiming);
+  const normalized = normalizeContentMeasurement({
+    ...measurement,
+    profileVisits: postAnalytics?.profileVisits ?? null,
+    postAttributedFollows: postAnalytics?.postAttributedFollows ?? null,
+    postAnalyticsViews: postAnalytics?.views ?? null,
+  });
+  return {
+    ...measurement,
+    captureTiming,
+    profileVisits: postAnalytics?.profileVisits ?? null,
+    postAttributedFollows: postAnalytics?.postAttributedFollows ?? null,
+    postAnalyticsViews: postAnalytics?.views ?? null,
+    profileVisitsPer1000Views: normalized.metrics.profile_visits_per_1000_views,
+    postAttributedFollowsPer1000Views: normalized.metrics.post_attributed_follows_per_1000_views,
+    postAnalytics,
+  };
+}
+
 export function getPublicationMeasurements(queueItemId) {
   return db.prepare('SELECT * FROM publication_measurements WHERE queue_item_id = ? ORDER BY window_minutes ASC')
-    .all(Number(queueItemId)).map(decodePublicationMeasurement);
+    .all(Number(queueItemId)).map(decodePublicationMeasurement).map(decoratePublicationMeasurement);
 }
 
 function numericOrNull(value) {
@@ -3253,6 +3321,7 @@ function editorialLearningContext(provenance) {
     selectedFormat: provenance.selectedPipeline || '',
     finalPublishedFormat: provenance.finalPublishedPipeline || '',
     editorialTopic: provenance.profileProof?.topic || '',
+    editorialAngleClass: provenance.angleClass || '',
   };
 }
 
@@ -3294,6 +3363,7 @@ export function getPublicationEditorialProvenance(queueItemId) {
     recommendedPipeline: recommendation.pipeline,
     selectedPipeline: selection.selectedPipeline,
     finalPublishedPipeline: queueItem.pipeline,
+    angleClass: recommendation.learnedContext?.angleClass || '',
     objectiveFit: numericOrNull(potentials.objectiveFit),
     storyPreResearchFit: numericOrNull(potentials.storyPreResearchFit),
     objectiveFitComponents: {
@@ -3417,7 +3487,7 @@ export function listPublicationMeasurements({ windowMinutes = null, limit = 200 
   const rows = windowMinutes == null
     ? db.prepare('SELECT * FROM publication_measurements ORDER BY captured_at DESC, id DESC LIMIT ?').all(bounded)
     : db.prepare('SELECT * FROM publication_measurements WHERE window_minutes = ? ORDER BY captured_at DESC, id DESC LIMIT ?').all(Number(windowMinutes), bounded);
-  return rows.map(decodePublicationMeasurement);
+  return rows.map(decodePublicationMeasurement).map(decoratePublicationMeasurement);
 }
 
 export function countPublicationMeasurements({ windowMinutes = null } = {}) {
@@ -3550,8 +3620,8 @@ export function recordPublicationMeasurement(measurement = {}) {
     normalized.metrics.bookmarks_per_1000_views, normalized.metrics.visible_engagement_per_1000_views, normalized.metrics.views_per_hour,
     normalized.attribution.confidence || 'unknown', JSON.stringify(metadata),
   );
-  return decodePublicationMeasurement(db.prepare(`SELECT * FROM publication_measurements
-    WHERE queue_item_id = ? AND window_minutes = ?`).get(queueItem.id, windowMinutes));
+  return decoratePublicationMeasurement(decodePublicationMeasurement(db.prepare(`SELECT * FROM publication_measurements
+    WHERE queue_item_id = ? AND window_minutes = ?`).get(queueItem.id, windowMinutes)));
 }
 
 export function listDueMeasurementWindows(now = Date.now()) {
@@ -3563,7 +3633,8 @@ export function listDueMeasurementWindows(now = Date.now()) {
     ORDER BY published_at ASC, id ASC`).all().map(decodeQueueItem);
   const due = [];
   for (const queueItem of published) {
-    const recorded = new Set(getPublicationMeasurements(queueItem.id).map((measurement) => measurement.windowMinutes));
+    const recorded = new Set(db.prepare('SELECT window_minutes FROM publication_measurements WHERE queue_item_id = ?')
+      .all(queueItem.id).map((row) => Number(row.window_minutes)));
     for (const windowMinutes of PUBLICATION_MEASUREMENT_WINDOWS) {
       const dueAt = queueItem.publishedAt + windowMinutes * 60_000;
       if (timestamp >= dueAt && !recorded.has(windowMinutes)) due.push({ queueItem, queueItemId: queueItem.id, tweetId: queueItem.outputTweetId, windowMinutes, dueAt });
@@ -3602,6 +3673,25 @@ function editorialOutcomeObservation(measurement) {
     },
     context,
     confounders: context,
+    newFollowerQuality: getNewFollowerQuality({ since: measurement.baselineAt, until: measurement.capturedAt }),
+  };
+}
+
+function summarizeEditorialCohort(observations) {
+  const content = summarizeContentCohort(observations);
+  const quality = observations.map((observation) => observation.newFollowerQuality).filter(Boolean);
+  const newlyObservedFollowerAssociations = quality.reduce((sum, row) => sum + Number(row.newlyObservedFollowers || 0), 0);
+  const relevantFollowerAssociations = quality.reduce((sum, row) => sum + Number(row.nicheAlignedNewFollowers || 0), 0);
+  return {
+    ...content,
+    newFollowerQuality: {
+      observationWindows: quality.length,
+      newlyObservedFollowerAssociations,
+      relevantFollowerAssociations,
+      alignmentRate: newlyObservedFollowerAssociations ? relevantFollowerAssociations / newlyObservedFollowerAssociations : null,
+      attribution: 'period_association_only',
+      overlappingWindowsMayDoubleCount: true,
+    },
   };
 }
 
@@ -3615,23 +3705,26 @@ function summarizeEditorialGroups(observations, key) {
   }
   return [...groups.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([value, rows]) => ({ value, summary: summarizeContentCohort(rows) }));
+    .map(([value, rows]) => ({ value, summary: summarizeEditorialCohort(rows) }));
 }
 
 export function getEditorialOutcomeSummary({ windowMinutes = 1440, limit = 200 } = {}) {
   const window = Number(windowMinutes);
   if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new Error(`Unsupported editorial outcome window: ${windowMinutes}.`);
-  const observations = listPublicationMeasurements({ windowMinutes: window, limit })
-    .map(editorialOutcomeObservation)
-    .filter(Boolean);
+  const measurements = listPublicationMeasurements({ windowMinutes: window, limit });
+  const ageAppropriate = measurements.filter((measurement) => measurement.captureTiming?.ageAppropriate !== false);
+  const observations = ageAppropriate.map(editorialOutcomeObservation).filter(Boolean);
   if (!observations.length) return null;
   return {
     windowMinutes: window,
+    measurementCount: measurements.length,
+    excludedLateMeasurementCount: measurements.length - ageAppropriate.length,
     observationCount: observations.length,
     byObjective: summarizeEditorialGroups(observations, 'editorialObjective'),
     byRecommendedPipeline: summarizeEditorialGroups(observations, 'recommendedFormat'),
     bySelectedPipeline: summarizeEditorialGroups(observations, 'selectedFormat'),
     byFinalPublishedPipeline: summarizeEditorialGroups(observations, 'finalPublishedFormat'),
+    byAngleClass: summarizeEditorialGroups(observations, 'editorialAngleClass'),
     byTopic: summarizeEditorialGroups(observations, 'editorialTopic'),
     causalClaimAllowed: false,
   };
@@ -3712,6 +3805,29 @@ export function setExperimentStatus(id, status) {
   db.prepare(`UPDATE experiments SET status = ?, started_at = CASE WHEN ? = 'active' THEN COALESCE(started_at, ?) ELSE started_at END,
     ended_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END WHERE id = ?`)
     .run(normalized, normalized, now, normalized, now, Number(id));
+  return getExperiment(id);
+}
+
+export function setExperimentMinimumCompletedPerVariant(id, minimumCompletedPerVariant) {
+  const experiment = getExperiment(id);
+  if (!experiment) throw new Error(`Experiment not found: ${id}`);
+  if (experiment.status === 'completed') throw new Error('Completed experiment thresholds are historical and cannot be changed.');
+  const minimum = Number(minimumCompletedPerVariant);
+  if (!Number.isInteger(minimum) || minimum < 1) throw new Error('minimumCompletedPerVariant must be a positive integer.');
+  if (experiment.minimumCompletedPerVariant === minimum) return experiment;
+  db.prepare('UPDATE experiments SET minimum_completed_per_variant = ? WHERE id = ?').run(minimum, Number(id));
+  return getExperiment(id);
+}
+
+export function setExperimentSecondaryMetrics(id, secondaryMetrics) {
+  const experiment = getExperiment(id);
+  if (!experiment) throw new Error(`Experiment not found: ${id}`);
+  if (experiment.status === 'completed') throw new Error('Completed experiment metrics are historical and cannot be changed.');
+  const validation = validateExperimentDefinition({ ...experiment, secondaryMetrics });
+  if (!validation.valid) throw new Error(`Invalid experiment metrics: ${validation.errors.map((error) => error.message).join(' ')}`);
+  const metrics = validation.experiment.secondaryMetrics;
+  if (JSON.stringify(metrics) === JSON.stringify(experiment.secondaryMetrics)) return experiment;
+  db.prepare('UPDATE experiments SET secondary_metrics_json = ? WHERE id = ?').run(JSON.stringify(metrics), Number(id));
   return getExperiment(id);
 }
 
@@ -3821,10 +3937,15 @@ export function listExperimentAssignments(experimentId) {
 function contentObservationForAssignment(queueItem, variantLabel, windowMinutes) {
   const assignment = queueItem.experimentAssignment || {};
   const measurement = getPublicationMeasurements(queueItem.id).find((entry) => entry.windowMinutes === windowMinutes) || null;
+  const ageAppropriate = measurement?.captureTiming?.ageAppropriate !== false;
   const editorialContext = measurement?.metadata?.editorial?.learningContext || {};
   const context = { ...(assignment.context || {}), ...editorialContext };
   return {
-    variantLabel, completed: Boolean(measurement), item: assignmentItem(queueItem, context),
+    variantLabel,
+    completed: Boolean(measurement) && ageAppropriate,
+    completionReason: measurement && !ageAppropriate ? 'measurement_not_age_appropriate' : null,
+    completionDetails: measurement && !ageAppropriate ? { captureTiming: measurement.captureTiming } : null,
+    item: assignmentItem(queueItem, context),
     context,
     measurement: measurement ? { ...measurement, publishedAt: queueItem.publishedAt } : null,
     health: measurement?.metadata?.health || assignment.health || null,
