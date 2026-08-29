@@ -292,6 +292,7 @@ export async function publishMainFeedBrowser(item, credentials, {
   if (!expectedText) throw new Error(`${pipeline || 'Main-feed'} publication requires final text.`);
 
   const { browser, page } = await openAuthenticatedBrowser(credentials, { headless });
+  let verificationBrowser = null;
   try {
     const beforeIds = new Set((await recentPosts(page, account)).map((row) => row.tweetId));
     try {
@@ -309,19 +310,19 @@ export async function publishMainFeedBrowser(item, credentials, {
       throw ambiguousBrowserResult(`Browser ${pipeline} publication result is ambiguous: ${error.message}`, error);
     }
 
-    try {
-      const identity = await verifyNewPost(page, account, expectedText, beforeIds);
+    const verifyPublication = async (verificationPage) => {
+      const identity = await verifyNewPost(verificationPage, account, expectedText, beforeIds);
       if (!identity) throw ambiguousBrowserResult(`Browser ${pipeline} publication completed without a verifiable new root tweet ID.`);
 
       let structure = {};
       if (pipeline === 'quote') {
-        const quoteVerified = await verifyQuoteSource(page, identity, item, quoteSourceUrl);
+        const quoteVerified = await verifyQuoteSource(verificationPage, identity, item, quoteSourceUrl);
         if (!quoteVerified) {
           throw ambiguousBrowserResult('Browser quote publication root exists, but the rendered quoted source could not be verified.');
         }
         structure = { quotedTweetId: quoteSourceUrl.match(STATUS_ID)?.[1] || null };
       } else if (pipeline === 'thread') {
-        const thread = await verifyThreadStructure(page, account, identity, threadParts);
+        const thread = await verifyThreadStructure(verificationPage, account, identity, threadParts);
         if (!thread) {
           throw ambiguousBrowserResult('Browser thread publication root exists, but the complete approved thread structure could not be verified.');
         }
@@ -335,11 +336,27 @@ export async function publishMainFeedBrowser(item, credentials, {
         ...structure,
         result: { transport: 'clearcote_browser_ui', tweetId: identity.tweetId, url: identity.url, ...structure },
       };
+    };
+
+    try {
+      return await verifyPublication(page);
     } catch (error) {
       if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') throw error;
-      throw ambiguousBrowserResult(`Browser ${pipeline} publication verification failed after submission: ${error.message}`, error);
+      if (!String(error?.message || '').includes('Target crashed')) {
+        throw ambiguousBrowserResult(`Browser ${pipeline} publication verification failed after submission: ${error.message}`, error);
+      }
+
+      try {
+        const recovery = await openAuthenticatedBrowser(credentials, { headless });
+        verificationBrowser = recovery.browser;
+        return await verifyPublication(recovery.page);
+      } catch (recoveryError) {
+        if (recoveryError?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') throw recoveryError;
+        throw ambiguousBrowserResult(`Browser ${pipeline} publication verification failed after fresh-browser recovery: ${recoveryError.message}`, recoveryError);
+      }
     }
   } finally {
+    if (verificationBrowser) await verificationBrowser.close().catch(() => {});
     await browser.close().catch(() => {});
   }
 }
