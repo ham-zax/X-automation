@@ -250,10 +250,21 @@ function assignContentExperimentIfEligible(queueItem) {
   });
 }
 
-function usableRecommendation(recommendations = []) {
-  return [...recommendations]
+function selectUsableRecommendation(recommendations = [], grantRevision) {
+  const candidates = [...recommendations]
     .filter((item) => item.status === 'suggested' && item.decision === 'PREPARE' && MISSION_PIPELINES.has(item.pipeline))
-    .sort((left, right) => Number(left.rank || 0) - Number(right.rank || 0) || Number(left.id) - Number(right.id))[0] || null;
+    .sort((left, right) => Number(left.rank || 0) - Number(right.rank || 0) || Number(left.id) - Number(right.id));
+
+  for (const recommendation of candidates) {
+    try {
+      const selected = selectEditorialRecommendationAsMissionAgent(recommendation.id, { grantRevision });
+      return { recommendation: selected.recommendation, selection: selected.selection, queueItem: selected.queueItem };
+    } catch (error) {
+      if (String(error?.message || '').includes('currently recommended Ignore')) continue;
+      throw error;
+    }
+  }
+  return null;
 }
 
 function missionRepairableDraft(draft) {
@@ -356,20 +367,18 @@ export async function prepareAutonomousMainFeed({
   if (!work) {
     const selectedObjective = objective();
     let plan = getLatestEditorialPlan(selectedObjective);
-    let recommendation = usableRecommendation(plan?.recommendations || []);
-    if (!recommendation && !editorialRefreshed) {
+    requirePreparationAuthority(grantRevision);
+    work = selectUsableRecommendation(plan?.recommendations || [], grantRevision);
+    if (!work && !editorialRefreshed) {
       await refreshEditorialPlan({ objective: selectedObjective, refreshSources: false });
       editorialRefreshed = true;
       requirePreparationAuthority(grantRevision);
       plan = getLatestEditorialPlan(selectedObjective);
-      recommendation = usableRecommendation(plan?.recommendations || []);
+      work = selectUsableRecommendation(plan?.recommendations || [], grantRevision);
     }
-    if (!recommendation) {
+    if (!work) {
       return { action: 'noop', reason: 'no_current_prepare_recommendation', editorialRefreshed };
     }
-    requirePreparationAuthority(grantRevision);
-    const selected = selectEditorialRecommendationAsMissionAgent(recommendation.id, { grantRevision });
-    work = { recommendation: selected.recommendation, selection: selected.selection, queueItem: selected.queueItem };
   }
 
   let queueItem = getQueueItem(work.queueItem.id);
