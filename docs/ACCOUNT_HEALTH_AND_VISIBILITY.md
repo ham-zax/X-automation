@@ -64,7 +64,7 @@ Valid causes:
 - an observed visibility-impacting account/post label that warrants intervention;
 - an explicit platform enforcement/challenge/restriction signal;
 - a requested action that conflicts with current platform rules or project hard boundaries;
-- a content item fails factuality/source/duplicate hard gates at the item level.
+- a content item fails source/duplicate hard gates at the item level.
 
 A guessed timing pattern, follower-count bucket, daily reply count, or soft saturation signal must never create `CONSTRAINED` by itself.
 

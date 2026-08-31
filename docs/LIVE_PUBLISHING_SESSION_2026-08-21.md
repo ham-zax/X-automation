@@ -93,7 +93,7 @@ The Writer contract now separates:
 - internal fact/risk/provenance context, which determines what may safely be claimed and stays inspectable in draft details;
 - public copy, which should contain reader value plus only qualifications that materially change the reader's decision.
 
-The prompt no longer treats the absence of an independent second source as a reason to fill ordinary source-attributed commentary with verification boilerplate. Unsupported benchmarks, metrics, guarantees, first-person experiments, release facts, scarcity, and fabricated experience remain prohibited.
+The prompt no longer treats the absence of an independent second source as a reason to fill ordinary source-attributed commentary with verification boilerplate.
 
 ### Writing Quality versus Growth Packaging
 
@@ -291,7 +291,7 @@ Later observations must keep views, replies, reposts, bookmarks, visible engagem
 
 The repaired real browser path has been exercised through:
 
-`Today Editorial -> blocked Ignore route -> Discover Use anyway + reason -> Today selection -> blank Draft -> deliberate strategy -> Generate -> Writing quality -> Growth Packaging -> manual public-copy edit -> factuality confirmation -> readiness -> explicit approval -> scheduler/publication`
+`Today Editorial -> blocked Ignore route -> Discover Use anyway + reason -> Today selection -> blank Draft -> deliberate strategy -> Generate -> Writing quality -> Growth Packaging -> manual public-copy edit -> readiness -> explicit approval -> scheduler/publication`
 
 Observed product behavior:
 

@@ -134,7 +134,7 @@ First 1,000 mode is event-driven, not quota-driven.
 
 Do not impose `plain reposts: exceptional`, `0-1 quote/day`, or a fixed cold-reply ceiling as strategic rules during this phase. If several distinct relevant stories break in the same day, participate in several distinct stories.
 
-Do not invent fake-human timing or random jitter. `ALGORITHM_EVIDENCE_LEDGER.md` already classifies exact posting gaps and first-hour timing as empirical variables rather than established universal rules.
+Timing remains direct, without fake-human random jitter. `ALGORITHM_EVIDENCE_LEDGER.md` already classifies exact posting gaps and first-hour timing as empirical variables rather than established universal rules.
 
 Use freshness and observed source movement as decision inputs. A source that is gaining views, likes, reposts, or replies quickly deserves faster consideration than an equally relevant static source.
 
@@ -169,7 +169,7 @@ Current bootstrap heuristics are deliberately explicit and empirical:
 - a momentum-only Repost may qualify when `reachPotential >= 50`, freshness is at least `10`, momentum is at least `10`, and traction is at least `8`;
 - at 1,000 followers, the normal conservative recommendation behavior resumes;
 - already-used candidates, stale low-value sources, and candidates outside Growth Focus remain skippable;
-- factuality, duplicate prevention, hard review gates, scheduler integrity, and publication transport are unchanged; a separately started `live` First-1,000 mission may delegate Original / Quote / Thread approval to the mission agent with concrete stored verification provenance, while replies, Reposts, human approval, and `AUTO_POST` remain separate authority paths;
+- duplicate prevention, hard review gates, scheduler integrity, and publication transport are unchanged; a separately started `live` First-1,000 mission may delegate Original / Quote / Thread approval to the mission agent with stored provenance, while replies, Reposts, human approval, and `AUTO_POST` remain separate authority paths;
 - the explicit human `Use anyway` override remains available for genuinely ignored candidates.
 
 These numeric thresholds are bootstrap heuristics, not claimed X platform laws. They should be revised from observed account outcomes, not folklore.

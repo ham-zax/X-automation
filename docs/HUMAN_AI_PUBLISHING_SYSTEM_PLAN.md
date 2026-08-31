@@ -12,10 +12,9 @@
 - The account promise is: **turn fast-moving AI/software signals into developer decisions: what changed, what actually works, what breaks, why it matters, and how to use it.**
 - Bookmarking a research signal means keep it for reference/taste memory. Choosing a workflow action such as Draft/Research/Watch must ensure a human-visible queue item independently of bookmark state.
 - AI may recommend a distribution format, but the human can override it.
-- Every original post, quote post, and thread opener must pass the same factuality, originality, niche, scannability, integrity, and quality gates before scheduling.
+- Every original post, quote post, and thread opener must pass the same originality, niche, scannability, and quality gates before scheduling.
 - Human approval is required before a queued main-feed item can become publishable. An explicit user command to publish a specific final item counts as human approval for that item.
-- Replies remain relationship-building interactions and must not become unsolicited mass automation.
-- Do not automate likes, follow churn, reciprocal engagement, or spammy keyword replies.
+- Replies remain relationship-building interactions.
 - Do not add fake-human timing, random delays, or other anti-detection/evasion logic. Scheduling optimizes freshness, audience coverage, semantic diversity, and self-cannibalization risk.
 - Viral items may pre-empt normal queue order, but main-feed writes remain serialized; the system must not dump several queued items at once.
 - Use current public X recommendation code as directional evidence, not a raw-points formula. Public action weights multiply predicted viewer probabilities rather than observed engagement counts.
@@ -26,10 +25,10 @@
 - Conversation follow-ups should generally outrank endless cold insertion when a substantive response is warranted.
 - Account-health behavior is advisory-first: target saturation, reply volume, repeated archetype, and conversation density are soft modifiers/experiment variables, not automatic bans.
 - Genuine active-conversation bursts are healthy by default when the interaction is bidirectional and substantive.
-- A hard account-level constraint requires observed visibility/enforcement evidence or an explicit platform/project boundary; do not invent hidden bot/reputation thresholds.
+- A hard account-level constraint requires observed visibility/enforcement evidence or an explicit platform/project boundary.
 - Algorithm/tactic assumptions must be classified through `ALGORITHM_EVIDENCE_LEDGER.md` as CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Experiments must compare independent future posts/cohorts; do not publish duplicate or near-duplicate A/B variants of the same content to manufacture a clean test.
-- Engagement opportunities may be discovered and drafted automatically, but replies remain human-approved and must add concrete value.
+- Engagement opportunities may be discovered, drafted, and sent through an explicitly started autonomous grant or the human-reviewed path.
 - Per-post follower conversion is an attribution estimate unless X exposes direct post-level follow attribution. When multiple posts overlap a measurement window, store attribution confidence rather than claiming causality.
 - No new database service is required; use the existing built-in SQLite store.
 - No new front-end framework is required; Bootstrap is already installed and sufficient.
@@ -375,7 +374,7 @@ Supported initial dimensions:
 Rules:
 
 - never post the same or near-identical content twice for an experiment;
-- never sacrifice factuality or useful value to create a variant;
+- preserve useful value when creating a variant;
 - record the hypothesis before publication;
 - attach the experiment/variant to the queue item before final drafting when the variant affects writing/media;
 - evaluate on normalized outcome metrics, including follower conversion, not likes alone;
@@ -595,7 +594,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - Produces: hard-gate result plus existing numeric quality score.
 
 **Steps:**
-- [x] Add deterministic gates for explicit factuality/evidence confirmation, niche fit, additive value, source/recent originality, placeholders, scannability/weighted length, CTA integrity, hashtag/emoji limits, first-person evidence, thread rules, and required-media readiness.
+- [x] Add deterministic gates for niche fit, additive value, source/recent originality, placeholders, scannability/weighted length, CTA integrity, hashtag/emoji limits, thread rules, and required-media readiness.
 - [x] Keep the numeric 50-point rubric separate from hard pass/fail.
 - [x] Allow `needs_review` to expose gate failures, but require at least 40/50 plus passing current gates for explicit human approval.
 - [x] Recompute current gates at approval so a high score cannot override a hard invariant.
@@ -791,7 +790,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, contribution archetype, and the reason the reply would be useful.
 - [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and contribution strength rather than follower count alone.
 - [x] Let AI draft a reply and move it to `needs_review`; the human path requires one exact approval/send action for each outbound reply.
-- [x] Keep autonomous replies off by default. When explicitly started in Dry run, the existing daemon may evaluate newly observed opportunities continuously and process several independently eligible items serially. Live automated replies require recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, an explicit remaining operator budget, deterministic eligibility, an atomic claim, and an official X API write transport. Because the current publisher uses the Clearcote browser UI rather than the official X API, Live autonomous Start is intentionally blocked. Cold unsolicited discoveries without recipient opt-in become human review or skip.
+- [x] Keep autonomous replies off by default. When explicitly started in Dry run or Live mode, the existing daemon may evaluate newly observed opportunities continuously and process eligible items serially. Live automated replies require an explicit remaining operator budget, deterministic eligibility, an atomic claim, exact persisted text/provenance, and the configured publication transport.
 - [ ] Expire opportunities whose source conversation is no longer timely instead of sending stale replies.
 - [ ] Record successful replies in `candidate_actions` plus `relationship_events`, then feed target responses, conversation continuation, follower/connection changes, and recurring relationships into analytics.
 
@@ -947,7 +946,7 @@ Implemented through the human-review boundary:
 
 - format-aware Original/Quote/Thread/Reply writing and structured writer packets;
 - deterministic hard gates plus the separate 50-point score;
-- persisted thread/editor/gate metadata and human factuality/evidence confirmation;
+- persisted thread/editor/gate metadata and human approval;
 - media-plan state plus real operator attachment/readiness; required media stays blocked until the attachment and complete plan exist;
 - recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
@@ -1022,7 +1021,7 @@ Phase 6 is advisory. It may recommend no action and cannot approve, publish, sen
 ## Risks and Boundaries
 
 - X private web endpoints are not a stable public API contract. Publication transport may break independently of queue correctness.
-- Current X automation rules restrict several forms of automated engagement; this architecture intentionally keeps likes, follow churn, mass replies, and unsolicited engagement outside the autonomous loop.
+- Autonomous engagement remains bounded by an explicit operator grant, budget, deduplication, account-health checks, deterministic eligibility, and atomic claims.
 - The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait; if there are many genuinely useful conversations, a fixed daily cap must not suppress them.
 - Target saturation, repeated archetype, target concentration, and weak recent InteractionYield are advisory signals by default; they lower priority or warn rather than hard-blocking a useful human-approved interaction.
 - Active bidirectional conversation, a direct target question, or new verified evidence may offset soft health penalties.

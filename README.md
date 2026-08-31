@@ -23,7 +23,6 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 ## Operating standards
 
 - [`docs/CONTENT_OPERATING_STANDARD.md`](docs/CONTENT_OPERATING_STANDARD.md) — hard content invariants plus good/strong/excellent standards for originals, replies, quotes, threads, and news.
-- [`docs/ENGAGEMENT_INTEGRITY.md`](docs/ENGAGEMENT_INTEGRITY.md) — engagement-farming boundaries, networking rules, automation constraints, and safe growth loop.
 - [`docs/NICHE_AND_KEYWORDS.md`](docs/NICHE_AND_KEYWORDS.md) — target audience, content pillars, keyword clusters, source themes, and exclusion terms.
 - [`docs/AGENT_WORKFLOW.md`](docs/AGENT_WORKFLOW.md) — exact agent contract for manually supplied posts, research, drafting, scoring, distribution decisions, audience sync, and queue interaction.
 - [`docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`](docs/GROWTH_DISTRIBUTION_PLAYBOOK.md) — Direct/Quote/Repost/Reply/Ignore rules, attention prompts, relationship recruitment, and follower-quality strategy.
@@ -50,7 +49,7 @@ Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` 
 
 Phase 1C Engage Next is implemented: bounded relationship-target reads and observed responses feed an engagement lane; active conversations rank ahead of comparable cold opportunities; reply drafting/review uses the Phase-2 writer/gate engine; the dashboard provides one-item Draft/Quote/Ignore/Expire/Approve & Send actions; successful replies record candidate action plus relationship history. Automation refreshes opportunities but never sends them.
 
-Phase 2 Content Quality is implemented through the human-review boundary: routed formats persist single text or explicit thread parts plus editor/gate metadata; agents can retrieve `writer-packet` and persist allow-listed structured output; review/approval recomputes deterministic hard gates with explicit human factuality/evidence confirmation. Required media remains blocked because no real attachment/upload readiness path is implemented yet.
+Phase 2 Content Quality is implemented through the human-review boundary: routed formats persist single text or explicit thread parts plus editor/gate metadata; agents can retrieve `writer-packet` and persist allow-listed structured output; review/approval recomputes deterministic hard gates. Required media remains blocked because no real attachment/upload readiness path is implemented yet.
 
 Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; the pure scheduler explains urgency/expiry/coverage/semantic timing; optional human schedule overrides are stored separately from approval; enabled automation atomically claims one Original/Quote/Thread row before transport; success/failure remains inspectable in queue state. Reposts remain manual and engagement replies remain outside this scheduler.
 

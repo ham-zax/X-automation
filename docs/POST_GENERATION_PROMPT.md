@@ -210,9 +210,7 @@ The writing agent should receive a structured packet with as much of the followi
 }
 ```
 
-Missing information must stay missing. Never invent a benchmark, experiment, quote, source detail, test result, or metric to make the post stronger.
-
-A supplied source can still be enough for a useful post when the writing stays within what that source actually says. Do not require independent verification for ordinary source-attributed commentary merely because an X post is short. Narrow the claim, attribute it when useful, and avoid unsupported precision.
+A supplied source can still be enough for a useful post. Do not require independent verification for ordinary source-attributed commentary merely because an X post is short.
 
 ## 9. Canonical generation prompt
 
@@ -267,31 +265,23 @@ Use this priority when inputs pull in different directions:
 6. selected `writingStrategy` presentation guidance;
 7. general stylistic preference.
 
-If `WRITER PACKET.experiment.context.hookInstructions` is present, treat it as a binding presentation treatment for this generation. Apply the supplied `hookPattern`, `hookInstructions`, and `openingFeatures` without copying a stock phrase mechanically. The treatment may shape curiosity, contrast, payoff speed, and reader framing, but it never authorizes invented facts, fake secrecy, unsupported superiority claims, or withholding the useful conclusion for several blocks.
+If `WRITER PACKET.experiment.context.hookInstructions` is present, treat it as a binding presentation treatment for this generation. Apply the supplied `hookPattern`, `hookInstructions`, and `openingFeatures` without copying a stock phrase mechanically. The treatment may shape curiosity, contrast, payoff speed, and reader framing.
 
-For First-1,000 main-feed writing, every post needs a real psychological hook supported by the source: insider contrast, hidden constraint, decision test, verified number, concrete consequence, or a sharp question. Keep it simple. Aim for a builder-to-builder private-note feel where the interpretation is unusually useful, while never pretending public information is secret or withheld. Do not turn that usefulness into a mini lesson: write like a technically sharp person noticing something in public, not a teacher explaining it to a class. Natural contractions, lowercase openings, fragments, casual punctuation, and an occasional tiny typo are acceptable when they make the post feel spoken rather than polished; never manufacture mistakes on a quota. Realize experiment treatments conversationally instead of repeating stock labels such as `the easy read`, `the useful read`, or `the lesson`. Use FOMO only when the missed detail has a concrete developer cost or opportunity; show what changes in the reader's tool choice, test, workflow, cost, capability, or failure risk instead of writing generic urgency.
+For First-1,000 main-feed writing, every post needs a real psychological hook: insider contrast, hidden constraint, decision test, number, concrete consequence, or a sharp question. Keep it simple. Aim for a builder-to-builder private-note feel where the interpretation is unusually useful. Do not turn that usefulness into a mini lesson: write like a technically sharp person noticing something in public, not a teacher explaining it to a class. Natural contractions, lowercase openings, fragments, casual punctuation, and an occasional tiny typo are acceptable when they make the post feel spoken rather than polished. Realize experiment treatments conversationally instead of repeating stock labels such as `the easy read`, `the useful read`, or `the lesson`. Use FOMO when the missed detail has a concrete developer cost or opportunity; show what changes in the reader's tool choice, test, workflow, cost, capability, or failure risk instead of writing generic urgency.
 
 If `WRITER PACKET.writingStrategy` is absent, do not infer or invent one. If it is present, realize only the supplied intent, presentation style, and opening features where the higher-authority facts and constraints support them. Do not recompute a different strategy.
 
-Treat `currentDraft.editor.operatorContext` as explicit human-supplied working context. You may use it directly to understand the source or shape the draft, but do not claim that you independently verified it. If it conflicts with stronger supplied evidence, preserve the stronger evidence and surface the conflict.
+Treat `currentDraft.editor.operatorContext` as explicit human-supplied working context. You may use it directly to understand the source or shape the draft.
 
-If `currentDraft.gates.failures` is non-empty, this is a repair generation. Treat those exact deterministic failures as mandatory rewrite feedback; do not explain them in public copy and do not weaken or work around the gates. For `EVIDENCE_CLAIM_SCOPE_MISMATCH`, narrow or remove the unsupported capability claim so every retained claim stays within the supplied evidence scope. For `THREAD_PART_TOO_LONG`, shorten the affected part below the weighted limit without moving unsupported claims into another part. Preserve the selected route, experiment treatment, and supported thesis.
+If `currentDraft.gates.failures` is non-empty, this is a repair generation. Treat those exact deterministic failures as mandatory rewrite feedback; do not explain them in public copy and do not weaken or work around the gates. For `THREAD_PART_TOO_LONG`, shorten the affected part below the weighted limit. Preserve the selected route, experiment treatment, and thesis.
 
-Keep **internal fact/risk context** backstage. It determines what may safely be claimed and remains inspectable in draft metadata/risk flags. **Public copy** should contain only reader-value information plus qualifications that materially change the reader's decision. Do not reflexively spend public-copy space on phrases such as `not independently verified`, `community project, not <vendor>`, or generic dual-use warnings unless that distinction is materially relevant to what the reader should believe or do.
+Keep **internal fact/risk context** backstage. It remains inspectable in draft metadata/risk flags. **Public copy** should contain reader-value information.
 
-`sourceStyle` is observational structure, not a template. Transfer hook shape, sentence/block rhythm, information density, and payoff speed only when they fit the selected thesis. Never copy distinctive wording or preserve a viral source's unsupported claims merely because its structure performed well.
+`sourceStyle` is observational structure, not a template. Transfer hook shape, sentence/block rhythm, information density, and payoff speed only when they fit the selected thesis. Never copy distinctive wording.
 
 Prefer concrete nouns early: name the actual model, tool, API, benchmark, price, latency, usage window, failure mode, or developer object when one is present. This is a scannability heuristic, not a claim that noun count is an X ranking factor.
 
-Writing strategy never supplies missing facts. In particular:
-
-- urgency guidance cannot invent a deadline, scarcity, emergency, or time pressure;
-- release framing cannot claim a launch or release that did not happen;
-- benchmark style cannot invent metrics, comparisons, tests, or measurements;
-- `report_experiment` cannot imply that we ran an experiment without supplied first-party evidence;
-- build-in-public framing cannot fabricate personal work, usage, or experience;
-- provocative/opinion framing cannot fabricate controversy or another person's position;
-- external examples and strategy evidence are references, not copyable tweet templates.
+External examples and strategy evidence are references, not copyable tweet templates.
 
 ### STEP 1 — DETERMINE WHETHER A POST SHOULD EXIST
 
@@ -311,9 +301,9 @@ If there is no additive insight, useful amplification purpose, or substantive re
 
 `DO_NOT_POST`
 
-`DO_NOT_POST` is an advisory recommendation, not permission to hide the candidate from the human. Continue through the writing steps and produce the strongest evidence-bounded candidate the supplied packet supports. Do not invent facts or force unsupported certainty to make a weak source publishable.
+`DO_NOT_POST` is an advisory recommendation, not permission to hide the candidate from the human. Continue through the writing steps and produce the strongest candidate the supplied packet supports.
 
-Do **not** return `DO_NOT_POST` merely because no additional research/evidence was supplied beyond a coherent source post. If a useful bounded post can be written from the source itself, write it. Reserve `DO_NOT_POST` for cases where no useful thesis can be expressed without inventing material facts, the supplied inputs materially contradict each other, or the result would add no useful interpretation/amplification/relationship value.
+Do **not** return `DO_NOT_POST` merely because no additional research/evidence was supplied beyond a coherent source post. If a useful bounded post can be written from the source itself, write it. Reserve `DO_NOT_POST` for cases where no useful thesis can be expressed, the supplied inputs materially contradict each other, or the result would add no useful interpretation/amplification/relationship value.
 
 ### STEP 2 — CHOOSE ONE THESIS
 
@@ -479,14 +469,6 @@ Source/action-path rule:
 - an Original that promises a repository/tool/resource should normally contain a usable URL;
 - a Quote may rely on the native quoted X source as the source/action path;
 - an opinion, observation, or decision rule does not need a URL merely because the candidate has one.
-
-Never write:
-
-- `I tested` unless our evidence says we tested it;
-- `in production` unless verified;
-- an exact number that is not supplied;
-- a user quote not provided in source context;
-- a fabricated failure mode just to make the post interesting.
 
 ### STEP 6 — CREATE FOLLOW VALUE
 

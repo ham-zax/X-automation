@@ -208,7 +208,7 @@ Create or update reviewable reply text without approving it:
 
 ```bash
 npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123"}'
-npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123","body":"Concrete reply text","requestReview":true,"factualityConfirmed":true,"evidenceConfirmed":true}'
+npm run agent -- engage-draft <<<'{"key":"https://x.com/example/status/123","body":"Concrete reply text","requestReview":true}'
 ```
 
 Resolve without sending:
@@ -266,7 +266,6 @@ If the user supplies only an X URL, retrieve the exact post with the authenticat
 - views, likes, reposts, replies if available
 - quoted-post or thread context when it materially changes the meaning
 
-Do not invent metrics or source context.
 
 ### 2. Ingest it into the shared research memory
 
@@ -396,7 +395,7 @@ Current writing-quality dimensions:
 
 These total 40 raw writing points and are proportionally normalized to the 50-point writing-quality scale. Growth fit and Growth Packaging are separate; the score is not a virality or follower-growth prediction.
 
-Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover explicit factuality confirmation; evidence confirmation when claims require it; niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; first-person evidence; thread rules; and required-media readiness. The dashboard confirmation checkboxes are deliberately unchecked on every review/approval submission, and approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval additionally snapshots the exact reply body; only the explicit Engage send path can consume that snapshot. No bridge command can create either human approval.
+Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; thread rules; and required-media readiness. Approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval additionally snapshots the exact reply body; only the explicit Engage send path can consume that snapshot. No bridge command can create either human approval.
 
 ## Queue and automation interaction
 
@@ -428,7 +427,7 @@ Route an item without approving it:
 printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
 ```
 
-The automation daemon refreshes real X source snapshots and Engage Next after research, with observed responses checked before cold opportunities. Autonomous replies are independently **off by default**. When the operator explicitly starts the persisted reply grant in Dry run, the same daemon keeps evaluating newly observed active, momentum, and normal-relevant opportunities until Pause/Stop/revocation or process shutdown. A cycle may produce zero, one, or several serial decisions; already-decided targets are durable across restart. Dry-run records exact would-send/review/skip decisions without X mutation. Live autonomous send has a distinct atomic authority path and never creates `humanApprovedAt`; it requires recipient opt-in for the interaction, a recorded clear/easy opt-out mechanism, recorded X written AI-reply approval, remaining operator budget, all autonomous deterministic gates, and an official X API write transport. The current Clearcote browser-UI publisher does not meet that last boundary, so Live autonomous Start is intentionally blocked. Main-feed selection remains separate: it reads approved main-feed queue items, supplies current/recent publication context to `scheduler.js`, and considers only scheduler-eligible Original/Quote/Thread items for daemon publication.
+The automation daemon refreshes real X source snapshots and Engage Next after research, with observed responses checked before cold opportunities. Autonomous replies are independently **off by default**. When the operator explicitly starts the persisted reply grant in Dry run or Live mode, the same daemon keeps evaluating newly observed active, momentum, and normal-relevant opportunities until Pause/Stop/revocation or process shutdown. A cycle may produce zero, one, or several serial decisions; already-decided targets are durable across restart. Dry-run records exact would-send/review/skip decisions without X mutation. Live autonomous send has a distinct atomic authority path and never creates `humanApprovedAt`; it requires remaining operator budget, all autonomous deterministic gates, and an atomic claim. Main-feed selection remains separate: it reads approved main-feed queue items, supplies current/recent publication context to `scheduler.js`, and considers only scheduler-eligible Original/Quote/Thread items for daemon publication.
 
 `AUTO_POST` controls only the main-feed publication path. When `AUTO_POST=false`, main-feed automation previews the recommendation and performs no main-feed claim/transport call; when true it atomically claims the exact approved queue snapshot. The autonomous-reply grant is a separate authority and defaults to stopped. Scheduler spacing/urgency/expiry remain `EMPIRICAL_VARIABLE` editorial heuristics; there is no fake-human minimum interval or jitter. Original uses ordinary tweet creation, Quote uses the stored source tweet ID, and Thread uses the approved explicit thread parts as one main-feed unit. Engagement approval never makes a reply eligible for main-feed scheduling, and Repost remains manual.
 
@@ -482,17 +481,15 @@ Use persisted candidates with tags `jobs/career`, `builders`, or `business`, the
 
 ## Strict invariants
 
-- Never manufacture evidence, metrics, benchmark results, quotes, or source context.
 - Never turn a source tweet into a near-copy. Add analysis, testing, context, evidence, or a developer action.
 - Never represent `needs_review` as human approval; only the explicit dashboard approval action may create compatibility `ready`.
 - Never manipulate SQLite directly from an agent when the bridge command exists.
 - Never silently enable `AUTO_POST`.
-- Never use automated likes, follow churn, or mass unsolicited replies as part of this workflow.
 - Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
 - Treat target saturation, repeated archetype, concentration, and InteractionYield as advisory diagnostics; accepted learned rules may tune their bounded soft effect, while exact/near-duplicate replies remain a hard stop owned by the content gate.
 - Replies and quote-posts should add a specific technical contribution, not generic praise or engagement bait.
 - Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another path has not already done so. The Engage Next approved-send path records its own successful `reply` action and `our_reply` relationship event exactly once.
-- Preserve the content and engagement standards in `CONTENT_OPERATING_STANDARD.md`, `ENGAGEMENT_INTEGRITY.md`, and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.
+- Preserve the content and distribution standards in `CONTENT_OPERATING_STANDARD.md` and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.
 
 ## Feedback loop
 

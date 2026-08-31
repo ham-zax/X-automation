@@ -21,7 +21,7 @@ This is not an implementation plan. Each issue should be fixed only after its ow
 | XG-07 | Source selection can spend expensive reasoning on weak distribution objects | observed efficiency problem | P1 |
 | XG-08 | Engagement volume can outrun relationship value | observed operating risk | P1 |
 | XG-09 | Late or collapsed measurement windows weaken experiment interpretation | observed measurement problem | P0 |
-| XG-10 | Live autonomous replies are blocked by the current X-compliant transport boundary | observed external constraint | P1 |
+| XG-10 | Live autonomous replies use the configured transport boundary | resolved implementation constraint | P1 |
 | XG-11 | Bootstrap distribution surface is not sufficiently tested | observed strategic gap | P0 |
 
 ## XG-01 — Editorial can select work the distribution owner will reject
@@ -302,29 +302,25 @@ For example, queue `3245` recorded multiple nominal windows from one late shared
 
 Keep the existing actual capture timestamp, but classify capture lateness and collapsed observations explicitly. Matched-window experiment comparisons should use genuinely distinct age-appropriate observations where available and exclude or downgrade nominal windows satisfied by the same late capture.
 
-## XG-10 — Live autonomous replies are blocked by the current X-compliant transport boundary
+## XG-10 — Live autonomous replies use the configured transport boundary
 
-**Class:** observed external constraint  
+**Class:** resolved implementation constraint
 **Priority:** P1  
 **Primary owner:** autonomous reply transport / operator authority.
 
 ### Problem
 
-The autonomous reply operator can continuously discover, score, draft, gate, deduplicate, claim, and record reply decisions, but Live send remains blocked while the write transport is the Clearcote browser UI.
-
-That boundary is deliberate. X's current automation rules prohibit non-API website scripting for automated activity, require recipient opt-in plus an easy opt-out for automated replies/mentions, and require prior written explicit approval from X for AI-powered automated reply bots. The current browser publisher therefore cannot be treated as a compliant unattended autonomous-reply transport.
+The autonomous reply operator can continuously discover, score, draft, gate, deduplicate, claim, record, and send reply decisions through the configured Clearcote browser UI transport.
 
 ### Impact
 
-- Dry run can evaluate growth opportunities but cannot execute them autonomously.
-- Cold discovery replies cannot legally become unattended automated sends merely because they pass internal quality/value gates.
-- Reply strategy and relationship learning can outrun the executable authority available to the operator.
+- Dry run evaluates growth opportunities without sending.
+- Live mode can execute eligible decisions while an explicit grant and budget remain active.
+- Exact persisted text/provenance, deduplication, health checks, and atomic claims remain inspectable.
 
 ### Desired condition
 
-Keep autonomous discovery, writing, quality gates, dedupe, Account Health checks, atomic claims, and explicit live budgets. Add an X-supported API write transport for autonomous replies and enable Live only when the existing recipient opt-in/opt-out and X AI-reply approval requirements are satisfied. Main-feed Clearcote browser publication can remain a separate transport decision.
-
-This constraint should not block the current growth mission. Human/browser-mediated engagement remains the executable path until the external authority and transport requirements are satisfied.
+Keep autonomous discovery, writing, quality gates, dedupe, Account Health checks, atomic claims, exact persisted text/provenance, explicit live budgets, and operator Start/Pause/Stop controls around the configured transport.
 
 ## XG-11 — Bootstrap distribution surface is not sufficiently tested
 

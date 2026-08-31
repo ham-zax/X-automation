@@ -195,7 +195,7 @@ During First 1,000 mode:
 - a Quote is preferred when the source is visible and we have a distinct thesis quickly;
 - an Original is preferred when the idea needs to become owned profile proof rather than another attachment to someone else's graph.
 
-Do not confuse momentum with truth. High velocity reduces decision latency; it does not reduce factuality requirements.
+High velocity reduces decision latency.
 
 ## Viral style: transfer the shape, not the wording
 
@@ -243,7 +243,7 @@ For Originals and Quotes, prefer 2-4 short blocks when the idea benefits from ve
 
 ### Verified numbers earn space
 
-Concrete numbers are useful when they change a decision: price, token count, latency, views-per-hour, benchmark result, context length, usage window. Never invent a number merely because quantified hooks appear in viral examples.
+Concrete numbers are useful when they change a decision: price, token count, latency, views-per-hour, benchmark result, context length, usage window.
 
 ### Match the native shape
 

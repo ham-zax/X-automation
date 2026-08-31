@@ -426,7 +426,6 @@ Premium automatically increases all For You candidate eligibility or universally
 
 **Status:** `OFFICIAL_PRODUCT_OR_POLICY`
 
-Platform automation constraints are maintained in `ENGAGEMENT_INTEGRITY.md` and should be re-checked before changing automated outbound behavior.
 
 They are operational boundaries, not growth-scoring factors.
 

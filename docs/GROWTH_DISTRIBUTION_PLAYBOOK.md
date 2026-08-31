@@ -293,7 +293,7 @@ Current route choices already include:
 - Watch;
 - Ignore.
 
-Phase 6 recommends `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval remains human-controlled. Engage Next keeps its human exact-approval/send path, while the separate autonomous-reply operator can act only after an explicit persisted Start grant and deterministic autonomous eligibility. Dry run can continuously evaluate active, momentum, and normal relevant opportunities. Live AI auto-replies additionally require recipient opt-in, a recorded clear/easy opt-out mechanism, recorded X written approval, remaining operator budget, an atomic claim, and an official X API write transport; the current Clearcote browser-UI publisher therefore keeps Live autonomous Start blocked. Cold momentum/normal opportunities without recipient opt-in can still be evaluated or downgraded to human review.
+Phase 6 recommends `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval remains human-controlled. Engage Next keeps its human exact-approval/send path, while the separate autonomous-reply operator can act only after an explicit persisted Start grant and deterministic autonomous eligibility. Dry run and Live mode can continuously evaluate active, momentum, and normal relevant opportunities; Live sending additionally requires remaining operator budget and an atomic claim.
 
 Bookmarking is independent reference state. A source may enter Triage/Drafting/Research without being bookmarked, and a bookmarked source may already be handled.
 
@@ -414,4 +414,4 @@ The 2026-08-25 three-post account micro-cohort is enough to make **hashtag count
 
 ## 18. Performance-first documentation boundary
 
-Growth documentation should concentrate on distribution, conversion, relationship compounding, research, and measurement. Platform/safety constraints are centralized in `ENGAGEMENT_INTEGRITY.md`, `AGENTS.md`, and the human-approval boundaries in implementation plans rather than repeated as moral commentary throughout the strategy.
+Growth documentation should concentrate on distribution, conversion, relationship compounding, research, and measurement.

@@ -56,7 +56,6 @@ These apply to original posts, replies, quote posts, and threads.
    - No generic engagement bait.
    - No fake controversy.
    - No "reply YES", "drop your link", "like if..." or equivalent unless the interaction itself is genuinely necessary to the content.
-   - See `ENGAGEMENT_INTEGRITY.md`.
 
 6. **Do not copy another creator's wording or structure too closely.**
    - Facts and source material can be synthesized.
@@ -370,7 +369,6 @@ Before any original post, reply, or quote goes live:
 5. Is the hook accurate rather than exaggerated?
 6. Is this materially different from our recent posts and the obvious summaries already circulating?
 7. Can anything be removed without losing value?
-8. Does it violate `ENGAGEMENT_INTEGRITY.md`?
 9. Would we still be comfortable defending this publicly after the engagement numbers disappear?
 
 If #1, #2, #3, or #8 fails: **do not publish**.
@@ -392,6 +390,6 @@ Default editorial rules:
 - a question must seek useful information rather than comments for their own sake;
 - do not let the generation model self-authorize publication.
 
-A separate hard gate and the numeric quality rubric run after generation. The implemented Phase-2 workflow lets AI prepare routed Original/Quote/Thread/Reply content and persist structured writer output, but AI cannot self-approve. Review stores deterministic failures/warnings for factuality/evidence confirmation, niche/additive value, source/recent duplication, scannability/placeholders/weighted length, CTA integrity, hashtags/emoji, first-person evidence, thread rules, and media readiness. A human must explicitly reconfirm factuality (and evidence when required) on final approval; a hard-gate failure always overrides the numeric score.
+A separate hard gate and the numeric quality rubric run after generation. The implemented Phase-2 workflow lets AI prepare routed Original/Quote/Thread/Reply content and persist structured writer output, but AI cannot self-approve. Review stores deterministic failures/warnings for niche/additive value, source/recent duplication, scannability/placeholders/weighted length, CTA integrity, hashtags/emoji, thread rules, and media readiness. A hard-gate failure always overrides the numeric score.
 
 Media planning is implemented with the persisted enum `none | screenshot | chart | code | diagram`. Operator-attached JPEG/PNG/WebP/GIF images can provide real readiness and are uploaded by the authenticated publication transport. Required media remains unapprovable until an attachment and complete media plan are present; decorative media is never required merely to improve a growth score.
