@@ -1,5 +1,6 @@
 import { launch as launchClearcote } from 'clearcote';
 
+const CLEARCOTE_CHROME_EXECUTABLE = '/usr/bin/google-chrome';
 const CLEARCOTE_FINGERPRINT = 'x-test-growth-os';
 const WAIT_UNTIL = Object.freeze({
   networkidle0: 'domcontentloaded',
@@ -67,6 +68,7 @@ function wrapPage(page) {
 export async function createBrowser(options = {}) {
   return launchClearcote({
     ...options,
+    executablePath: CLEARCOTE_CHROME_EXECUTABLE,
     headless: options.headless !== false,
     humanize: true,
     fingerprint: CLEARCOTE_FINGERPRINT,
