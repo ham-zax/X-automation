@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import { useConversationAction, useConversationDetail } from '../../api/client'
 import {
   Badge,
-  ConfirmCheckboxes,
   Disclosure,
   Error,
   Loading,
@@ -22,7 +20,6 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   const sendAction = useConversationAction('send', candidateKey)
   const resolveAction = useConversationAction('resolve', candidateKey)
   const quoteAction = useConversationAction('quote', candidateKey)
-  const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
   if (isLoading) {
     return <Loading message="Loading conversation..." />
@@ -37,7 +34,6 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   }
 
   const editor = data.editor
-  const evidenceRequired = Boolean(editor?.analysis.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
   const canApproveSend = data.flags.canApproveSend
   const canSendApproved = data.flags.approved && !data.health.constrained
   const actionError =
@@ -171,14 +167,8 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
           <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
             {editor.flags.canReview && (
               <div>
-                <ConfirmCheckboxes
-                  factuality={confirmations.factualityConfirmed}
-                  evidence={confirmations.evidenceConfirmed}
-                  evidenceRequired={evidenceRequired}
-                  onChange={setConfirmations}
-                />
                 <button
-                  onClick={() => reviewAction.mutate(confirmations)}
+                  onClick={() => reviewAction.mutate({})}
                   disabled={reviewAction.isPending}
                   className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
                 >
@@ -190,18 +180,11 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
 
             {canApproveSend && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <ConfirmCheckboxes
-                  factuality={confirmations.factualityConfirmed}
-                  evidence={confirmations.evidenceConfirmed}
-                  evidenceRequired={evidenceRequired}
-                  onChange={setConfirmations}
-                />
                 {approveSendPending ? (
                   <Pending label="Approving and sending the exact reply…" />
                 ) : (
                   <button
-                    onClick={() => approveSendAction.mutate(confirmations)}
-                    disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
+                    onClick={() => approveSendAction.mutate({})}
                     className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
                     Approve &amp; send exact reply

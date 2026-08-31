@@ -573,8 +573,6 @@ export function schedulerContext(now = Date.now()) {
 }
 
 export function evaluateDraftQuality(candidate, draft, pipeline, {
-  evidence = null,
-  confirmations = {},
   relevanceOverride = null,
   growthObjective = null,
 } = {}) {
@@ -584,9 +582,6 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
     pipeline,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
-    factualityConfirmed: confirmations.factualityConfirmed === true,
-    evidenceConfirmed: confirmations.evidenceConfirmed === true,
-    evidence,
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
     mediaPublishingAvailable: true,
     relevanceOverride,
@@ -598,14 +593,6 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
     hasGenerationProvenance: Boolean(draft?.editor?.generation),
     strategyApproach: strategySelection?.guidance?.rationale || '',
   });
-}
-
-function persistedDraftConfirmations(draft) {
-  const checks = draft?.gates?.checks || {};
-  return {
-    factualityConfirmed: checks.factualityConfirmed === true,
-    evidenceConfirmed: checks.evidenceConfirmed === true,
-  };
 }
 
 function writerEditorialContext(candidate, queueItem) {
@@ -676,7 +663,6 @@ export async function generateDraftCandidate(current) {
   });
   const next = applyWriterOutput(writerBase, output, { generationProvenance });
   const analysis = evaluateDraftQuality(candidate, next, pipeline, {
-    evidence: editorialContext.evidence,
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });
   const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
@@ -934,12 +920,10 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
 }
 
 function formatGates(gates = {}) {
-  const humanCodes = new Set(['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED']);
   const failures = gates.failures || [];
   return {
     passed: gates.passed === true,
-    approvalFailures: failures.filter((item) => !humanCodes.has(item.code)),
-    humanConfirmations: failures.filter((item) => humanCodes.has(item.code)),
+    approvalFailures: failures,
     warnings: gates.warnings || [],
   };
 }
@@ -1021,7 +1005,6 @@ function formatQueueItem(queueItem) {
         && !queueItem.outputTweetId
         && CONTENT_PIPELINES.has(queueItem.pipeline)
         ? evaluateDraftQuality(candidate, draft, queueItem.pipeline, {
-            confirmations: persistedDraftConfirmations(draft),
             relevanceOverride: queueItem.relevance?.humanOverride || null,
           })
         : null,
@@ -1060,7 +1043,6 @@ function draftEditorPayload(draftId) {
   const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
   const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem?.relevance?.humanOverride || null });
   const analysis = evaluateDraftQuality(candidate, draft, pipeline, {
-    confirmations: persistedDraftConfirmations(draft),
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
   });
   const engagementReply = queueItem?.lane === 'engagement' && pipeline === 'reply';
@@ -1591,13 +1573,6 @@ async function persistDraftMedia(draft, req) {
   }
 }
 
-function confirmedFlags(body) {
-  return {
-    factualityConfirmed: body.factualityConfirmed === true,
-    evidenceConfirmed: body.evidenceConfirmed === true,
-  };
-}
-
 function first1000MissionView() {
   return {
     grant: getFirst1000MainFeedMissionGrant(),
@@ -1970,7 +1945,6 @@ export async function handleApi(req, res, requestUrl) {
         const candidate = getCandidate(reviewItem.candidateKey);
         const analysis = draft && candidate && CONTENT_PIPELINES.has(reviewItem.pipeline)
           ? evaluateDraftQuality(candidate, draft, reviewItem.pipeline, {
-              confirmations: persistedDraftConfirmations(draft),
               relevanceOverride: reviewItem.relevance?.humanOverride || null,
             })
           : null;
@@ -2220,7 +2194,6 @@ export async function handleApi(req, res, requestUrl) {
         const draft = getDraftByCandidate(item.candidateKey);
         const draftAnalysis = draft && candidate && CONTENT_PIPELINES.has(item.pipeline)
           ? evaluateDraftQuality(candidate, draft, item.pipeline, {
-              confirmations: persistedDraftConfirmations(draft),
               relevanceOverride: item.relevance?.humanOverride || null,
             })
           : null;
@@ -2292,13 +2265,13 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'review') {
-        const result = requestQueueReview(key, confirmedFlags(payload));
+        const result = requestQueueReview(key);
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), editor: draftEditorPayload(result.draft.id) });
       }
 
       if (action === 'approve-send') {
         requireEngagementSendAllowed();
-        approveEngagementQueueItem(key, confirmedFlags(payload), { actor: 'human' });
+        approveEngagementQueueItem(key, { actor: 'human' });
         const sent = await sendApprovedEngagementReply(key);
         return sendSuccess({
           queueItem: formatQueueItem(sent.queueItem),
@@ -2556,12 +2529,12 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'review') {
-        const result = requestQueueReview(key, confirmedFlags(payload));
+        const result = requestQueueReview(key);
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), draft: formatDraft(result.draft) });
       }
 
       if (action === 'approve') {
-        const result = approveQueueItem(key, confirmedFlags(payload));
+        const result = approveQueueItem(key);
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), draft: formatDraft(result.draft) });
       }
 

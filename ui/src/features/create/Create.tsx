@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useCreate, useQueueAction, type CreateSection, type QueueItemView, type SchedulePlan } from '../../api/client'
 import {
   Badge,
-  ConfirmCheckboxes,
   Disclosure,
   Error,
   GatePanel,
@@ -143,7 +142,6 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
   const approve = useQueueAction('approve')
   const completeRepost = useQueueAction('complete-repost')
   const discard = useQueueAction('discard')
-  const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
   const mainFeedReview = item.status === 'needs_review' && ['original', 'quote', 'thread', 'repost'].includes(item.pipeline)
   const canApprove = mainFeedReview && (item.pipeline === 'repost'
@@ -154,11 +152,9 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
   const approvalBlockers = item.draft
     ? [
         ...(item.draft.gatesView?.approvalFailures || []).map((failure) => failure.message),
-        ...(item.draft.gatesView?.humanConfirmations || []).map((confirmation) => confirmation.message),
         ...(item.draft.growthPackaging?.blockers || []).map((blocker) => blocker.message),
       ]
     : []
-  const evidenceRequired = Boolean(item.draft?.liveAnalysis?.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
 
   const publicationState = item.publishStartedAt || item.publishedAt || item.publishError ? (
     <div className="mt-2 text-sm text-slate-700">
@@ -241,18 +237,11 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
         )}
         {canApprove && item.pipeline !== 'repost' && (
           <div className="w-full">
-            <ConfirmCheckboxes
-              factuality={confirmations.factualityConfirmed}
-              evidence={confirmations.evidenceConfirmed}
-              evidenceRequired={evidenceRequired}
-              onChange={setConfirmations}
-            />
             {approve.isPending && approve.variables?.key === item.candidateKey ? (
               <Pending label="Approving…" />
             ) : (
               <button
-                onClick={() => approve.mutate({ key: item.candidateKey, ...confirmations })}
-                disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
+                onClick={() => approve.mutate({ key: item.candidateKey })}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
                 Approve for publishing
@@ -290,14 +279,8 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
       {canRequestReview && (
         <Disclosure summary="Approval readiness">
-          <ConfirmCheckboxes
-            factuality={confirmations.factualityConfirmed}
-            evidence={confirmations.evidenceConfirmed}
-            evidenceRequired={evidenceRequired}
-            onChange={setConfirmations}
-          />
           <button
-            onClick={() => review.mutate({ key: item.candidateKey, ...confirmations })}
+            onClick={() => review.mutate({ key: item.candidateKey })}
             disabled={review.isPending}
             className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
           >

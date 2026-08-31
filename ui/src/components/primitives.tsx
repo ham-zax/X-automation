@@ -125,50 +125,8 @@ export function Pending({ label = 'Working…' }: { label?: string }) {
   )
 }
 
-interface ConfirmCheckboxesProps {
-  factuality: boolean
-  evidence: boolean
-  evidenceRequired: boolean
-  onChange: (flags: { factualityConfirmed: boolean; evidenceConfirmed: boolean }) => void
-}
-
-export function ConfirmCheckboxes({ factuality, evidence, evidenceRequired, onChange }: ConfirmCheckboxesProps) {
-  return (
-    <div className={`my-3 grid gap-2 text-sm text-slate-700 ${evidenceRequired ? 'sm:grid-cols-2' : ''}`}>
-      <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <input
-          className="mt-0.5"
-          type="checkbox"
-          checked={factuality}
-          onChange={(event) => onChange({ factualityConfirmed: event.target.checked, evidenceConfirmed: evidence })}
-        />
-        <span>
-          <strong>I reviewed the final wording</strong>
-          <br />
-          <span className="text-xs text-slate-500">The final wording matches the source and context I reviewed.</span>
-        </span>
-      </label>
-      {evidenceRequired && (
-        <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-          <input
-            className="mt-0.5"
-            type="checkbox"
-            checked={evidence}
-            onChange={(event) => onChange({ factualityConfirmed: factuality, evidenceConfirmed: event.target.checked })}
-          />
-          <span>
-            <strong>I checked the supporting proof</strong>
-            <br />
-            <span className="text-xs text-slate-500">This draft makes a benchmark, result, or capability claim that needs real support.</span>
-          </span>
-        </label>
-      )}
-    </div>
-  )
-}
-
-export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] } | null | undefined }) {
-  if (!gates || (!gates.approvalFailures.length && !gates.warnings.length && !gates.humanConfirmations.length && !gates.passed)) {
+export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailures: { message: string }[]; warnings: { message: string }[] } | null | undefined }) {
+  if (!gates || (!gates.approvalFailures.length && !gates.warnings.length && !gates.passed)) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
         <div className="font-semibold">Checks update as you edit.</div>
@@ -177,7 +135,7 @@ export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailure
     )
   }
   const ready = gates.passed === true
-  const heading = ready ? 'Approval checks passed' : gates.approvalFailures.length ? 'Fix before approval' : 'Human confirmation needed'
+  const heading = ready ? 'Approval checks passed' : 'Fix before approval'
   return (
     <div className={`rounded-xl p-4 text-sm ${ready ? 'border border-emerald-200 bg-emerald-50 text-emerald-900' : 'border border-amber-200 bg-amber-50 text-amber-950'}`}>
       <strong>{heading}</strong>
@@ -193,11 +151,6 @@ export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailure
             {gates.warnings.map((warning, index) => <li key={index}>{warning.message}</li>)}
           </ul>
         </>
-      )}
-      {gates.humanConfirmations.length > 0 && (
-        <div className="mt-2 text-sky-800">
-          Before approval, review the finished post and complete the required confirmations below. You do not need to add extra text.
-        </div>
       )}
     </div>
   )

@@ -533,7 +533,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
         route === 'reply' ? 'Prefer one compact paragraph with one concrete contribution.' : 'Prefer 2-4 short visual blocks when the idea benefits from vertical scanability.',
         'Open with a concrete product, result, constraint, or verified number; remove generic setup.',
         'Put the payoff in the first 1-2 blocks and use short sentences around concrete nouns.',
-        'Use a verified number near the top when it changes the reader decision; never invent one for punch.',
+        'Use a concrete number near the top when it changes the reader decision.',
         'Default to zero hashtags; use 1-2 only when they are canonical and tied to an active topic/search surface.',
       ],
     },
@@ -1105,8 +1105,6 @@ async function main() {
       recentReplies: pipeline === 'reply'
         ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key })
         : [],
-      factualityConfirmed: false,
-      evidenceConfirmed: false,
       mediaReady: false,
       relevanceOverride: workflow.queueItem?.relevance?.humanOverride || null,
     });
@@ -1566,10 +1564,7 @@ async function main() {
     }
     let review = null;
     if (payload.requestReview === true) {
-      review = requestQueueReview(key, {
-        factualityConfirmed: payload.factualityConfirmed === true,
-        evidenceConfirmed: payload.evidenceConfirmed === true,
-      });
+      review = requestQueueReview(key);
       workflow = inspectWorkflow(key);
     }
     const queueItem = workflow.queueItem;

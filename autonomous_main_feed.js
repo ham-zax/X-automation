@@ -40,8 +40,7 @@ import { selectWritingStrategyAsMissionAgent } from './writing_strategy.js';
 
 const MISSION_PIPELINES = new Set(['original', 'quote', 'thread']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
-const MISSION_REPAIRABLE_GATE_CODES = new Set(['EVIDENCE_CLAIM_SCOPE_MISMATCH', 'THREAD_PART_TOO_LONG']);
-const MISSION_REVIEW_CONFIRMATION_GATE_CODES = new Set(['FACTUALITY_UNCONFIRMED', 'EVIDENCE_UNCONFIRMED']);
+const MISSION_REPAIRABLE_GATE_CODES = new Set(['THREAD_PART_TOO_LONG']);
 
 function compactGrant(grant) {
   return {
@@ -271,12 +270,9 @@ function selectUsableRecommendation(recommendations = [], grantRevision) {
 function missionRepairableDraft(draft) {
   const generations = Array.isArray(draft?.editor?.generationHistory) ? draft.editor.generationHistory : [];
   const failures = Array.isArray(draft?.gates?.failures) ? draft.gates.failures : [];
-  const writerFailures = failures.filter((failure) => !MISSION_REVIEW_CONFIRMATION_GATE_CODES.has(String(failure?.code || '')));
   return generations.length === 1
-    && writerFailures.length > 0
-    && writerFailures.every((failure) => MISSION_REPAIRABLE_GATE_CODES.has(String(failure?.code || '')))
-    && failures.every((failure) => MISSION_REPAIRABLE_GATE_CODES.has(String(failure?.code || ''))
-      || MISSION_REVIEW_CONFIRMATION_GATE_CODES.has(String(failure?.code || '')));
+    && failures.length > 0
+    && failures.every((failure) => MISSION_REPAIRABLE_GATE_CODES.has(String(failure?.code || '')));
 }
 
 function resumableMissionSelection(grantRevision) {

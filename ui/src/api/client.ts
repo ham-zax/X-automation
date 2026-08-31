@@ -49,7 +49,6 @@ async function postApi<T>(path: string, body: object = {}): Promise<T> {
 export interface GatesView {
   passed: boolean
   approvalFailures: { code: string; message: string }[]
-  humanConfirmations: { code: string; message: string }[]
   warnings: { code: string; message: string }[]
 }
 

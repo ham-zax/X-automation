@@ -9,12 +9,10 @@ import {
   getAudienceProfile,
   getCandidate,
   getDraftByCandidate,
-  getEditorialRecommendation,
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
   getFirst1000MainFeedMissionGrant,
-  getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
   getPerformanceSnapshot,
@@ -26,7 +24,6 @@ import {
   listExperiments,
   listQueueItems,
   listQueueSources,
-  listResearchEvidence,
   listRecentOurConversationPosts,
   listRecentPublishedContent,
   listRelationshipEvents,
@@ -87,18 +84,6 @@ function sourceTweetId(candidate) {
   if (candidate?.source !== 'x') return '';
   const match = String(candidate.url || candidate.key || '').match(/\/status\/(\d+)/i);
   return match?.[1] || '';
-}
-
-function editorialEvidenceForQueue(queueItem) {
-  if (!queueItem) return null;
-  const selection = getLatestEditorialSelectionForQueueItem(queueItem.id);
-  if (!selection) return null;
-  const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
-  if (!recommendation) return null;
-  const evidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
-  if (recommendation.decision === 'RESEARCH_MORE') return evidence;
-  const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
-  return evidence.filter((item) => linkedIds.has(String(item.id)));
 }
 
 function relationshipContext(candidate) {
@@ -174,7 +159,7 @@ function requireCurrentStrategyDecision(queueItem, draft) {
   return selection;
 }
 
-function contentGateContext(candidateKey, pipeline, confirmations = {}) {
+function contentGateContext(candidateKey, pipeline) {
   const queueItem = getQueueItemByCandidate(candidateKey);
   const draft = getDraftByCandidate(candidateKey);
   const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
@@ -187,9 +172,6 @@ function contentGateContext(candidateKey, pipeline, confirmations = {}) {
     recentReplies: pipeline === 'reply'
       ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidateKey })
       : [],
-    factualityConfirmed: confirmations.factualityConfirmed === true,
-    evidenceConfirmed: confirmations.evidenceConfirmed === true,
-    evidence: editorialEvidenceForQueue(queueItem),
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
     mediaPublishingAvailable: true,
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
@@ -413,11 +395,7 @@ export function inspectWorkflow(key) {
     || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
   let draft = storedDraft;
   if (storedDraft && queueItem && !historicalDraft && TEXT_PIPELINES.has(queueItem.pipeline)) {
-    const checks = storedDraft.gates?.checks || {};
-    const analysis = scoreDraft(storedDraft, candidate, contentGateContext(key, queueItem.pipeline, {
-      factualityConfirmed: checks.factualityConfirmed === true,
-      evidenceConfirmed: checks.evidenceConfirmed === true,
-    }));
+    const analysis = scoreDraft(storedDraft, candidate, contentGateContext(key, queueItem.pipeline));
     draft = { ...storedDraft, qualityScore: analysis.score, gates: analysis.gates };
   }
   return {
@@ -571,7 +549,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
   });
 }
 
-export function requestQueueReview(key, confirmations = {}) {
+export function requestQueueReview(key) {
   return runStoreTransaction(() => {
     const candidate = requireCandidate(key);
     let queueItem = getQueueItemByCandidate(key);
@@ -588,7 +566,7 @@ export function requestQueueReview(key, confirmations = {}) {
 
     const draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
-    const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
+    const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
     const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     return {
       queueItem: saveQueueItem({ candidateKey: key, status: 'needs_review', draftId: savedDraft.id, humanApprovedAt: null, approvedText: null }),
@@ -598,7 +576,7 @@ export function requestQueueReview(key, confirmations = {}) {
   });
 }
 
-export function approveQueueItem(key, confirmations = {}) {
+export function approveQueueItem(key) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem) throw new Error(`Queue item not found: ${key}`);
@@ -615,7 +593,7 @@ export function approveQueueItem(key, confirmations = {}) {
     draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
     requireCurrentStrategyDecision(queueItem, draft);
-    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, confirmations));
+    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
     draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     if (!analysis.publishable) {
       const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
@@ -659,10 +637,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   let draft = getDraftByCandidate(key);
   if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
   requireCurrentStrategyDecision(queueItem, draft);
-  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, {
-    factualityConfirmed: provenance.sourceReferences.length > 0,
-    evidenceConfirmed: provenance.evidenceReferences.length > 0,
-  }));
+  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
   draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   if (!analysis.publishable) {
     const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
@@ -703,7 +678,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   };
 }
 
-export function approveEngagementQueueItem(key, confirmations = {}, { actor = 'human' } = {}) {
+export function approveEngagementQueueItem(key, { actor = 'human' } = {}) {
   if (actor !== 'human') throw new Error('Engagement approval requires an explicit human action.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
@@ -714,7 +689,7 @@ export function approveEngagementQueueItem(key, confirmations = {}, { actor = 'h
 
   const draft = getDraftByCandidate(key);
   if (!draft) throw new Error('A reply draft is required before approval.');
-  const analysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply', confirmations));
+  const analysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
   const checkedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   if (!analysis.publishable) {
     const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];

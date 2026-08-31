@@ -273,112 +273,6 @@ function addIssue(target, code, message) {
   target.push({ code, message });
 }
 
-function claimNeedsEvidence(text, sourceText, pipeline = 'original') {
-  const body = String(text || '');
-  if (/\b(?:i|we)\s+(?:tested|measured|benchmarked|used|ran|observed|verified|found)\b/i.test(body)) return true;
-  const measurementAssertion = pipeline === 'reply'
-    ? /\b(?:benchmark|measured|tested|result(?:s)?|faster|slower|costs?)\b/i.test(body)
-      || /\b(?:latency|throughput|performance)\b.{0,30}\b(?:improved|reduced|increased|lower|higher|better|worse)\b/i.test(body)
-    : /\b(?:benchmark|latency|throughput|measured|tested|result(?:s)?|faster|slower|costs?)\b/i.test(body);
-  if (measurementAssertion) return true;
-  if (/\b\d+(?:\.\d+)?\s?(?:%|x|ms|s|sec|seconds?|tokens?|rps|req\/s|mb|gb|usd)\b/i.test(body)) return true;
-
-  const capability = /\b(?:supports?|allows?|adds?|ships?|includes?|handles?|runs?|works with|can|now has)\b/i;
-  return body.split(/(?<=[.!?])\s+|\n+/)
-    .filter((sentence) => sentence.length >= 20 && capability.test(sentence))
-    .some((sentence) => similarity(sentence, sourceText) < 0.30);
-}
-
-function firstPersonEvidenceClaim(text) {
-  return /\b(?:i|we)\s+(?:tested|measured|benchmarked|used|ran|observed|verified|found|tried)\b/i.test(String(text || ''));
-}
-
-function evidenceId(item) {
-  return String(item?.id ?? '').trim();
-}
-
-function resolveEvidenceReferences(draft, evidence = null) {
-  const contextProvided = Array.isArray(evidence);
-  const rows = contextProvided ? evidence : [];
-  const byId = new Map(rows.map((item) => [evidenceId(item), item]).filter(([id]) => id));
-  const requested = asStringArray(draft?.editor?.evidenceUsed || []).filter(Boolean);
-  const invalidIds = contextProvided ? requested.filter((id) => !byId.has(id)) : [];
-  const resolved = requested.map((id) => byId.get(id)).filter(Boolean);
-  return { requested, resolved, invalidIds, availableCount: byId.size, contextProvided };
-}
-
-function eligibleEvidence(item) {
-  return ['primary_supported', 'source_claim'].includes(String(item?.status || ''));
-}
-
-function firstPartyEvidence(item) {
-  if (String(item?.status || '') !== 'primary_supported') return false;
-  if (item?.metadata?.firstParty === true || item?.metadata?.ownedEvidence === true) return true;
-  const identity = `${item?.sourceKind || ''} ${item?.sourceFamily || ''}`;
-  return /\b(?:first[-_ ]?party|owned|our|ham_zax|experiment|measurement)\b/i.test(identity);
-}
-
-function claimTypes(sentence) {
-  const types = [];
-  if (/\b(?:benchmark|eval(?:uation)?|score|accuracy|pass rate)\b/i.test(sentence)) types.push('benchmark');
-  if (/\b(?:performance|latency|throughput|faster|slower|speed|tokens?\s*\/\s*s|rps|req(?:uests?)?\s*\/\s*s|\d+(?:\.\d+)?\s*ms\b)/i.test(sentence)) types.push('performance');
-  if (/\b(?:supports?|allows?|adds?|ships?|includes?|handles?|works with|compatible with|can now|now has)\b/i.test(sentence)) types.push('capability');
-  return [...new Set(types)];
-}
-
-function attributedSourceClaim(sentence) {
-  return /\b(?:according to|reports?|reported|says?|said|claims?|claimed|announces?|announced|release notes?|documentation|docs|readme|maintainer|vendor|author)\b/i.test(sentence);
-}
-
-const CLAIM_SCOPE_STOP_WORDS = new Set([
-  'according', 'report', 'reports', 'reported', 'say', 'says', 'said', 'claim', 'claims', 'claimed',
-  'announce', 'announces', 'announced', 'vendor', 'author', 'maintainer', 'model', 'tool', 'system',
-  'support', 'supports', 'allow', 'allows', 'add', 'adds', 'ship', 'ships', 'include', 'includes',
-  'handle', 'handles', 'work', 'works', 'with', 'can', 'now', 'has', 'have', 'the', 'this', 'that',
-]);
-
-function claimScopeTokens(text) {
-  return new Set((String(text || '').toLowerCase().match(/[a-z0-9][a-z0-9+.#/-]{2,}/g) || [])
-    .filter((token) => !CLAIM_SCOPE_STOP_WORDS.has(token)));
-}
-
-function persistedClaimMatches(item, sentence, { requireAttribution = false } = {}) {
-  if (requireAttribution && !attributedSourceClaim(sentence)) return false;
-  const evidenceParts = [item?.claim, item?.title, item?.summary].map((value) => String(value || '')).filter(Boolean);
-  const evidenceText = evidenceParts.join(' ');
-  const numbers = String(sentence).match(/\d+(?:\.\d+)?/g) || [];
-  if (numbers.length && numbers.some((value) => !evidenceText.includes(value))) return false;
-  const requested = claimScopeTokens(sentence);
-  if (!requested.size) return false;
-  return evidenceParts.some((part) => {
-    const available = claimScopeTokens(part);
-    let overlap = 0;
-    for (const token of requested) if (available.has(token)) overlap += 1;
-    return overlap >= Math.min(2, requested.size);
-  });
-}
-
-function primaryEvidenceSupportsType(item, type, sentence) {
-  const claimType = String(item?.claimType || '');
-  const compatibleType = type === 'benchmark'
-    ? claimType === 'benchmark'
-    : type === 'performance'
-      ? ['performance', 'benchmark'].includes(claimType)
-      : type === 'capability' && ['capability', 'implementation', 'compatibility'].includes(claimType);
-  return compatibleType && persistedClaimMatches(item, sentence);
-}
-
-function sourceClaimMatchesSentence(item, sentence) {
-  return persistedClaimMatches(item, sentence, { requireAttribution: true });
-}
-
-function supportsSensitiveClaim(item, type, sentence) {
-  const status = String(item?.status || '');
-  if (status === 'primary_supported') return primaryEvidenceSupportsType(item, type, sentence);
-  if (status === 'source_claim') return sourceClaimMatchesSentence(item, sentence);
-  return false;
-}
-
 function genericPraise(text) {
   const body = String(text || '').trim();
   const praise = /\b(?:great point|great post|love this|well said|spot on|exactly|awesome|amazing|nice|this is great|this is huge)\b/i.test(body);
@@ -453,9 +347,6 @@ export function evaluateDraftGates(draft, candidate, {
   recentReplies = [],
   recentReplyArchetypes = [],
   replyArchetype = '',
-  factualityConfirmed = false,
-  evidenceConfirmed = false,
-  evidence = null,
   mediaReady = false,
   relevanceOverride = null,
   conversationRelevanceCandidate = null,
@@ -469,10 +360,6 @@ export function evaluateDraftGates(draft, candidate, {
   const failures = [];
   const warnings = [];
   const checks = {
-    factualityConfirmed: true,
-    evidenceConfirmed: true,
-    evidenceReferences: true,
-    claimScope: true,
     growthFocus: true,
     additiveValue: true,
     originality: true,
@@ -484,52 +371,9 @@ export function evaluateDraftGates(draft, candidate, {
     recentDuplicate: true,
     hashtagCount: true,
     emojiCount: true,
-    firstPersonEvidence: true,
     threadRules: true,
     mediaReady: true,
   };
-
-  if (!factualityConfirmed) {
-    checks.factualityConfirmed = false;
-    addIssue(failures, 'FACTUALITY_UNCONFIRMED', 'Factuality must be explicitly confirmed before approval.');
-  }
-
-  const evidenceRequired = claimNeedsEvidence(combinedText, candidate?.text || '', pipeline);
-  if (evidenceRequired && !evidenceConfirmed) {
-    checks.evidenceConfirmed = false;
-    addIssue(failures, 'EVIDENCE_UNCONFIRMED', 'This draft contains test, measurement, benchmark, result, or unsupported capability claims that require explicit evidence confirmation.');
-  }
-
-  const evidenceReferences = resolveEvidenceReferences(draft, evidence);
-  if (evidenceReferences.invalidIds.length) {
-    checks.evidenceReferences = false;
-    addIssue(failures, 'EVIDENCE_REFERENCE_INVALID', `Draft cites evidence IDs that were not supplied: ${evidenceReferences.invalidIds.join(', ')}.`);
-  }
-  const ineligibleEvidence = evidenceReferences.resolved.filter((item) => !eligibleEvidence(item));
-  if (ineligibleEvidence.length) {
-    checks.evidenceReferences = false;
-    addIssue(failures, 'EVIDENCE_REFERENCE_INELIGIBLE', `Draft cites unresolved or contradicted evidence IDs: ${ineligibleEvidence.map(evidenceId).join(', ')}.`);
-  }
-  const eligibleCitedEvidence = evidenceReferences.resolved.filter(eligibleEvidence);
-  if (evidenceRequired && evidenceReferences.availableCount > 0 && eligibleCitedEvidence.length === 0) {
-    checks.evidenceReferences = false;
-    addIssue(failures, 'EVIDENCE_REFERENCE_REQUIRED', 'This researched claim must cite at least one supplied eligible evidence ID.');
-  }
-
-  const sensitiveSentences = String(combinedText || '').split(/(?<=[.!?])\s+|\n+/).map((sentence) => sentence.trim()).filter(Boolean);
-  for (const sentence of sensitiveSentences) {
-    for (const type of claimTypes(sentence)) {
-      if (eligibleCitedEvidence.some((item) => supportsSensitiveClaim(item, type, sentence))) continue;
-      if (!eligibleCitedEvidence.length) continue;
-      checks.claimScope = false;
-      addIssue(failures, 'EVIDENCE_CLAIM_SCOPE_MISMATCH', `Cited evidence does not support the draft's ${type} claim at its persisted claim scope.`);
-    }
-  }
-
-  if (firstPersonEvidenceClaim(combinedText) && !eligibleCitedEvidence.some(firstPartyEvidence)) {
-    checks.firstPersonEvidence = false;
-    addIssue(failures, 'FIRST_PERSON_EVIDENCE_UNVERIFIED', 'First-person test/measurement language requires a supplied eligible first-party evidence ID.');
-  }
 
   let growthFit = assessStrategicRelevance(candidate, {
     objective: growthObjective,

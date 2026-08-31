@@ -1,8 +1,6 @@
-import { useState } from 'react'
 import { useDraftEditor, useQueueAction } from '../../api/client'
 import {
   Badge,
-  ConfirmCheckboxes,
   Disclosure,
   Error,
   Loading,
@@ -16,7 +14,6 @@ export function DraftPage({ draftId }: { draftId: number }) {
   const { data, isLoading, error, refetch } = useDraftEditor(Number.isFinite(draftId) ? draftId : null)
   const review = useQueueAction('review')
   const approve = useQueueAction('approve')
-  const [confirmations, setConfirmations] = useState({ factualityConfirmed: false, evidenceConfirmed: false })
 
   if (isLoading) {
     return <Loading message="Loading draft..." />
@@ -32,7 +29,6 @@ export function DraftPage({ draftId }: { draftId: number }) {
 
   const { flags, schedule, queueItem } = data
   const isReply = flags.engagementReply
-  const evidenceRequired = Boolean(data.analysis.gatesView.humanConfirmations.some((confirmation) => confirmation.code === 'EVIDENCE_UNCONFIRMED'))
   const actionError = (review.isError && review.error.message) || (approve.isError && approve.error.message) || null
 
   return (
@@ -80,14 +76,8 @@ export function DraftPage({ draftId }: { draftId: number }) {
 
           {flags.canReview && (
             <div>
-              <ConfirmCheckboxes
-                factuality={confirmations.factualityConfirmed}
-                evidence={confirmations.evidenceConfirmed}
-                evidenceRequired={evidenceRequired}
-                onChange={setConfirmations}
-              />
               <button
-                onClick={() => review.mutate({ key: data.candidate.key, ...confirmations })}
+                onClick={() => review.mutate({ key: data.candidate.key })}
                 disabled={review.isPending}
                 className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
               >
@@ -99,18 +89,11 @@ export function DraftPage({ draftId }: { draftId: number }) {
 
           {flags.canApprove && (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
-              <ConfirmCheckboxes
-                factuality={confirmations.factualityConfirmed}
-                evidence={confirmations.evidenceConfirmed}
-                evidenceRequired={evidenceRequired}
-                onChange={setConfirmations}
-              />
               {approve.isPending ? (
                 <Pending label="Approving…" />
               ) : (
                 <button
-                  onClick={() => approve.mutate({ key: data.candidate.key, ...confirmations })}
-                  disabled={!confirmations.factualityConfirmed || (evidenceRequired && !confirmations.evidenceConfirmed)}
+                  onClick={() => approve.mutate({ key: data.candidate.key })}
                   className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   Approve for publishing

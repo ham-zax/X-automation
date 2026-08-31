@@ -21,7 +21,7 @@ const MEDIA_TYPE_OPTIONS = [
 
 interface PreviewResult {
   score: number
-  gatesView: { passed: boolean; approvalFailures: { message: string }[]; humanConfirmations: { message: string }[]; warnings: { message: string }[] }
+  gatesView: { passed: boolean; approvalFailures: { message: string }[]; warnings: { message: string }[] }
   breakdown: Record<string, number>
   weightedLength: number | null
   growthPackaging: GrowthPackagingReview | null
