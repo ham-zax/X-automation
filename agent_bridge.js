@@ -2,8 +2,6 @@ import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
-  AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY,
-  AUTONOMOUS_REPLY_WRITE_TRANSPORT,
   getAutonomousReplyGrant,
   getAutonomousReplyRuntime,
 } from './autonomous_reply.js';
@@ -729,8 +727,6 @@ function operatorStatus(payload = {}) {
         state: replyGrant.state,
         mode: replyGrant.mode,
         remainingBudget: remainingReplyBudget,
-        currentWriteTransport: AUTONOMOUS_REPLY_WRITE_TRANSPORT,
-        liveTransportReady: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY,
         nextExpectedRefreshAt: replyRuntime.nextExpectedRefreshAt || null,
         lastError: replyRuntime.lastError || null,
       },

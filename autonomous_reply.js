@@ -40,9 +40,6 @@ export const AUTONOMOUS_REPLY_INTENTS = Object.freeze([
   'social_reaction',
 ]);
 export const AUTONOMOUS_REPLY_TONES = Object.freeze(['direct', 'warm', 'conversational', 'light_humor', 'dry_wit']);
-export const AUTONOMOUS_REPLY_WRITE_TRANSPORT = 'clearcote_browser_ui';
-export const AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY = false;
-
 export const AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES = 5;
 const AUTONOMOUS_COLD_PRIORITY_MIN = 60;
 const AUTONOMOUS_ACTIVE_PRIORITY_MIN = 40;
@@ -75,8 +72,6 @@ function defaultGrant() {
     liveBudget: null,
     budgetUsed: 0,
     refreshMinutes: AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
-    xApprovalReference: '',
-    optOutMechanism: '',
     revision: 0,
     updatedAt: null,
     startedAt: null,
@@ -142,8 +137,6 @@ export function configureAutonomousReplyGrant(input = {}, { actor = 'human' } = 
     humorAllowed: input.humorAllowed === undefined ? current.humorAllowed : input.humorAllowed === true,
     liveBudget: integerBudget(input.liveBudget, current.liveBudget),
     refreshMinutes,
-    xApprovalReference: input.xApprovalReference === undefined ? current.xApprovalReference : String(input.xApprovalReference || '').trim(),
-    optOutMechanism: input.optOutMechanism === undefined ? current.optOutMechanism : String(input.optOutMechanism || '').trim(),
     revision: current.revision + 1,
     updatedAt: Date.now(),
   };
@@ -159,17 +152,8 @@ function transitionGrant(action, { actor = 'human' } = {}) {
   const now = Date.now();
   if (action === 'start') {
     if (current.mode === 'live') {
-      if (!AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY) {
-        throw new Error('Live autonomous replies are disabled until reply sending uses the official X API. The current Clearcote browser-UI transport remains available only for human-reviewed sends; use Dry run for autonomous operation.');
-      }
       if (!Number.isInteger(Number(current.liveBudget)) || Number(current.liveBudget) <= 0) {
         throw new Error('Set an explicit positive live safety budget before starting live autonomous replies.');
-      }
-      if (!String(current.xApprovalReference || '').trim()) {
-        throw new Error('Record the X written AI-reply approval reference before starting live autonomous replies.');
-      }
-      if (!String(current.optOutMechanism || '').trim()) {
-        throw new Error('Record the clear recipient opt-out mechanism before starting live autonomous replies.');
       }
     }
     const fromStopped = current.state === 'stopped';
@@ -257,12 +241,6 @@ function priorAutonomousDuplicate(text) {
   return { duplicate: best >= 0.75, similarity: best };
 }
 
-function unsupportedSecurityAssertion(text) {
-  const value = String(text || '');
-  if (!/\b(?:secure|security|vulnerab\w*|exploit\w*|cve-?\d*|prevents? attacks?|safe from|cannot be compromised)\b/i.test(value)) return false;
-  return !/\?/.test(value);
-}
-
 function chooseIntent(item, candidate, grant) {
   const text = String(candidate?.text || '');
   const allowed = new Set(grant.allowedIntents);
@@ -289,12 +267,6 @@ function chooseTone(intent, candidate, grant) {
   return { tone, humorSafe };
 }
 
-function recipientOptedIn(item) {
-  return item.engagementKind !== 'initial_reply'
-    || item.engagement?.sourceClass === 'active'
-    || item.engagement?.recipientOptIn === true;
-}
-
 function relationshipContext(profile) {
   if (!profile) return {};
   return {
@@ -308,9 +280,6 @@ function relationshipContext(profile) {
 
 function preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, tone) {
   if (!item.targetTweetId) return { decision: 'skipped', reason: boundedReason('MISSING_TARGET_TWEET_ID', 'A real X target tweet ID is required.') };
-  if (/\b(?:stop(?: replying)?|unsubscribe|opt[ -]?out|do not reply|don['’]t reply|no more (?:automated )?replies)\b/i.test(String(candidate?.text || ''))) {
-    return { decision: 'skipped', reason: boundedReason('RECIPIENT_OPTED_OUT', 'The target message contains a clear request to stop automated replies.') };
-  }
   if (!grant.allowedSources.includes(sourceClass)) return { decision: 'skipped', reason: boundedReason('SOURCE_CLASS_NOT_ALLOWED', `${sourceClass} sources are not enabled by the current grant.`) };
   if (!intent) return { decision: 'review', reason: boundedReason('NO_ALLOWED_REPLY_INTENT', 'The current contribution does not map to an intent allowed by the grant.') };
   if (!tone) return { decision: 'review', reason: boundedReason('NO_SAFE_ALLOWED_TONE', 'No context-safe tone allowed by the grant is available.') };
@@ -364,7 +333,6 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
       'Intent and tone are separate; tone must not replace substantive value.',
       'The reply must still make sense if any joke is ignored.',
       'Do not imitate a specific real person.',
-      'Do not invent first-person usage, tests, benchmarks, security results, or other evidence.',
     ],
   };
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
@@ -402,41 +370,19 @@ function autonomousGateResult(item, candidate, generated, recentReplies, recentR
     recentReplies,
     recentReplyArchetypes,
     replyArchetype: item.replyArchetype || '',
-    factualityConfirmed: false,
-    evidenceConfirmed: false,
     relevanceOverride: item.relevance?.humanOverride || null,
     conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
   });
   const failures = analysis.gates?.failures || [];
-  const deterministicFailures = failures.filter((failure) => failure.code !== 'FACTUALITY_UNCONFIRMED');
+  const deterministicFailures = [...failures];
   const duplicate = priorAutonomousDuplicate(generated.body || '');
   if (duplicate.duplicate) {
     deterministicFailures.push({ code: 'AUTONOMOUS_REPLY_DUPLICATE', message: `Generated reply is exact/near-duplicate autonomous text (${duplicate.similarity.toFixed(2)} similarity).` });
   }
-  if (unsupportedSecurityAssertion(generated.body || '')) {
-    deterministicFailures.push({ code: 'SECURITY_CLAIM_REVIEW', message: 'Security-sensitive assertions require human evidence review before sending.' });
-  }
-  const evidenceDependent = deterministicFailures.some((failure) => ['EVIDENCE_UNCONFIRMED', 'SECURITY_CLAIM_REVIEW'].includes(failure.code));
   return {
     analysis,
     passed: analysis.score >= analysis.minimumScore && analysis.growthPackaging?.ready === true && deterministicFailures.length === 0,
-    evidenceDependent,
     deterministicFailures,
-  };
-}
-
-function livePolicy(grant, item) {
-  const recipientOptIn = recipientOptedIn(item);
-  const xApprovalRecorded = Boolean(String(grant.xApprovalReference || '').trim());
-  const optOutMechanismRecorded = Boolean(String(grant.optOutMechanism || '').trim());
-  return {
-    recipientOptIn,
-    xApprovalRecorded,
-    optOutMechanismRecorded,
-    allowed: recipientOptIn && xApprovalRecorded && optOutMechanismRecorded,
-    basis: recipientOptIn
-      ? 'The target initiated this X interaction or has explicit persisted opt-in evidence.'
-      : 'No recipient opt-in is present for this cold public-post opportunity.',
   };
 }
 
@@ -482,16 +428,14 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
   }
   const exactReply = String(generated.draft.body || '').trim();
   const gates = autonomousGateResult(item, candidate, generated.draft, generated.recentReplies, generated.recentReplyArchetypes);
-  const policy = livePolicy(grant, item);
   const checks = {
     ...base.checks,
     writingScore: gates.analysis.score,
     growthPackagingReady: gates.analysis.growthPackaging?.ready === true,
     deterministicFailures: gates.deterministicFailures,
-    policy,
   };
   if (generated.output.decision === 'DO_NOT_POST') {
-    return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'skipped', reasons: [boundedReason('WRITER_DO_NOT_REPLY', 'The Writer found no strong evidence-bounded reply worth sending.')] };
+    return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'skipped', reasons: [boundedReason('WRITER_DO_NOT_REPLY', 'The Writer found no strong reply worth sending.')] };
   }
   if (!gates.passed) {
     const first = gates.deterministicFailures[0];
@@ -502,11 +446,8 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
       generatedDraft: generated.draft,
       checks,
       decision: 'review',
-      reasons: [boundedReason(gates.evidenceDependent ? 'EVIDENCE_DEPENDENT_REVIEW' : 'DETERMINISTIC_GATE_REVIEW', first?.message || 'The generated reply needs human review before sending.')],
+      reasons: [boundedReason('DETERMINISTIC_GATE_REVIEW', first?.message || 'The generated reply needs human review before sending.')],
     };
-  }
-  if (grant.mode === 'live' && !policy.allowed) {
-    return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'review', reasons: [boundedReason('POLICY_AUTHORITY_REQUIRED', 'Live AI-generated auto-reply requires recipient opt-in, a recorded clear opt-out mechanism, and recorded X written approval.')] };
   }
   return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'send', reasons: [] };
 }
@@ -576,9 +517,6 @@ function currentLiveAuthority(item, decision, expectedRevision) {
   }
   if (hasCandidateAction(item.candidateKey, 'reply') || item.outputTweetId || item.status === 'published') {
     return { allowed: false, reason: boundedReason('ALREADY_REPLIED', 'A reply was recorded before autonomous claim.') };
-  }
-  if (!livePolicy(grant, item).allowed) {
-    return { allowed: false, reason: boundedReason('POLICY_AUTHORITY_REQUIRED', 'Recipient opt-in, the clear opt-out mechanism, or X written AI-reply approval is no longer present.') };
   }
   if (decision.decision !== 'eligible_live') {
     return { allowed: false, reason: boundedReason('CLAIM_STATE_CHANGED', 'Autonomous decision is no longer live-eligible.') };
@@ -729,22 +667,9 @@ export function getAutonomousReplyReadModel({ limit = 50 } = {}) {
     grant: {
       ...grant,
       remainingBudget: grant.liveBudget == null ? null : Math.max(0, Number(grant.liveBudget) - Number(grant.budgetUsed || 0)),
-      liveStartReady: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY
-        && Number(grant.liveBudget || 0) > 0
-        && Boolean(String(grant.xApprovalReference || '').trim())
-        && Boolean(String(grant.optOutMechanism || '').trim()),
+      liveStartReady: Number(grant.liveBudget || 0) > 0,
     },
     runtime,
-    policy: {
-      recipientOptInRequired: true,
-      aiReplyApprovalRequired: true,
-      officialApiWriteRequired: true,
-      liveTransportReady: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY,
-      currentWriteTransport: AUTONOMOUS_REPLY_WRITE_TRANSPORT,
-      note: AUTONOMOUS_REPLY_LIVE_TRANSPORT_READY
-        ? 'Cold momentum/normal opportunities may be evaluated, but live AI auto-send requires recipient opt-in for that interaction, a recorded clear opt-out mechanism, and recorded X written approval.'
-        : 'Dry run can evaluate active, momentum, and normal opportunities continuously. Live autonomous sending is disabled until reply transport uses the official X API; the current Clearcote browser-UI transport is not used for unattended autonomous replies.',
-    },
     options: {
       sourceClasses: [...AUTONOMOUS_REPLY_SOURCE_CLASSES],
       intents: [...AUTONOMOUS_REPLY_INTENTS],

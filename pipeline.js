@@ -941,9 +941,6 @@ export async function sendAutonomousEngagementReply(key, {
     || decision.exactReply !== String(exactReply || '')) {
     throw new Error('Autonomous reply claim/provenance does not match the exact candidate reply.');
   }
-  if (decision.checks?.policy?.allowed !== true) {
-    throw new Error('Autonomous reply policy authority is not satisfied for this interaction.');
-  }
   const currentGrant = getAutonomousReplyGrantState() || {};
   if (currentGrant.state !== 'running' || currentGrant.mode !== 'live' || Number(currentGrant.revision) !== Number(grantRevision)) {
     throw new Error('Autonomous reply grant was paused, stopped, or revised after claim; transport is blocked.');

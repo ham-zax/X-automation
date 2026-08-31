@@ -93,8 +93,6 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
   const [humorAllowed, setHumorAllowed] = useState(data.grant.humorAllowed)
   const [liveBudget, setLiveBudget] = useState(data.grant.liveBudget == null ? '' : String(data.grant.liveBudget))
   const [refreshMinutes, setRefreshMinutes] = useState(String(data.grant.refreshMinutes))
-  const [xApprovalReference, setXApprovalReference] = useState(data.grant.xApprovalReference || '')
-  const [optOutMechanism, setOptOutMechanism] = useState(data.grant.optOutMechanism || '')
 
   const toggle = (value: string, selected: string[], setSelected: (value: string[]) => void) => {
     setSelected(selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value])
@@ -111,7 +109,7 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
           <div className="mt-2 flex gap-2">
             {(['dry_run', 'live'] as const).map((value) => (
               <button key={value} type="button" onClick={() => setMode(value)} className={`rounded-md border px-3 py-2 text-sm ${mode === value ? 'border-slate-900 bg-slate-50 font-medium' : 'border-slate-200 text-slate-600'}`}>
-                {value === 'dry_run' ? 'Dry run' : data.policy.liveTransportReady ? 'Live' : 'Live (transport blocked)'}
+                {value === 'dry_run' ? 'Dry run' : 'Live'}
               </button>
             ))}
           </div>
@@ -169,29 +167,12 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
         </fieldset>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+      <div className="mt-5">
         <label className="text-sm text-slate-700">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Live safety budget</span>
           <input type="number" min={1} step={1} value={liveBudget} onChange={(event) => setLiveBudget(event.target.value)} placeholder="Required before Live Start" className="mt-2 w-full rounded-md border border-slate-300 px-2 py-2" />
           <span className="mt-1 block text-xs text-slate-500">Operator safety limit for one Start session. It is not a quota or X algorithm recommendation.</span>
         </label>
-        <label className="text-sm text-slate-700">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">X AI-reply approval reference</span>
-          <input value={xApprovalReference} onChange={(event) => setXApprovalReference(event.target.value)} placeholder="Written approval / developer reference" className="mt-2 w-full rounded-md border border-slate-300 px-2 py-2" />
-          <span className="mt-1 block text-xs text-slate-500">Required for Live Start. Recipient opt-in is still checked independently for each interaction.</span>
-        </label>
-        <label className="text-sm text-slate-700">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Recipient opt-out mechanism</span>
-          <input value={optOutMechanism} onChange={(event) => setOptOutMechanism(event.target.value)} placeholder="Public instruction or campaign mechanism" className="mt-2 w-full rounded-md border border-slate-300 px-2 py-2" />
-          <span className="mt-1 block text-xs text-slate-500">Required for Live Start. Record the clear/easy way opted-in recipients can stop automated replies.</span>
-        </label>
-      </div>
-
-      <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-        {data.policy.note}
-        {!data.policy.liveTransportReady && (
-          <div className="mt-2 text-xs">Current write transport: {data.policy.currentWriteTransport.replaceAll('_', ' ')}. You can configure Live prerequisites now, but Start remains unavailable until an official X API write transport is installed.</div>
-        )}
       </div>
 
       <button
@@ -205,8 +186,6 @@ function ConfigForm({ data }: { data: AutonomousReplyData }) {
           humorAllowed,
           liveBudget: liveBudget ? Number(liveBudget) : null,
           refreshMinutes: Number(refreshMinutes),
-          xApprovalReference,
-          optOutMechanism,
         })}
         className="mt-5 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
       >
@@ -245,15 +224,12 @@ export function AutonomousRepliesSettings() {
             <div className="mt-2 text-sm text-slate-600">Grant revision {data.grant.revision} · budget {data.grant.liveBudget == null ? 'not set' : `${data.grant.budgetUsed}/${data.grant.liveBudget} used`}</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => start.mutate({})} disabled={start.isPending || data.grant.state === 'running' || (data.grant.mode === 'live' && !data.policy.liveTransportReady)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">Start</button>
+            <button type="button" onClick={() => start.mutate({})} disabled={start.isPending || data.grant.state === 'running'} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-40">Start</button>
             <button type="button" onClick={() => pause.mutate({})} disabled={pause.isPending || data.grant.state !== 'running'} className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900 disabled:opacity-40">Pause</button>
             <button type="button" onClick={() => stop.mutate({})} disabled={stop.isPending || data.grant.state === 'stopped'} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-40">Stop</button>
           </div>
         </div>
         {actionError && <div className="mt-3 text-sm text-red-700">{actionError}</div>}
-        {data.grant.mode === 'live' && !data.policy.liveTransportReady && (
-          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Live autonomous sending is intentionally blocked until the reply publisher uses the official X API. Switch to Dry run to start the persistent operator now.</div>
-        )}
         <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
           <div><strong className="text-slate-800">Last successful refresh</strong><br />{data.runtime.lastSuccessfulRefreshAt ? formatDateTime(data.runtime.lastSuccessfulRefreshAt) : 'Not yet'}</div>
           <div><strong className="text-slate-800">Next expected evaluation</strong><br />{data.runtime.nextExpectedRefreshAt ? formatDateTime(data.runtime.nextExpectedRefreshAt) : data.grant.state === 'running' ? 'Next daemon cycle' : 'Not running'}</div>

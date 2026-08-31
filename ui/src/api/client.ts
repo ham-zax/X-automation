@@ -589,8 +589,6 @@ export interface AutonomousReplyGrant {
   budgetUsed: number
   remainingBudget: number | null
   refreshMinutes: number
-  xApprovalReference: string
-  optOutMechanism: string
   revision: number
   updatedAt: number | null
   startedAt: number | null
@@ -606,14 +604,6 @@ export interface AutonomousReplyData {
     nextExpectedRefreshAt: number | null
     lastError: string
     lastDecisionCounts: { sent: number; review: number; skipped: number }
-  }
-  policy: {
-    recipientOptInRequired: boolean
-    aiReplyApprovalRequired: boolean
-    officialApiWriteRequired: boolean
-    liveTransportReady: boolean
-    currentWriteTransport: string
-    note: string
   }
   options: { sourceClasses: string[]; intents: string[]; tones: string[]; minRefreshMinutes: number }
   recentDecisions: AutonomousReplyDecision[]

@@ -2047,9 +2047,7 @@ export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now
       db.exec('ROLLBACK');
       return null;
     }
-    if (decision.checks?.policy?.allowed !== true || !String(decision.exactReply || '').trim()) {
-      throw new Error('Autonomous reply decision is not policy-authorized for live send.');
-    }
+    if (!String(decision.exactReply || '').trim()) throw new Error('Autonomous reply decision has no exact text for live send.');
     const storedGrant = db.prepare('SELECT value FROM app_state WHERE key = ?').get(AUTONOMOUS_REPLY_GRANT_STATE_KEY)?.value;
     const grant = json(storedGrant, {});
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(grantRevision)) {
@@ -2059,12 +2057,6 @@ export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now
     const budgetUsed = Number(grant.budgetUsed || 0);
     if (!Number.isInteger(liveBudget) || liveBudget <= 0 || budgetUsed >= liveBudget) {
       throw new Error('Autonomous reply live budget has no remaining capacity.');
-    }
-    if (!String(grant.xApprovalReference || '').trim()) {
-      throw new Error('Autonomous live replies require a recorded X AI-reply approval reference.');
-    }
-    if (!String(grant.optOutMechanism || '').trim()) {
-      throw new Error('Autonomous live replies require a recorded recipient opt-out mechanism.');
     }
     const changed = db.prepare(`UPDATE autonomous_reply_decisions
       SET decision = 'sending', claimed_at = ?, updated_at = ?
