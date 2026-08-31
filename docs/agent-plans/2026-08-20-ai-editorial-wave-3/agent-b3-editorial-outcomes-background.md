@@ -66,7 +66,7 @@ No tests. Use only minimal non-test syntax/direct temporary-state checks needed 
 ## Out of scope
 
 - recommendation selection implementation;
-- writer evidence/gates;
+- writer context/gates;
 - general editorial web/agent APIs or React surfaces;
 - altering Phase-4 attribution semantics or Phase-5 evidence thresholds;
 - automatic learned-rule acceptance;

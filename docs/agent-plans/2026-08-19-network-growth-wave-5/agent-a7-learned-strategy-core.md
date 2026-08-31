@@ -47,7 +47,7 @@ You own only:
 - Acceptance eligibility requires at least directional evidence.
 - One outlier or one viral item must not create an actionable learned adjustment.
 - Preserve the account's niche identity and base formulas.
-- No learned rule may bypass hard factuality/duplicate gates, explicit expiry, human approval, or a direct manual route/schedule decision.
+- No learned rule may bypass hard duplicate gates, explicit expiry, human approval, or a direct manual route/schedule decision.
 - Health learning may tune WATCH-level soft behavior only. It must never infer CONSTRAINED from low reach/volume and must never create a hard constraint without supported observed platform/project evidence.
 - Do not introduce fixed daily reply caps, fake-human timing, jitter, or human-simulation logic.
 

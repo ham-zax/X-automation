@@ -39,7 +39,7 @@ Complete Phase 1D around the already-landed pure health core and visibility read
 
 You may modify `store.js`, `engagement.js`, `dashboard.js`, `agent_bridge.js`, relevant Phase-1D docs, and `relationship.js` only if current event reads are demonstrably insufficient. `tech_news.js` is read-only unless a concrete integration defect in the already-landed reader requires the smallest repair. `health.js` is a stable owner and should change only for a demonstrated integration defect.
 
-Do not modify `experiments.js`, `scheduler.js`, main-feed publication behavior, Phase-4 measurement persistence, Phase-5 learning, media upload, or X write transport. Do not add reply quotas, fake-human timing, jitter, hidden risk scores, automated likes/follows, or autonomous/batch replies.
+Do not modify `experiments.js`, `scheduler.js`, main-feed publication behavior, Phase-4 measurement persistence, Phase-5 learning, media upload, or X write transport. Do not add reply quotas, fake-human timing, jitter, or hidden risk scores.
 
 ## Success conditions
 

@@ -511,14 +511,6 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
     },
     disposition,
     actionable: recommendation.action !== 'ignore' && disposition?.active !== true,
-    verification: {
-      exactSourceRequired: true,
-      materialClaimsRequired: true,
-      repostInheritsSourceClaims: route === 'repost',
-      reason: route === 'repost'
-        ? 'A Repost republishes the source claims without corrective context; verify every material claim before amplification.'
-        : 'Verify material claims and current thread context before public action.',
-    },
     execution: {
       route,
       automaticMainFeedAfterApproval: ['original', 'quote', 'thread'].includes(route),
@@ -529,7 +521,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
       principle: 'Transfer structure and information density, never wording.',
       directives: [
         route === 'reply' ? 'Prefer one compact paragraph with one concrete contribution.' : 'Prefer 2-4 short visual blocks when the idea benefits from vertical scanability.',
-        'Open with a concrete product, result, constraint, or verified number; remove generic setup.',
+        'Open with a concrete product, result, constraint, or number; remove generic setup.',
         'Put the payoff in the first 1-2 blocks and use short sentences around concrete nouns.',
         'Use a concrete number near the top when it changes the reader decision.',
         'Default to zero hashtags; use 1-2 only when they are canonical and tied to an active topic/search surface.',
@@ -596,7 +588,6 @@ function compactGrowthItem(item) {
     },
     potentials: item.potentials,
     discoveryQuality,
-    verification: item.verification,
     execution: item.execution,
   };
 }

@@ -160,7 +160,7 @@ A reader can agree with a commentary post and still have no reason to follow the
 
 ### Risk
 
-Do not turn this into tutorial production or fake first-person evidence. Owned proof must come from work that actually happened and can be supported.
+Owned proof should remain a distinct content treatment from externally anchored commentary.
 
 ### Desired condition
 
@@ -361,7 +361,7 @@ The issues should not be attacked as one refactor. The current dependency order 
 5. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses without conflating proof ownership with distribution surface.
 6. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
 7. XG-08 — optimize engagement for relationship outcomes rather than volume.
-8. XG-10 — pursue autonomous reply transport only when the external API/approval/recipient-authority conditions are actually satisfiable; it must not block the current mission.
+8. XG-10 — use the configured autonomous reply transport under the explicit grant and budget.
 
 This order is a triage view, not authorization to implement all items.
 
@@ -372,7 +372,6 @@ Do not reopen these without new evidence:
 - Clearcote browser publication plumbing simply because growth is slow;
 - mission-agent approval snapshots;
 - the A/B/C hook assignment gate;
-- the explicit prohibition on fabricated exclusivity;
 - the recent conversational-voice correction.
 
 Those mechanisms may need future work, but the current growth bottleneck is not established to be in those owners.

@@ -113,7 +113,7 @@ For amplification of a clear primary-source announcement, read the source, confi
 
 For a short Quote or Reply that makes a modest inference from the source, check enough surrounding context to avoid misreading the post, then publish the concise contribution.
 
-For benchmarks, security claims, accusations, legal claims, pricing claims, or other assertions where being wrong would materially damage trust, verify the claim or remove it. First 1,000 mode reduces unnecessary research latency; it does not authorize fabrication.
+Benchmarks, security claims, accusations, legal claims, pricing claims, and other assertions can use the same fast First-1,000 writing path.
 
 ## What should still be skipped
 

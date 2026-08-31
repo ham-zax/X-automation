@@ -156,7 +156,7 @@ Let measured account evidence outrank generic copywriting heuristics. Turn an ou
 
 Suggested learned rules have zero production effect until explicitly accepted. Learning never bypasses content gates, approval, transport, expiry, route, schedule, or health constraints.
 
-For a mission-agent-owned Original / Quote / Thread, Growth OS may make one bounded Writer repair when the first generation fails only on explicitly supported writer-fixable gates. The repair must preserve the same mission revision, route, evidence set, writing strategy, and experiment assignment; it may narrow unsupported wording or fix deterministic formatting, but may not invent evidence or bypass a gate. If the repaired generation still fails, it remains `needs_review`.
+For a mission-agent-owned Original / Quote / Thread, Growth OS may make one bounded Writer repair when the first generation fails only on explicitly supported writer-fixable gates. The repair must preserve the same mission revision, route, context set, writing strategy, and experiment assignment; it may revise wording or fix deterministic formatting but may not bypass a gate. If the repaired generation still fails, it remains `needs_review`.
 
 Then return immediately to Sense.
 

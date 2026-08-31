@@ -69,7 +69,7 @@ Give extra attention to distinctions among:
 - recommendation;
 - selection/routing;
 - draft generation/editing;
-- evidence/factuality confirmations;
+- approval controls;
 - approval;
 - scheduling;
 - publishing/sending;

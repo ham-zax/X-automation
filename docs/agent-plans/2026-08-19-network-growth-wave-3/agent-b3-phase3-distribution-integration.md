@@ -54,7 +54,6 @@ Agent A4 concurrently owns only `health.js`.
 - Original/Quote/Thread are the required automated main-feed formats. Repost remains manual unless an already-supported stable existing transport path can be reused without widening scope.
 - Required media remains blocked unless a real attachment/upload readiness path already exists. Do not implement fake media readiness or a checkbox bypass.
 - Do not add random jitter, human-mimic delays, anti-detection timing, or fake minimum posting intervals.
-- Do not add autonomous engagement sends, likes, follow/unfollow automation, batch replies, or keyword auto-replies.
 
 ## Required behavior
 

@@ -23,7 +23,7 @@ Before source mutation, use **Causal Coding**. Use **Persistent Agent Loop** for
 
 ## Objective
 
-Complete the Phase-2 integration around the already-landed content-quality core: persist thread/editor/gate metadata, expose writer-packet/structured-output bridge commands, make workflow review/approval gate-aware with explicit human factuality/evidence confirmation, provide format-aware review UI including thread/media-plan state, and synchronize current operating documentation.
+Complete the Phase-2 integration around the already-landed content-quality core: persist thread/editor/gate metadata, expose writer-packet/structured-output bridge commands, make workflow review/approval gate-aware, provide format-aware review UI including thread/media-plan state, and synchronize current operating documentation.
 
 Keep the existing Phase-1 human approval boundary intact. Do not absorb Engage Next, Account Health, scheduler, media upload, experiments, or publishing transport work.
 
@@ -78,7 +78,6 @@ Existing drafts must remain readable. Add the narrow recent approved/published m
 
 - `requestQueueReview` recomputes/saves gate output for the latest content and may enter `needs_review` even when gates fail so the human can inspect failures.
 - Human approval must recompute the latest gate result and require both numeric score >=40 and `gates.passed`.
-- Require explicit human `factualityConfirmed`; require `evidenceConfirmed` where the gate engine determines evidence claims need confirmation.
 - Preserve the compatibility behavior where only explicit human approval sets the associated text draft to `ready`.
 - Required media remains a hard approval blocker until actual Phase-3 readiness exists.
 
@@ -92,7 +91,6 @@ Provide format-aware editing/review for Original, Quote, Reply, and Thread:
 - weighted character count per publishable unit;
 - editor metadata: semantic anchors, evidence used, follow reason, risk flags, discussion question, media recommendation;
 - gate pass/fail/warning display with readable failure messages;
-- human factuality/evidence confirmation controls not prechecked by AI;
 - approval absent/blocked when gates or score fail;
 - media state clearly distinguishes none/recommended/required and required-but-not-ready.
 

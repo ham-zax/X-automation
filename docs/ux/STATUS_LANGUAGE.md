@@ -63,9 +63,8 @@ These sequences describe semantics, not a required visual component or final IA.
 |---|---|---|---|---|---|---|
 | Drafting | `Draft in progress` | Editable candidate wording exists or the item is in an authored-content workflow. | No approval or remote publication/send is implied. | Edit, save, generate/regenerate, inspect evidence. | Generation retry has different consequences from save; do not use one generic retry. | Semantic stable. `Draft in progress` is current baseline wording. |
 | Generating | `Generating draft…` / `Regenerating draft…` | AI generation is actively producing/replacing candidate wording. | Generation has not completed; nothing is approved/public. | Wait for completion; preserve/resolve unsaved-edit warnings before regeneration. | Do not start duplicate generation while current request is unresolved unless the owner explicitly supports cancellation/retry. | Semantic stable. |
-| Needs review | `Needs review` with exact next requirement nearby | Current draft requires human review/readiness work before approval. | No human approval; no send/publish. | Inspect exact text, blockers, facts/evidence confirmations; check readiness. | Not normally a retry state. | Semantic stable; `Needs review` is current baseline but final comprehension still requires participant testing. |
+| Needs review | `Needs review` with exact next requirement nearby | Current draft requires human review/readiness work before approval. | No human approval; no send/publish. | Inspect exact text and blockers; check readiness. | Not normally a retry state. | Semantic stable; `Needs review` is current baseline but final comprehension still requires participant testing. |
 | Blocked by writing check | `Fix before approval: {plain reason}` | Deterministic content rule prevents approval. | Human approval and remote action have not occurred. | Edit the content or resolve the actual blocker. | Retrying the same unchanged check is not a recovery strategy. | Semantic stable; blocker copy is object-specific. |
-| Blocked by evidence/confirmation | `Supporting proof must be checked before approval` / `Fact confirmation required` | Required human confirmation/evidence condition is unmet. | Approval/send/publish has not occurred. | Inspect proof, confirm only when warranted, or change unsupported wording. | Do not “retry” around a missing confirmation. | Semantic stable; exact confirmation labels remain copy candidates. |
 | Blocked by account/policy state | `Sending is temporarily unavailable` or specific consequence | A deterministic account/eligibility condition prevents the action. | The blocked remote action did not start through this control. | Resolve/check the account condition or choose another allowed task. | Retry only after authoritative state shows the blocker cleared. | Semantic stable. |
 | Approved | `Approved — not published yet` for main feed; `Approved — ready to send` for replies | Human approved the exact current content under the relevant confirmations. | Main-feed publication has not necessarily happened; reply send has not happened until explicit send/combined action completes. | Main feed: inspect publishing plan/wait. Reply: send exact approved reply when appropriate. | Approval is not a generic retry state. Editing may invalidate approval. | Semantic stable; the explicit suffix is preferred over bare `Approved` where consequence could be ambiguous. |
 
@@ -133,7 +132,6 @@ Current backend examples include:
 Examples:
 
 - exact reply changed after approval, invalidating approval;
-- evidence/factuality confirmation missing;
 - account constraint blocks send;
 - research configuration is incomplete.
 

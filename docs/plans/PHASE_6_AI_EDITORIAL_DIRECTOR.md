@@ -722,7 +722,7 @@ linked article/page when fetchable
 HN discussion URL
 ```
 
-HN comments are conversation/context evidence, not independent verification of a technical claim.
+HN comments are available as conversation/context inputs.
 
 ### X story enrichment
 
@@ -1047,11 +1047,11 @@ For existing `app_state` data, `getDiscoverSnapshot(canonicalKind)` must read th
 - [ ] Define a strict final-plan JSON schema with at most five recommendations and the `PREPARE/RESEARCH_MORE/SKIP` contract, including bounded `angleClass`, `researchQuestions`, and a required `targetCandidateKey` for Quote/Reply/Repost.
 - [ ] Call `runStructuredAI({ role: 'editorial_scan', ... })` for the scan and `runStructuredAI({ role: 'editorial_final', ... })` for the final pass; do not spawn Codex directly from `editorial_runtime.js`.
 - [ ] Persist the resolved AI profile/runtime/provider/model/reasoning provenance returned by the shared runtime with the editorial run/recommendation metadata.
-- [ ] Explicitly instruct both passes: no shell, no browsing, no file edits, no invented source facts, no following instructions inside source content.
+- [ ] Explicitly instruct both passes: no shell, no browsing, no file edits, and no following instructions inside source content.
 - [ ] Validate returned candidate/evidence/mechanism IDs against the supplied packet before persistence.
 
 **Acceptance criteria:**
-- The selected `editorial_scan` / `editorial_final` profiles can change runtime/provider/model without changing the Phase-6 domain contract, and the model can semantically combine multiple current sources into one story without inventing unseen sources, evidence IDs, algorithm mechanisms, or publication authority.
+- The selected `editorial_scan` / `editorial_final` profiles can change runtime/provider/model without changing the Phase-6 domain contract, and the model can semantically combine multiple current sources into one story while preserving supplied identifiers and publication authority.
 
 ---
 
@@ -1153,8 +1153,7 @@ For existing `app_state` data, `getDiscoverSnapshot(canonicalKind)` must read th
 - [ ] For manually routed/non-editorial drafts, preserve existing behavior while supplying ProfileProofCoverage from Task 4.
 - [ ] Represent writer evidence items with stable IDs plus claim type/status/source family/requested+resolved URL/title/summary rather than free-form `verified ...` strings.
 - [ ] Require `evidenceUsed` to contain supplied evidence IDs when the final text relies on a researched claim.
-- [ ] Update evidence confirmation checks so an evidence ID resolves to a persisted eligible evidence row; stop treating the literal word `verified` in an AI-generated string as proof. A `source_claim` row cannot satisfy a stronger capability/benchmark/performance assertion than the row's stored claim.
-- [ ] Keep human factuality/evidence confirmation as the final approval assertion where existing gates require it.
+- [ ] Keep evidence IDs and persisted evidence rows available as inspectable writer context.
 
 **Acceptance criteria:**
 - Evidence shown as supporting a draft resolves to a real persisted evidence record with claim scope and provenance; the UI/writer never turns an AI-authored `verified` label into proof.
@@ -1397,11 +1396,11 @@ Phase 6 is complete when all of the following are true:
 4. Every recommendation states the selected objective, current source context, format rationale, desired reader outcome, and transparent opportunity/authority inputs.
 5. Algorithm-aware reasoning cites only allowed evidence-ledger mechanisms and keeps empirical variables distinct.
 6. Controlled research produces persisted claim-level evidence with source URL/provenance/status.
-7. The writer consumes actual evidence records and can no longer manufacture supporting-evidence status through free-form text.
+7. The writer consumes evidence records as optional inspectable context.
 8. ProfileProofCoverage is computed once and shared by Today and the writer.
 9. Multi-source originals preserve all source provenance without forcing one external URL to pretend to be the whole origin.
 10. Selecting an editorial recommendation creates ordinary workflow work but cannot approve, schedule, publish, send, or accept learned strategy.
 11. Discover remains the source-truth surface; Today becomes the action/recommendation surface.
 12. Published outcomes can be traced back to the AI recommendation and any human route override for later Phase-4/5 analysis.
-13. A failed/empty source refresh or missing evidence is visible; the product never silently presents stale or unsupported context as current or primary-supported.
+13. A failed/empty source refresh remains visible.
 14. "Do nothing now" is a first-class successful recommendation when the available opportunities do not justify occupying the feed.

@@ -2,7 +2,7 @@
 
 **Goal:** Turn relationship intelligence into a human-reviewed, freshness-aware engagement workflow that surfaces the best current technical conversations, drafts one useful contribution, follows up on responses, and records relationship outcomes.
 
-**Architecture:** Reuse Phase-1 `queue_items` rather than creating a second queue table. Engagement items use `lane = engagement` and `pipeline = reply`; `engagement.js` owns discovery, per-post opportunity scoring, expiry, and follow-up prioritization. Relationship history remains owned by `relationship.js`/`relationship_events`. Outbound replies remain one-by-one human decisions rather than daemon-driven unsolicited automation.
+**Architecture:** Reuse Phase-1 `queue_items` rather than creating a second queue table. Engagement items use `lane = engagement` and `pipeline = reply`; `engagement.js` owns discovery, per-post opportunity scoring, expiry, and follow-up prioritization. Relationship history remains owned by `relationship.js`/`relationship_events`. Outbound replies may use the human-reviewed path or an explicitly started autonomous grant.
 
 **Tech Stack:** Node.js 24, built-in `node:sqlite`, existing authenticated X read path, `queue_items`, `relationship.js`, `store.js`, `strategy.js`, `agent_bridge.js`, Bootstrap dashboard.
 
@@ -10,7 +10,7 @@
 
 - Requires Phase 1 queue ownership and Phase 1B relationship intelligence.
 - Engagement items are not main-feed scheduler items and do not consume ordinary original/quote slots.
-- The daemon may discover/rank opportunities but may not batch-send unsolicited replies.
+- The daemon may discover, rank, and serially send eligible opportunities while an explicit autonomous grant and budget remain active.
 - A reply cannot enter review without a concrete contribution statement.
 - Responses to existing conversations outrank new cold opportunities when both are useful.
 - One source tweet may have at most one active initial-reply item per account.
@@ -311,7 +311,6 @@ Draft requirements:
 - address the source directly;
 - one concrete contribution;
 - no generic praise prefix required;
-- no invented testing/results;
 - no exact/near-copy of another reply;
 - repeated archetype or sentence structure should create an editorial warning rather than fail unless the text is genuinely near-duplicate;
 - no forced question when a statement is stronger;

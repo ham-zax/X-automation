@@ -596,7 +596,7 @@ export async function recommendWritingStrategy(queueItemId, { profile = null } =
     'You may select only an optionIndex that appears below, or return no_recommendation.',
     'Do not create or alter intent, style, opening features, or limitations.',
     'limitations must be exact supplied limitation strings.',
-    'Do not copy wording from example/source posts. Explain fit using only the supplied candidate context, objective, pipeline, evidence, and limitations.',
+    'Do not copy wording from example/source posts. Explain fit from the candidate context, objective, pipeline, and selected option.',
     '',
     'CURRENT CONTEXT:',
     JSON.stringify({

@@ -47,13 +47,13 @@ The objective of this wave is therefore not to add another dashboard or immediat
 ## Shared contracts
 
 - First-1,000 mode remains active until the account reaches 1,000 followers or the operator explicitly ends it.
-- Live X is authoritative for whether a social mutation actually happened. Local state must never invent a tweet ID, URL, metric, or successful action.
+- Live X is authoritative for whether a social mutation actually happened. Local state records observed tweet IDs, URLs, metrics, and successful actions.
 - `growth-next` remains read-only planning. It may rank and explain, but it does not publish.
 - `record-action` or its coherent successor must remain idempotent for the same exact candidate/action and must never create a second social mutation.
 - Unknown metrics are not the same as observed zero. Preserve absence/provenance when the operator did not observe a value.
 - Reply density, bookmark density, author authority, momentum, and similar fields are observational evidence. Do not turn the latest small sample into a claimed X algorithm law.
 - Do not introduce a hard author/topic saturation ban. The requested suppression state is exact-candidate operator disposition, with transparent reason/state and a reversible or expiry-aware model if needed.
-- Do not weaken factuality, duplicate prevention, publication authority, human approval boundaries, or the existing prohibition on fabricated claims.
+- Preserve duplicate prevention, publication authority, and human approval boundaries.
 - Do not change `AUTO_POST`, browser transport, social-action safety, or scheduler authority in this mission.
 
 ## Workspace policy

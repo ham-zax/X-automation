@@ -69,7 +69,7 @@ If the authoritative Phase-2 plan proves internally inconsistent with current Ph
 - Thread composition uses explicit `threadParts`; single formats continue to produce one body.
 - `buildWriterPacket()` returns the documented inspectable account/candidate/queue/evidence/recent/profile-proof/constraints context without secrets or chain-of-thought.
 - `applyWriterOutput()` accepts only documented decision/pipeline/media enums and allow-listed fields, preserves structured editor metadata in the returned draft object, and does not authorize workflow state.
-- `evaluateDraftGates()` produces stable machine-readable failures/warnings/checks for factuality, evidence when required, niche, additive value, source/recent duplication, scannability, placeholders, weighted length, CTA integrity, hashtags, emoji, first-person evidence, thread rules, and media readiness as specified by the Phase-2 plan.
+- `evaluateDraftGates()` produces stable machine-readable failures/warnings/checks for niche, additive value, source/recent duplication, scannability, placeholders, weighted length, CTA integrity, hashtags, emoji, thread rules, and media readiness as specified by the Phase-2 plan.
 - Exact/near-duplicate text at the documented threshold can hard-fail; repeated reply archetype/style by itself remains warning-level rather than a ban.
 - `scoreDraft()` preserves the current 50-point rubric and remains callable by existing Phase-1 code; gate-aware publishability is additive/contextual rather than a breaking API rewrite.
 - No persistence, dashboard, bridge, workflow, scheduler, or X transport files are changed.
@@ -82,7 +82,7 @@ Use direct pure-function/runtime evidence capable of disproving the contracts ab
 - exercise representative Original/Quote/Reply/Thread inputs with short temporary Node invocations;
 - confirm legacy default calls still return valid current-style draft/scoring results;
 - confirm hard-gate failures do not become publishable merely because numeric quality is high;
-- confirm duplicate/bait/factuality/length/thread/media cases produce the documented failure/warning shape;
+- confirm duplicate/bait/length/thread/media cases produce the documented failure/warning shape;
 - inspect the final diff to ensure only `drafting.js` (or an unavoidable tiny pure helper explicitly reported) changed and `git diff --check` is clean.
 
 Do not create a test framework/file or run a broad suite merely for confidence.

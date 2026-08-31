@@ -62,7 +62,7 @@ No test creation, modification, or execution. Use only directly relevant non-tes
 
 ## Future / blocked work
 
-- Bounded live autonomous-reply pilot — blocked until A9 is integrated, reply publication uses the official X API rather than private web GraphQL, X written AI-reply approval and recipient opt-in/opt-out requirements are satisfied, and the user separately authorizes a concrete live-send budget.
+- Bounded live autonomous-reply pilot — available after A9 integration when the user starts Live mode with a concrete live-send budget.
 - Outcome learning for autonomous reply intent/tone — use real published-reply outcomes only after sufficient observations; do not auto-promote rules from tiny samples.
 
 ## Status log

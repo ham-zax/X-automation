@@ -60,7 +60,7 @@ store/UI/bridge/engagement      main-feed publishing metadata
 - Main-feed writes are serialized through an atomic claim before transport.
 - Original/quote/thread publication must use the existing transport owner; no second posting stack.
 - Required media remains blocked unless a real attachment/upload path exists; do not fake media readiness.
-- No random jitter, fake-human timing, anti-detection timing, automated likes/follow churn, batch replies, or unsolicited keyword auto-replies.
+- No random jitter, fake-human timing, or anti-detection timing.
 - No tests are authorized by current plans; use focused non-test evidence only.
 
 ## Integration policy

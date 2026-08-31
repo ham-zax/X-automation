@@ -22,16 +22,11 @@ These apply to original posts, replies, quote posts, and threads.
 
 ### MUST
 
-1. **Be true enough to defend.**
-   - Do not state uncertain claims as facts.
-   - Prefer primary sources for releases, benchmarks, security claims, pricing, model capabilities, outages, and technical behavior.
-   - If a claim is an inference, phrase it as an inference.
-
-2. **Add information, judgment, or experience.**
+1. **Add information, judgment, or experience.**
    - Do not merely restate a headline or another person's post.
    - Every outbound item must contribute at least one of: explanation, comparison, experiment, implication, opinion with reasoning, implementation detail, useful question, or synthesis.
 
-3. **Fit the account's topic cluster.**
+2. **Fit the account's topic cluster.**
    A normal post should clearly fit at least one:
    - AI models and model releases
    - coding agents / agentic development
@@ -106,7 +101,6 @@ Original posts are the primary growth surface.
 - State what changed, what was learned, or what the reader can do.
 - Be understandable without requiring the reader to know the full backstory.
 - If based on external news, include our interpretation rather than only the announcement.
-- If based on a benchmark, say what was measured and avoid overgeneralizing the result.
 
 ### SHOULD
 
@@ -241,7 +235,6 @@ Long posts are justified when compression would remove useful reasoning.
 - Put the thesis and payoff near the top.
 - Use sections or visual structure.
 - Remove repeated conclusions and filler transitions.
-- Distinguish verified facts from interpretation.
 - End with a practical takeaway, not a generic CTA.
 
 ### SHOULD
@@ -252,7 +245,7 @@ Good long-form topics include:
 - benchmark or model-release analysis;
 - end-to-end experiment results;
 - architecture breakdowns;
-- "what everyone is getting wrong" when backed by primary evidence;
+- "what everyone is getting wrong";
 - detailed builder retrospectives.
 
 ### EXCELLENT
@@ -274,12 +267,11 @@ For news-based posts, answer at least one:
 - How does it compare with the current alternative?
 - What is the cost/performance/developer-experience tradeoff?
 - What should a developer test first?
-- What claim in the announcement needs verification?
+- What claim in the announcement creates the strongest developer angle?
 
 ### SHOULD
 
-- Prefer the primary announcement, code, docs, paper, benchmark, changelog, or release notes.
-- Be early, but never sacrifice correctness just to be first.
+- Prefer concrete technical detail.
 - Prefer developer consequence over corporate announcement language.
 - For models, discuss capability in relation to a task, not only leaderboard position.
 

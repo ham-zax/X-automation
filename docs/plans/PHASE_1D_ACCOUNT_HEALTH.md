@@ -2,7 +2,7 @@
 
 **Goal:** Add an account-level observability layer that tracks real visibility/enforcement evidence, target saturation, reply repetition, network quality, and interaction yield while keeping most behavioral signals advisory rather than imposing arbitrary activity quotas.
 
-**Architecture:** Add `health.js` as the owner of derived HEALTHY/WATCH/CONSTRAINED state and soft health diagnostics. Keep raw relationship events in Phase 1B, engagement decisions in `engagement.js`, writing/duplicate gates in Phase 2, and experiment/measurement ownership in Phase 4. Persist observed health/visibility events in SQLite with provenance; do not invent hidden X reputation or bot scores.
+**Architecture:** Add `health.js` as the owner of derived HEALTHY/WATCH/CONSTRAINED state and soft health diagnostics. Keep raw relationship events in Phase 1B, engagement decisions in `engagement.js`, writing/duplicate gates in Phase 2, and experiment/measurement ownership in Phase 4. Persist observed health/visibility events in SQLite with provenance; derive constraints only from that inspectable state.
 
 **Tech Stack:** Node.js 24, built-in `node:sqlite`, existing `store.js`, Phase-1B `relationship.js`/relationship events, Phase-1C `engagement.js`/queue items, Bootstrap dashboard, existing authenticated X read/browser facilities.
 
@@ -10,7 +10,7 @@
 
 - This phase is advisory-first.
 - `WATCH` may lower priority or create a warning; it must not block a useful human-approved action by itself.
-- `CONSTRAINED` requires observed platform/visibility evidence, a current platform/project hard boundary, or an item-level factuality/duplicate hard failure owned by the relevant subsystem.
+- `CONSTRAINED` requires observed platform/visibility evidence, a current platform/project hard boundary, or an item-level duplicate hard failure owned by the relevant subsystem.
 - Do not add fixed daily reply caps.
 - Do not add fake-human timing, circadian simulation, random jitter, typing delays, browser-fingerprint tactics, or other evasion machinery.
 - Genuine active-conversation bursts are healthy by default when replies remain substantive.

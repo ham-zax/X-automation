@@ -178,8 +178,7 @@ flowchart TD
     BLOCK --> FIX[Edit text / add evidence / resolve media requirement]
     FIX --> CHECK
 
-    PASS -- Yes --> CONFIRM[Human factuality/evidence confirmations as required]
-    CONFIRM --> APPROVE{Approve exact content?}
+    PASS -- Yes --> APPROVE{Approve exact content?}
     APPROVE -- No --> DRAFT
     APPROVE -- Yes --> APPROVED[Approved — not published\nEffect: future publication is now authorized if later eligible]
 
@@ -497,7 +496,7 @@ flowchart TD
     SUG --> GEN
     APP --> GEN
     GEN --> PROV[Draft shows in-force mode + whether strategy influenced generation\nEvidence provenance inspectable]
-    PROV --> REVIEW[Review actual wording + factual/evidence gates]
+    PROV --> REVIEW[Review actual wording + remaining content gates]
     REVIEW --> KEEP{Keep current strategy choice?}
     KEEP -- Yes --> NORMAL[Continue normal readiness / approval / send-publication lifecycle]
     KEEP -- Change mode / remove --> CHANGE[Choose off/suggest/apply again]

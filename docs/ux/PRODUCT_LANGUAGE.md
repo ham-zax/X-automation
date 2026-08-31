@@ -81,7 +81,7 @@ A later step may depend on an earlier one, but one verb must not silently stand 
 |---|---|---|---|---|---|
 | Inspect/read | Opens information or evidence without changing workflow authority. | `View evidence`, `Open source`, `Review details` | `This opens the evidence/details. It does not change the work item.` | Selection, generation, approval, send, publish. | Semantic stable; exact labels context-specific. |
 | Select/route | Human chooses which recommendation/format/workflow to pursue. | `Choose this`, `Use as a thread`, `Select for drafting` | `This records your choice and moves the item into the {content type} workflow. Nothing is approved or published.` | That AI text has been generated unless generation also occurs. | Semantic stable; exact selection label requires task testing. |
-| Generate draft | Starts AI generation and creates/replaces candidate wording. | `Generate draft with AI` | `AI will create draft wording from the supplied context. You will review the exact text before approval.` | Approval, factual verification, publication. | Semantic stable. Current baseline already uses `Generate with AI`. |
+| Generate draft | Starts AI generation and creates/replaces candidate wording. | `Generate draft with AI` | `AI will create draft wording from the supplied context. You will review the exact text before approval.` | Approval, publication. | Semantic stable. Current baseline already uses `Generate with AI`. |
 | Regenerate/rewrite | Starts another generation that replaces or revises existing candidate wording. | `Regenerate with AI` | `AI will replace the current generated wording. Review the new text before approval.` | Preserving unsaved edits; approval carrying over automatically. | Semantic stable. Warn before destructive replacement. |
 | Check readiness | Runs deterministic writing/evidence/confirmation checks against current content. | `Check readiness` | `This checks whether the current draft is ready for human approval. It does not approve or publish it.` | Human approval; AI recommendation; send/publish. | Semantic stable; `review` versus `check readiness` remains a participant-language question. |
 | Approve wording | Human authorizes the exact current content for the next controlled stage. | `Approve for publishing`; for replies, approval may be a separate state or explicitly combined with send. | `This approves the exact text. It is not public yet.` | Immediate publication unless the same control explicitly says `publish`/`send`. | Semantic stable; exact label must preserve consequence. |
@@ -114,8 +114,6 @@ These translations are defaults for semantics, not evidence that the exact UI la
 
 | Internal term | Plain-language concept |
 |---|---|
-| factuality gate | Facts must be checked before approval / `I checked the facts` confirmation |
-| evidence gate | Supporting proof must be checked before approval / `I checked the supporting proof` confirmation |
 | niche | Topic/audience fit |
 | hook | Opening |
 | insight | Useful insight |
@@ -240,7 +238,7 @@ Until participant research supports a different default, an applicable draft sta
 |---|---|---|---|---|
 | `off` | No learned style/intent guidance influences this generation. | No strategy instruction is supplied. | The UI may state that guidance is not being used. | Recommendation/selection, approval state, schedule, publication/send authority, learned-rule status. |
 | `suggest` | Show relevant strategy/evidence as advice only. | **Zero Writer effect.** | Human can inspect the recommendation and evidence, then choose whether to use it. | Same authority boundaries; suggestion cannot silently influence text. |
-| `apply` | Human deliberately selects intent/style guidance to influence this generation only. | Selected strategy is supplied as generation guidance, subject to evidence/content-type/voice/hard constraints. | UI must show what was deliberately selected and which evidence supports it. | Facts/evidence, hard gates, content type, approval, timing, send/publish authority, experiment assignment, learned-rule acceptance. |
+| `apply` | Human deliberately selects intent/style guidance to influence this generation only. | Selected strategy is supplied as generation guidance, subject to content-type/voice/hard constraints. | UI must show what was deliberately selected and which context supports it. | Hard gates, content type, approval, timing, send/publish authority, experiment assignment, learned-rule acceptance. |
 
 For repost, authored-body writing strategy is normally not applicable.
 

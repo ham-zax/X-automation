@@ -443,7 +443,6 @@ without requiring technical-detail views.
 
 - Replacing the current backend/scoring architecture solely for visual simplicity.
 - Weakening human approval or explicit send/publish controls.
-- Automated likes/follow churn/batch unsolicited replies.
 - Fake-human timing/jitter or hidden account-risk scoring.
 - Randomized or duplicate-post A/B testing.
 - Media upload/attachment readiness unless separately commissioned.

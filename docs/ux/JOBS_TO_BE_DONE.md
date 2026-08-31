@@ -89,7 +89,7 @@ Editorial recommendations can propose `PREPARE`, `RESEARCH_MORE`, or `SKIP`. Dis
 - generate or edit a draft;
 - inspect the source and evidence;
 - improve weak wording;
-- satisfy factual/evidence/media requirements;
+- satisfy remaining content/media requirements;
 - preserve the completed text as history.
 
 **Confidence/control progress**

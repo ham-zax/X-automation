@@ -287,7 +287,7 @@ The first live run of the redesigned loop produced four different decisions inst
 
 - **Damon Chen / xAI stack cost:** `growth-next` surfaced a roughly 0.6-hour-old source at about 1.9K views/hour, with stored observations implying roughly 3.0K views/hour acceleration. The source used a quantified cost comparison. The resulting Reply kept that quantified framing and shifted the decision metric from sticker price to which paid surface reaches its usage ceiling first. Live reply: `2092105631134364130`.
 - **Andy Konwinski / Headlong:** the source was a primary project announcement at roughly 121K views with substantial bookmarking and enough detail to stand alone. Growth OS chose Repost. No commentary was manufactured just to create text.
-- **Lou / GLM-5.3:** the source was still adding roughly 1.9K views/hour but made broad performance claims. Momentum shortened the time-to-decision; it did not lower the verification bar. The Reply therefore asked for a per-category matrix with repeat success rate, wall time, and tokens instead of endorsing the claim. Live reply: `2092106772354113553`.
+- **Lou / GLM-5.3:** the source was still adding roughly 1.9K views/hour and made broad performance claims. The Reply asked for a per-category matrix with repeat success rate, wall time, and tokens. Live reply: `2092106772354113553`.
 - **Andrew Ho / computer-use automation:** the source was under an hour old with only four replies and roughly 1.8K live views when inspected. The thesis stood alone: an edge case can itself be the signal that deserves human attention. Growth OS chose Repost; X verified the repost count moving from 3 to 4.
 
 This first run also exposed a useful independent variable: **conversation crowding**. `growth-next` now reports replies per 1,000 views. It does not use that value in `operatorPriority` yet; there is not enough account evidence to justify a weight.
@@ -296,11 +296,11 @@ This first run also exposed a useful independent variable: **conversation crowdi
 
 Do not respond to this redesign by adding more dashboard surface area. The action-time source snapshot and inspectable action/outcome join are now in place; improve the evidence loop from that foundation in this order:
 
-1. **Expand real outcome capture where the platform/runtime exposes it.** Use the joined action-time source context to compare impressions, engagements, detail expands, profile visits, author response, follower delta, and follower niche quality by Reply / Quote / Repost / Original without inventing unavailable metrics.
-2. **Deepen claim/media readiness.** `growth-next` now marks Repost claim exposure and requires exact-source/material-claim verification. A later evidence-backed classifier may distinguish `needs_primary_source`, `needs_media_inspection`, and `clean_to_amplify`; until then the live operator owns that judgment.
+1. **Expand real outcome capture where the platform/runtime exposes it.** Use the joined action-time source context to compare observed impressions, engagements, detail expands, profile visits, author response, follower delta, and follower niche quality by Reply / Quote / Repost / Original.
+2. **Deepen media readiness.** A later classifier may distinguish `needs_media_inspection` and `clean_to_amplify`; until then the live operator owns that judgment.
 3. **Learn reply-density and bookmark-density direction before weighting either.** Keep both as observational evidence. Only add a ranking bonus after enough own-account outcomes show a repeated directional relationship with impressions, author responses, profile visits, or follows.
 4. **Make refresh durable, not blocking.** `growth-refresh` is already separated from `growth-next`. The next runtime step is to let the existing automation/terminal layer refresh snapshots durably while the operator keeps consuming last-known-good state.
-5. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, verified-number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.
+5. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.
 
 ## Agent stopping rule
 

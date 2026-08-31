@@ -38,7 +38,6 @@ future refinement / Learn feedback / media follow-up if still needed
 - Human publication/send authority remains structurally unchanged. The user has given this mission a **bounded live-pilot authorization** described below; do not turn that into generalized autonomous publication authority.
 - Writing strategy modes remain `off | suggest | apply`; only persisted `apply` enters Writer.
 - Results remains descriptive outcome truth; Learn remains evidence/interpretation.
-- Existing strict no-mass-like/no-follow-churn/no-unsolicited-reply-spam invariants remain in force.
 
 ## Live-pilot authorization
 

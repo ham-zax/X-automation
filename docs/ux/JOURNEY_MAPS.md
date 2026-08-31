@@ -91,7 +91,7 @@ flowchart LR
   H -.-> I[Editable draft]
   H2 --> I
 
-  I --> J[Quality feedback + factuality/<br/>evidence/media gates<br/>RO]
+  I --> J[Quality feedback +<br/>content/media gates<br/>RO]
   J --> K{Human review & approval<br/>RO}
   K -->|Revise| I
   K -->|Approve main feed| L[Approved, not published<br/>RO]

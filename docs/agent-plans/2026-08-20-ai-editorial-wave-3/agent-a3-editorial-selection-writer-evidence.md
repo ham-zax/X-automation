@@ -33,7 +33,7 @@ You own:
 - recommendation-specific synthetic candidate use and queue-source linking where required;
 - persisted evidence/ProfileProof loading for selected editorial work;
 - writer packet evidence-ID semantics and normal `web_api.js:generateDraftCandidate()` integration;
-- evidence confirmation logic needed to stop treating free-form AI text as proof.
+- persisted evidence references remain inspectable writer context.
 
 Neighboring Agent B3 owns:
 - `store.js` changes for measurement/editorial outcome metadata;
@@ -59,8 +59,8 @@ Preserve existing manual/non-editorial draft behavior. A human route override mu
 - One append-only `editorial_selection` links recommendation, queue item, selected pipeline, and timestamp; the recommendation becomes `selected` without rewriting its recommended pipeline.
 - Normal web writer generation for editorial-selected work supplies persisted evidence records with stable IDs, claim type/status/source family/provenance plus the exact persisted recommendation ProfileProof packet.
 - Manually routed/non-editorial drafts keep current behavior while receiving strict published-only ProfileProof where applicable.
-- `writer_runtime` output may cite only supplied evidence IDs; evidence-sensitive gate logic resolves those IDs/claim scope rather than trusting literal words such as `verified` in model-authored strings.
-- `source_claim` cannot satisfy a stronger benchmark/performance/capability assertion than the persisted claim supports; human factuality/evidence confirmation remains authoritative where current gates require it.
+- `writer_runtime` output may carry supplied evidence IDs as inspectable context.
+- linked evidence rows retain their persisted claim scope and provenance.
 - Existing approval, scheduler, publication, reply-send, repost-completion, health, and learned-rule authority is unchanged.
 
 ## Required validation

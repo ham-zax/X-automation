@@ -23,7 +23,7 @@
 - External Viral Styles findings and internal account learnings must remain separate evidence sources. Do not blend them into an opaque score or present correlation as causation.
 - Viral research may infer **communicative intent expressed by the post** (for example teach, demonstrate, compare, announce, challenge, curate). It must not claim to know an author's private motivation.
 - Learned writing guidance is optional at draft time. The operator must be able to choose `Off`, `Suggest`, or `Apply`; default to `Suggest` until user research demonstrates a better default.
-- Applying learned guidance may shape presentation strategy only. It must not override factual evidence, hard gates, selected content type, human approval, publication timing, or send/publication authority.
+- Applying learned guidance may shape presentation strategy only. It must not override remaining hard gates, selected content type, human approval, publication timing, or send/publication authority.
 - External viral-pattern evidence must never silently become an accepted production learned rule. Existing learned-rule acceptance remains an explicit human action backed by qualified internal/experiment evidence.
 - A business goal such as revenue or opportunities may be shown as a strategic purpose only when the product distinguishes what is directly measured from what is merely a longer-term outcome. Do not pretend to optimize revenue if no revenue/conversion observation exists.
 
@@ -68,7 +68,7 @@ The UX should let the operator state the purpose of a piece of work in plain lan
 | User-facing goal | Current system mapping | Product interpretation |
 |---|---|---|
 | Grow relevant followers | `qualified_growth` | Default. Optimize **qualified growth velocity**: relevant follower/audience-quality movement per unit time, while preserving attribution caveats and avoiding vanity reach. |
-| Maximize reach | `reach_momentum` | Prefer distribution/momentum when it does not violate quality/evidence gates. |
+| Maximize reach | `reach_momentum` | Prefer distribution/momentum when it passes the remaining quality gates. |
 | Build technical authority | `technical_authority` | Prefer credible technical insight, evidence, and durable reference value. |
 | Build relationships / opportunities | `relationships` | Prefer conversation and relationship potential; later connect to explicit opportunity outcomes when those exist. |
 | Showcase a build | initially `balanced` + explicit desired reader outcome | Optimize for qualified attention to a concrete product/build; do not claim conversion optimization without observed conversion data. |
@@ -454,7 +454,7 @@ graph TD
     CHECK --> READY{Checks pass?}
     READY -- No --> FIX[Fix exact blockers]
     FIX --> CHECK
-    READY -- Yes --> HUMAN[Human facts/evidence confirmations]
+    READY -- Yes --> HUMAN[Human approval]
     HUMAN --> APPROVE[Approve content]
     APPROVE --> TIME[Recommended time / choose time]
     TIME --> WAIT[Waiting to publish]
@@ -957,16 +957,16 @@ writingStrategy: {
 **Implementation:**
 - omit `writingStrategy` entirely when mode is Off;
 - in Suggest mode, show guidance in the UI but do not pass it as a generation instruction;
-- in Apply mode, instruct the Writer to realize the strategy in a pipeline-appropriate way without copying reference tweets or inventing evidence;
+- in Apply mode, instruct the Writer to realize the strategy in a pipeline-appropriate way without copying reference tweets;
 - Original/Thread/Quote/Reply may use strategy; Repost remains not applicable;
-- evidence/factuality constraints, content-type selection, length/media constraints, hard gates, and human confirmations remain higher authority than style guidance;
+- content-type selection, length/media constraints, hard gates, and human approval remain higher authority than style guidance;
 - persist on the resulting draft which strategy selection influenced that generation so the operator can see/change/remove it before approval.
 
 **Acceptance criteria:**
 - the operator can generate the same work with learned guidance Off, Suggested-only, or Applied;
 - removing/changing strategy is reversible before approval;
 - the final draft clearly shows whether learned guidance influenced generation and from which evidence sources;
-- learned guidance never permits unsupported claims or bypasses existing gates.
+- learned guidance never bypasses existing gates.
 
 ## Release 6 — Strategy outcomes and stakeholder Results
 
@@ -1132,7 +1132,7 @@ The redesign program is successful when a first-time non-technical operator can,
 10. understand what a “viral style” finding actually means, its communicative intent, and how strong the evidence is;
 11. distinguish external niche evidence from what has worked for this account;
 12. understand and change learned writing guidance between Off, Suggest, and Apply;
-13. generate Original/Thread/Quote/Reply work with or without optional strategy guidance while keeping factual/evidence gates intact;
+13. generate Original/Thread/Quote/Reply work with or without optional strategy guidance while keeping remaining content gates intact;
 14. understand recent performance without interpreting raw scorer internals;
 15. understand whether the product is showing an audience proxy or an actual recorded business outcome;
 16. recover from common failures;

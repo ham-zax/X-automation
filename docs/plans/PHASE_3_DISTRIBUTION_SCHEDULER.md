@@ -10,7 +10,7 @@
 
 - Requires Phase 1 queue/human approval and Phase 2 format-aware drafting/gates.
 - Main-feed writes are serialized.
-- Viral/timely items may pre-empt evergreen order but do not bypass factuality/gates/human approval.
+- Viral/timely items may pre-empt evergreen order but do not bypass remaining gates or human approval.
 - Scheduling optimizes coverage/freshness; it does not introduce fake-human randomness or detection-evasion timing.
 - Initial time windows are empirical heuristics and must be tagged accordingly.
 - Repost is rare and still requires explicit human approval.

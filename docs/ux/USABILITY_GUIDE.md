@@ -141,7 +141,7 @@ Do **not** claim population validity from a small qualitative round and do not s
 1. Today with at least one genuine human obligation and one advisory Editorial recommendation.
 2. Editorial recommendation with evidence/rationale and a route-selection CTA that does not generate or approve.
 3. Authored work immediately after selection with no generated text yet.
-4. Draft requiring review/readiness and human evidence/factuality confirmation.
+4. Draft requiring review/readiness and explicit approval.
 5. Main-feed post in `Approved — not published yet` / planned/waiting state.
 6. The same post after a simulated later re-entry in one of `Publishing`, `Published`, `Failed`, or reconciliation-required states.
 7. Conversation with editable reply and explicit send action.
@@ -510,7 +510,7 @@ Use consequence prediction before Generate/Regenerate and Check readiness.
 
 - generation understood as editable draft creation;
 - readiness understood as deterministic checking, not approval;
-- factual/evidence confirmation understood as human responsibility;
+- approval responsibility is understood;
 - AI recommendation versus deterministic gate versus human decision kept distinct.
 
 ### U5 — Approve wording without confusing approval and publication

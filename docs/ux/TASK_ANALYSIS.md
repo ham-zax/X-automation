@@ -109,15 +109,11 @@ Failure to make those distinctions is a task/comprehension defect, not merely a 
 
 4.3 Inspect writing-quality feedback and blockers.
 
-4.4 Verify factuality.
+4.4 Resolve media requirements where applicable.
 
-4.5 Verify evidence when the draft contains claims that require it.
+4.5 Save without confusing save with approval or publication.
 
-4.6 Resolve media requirements where applicable.
-
-4.7 Save without confusing save with approval or publication.
-
-**Repository-observed:** Writer generation is advisory, generated text remains editable, factuality/evidence checks can block readiness, quality is recalculated from the edited text, and saving does not approve or publish. Published/sent text becomes read-only historical state.
+**Repository-observed:** Writer generation is advisory, generated text remains editable, remaining deterministic checks can block readiness, quality is recalculated from the edited text, and saving does not approve or publish. Published/sent text becomes read-only historical state.
 
 #### 5. Move content through consequential states
 

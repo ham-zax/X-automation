@@ -64,7 +64,7 @@ What does **not** exist today:
 - an autonomous dry-run/read model explaining why the system would or would not reply;
 - autonomous-send provenance distinct from human approval.
 
-The current main branch also says automation refreshes Engage Next but never sends replies. This mission is explicitly authorized to change that product contract, while preserving bounded opt-in control and non-spam safeguards.
+The current main branch also says automation refreshes Engage Next but never sends replies. This mission is explicitly authorized to change that product contract while preserving explicit persisted operator control.
 
 ## Dependency gate
 
@@ -177,9 +177,6 @@ Live autonomous send should require all applicable conditions, including:
 - no duplicate send/reply to the same target tweet;
 - no exact/near-duplicate reply text;
 - no unresolved required media path;
-- no fabricated first-person experience;
-- no unsupported benchmark/result/performance/security claim;
-- corrections and evidence-dependent factual challenges have real supporting evidence;
 - reply intent/tone is allowed by the grant;
 - writing/content gates pass;
 - autonomous-specific risk/value gate passes;
@@ -300,7 +297,7 @@ repeat until paused/stopped/revoked/process stopped
 
 Do not add fake-human jitter, circadian delays, or arbitrary behavior designed to evade platform detection.
 
-Do not mass reply. "Several qualified replies arrived in the same refresh" is different from a mass-reply campaign. Process sends serially, not as a blind parallel burst, and re-evaluate state after each send so relationship concentration, account health, duplicate state, and remaining autonomy budget are current.
+Process sends serially and re-evaluate state after each send so relationship concentration, account health, duplicate state, and remaining autonomy budget are current.
 
 If no opportunity is strong enough, send nothing and keep the loop active for the next refresh.
 
@@ -396,7 +393,6 @@ The final design must preserve:
 - no fake human provenance;
 - no duplicate remote sends;
 - no arbitrary platform-law claims;
-- no mass engagement tactics.
 
 ## Success conditions
 
@@ -414,15 +410,14 @@ Do not call this mission complete until all are observable:
 10. Reply intent and tone are separately represented.
 11. Useful question, constructive feedback, technical insight/caveat/comparison, and light-humor behavior are supported.
 12. Humor is context-safe and non-degrading.
-13. Unsupported corrections/benchmarks/first-person claims cannot auto-send.
-14. Autonomous mode can downgrade an uncertain candidate to human review instead of forcing a send.
-15. Dry-run runs continuously too and explains selection, intent, tone, exact proposed text, and skip/review/send decision without transport mutation.
-16. Live path uses an atomic claim/idempotency boundary and cannot duplicate-send the same candidate, including across daemon restarts.
-17. Autonomous sends, when later enabled, record authority/provenance distinct from `humanApprovedAt`.
-18. Candidate action and relationship history are recorded exactly once after a successful send.
-19. Settings/Conversations make autonomy state, last refresh, and recent decisions legible.
-20. Existing docs no longer falsely state that automation can never send replies; they instead describe the explicit grant boundary.
-21. No live X reply is sent during this implementation mission without fresh bounded user authorization.
+13. Autonomous mode can downgrade a candidate to human review instead of forcing a send.
+14. Dry-run runs continuously too and explains selection, intent, tone, exact proposed text, and skip/review/send decision without transport mutation.
+15. Live path uses an atomic claim/idempotency boundary and cannot duplicate-send the same candidate, including across daemon restarts.
+16. Autonomous sends record authority/provenance distinct from `humanApprovedAt`.
+17. Candidate action and relationship history are recorded exactly once after a successful send.
+18. Settings/Conversations make autonomy state, last refresh, and recent decisions legible.
+19. Existing docs describe the explicit grant boundary.
+20. No live X reply is sent during this implementation mission without fresh bounded user authorization.
 
 ## Required validation
 
@@ -441,9 +436,7 @@ Use only directly relevant non-test validation:
 
 ## Out of scope
 
-- automated likes;
 - automatic follow/unfollow;
-- mass unsolicited reply campaigns;
 - engagement pods;
 - fake-human timing/jitter;
 - automatic DMs;

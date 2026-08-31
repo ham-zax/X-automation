@@ -11,8 +11,8 @@ There are no participant findings in this document. Where exact display labels r
 The product has four distinct kinds of authority:
 
 1. **AI/advisory authority** — research, classify, rank, recommend, generate, explain, and summarize. It can produce evidence-backed advice but does not silently become human intent.
-2. **Deterministic policy authority** — hard validation, factual/evidence requirements, eligibility, account-health constraints, expiry, supported content types, and other domain rules. These are not AI opinions.
-3. **Human decision authority** — selecting a route/strategy, confirming facts/evidence, approving exact wording, accepting/retiring a learned change, assigning a test option, choosing timing, or explicitly initiating a remote action where the backend requires it.
+2. **Deterministic policy authority** — hard validation, eligibility, account-health constraints, expiry, supported content types, and other domain rules. These are not AI opinions.
+3. **Human decision authority** — selecting a route/strategy, approving exact wording, accepting/retiring a learned change, assigning a test option, choosing timing, or explicitly initiating a remote action where the backend requires it.
 4. **Transport/result authority** — X/backend confirmation that a public action actually completed. A local pending state is not remote success.
 
 Keep this sequence recognizable:
@@ -92,11 +92,11 @@ The human decides whether to select/use/dismiss/research the recommendation. Sel
 
 ## Pattern 2 — Deterministic rule or gate
 
-Use for writing/evidence checks, hard eligibility, account-health constraints, expiry, and other non-AI policy boundaries.
+Use for writing checks, hard eligibility, account-health constraints, expiry, and other non-AI policy boundaries.
 
 **Visible first layer**
 
-- Name the consequence: `Fix before approval`, `Sending is temporarily unavailable`, `Evidence confirmation required`.
+- Name the consequence: `Fix before approval` or `Sending is temporarily unavailable`.
 - State what must change or be confirmed.
 - Do not present a hard rule as an AI suggestion that can be casually ignored.
 
@@ -187,13 +187,13 @@ Use when AI creates or replaces candidate wording.
 
 **Human authority boundary**
 
-The human owns the exact final wording and required factual/evidence confirmations. Generated text is always reviewable/editable before approval.
+The human owns the exact final wording. Generated text is always reviewable/editable before approval.
 
 **Prohibited interpretation/side effect**
 
 - generation approving or publishing content;
 - AI advisory `DO_NOT_POST` becoming a hidden hard block;
-- strategy guidance overriding factual evidence, hard gates, content type, or human edits.
+- strategy guidance overriding hard gates, content type, or human edits.
 
 ## Pattern 5 — Human approval
 
@@ -202,7 +202,6 @@ Use when a person authorizes exact wording for a later controlled action.
 **Visible first layer**
 
 - Show the exact content being approved or make it directly inspectable without leaving the decision context.
-- Show required fact/evidence confirmations.
 - State the next consequence in plain language.
 - For main-feed work: `Approval is not publication.`
 - If automation may act later, say so explicitly and name the condition/time relationship.
@@ -279,7 +278,7 @@ Do not show `Published`, `Sent`, or equivalent success until authoritative remot
 - optimistic success;
 - generic `Continue` for a remote write;
 - `Publish now` on a control that only approves or schedules;
-- automatic unsolicited reply sending.
+- autonomous reply sending without an explicit active grant.
 
 ## Pattern 7 — Learned recommendation
 
@@ -514,8 +513,7 @@ Whether the user-facing primary noun is `Tests` or `Experiments` remains a parti
 
 Do not introduce:
 
-- automatic unsolicited reply sending;
-- mass follow/unfollow or bulk unfollow;
+- autonomous reply sending without an explicit active grant;
 - fake-human timing/evasion;
 - hidden reputation scores presented as truth;
 - fake progress;

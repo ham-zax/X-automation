@@ -30,7 +30,7 @@ Complete Phase 1C as a coherent human-reviewed engagement vertical. Persist and 
 
 - `engagement.js` already owns contribution qualification, freshness, ReplyVisibility, expiry, EngagePriority, hard rejection reasons, ranking, and queue proposals.
 - `fetchXTargetRecentPosts(...)` already provides bounded normalized recent posts for supplied relationship-target usernames.
-- Phase 2 already persists editor/gate/thread metadata, exposes writer packets/structured output, and enforces explicit human factuality/evidence confirmation through `pipeline.js`.
+- Phase 2 already persists editor/gate/thread metadata and exposes writer packets/structured output through `pipeline.js`.
 - `x_http.js` already delegates to XActions `postTweet(..., { replyTo })`; do not create a second posting client.
 - Agent B2 is concurrently working only in `scheduler.js`. Do not modify that file.
 
@@ -61,7 +61,7 @@ Agent B2 owns `scheduler.js` exclusively.
 - Reuse `fetchXTargetRecentPosts(...)` for target timelines. Do not create another target reader.
 - No daemon/automation path may send a reply.
 - No batch-send action exists. Every outbound reply requires explicit human approval of the exact text and one explicit send action.
-- No likes, follow/unfollow, generic unsolicited keyword auto-replies, random timing/jitter, or detector-evasion machinery.
+- No random timing/jitter or detector-evasion machinery.
 - Do not implement Account Health, scheduler integration, media upload, experiments, learning, or follower automation.
 
 ## Required behavior
@@ -92,7 +92,7 @@ Do not manufacture `target_reply` evidence from mere reply counts; only record a
 
 ### Reviewable reply drafting
 
-Use the existing Phase-2 reply route/writer/gate workflow. `engage-draft` may create/update reviewable reply text and move it toward `needs_review`, but it cannot self-approve or send. Required factuality/evidence confirmations remain human inputs.
+Use the existing Phase-2 reply route/writer/gate workflow. `engage-draft` may create/update reviewable reply text and move it toward `needs_review`, but it cannot self-approve or send through the human-reviewed path.
 
 If the existing Phase-2 main-feed approval function intentionally excludes `reply`, add the smallest engagement-specific approval transition at the workflow owner rather than weakening main-feed semantics.
 
@@ -158,7 +158,6 @@ Do not create test files or run broad suites. Do not mutate live X state as veri
 - Account Health / Under the Hood;
 - experiments/measurement/learning;
 - media upload;
-- automated likes, follows, unfollows, repost churn, or unsolicited keyword auto-reply campaigns;
 - arbitrary refactors/cleanup outside the Phase-1C causal path.
 
 ## Working style

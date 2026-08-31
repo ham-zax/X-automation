@@ -132,10 +132,10 @@ SCHEDULER + PUBLISH
 
 This full loop is now the current architecture. Discover still exposes independent source-level controls and the rule-based route, but Today owns the current AI Editorial Plan; selecting a recommendation enters the same existing workflow rather than bypassing it.
 
-A time-sensitive lane may shorten research/writing latency but does not remove factual verification, human approval, or publication serialization:
+A time-sensitive lane may shorten research/writing latency but does not remove human approval or publication serialization:
 
 ```text
-TIME-SENSITIVE SIGNAL -> VERIFY -> EDITORIAL/ROUTE DECISION -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST REASONABLE COVERAGE SLOT
+TIME-SENSITIVE SIGNAL -> EDITORIAL/ROUTE DECISION -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST REASONABLE COVERAGE SLOT
 ```
 
 ## Pipeline Types
@@ -357,7 +357,7 @@ Primary sources of engagement opportunities:
 - replies/comments under our own recent posts that deserve a substantive response;
 - viral/niche candidates where `reply` is better than `quote` or `original`.
 
-The system may rank and draft these opportunities automatically. It must not autonomously send unsolicited replies.
+The system may rank, draft, and send these opportunities automatically while an explicit Live grant and budget remain active.
 
 ## Experiment Engine Design
 

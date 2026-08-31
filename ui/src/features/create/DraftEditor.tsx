@@ -312,8 +312,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             generationOutcome.decision === 'DO_NOT_POST' ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <strong>AI caution: review this draft.</strong>
-                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The Writer could not find a useful bounded thesis without adding unsupported material.'}</div>
-                <div className="mt-2 text-xs text-amber-800">This is advisory. The Writer uses the supplied source and any context you add above; it does not independently browse or verify the claim.</div>
+                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
               </div>
             ) : (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
@@ -325,8 +324,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <strong>AI caution: review this draft.</strong>
-              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The Writer could not find a useful bounded thesis without adding unsupported material.'}</div>
-              <div className="mt-2 text-xs text-amber-800">This is advisory. The Writer uses the supplied source and any context you add above; it does not independently browse or verify the claim.</div>
+              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
             </div>
           ) : (editorMeta.decision || body) ? (
             <div className="text-sm text-slate-500">

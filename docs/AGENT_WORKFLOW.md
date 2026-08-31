@@ -306,22 +306,20 @@ A source is worth drafting when it provides at least one of:
 
 Do not draft merely because a post is viral.
 
-### 4. Research before writing
+### 4. Inspect context before writing
 
-For claims that can change or that need verification, inspect primary sources before drafting. Prefer official docs, repositories, benchmarks, release notes, code, or the original announcement.
+Inspect useful source and conversation context before drafting.
 
 For a viral source post, explicitly determine:
 
 1. What is the source claiming?
-2. What is actually verified?
-3. What did most replies/other posts focus on?
-4. What is the non-obvious angle for a developer?
-5. What evidence can the final post include?
-6. What concrete action should a developer take?
+2. What did most replies/other posts focus on?
+3. What is the non-obvious angle for a developer?
+4. What concrete action should a developer take?
 
 The goal is not to rewrite the source tweet.
 
-For the final writing pass, use `POST_GENERATION_PROMPT.md` as the canonical style/editor contract: global English, one thesis, short scannable paragraphs, 1-3 natural semantic anchors, zero hashtags by default, evidence-led claims, and no generic engagement bait.
+For the final writing pass, use `POST_GENERATION_PROMPT.md` as the canonical style/editor contract: global English, one thesis, short scannable paragraphs, 1-3 natural semantic anchors, zero hashtags by default, and no generic engagement bait.
 
 ### 5. Create or inspect the draft
 

@@ -135,7 +135,7 @@ Cover:
 2. **Deterministic rule/gate pattern** — distinguish hard rule from AI recommendation.
 3. **Human selection pattern** — reversible routing/strategy choice without approval side effect.
 4. **Draft generation pattern** — exact consequence, pending state, provenance, generation does not approve.
-5. **Approval pattern** — human wording/evidence confirmation; approval is not publication.
+5. **Approval pattern** — human wording approval; approval is not publication.
 6. **Send/publish pattern** — explicit immediate remote effect and exact success criterion.
 7. **Learned recommendation pattern** — evidence, uncertainty, proposed effect, suggested/accepted distinction.
 8. **Writing-strategy pattern** — external/internal/experiment evidence -> human off/suggest/apply semantic choice -> generation influence provenance.

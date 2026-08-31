@@ -1,6 +1,6 @@
 # Phase 2: Format-Aware Writing, Hard Gates, and Media Planning Implementation Plan
 
-**Goal:** Turn a routed queue item into a format-aware, evidence-led, highly scannable draft that follows the canonical writing prompt, reinforces the account's owned technical proof for the topics it enters publicly, stores enough editorial metadata for human review, and cannot reach approval unless deterministic gates and the existing 50-point quality rubric pass.
+**Goal:** Turn a routed queue item into a format-aware, highly scannable draft that follows the canonical writing prompt, stores enough editorial metadata for human review, and cannot reach approval unless the remaining deterministic gates and the existing 50-point quality rubric pass.
 
 **Architecture:** Keep `drafting.js` as the text composition/scoring/gate owner. Do not embed an LLM provider in the repo; the system remains human+AI by exposing a structured writer packet through `agent_bridge.js`, accepting structured writer output back, validating it deterministically, and rendering it for human review in `dashboard.js`. Keep media as a plan/attachment contract in this phase; actual upload/publication is owned by the later distribution phase.
 
@@ -14,8 +14,6 @@
 - Use 1-3 precise semantic anchors naturally when relevant.
 - Default to zero hashtags; prefer 0-1, allow 2 when both are directly relevant/canonical, and treat the exact optimum as empirical.
 - Default to zero emoji; maximum one when it materially improves tone/clarity.
-- Never invent benchmarks, experiments, quotes, usage, metrics, or source facts.
-- Do not claim `I tested`, `I measured`, `I used`, or similar first-person evidence unless the input packet explicitly marks that evidence as ours and verified.
 - Original, quote, thread, and reply have different writing contracts.
 - Quote commentary must not summarize the visible source; it must add thesis/consequence/test/comparison/correction/informed question.
 - Thread Post 1 must stand alone; threads must not withhold the useful conclusion to force continuation.
@@ -71,7 +69,6 @@ ALTER TABLE drafts ADD COLUMN gate_json TEXT NOT NULL DEFAULT '{}';
   failures: [],
   warnings: [],
   checks: {
-    factualityConfirmed: true,
     niche: true,
     additiveValue: true,
     originality: true,
@@ -103,8 +100,6 @@ scoreDraft(draft, candidate, { pipeline, recentPosts = [] } = {})
 evaluateDraftGates(draft, candidate, {
   pipeline,
   recentPosts = [],
-  factualityConfirmed = false,
-  evidenceConfirmed = false,
   mediaReady = false,
 } = {})
 ```
@@ -220,14 +215,6 @@ The bridge returns the packet plus the prompt-document path; it does not call an
 ## Deterministic Gate Contract
 
 A draft cannot be human-approved unless `evaluateDraftGates(...).passed === true` and the numeric quality score is >= 40/50. Phase 1's `approveQueueItem()` becomes the enforcement boundary by calling these gates.
-
-### Factuality/evidence
-
-These are explicit review inputs, not guessed from prose:
-
-- `factualityConfirmed` must be true for Original/Quote/Thread/Reply.
-- `evidenceConfirmed` must be true when the draft contains benchmark/measurement/test/result claims or claims a concrete product capability not already represented by the source packet.
-- first-person test language requires `editor_json.evidenceUsed` to contain a verified first-party experiment/result marker supplied by the agent/human.
 
 ### Niche
 
@@ -392,7 +379,7 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 - Modify: `drafting.js`
 
 **Interfaces:**
-- Consumes: finalized draft/editor metadata, candidate, pipeline, recent posts, explicit evidence/factuality confirmation, media readiness.
+- Consumes: finalized draft/editor metadata, candidate, pipeline, recent posts, and media readiness.
 - Produces: `evaluateDraftGates()` result and updated `scoreDraft()` context.
 
 **Steps:**
@@ -401,13 +388,11 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 - [ ] Implement recent-duplicate similarity against up to 20 recent approved/published main-feed bodies passed by caller.
 - [ ] For replies, reuse the same local similarity helper against recent replies and hard-fail only exact/near-duplicate text; repeated archetype/construction remains a warning.
 - [ ] Implement scannability, placeholder, weighted-length, CTA-integrity, hashtag, and emoji checks from the contract above.
-- [ ] Require explicit `factualityConfirmed`; require `evidenceConfirmed` when claim type warrants it.
-- [ ] Validate first-person experiment/test claims against structured evidence metadata rather than assuming truth from text.
 - [ ] Return `failures` with stable machine-readable codes plus readable messages, e.g. `{ code: 'TOO_LONG', message: 'Single post is 312/280 weighted characters.' }`.
 - [ ] Keep the current 50-point rubric as a separate score; `publishable = score >= 40 && gates.passed`.
 
 **Acceptance criteria:**
-- A high numeric score cannot override factuality, length, duplicate, bait, or other hard-gate failures.
+- A high numeric score cannot override length, duplicate, bait, or other hard-gate failures.
 - Gate output tells a human/agent exactly what must change without rewriting the draft automatically.
 
 ### Task 5: Wire hard gates into Phase-1 review/approval
@@ -422,9 +407,8 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 
 **Steps:**
 - [ ] Add one store query that returns up to 20 recent approved/published main-feed draft bodies/thread openers needed for duplicate comparison.
-- [ ] `requestQueueReview` computes/saves `gate_json` using provided confirmation fields; it may move to `needs_review` even with gate failures so the human can see what is wrong.
+- [ ] `requestQueueReview` computes/saves `gate_json`; it may move to `needs_review` even with gate failures so the human can see what is wrong.
 - [ ] `approveQueueItem` recomputes gates from current text/metadata and refuses approval unless gates pass and score >= 40.
-- [ ] Require `factualityConfirmed` from the human approval form; where evidence claims exist, require `evidenceConfirmed`.
 - [ ] Preserve the Phase-1 compatibility bridge that only approved items set draft `ready`.
 
 **Acceptance criteria:**
@@ -446,11 +430,10 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 - [ ] Show weighted character count for each publishable unit.
 - [ ] Show semantic anchors, evidence used, follow reason, risk flags, discussion question, and media recommendation from `editor_json`.
 - [ ] Show hard-gate pass/fail rows with exact failure messages.
-- [ ] Add factuality/evidence confirmation checkboxes to the human review/approval form; these are not prechecked by AI.
 - [ ] Keep `Approve for publishing` disabled/absent when gates fail or score < 40.
 
 **Acceptance criteria:**
-- Human can understand exactly what will be posted, why it is supposed to be valuable, what evidence supports it, and which gate blocks publication.
+- Human can understand exactly what will be posted, why it is supposed to be valuable, and which gate blocks publication.
 
 ### Task 7: Add media-plan persistence and review state
 
@@ -488,7 +471,7 @@ This means a draft that truly requires proof-media can be written/reviewed in Ph
 
 **Steps:**
 - [ ] Document `writer-packet` and `apply-writer-output` commands.
-- [ ] Document deterministic hard-gate codes and explicit factuality/evidence confirmation responsibility.
+- [ ] Document deterministic hard-gate codes and approval responsibility.
 - [ ] Mark format-aware Original/Quote/Thread/Reply drafting as implemented.
 - [ ] Keep actual media upload, scheduler, experiments, follower conversion, and learned timing marked planned.
 
@@ -503,8 +486,7 @@ Phase 2 is complete when:
 2. An external AI agent can retrieve a structured writer packet and persist structured writer output without direct DB access.
 3. The system stores final single text or explicit thread parts plus inspectable editor metadata.
 4. The 50-point score is still visible but cannot override hard-gate failures.
-5. Factuality and evidence confirmation are explicit human/editor inputs, not inferred from confident prose.
-6. Exact/near-duplicate, bait, hashtag, emoji, scannability, placeholder, and weighted-length checks are deterministic and visible; reply-archetype repetition remains advisory unless it is also near-duplicate.
-7. Human approval always recomputes current gates.
-8. Required media blocks approval until the later upload/attachment path exists or the human legitimately revises the media plan.
-9. No LLM provider, media uploader, scheduler, experiment engine, or autonomous reply sender is added in this phase.
+5. Exact/near-duplicate, bait, hashtag, emoji, scannability, placeholder, and weighted-length checks are deterministic and visible; reply-archetype repetition remains advisory unless it is also near-duplicate.
+6. Human approval always recomputes current gates.
+7. Required media blocks approval until the later upload/attachment path exists or the human legitimately revises the media plan.
+8. No LLM provider, media uploader, scheduler, experiment engine, or autonomous reply sender is added in this phase.

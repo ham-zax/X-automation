@@ -299,9 +299,6 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
   if (Number(item.priority || 0) < minPriority) {
     return { decision: 'skipped', reason: boundedReason('AUTONOMOUS_VALUE_TOO_LOW', `Internal autonomous value threshold is ${minPriority}; current EngagePriority is ${Math.round(Number(item.priority || 0))}.`) };
   }
-  if (intent === 'verified_correction' && item.engagement?.contribution?.qualified !== true) {
-    return { decision: 'review', reason: boundedReason('CORRECTION_NOT_VERIFIED', 'Corrections require the existing verified contribution evidence before autonomous sending.') };
-  }
   if (intent === 'social_reaction' && sourceClass !== 'active' && !['responsive', 'recurring', 'connected', 'mutual'].includes(profile?.relationshipStage)) {
     return { decision: 'review', reason: boundedReason('SOCIAL_REACTION_CONTEXT_WEAK', 'Lightweight social reactions require an active or established relationship context.') };
   }

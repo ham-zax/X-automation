@@ -247,7 +247,7 @@ The draft screen should therefore distinguish:
 
 - **Growth fit** — Core / Adjacent / Outside current focus / Unknown;
 - **Writing quality** — opening, insight, support, action/usefulness, originality, etc.;
-- **Approval readiness** — deterministic facts/evidence/safety/length/etc. gates;
+- **Approval readiness** — deterministic duplicate/format/length/media gates;
 - **Writing approach** — optional intent/style/hook guidance used for generation.
 
 ## Decision 5 — Adjacent opportunities are allowed under explicit human control
@@ -540,8 +540,6 @@ Only properties of the actual generated text:
 
 Hard deterministic checks such as:
 
-- factuality confirmation;
-- evidence confirmation/scope;
 - duplicate/source similarity;
 - length;
 - placeholders;
@@ -813,8 +811,7 @@ Rules:
 Writer instruction priority remains:
 
 ```text
-facts / verified evidence
-  > content type / pipeline contract
+content type / pipeline contract
   > hard constraints and gates
   > human edits / explicit decisions
   > selected writing strategy
@@ -823,11 +820,7 @@ facts / verified evidence
 
 Examples:
 
-- urgency guidance cannot invent a deadline;
-- release framing cannot claim a release that did not occur;
-- benchmark style cannot invent measurements;
-- provocative opinion cannot fabricate controversy;
-- “report experiment” cannot imply the operator ran an experiment unless first-party evidence exists.
+- urgency, release, benchmark, provocative-opinion, and experiment-report treatments remain available writing choices.
 
 ## 10.3 Pipeline-aware realization
 
@@ -1131,7 +1124,7 @@ Learn can link back to the exact measured posts supporting a pattern.
 ### Acceptance criteria
 
 - the system can answer “what evidence supports this suggested approach?” with exact references;
-- no unsupported evidence class creates a recommendation;
+- recommendations retain their evidence references and limitations;
 - external evidence alone cannot become an accepted learned rule;
 - strategy recommendation remains usable when AI runtime is unavailable.
 
@@ -1166,8 +1159,8 @@ Learn can link back to the exact measured posts supporting a pattern.
 
 - a human can deliberately generate the same candidate with guidance off, visible-only, or applied;
 - the UI clearly states whether guidance affected the text;
-- a manual choice is possible without fabricating evidence;
-- urgency/release/benchmark/etc. guidance cannot invent unsupported facts;
+- a manual choice is possible;
+- urgency/release/benchmark/etc. guidance remains independently selectable;
 - strategy selection has no approval/publication authority.
 
 ---
@@ -1389,15 +1382,14 @@ Given a supported external urgency-language association and a candidate for whic
 - Draft recommends urgency only when it survives shortlist applicability;
 - AI rationale references supplied evidence;
 - user can choose Advice only or Apply;
-- applying urgency cannot invent a deadline or unsupported scarcity.
+- applying urgency changes the presentation of the selected draft.
 
 ## Scenario D — manual style
 
-Given no supported external/internal evidence for a benchmark-breakdown style:
+Given no selected recommendation for a benchmark-breakdown style:
 
 - user can manually choose benchmark breakdown;
-- product labels it as a manual choice without evidence-backed recommendation;
-- Writer still cannot invent benchmark results.
+- product labels it as a manual choice.
 
 ## Scenario E — strategy outcome learning
 
