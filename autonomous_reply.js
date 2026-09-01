@@ -337,6 +337,7 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
   if (output.pipeline !== 'reply') throw new Error(`Writer returned ${output.pipeline}; expected reply.`);
   const base = { ...createDraftScaffold(candidate, { pipeline: 'reply' }), editor: { pipeline: 'reply' } };
   const generated = applyWriterOutput(base, output, {
+    writerPacket: packet,
     generationProvenance: {
       writerAiExecution: output.execution || null,
       writerExecutionSource: 'autonomous_reply',

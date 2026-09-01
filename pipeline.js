@@ -9,10 +9,12 @@ import {
   getAudienceProfile,
   getCandidate,
   getDraftByCandidate,
+  getEditorialRecommendation,
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
   getFirst1000MainFeedMissionGrant,
+  getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
   getPerformanceSnapshot,
@@ -24,6 +26,7 @@ import {
   listExperiments,
   listQueueItems,
   listQueueSources,
+  listResearchEvidence,
   listRecentOurConversationPosts,
   listRecentPublishedContent,
   listRelationshipEvents,
@@ -84,6 +87,18 @@ function sourceTweetId(candidate) {
   if (candidate?.source !== 'x') return '';
   const match = String(candidate.url || candidate.key || '').match(/\/status\/(\d+)/i);
   return match?.[1] || '';
+}
+
+function editorialEvidenceForQueue(queueItem) {
+  if (!queueItem) return [];
+  const selection = getLatestEditorialSelectionForQueueItem(queueItem.id);
+  if (!selection) return [];
+  const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
+  if (!recommendation) return [];
+  const evidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+  if (recommendation.decision === 'RESEARCH_MORE') return evidence;
+  const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
+  return evidence.filter((item) => linkedIds.has(String(item.id)));
 }
 
 function relationshipContext(candidate) {
@@ -172,6 +187,7 @@ function contentGateContext(candidateKey, pipeline) {
     recentReplies: pipeline === 'reply'
       ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidateKey })
       : [],
+    evidence: editorialEvidenceForQueue(queueItem),
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
     mediaPublishingAvailable: true,
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
@@ -227,6 +243,24 @@ function normalizeMissionVerificationProvenance(provenance = {}) {
     sourceReferences: normalizeReferences(provenance.sourceReferences, 'sourceReferences', true),
     evidenceReferences: normalizeReferences(provenance.evidenceReferences, 'evidenceReferences'),
   };
+}
+
+function requireMissionEvidenceProvenance(queueItem, draft, provenance) {
+  const requested = [...new Set((Array.isArray(draft?.editor?.evidenceUsed) ? draft.editor.evidenceUsed : [])
+    .map((id) => String(id || '').trim()).filter(Boolean))];
+  const declared = provenance.evidenceReferences;
+  if (requested.length !== declared.length || requested.some((id) => !declared.includes(id))) {
+    throw new Error('Mission-agent evidence provenance must exactly match the draft evidenceUsed references.');
+  }
+  const storedEvidence = new Map(editorialEvidenceForQueue(queueItem).map((item) => [String(item.id), item]));
+  const invalid = requested.filter((id) => !storedEvidence.has(id));
+  if (invalid.length) {
+    throw new Error(`Mission-agent evidence provenance does not resolve to supplied stored Editorial evidence: ${invalid.join(', ')}.`);
+  }
+  const ineligible = requested.filter((id) => !['primary_supported', 'source_claim'].includes(String(storedEvidence.get(id)?.status || '')));
+  if (ineligible.length) {
+    throw new Error(`Mission-agent evidence provenance references unresolved or contradicted Editorial evidence: ${ineligible.join(', ')}.`);
+  }
 }
 
 function requireLiveFirst1000MainFeedMissionGrant(grantRevision) {
@@ -636,6 +670,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
   let draft = getDraftByCandidate(key);
   if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+  requireMissionEvidenceProvenance(queueItem, draft, provenance);
   requireCurrentStrategyDecision(queueItem, draft);
   const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
   draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });

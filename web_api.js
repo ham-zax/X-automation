@@ -578,8 +578,10 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
 } = {}) {
   const queueItem = getQueueItemByCandidate(candidate.key);
   const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
+  const evidence = writerEditorialContext(candidate, queueItem).evidence;
   return scoreDraft(draft, candidate, {
     pipeline,
+    evidence,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
@@ -661,7 +663,7 @@ export async function generateDraftCandidate(current) {
     writerAiExecution: output.execution || null,
     writerExecutionSource: 'writer_runtime',
   });
-  const next = applyWriterOutput(writerBase, output, { generationProvenance });
+  const next = applyWriterOutput(writerBase, output, { generationProvenance, writerPacket: packet });
   const analysis = evaluateDraftQuality(candidate, next, pipeline, {
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });

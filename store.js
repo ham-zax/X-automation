@@ -46,6 +46,7 @@ const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export const DB_FILE = path.resolve('.x-research.sqlite');
 export const PUBLICATION_MEASUREMENT_WINDOWS = Object.freeze([15, 60, 360, 1440]);
+const POST_ANALYTICS_MATCH_MAX_SKEW_MINUTES = 30;
 export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
   'under_the_hood_snapshot',
   'visibility_label_observed',
@@ -3215,6 +3216,7 @@ function publicationMeasurementTiming(measurement, queueItem) {
     .filter((laterWindow) => capturedAt >= publishedAt + laterWindow * 60_000);
   return {
     targetWindowMinutes: windowMinutes,
+    capturedAt,
     actualAgeMinutes: Math.max(0, (capturedAt - publishedAt) / 60_000),
     delayMinutes: Math.max(0, (capturedAt - dueAt) / 60_000),
     dueAt,
@@ -3227,17 +3229,20 @@ function publicationMeasurementTiming(measurement, queueItem) {
 }
 
 function matchedPublicationAnalytics(tweetId, timing) {
-  if (!tweetId || !timing?.dueAt) return null;
-  const select = `SELECT captured_at, views, profile_visits, new_follows FROM post_metrics
+  const capturedAt = Number(timing?.capturedAt);
+  const dueAt = Number(timing?.dueAt);
+  if (!tweetId || !Number.isFinite(capturedAt) || !Number.isFinite(dueAt)) return null;
+  const earliestAt = Math.max(dueAt, capturedAt - POST_ANALYTICS_MATCH_MAX_SKEW_MINUTES * 60_000);
+  const row = db.prepare(`SELECT captured_at, views, profile_visits, new_follows FROM post_metrics
     WHERE tweet_id = ? AND metric_source = 'account_analytics'
-      AND captured_at >= ?
-      AND (profile_visits IS NOT NULL OR new_follows IS NOT NULL)`;
-  const row = timing.nextDueAt == null
-    ? db.prepare(`${select} ORDER BY captured_at ASC LIMIT 1`).get(String(tweetId), timing.dueAt)
-    : db.prepare(`${select} AND captured_at < ? ORDER BY captured_at ASC LIMIT 1`).get(String(tweetId), timing.dueAt, timing.nextDueAt);
+      AND captured_at >= ? AND captured_at <= ?
+      AND (profile_visits IS NOT NULL OR new_follows IS NOT NULL)
+    ORDER BY captured_at DESC LIMIT 1`).get(String(tweetId), earliestAt, capturedAt);
   if (!row) return null;
+  const analyticsCapturedAt = Number(row.captured_at);
   return {
-    capturedAt: Number(row.captured_at),
+    capturedAt: analyticsCapturedAt,
+    skewMinutes: Math.max(0, (capturedAt - analyticsCapturedAt) / 60_000),
     views: Number(row.views || 0),
     profileVisits: row.profile_visits == null ? null : Number(row.profile_visits),
     postAttributedFollows: row.new_follows == null ? null : Number(row.new_follows),

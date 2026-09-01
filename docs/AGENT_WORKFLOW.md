@@ -351,7 +351,7 @@ cat <<'JSON' | node agent_bridge.js apply-writer-output
     "finalText": "Final publication text.",
     "threadParts": [],
     "semanticAnchors": ["MCP"],
-    "evidenceUsed": ["supplied source context"],
+    "evidenceUsed": [],
     "discussionQuestion": "",
     "media": {"required": false, "type": "none", "reason": "", "source": "", "altText": ""},
     "riskFlags": [],
@@ -362,7 +362,7 @@ cat <<'JSON' | node agent_bridge.js apply-writer-output
 JSON
 ```
 
-The writer output pipeline must match the currently routed queue item. `apply-writer-output` validates the echoed generation context against both the append-only human selection history and the exact draft revision that `writer-packet` prepared. A successful apply changes that draft revision, so the same packet cannot be replayed to persist a second output; request a fresh `writer-packet` after any draft edit or completed generation. The command persists generation provenance with the draft and returns the item to `drafting`; it never requests review or approval. If the external Writer has inspectable execution metadata, pass it separately as `writerAiExecution`; otherwise execution remains explicitly unavailable for that bridge generation. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
+The writer output pipeline must match the currently routed queue item. `evidenceUsed` may contain only exact IDs present in the supplied writer packet's `evidence` array; leave it empty when the packet supplies no evidence rows. `apply-writer-output` validates the echoed generation context against both the append-only human selection history and the exact draft revision that `writer-packet` prepared. A successful apply changes that draft revision, so the same packet cannot be replayed to persist a second output; request a fresh `writer-packet` after any draft edit or completed generation. The command persists generation provenance with the draft and returns the item to `drafting`; it never requests review or approval. If the external Writer has inspectable execution metadata, pass it separately as `writerAiExecution`; otherwise execution remains explicitly unavailable for that bridge generation. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
 
 The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media planning remains draft/editor metadata; operator-attached JPEG/PNG/WebP/GIF files can now provide real readiness, preview in the dashboard, and upload through the authenticated X transport at publication time. Required media remains approval-blocking until the attachment and media plan are complete.
 

@@ -112,6 +112,15 @@ function writerEvidenceItem(item) {
   };
 }
 
+export function validateWriterEvidenceReferences(output, packet) {
+  const allowed = new Set((Array.isArray(packet?.evidence) ? packet.evidence : [])
+    .map((item) => String(item?.id ?? '').trim()).filter(Boolean));
+  const used = asStringArray(output?.evidenceUsed).filter(Boolean);
+  const invalid = used.filter((id) => !allowed.has(id));
+  if (invalid.length) throw new Error(`Writer cited evidence IDs that were not supplied: ${[...new Set(invalid)].join(', ')}.`);
+  return used;
+}
+
 function writerCurrentDraft(draft) {
   if (!draft) return null;
   const editor = { ...(draft.editor || {}) };
@@ -213,7 +222,7 @@ export function buildWriterPacket({
   };
 }
 
-export function applyWriterOutput(draft, writerOutput = {}, { generationProvenance = null } = {}) {
+export function applyWriterOutput(draft, writerOutput = {}, { generationProvenance = null, writerPacket = null } = {}) {
   const decision = writerOutput?.decision;
   const pipeline = writerOutput?.pipeline;
   if (!WRITER_DECISIONS.has(decision)) throw new Error(`Invalid writer decision: ${decision}`);
@@ -226,6 +235,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
   if (mediaInput.required != null && typeof mediaInput.required !== 'boolean') throw new Error('media.required must be a boolean.');
   const mediaType = mediaInput.type || 'none';
   if (!MEDIA_TYPES.has(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
+  const evidenceUsed = validateWriterEvidenceReferences(writerOutput, writerPacket);
 
   const editor = {
     decision,
@@ -234,7 +244,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     finalText: String(writerOutput?.finalText ?? '').trim(),
     threadParts: asStringArray(writerOutput?.threadParts),
     semanticAnchors: asStringArray(writerOutput?.semanticAnchors).filter(Boolean),
-    evidenceUsed: asStringArray(writerOutput?.evidenceUsed).filter(Boolean),
+    evidenceUsed,
     discussionQuestion: String(writerOutput?.discussionQuestion ?? '').trim(),
     media: {
       required: mediaInput.required ?? false,
@@ -641,9 +651,14 @@ export function scoreDraft(draft, candidate, context = {}) {
   const hook = usefulText(firstLine, 20) ? 8 : firstLine ? 3 : 0;
   const insight = usefulText(insightText, 45) ? 10 : usefulText(body, 60) ? 6 : String(body || '').trim() ? 3 : 0;
   const evidenceText = String(body || '');
-  const hasStrongEvidence = Boolean(draft?.editor?.evidenceUsed?.length) || (usefulText(evidenceText, 30)
+  const citedEvidenceIds = new Set((Array.isArray(draft?.editor?.evidenceUsed) ? draft.editor.evidenceUsed : [])
+    .map((id) => String(id || '').trim()).filter(Boolean));
+  const resolvedEvidence = (Array.isArray(context?.evidence) ? context.evidence : [])
+    .filter((item) => citedEvidenceIds.has(String(item?.id ?? '').trim()));
+  const hasResolvedEvidence = resolvedEvidence.some((item) => ['primary_supported', 'source_claim'].includes(String(item?.status || '')));
+  const hasStrongEvidence = hasResolvedEvidence || (usefulText(evidenceText, 30)
     && /(\d|benchmark|latency|ms|sec|token|cost|install|npm|pnpm|curl|git |python |node |output|result|tested|measured|source|docs|release notes)/i.test(evidenceText));
-  const hasSource = /https?:\/\//i.test(evidenceText) || Boolean(draft?.editor?.evidenceUsed?.length);
+  const hasSource = /https?:\/\//i.test(evidenceText) || hasResolvedEvidence;
   const evidence = !evidenceText.trim() ? 0 : hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 40) ? 4 : 1;
   const hasAction = /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|keep|check|measure|benchmark|configure|ship|test)\b)/i.test(finalBlock);
   const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;

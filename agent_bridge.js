@@ -103,6 +103,7 @@ import {
   recordRelationshipEvent,
   recordUnderTheHoodSnapshot,
   refreshLearnedRuleSuggestion,
+  runStoreTransaction,
   retireLearnedRule,
   saveDraft,
   saveQueueItem,
@@ -1388,14 +1389,18 @@ async function main() {
     if (payload.minimumCompletedPerVariant == null && payload.secondaryMetrics == null) {
       throw new Error('experiment-update requires minimumCompletedPerVariant and/or secondaryMetrics.');
     }
-    let experiment = getExperiment(Number(payload.id));
-    if (!experiment) throw new Error(`Experiment not found: ${payload.id}`);
-    if (payload.minimumCompletedPerVariant != null) {
-      experiment = setExperimentMinimumCompletedPerVariant(experiment.id, Number(payload.minimumCompletedPerVariant));
-    }
-    if (payload.secondaryMetrics != null) {
-      experiment = setExperimentSecondaryMetrics(experiment.id, payload.secondaryMetrics);
-    }
+    const currentExperiment = getExperiment(Number(payload.id));
+    if (!currentExperiment) throw new Error(`Experiment not found: ${payload.id}`);
+    const experiment = runStoreTransaction(() => {
+      let updated = currentExperiment;
+      if (payload.minimumCompletedPerVariant != null) {
+        updated = setExperimentMinimumCompletedPerVariant(updated.id, Number(payload.minimumCompletedPerVariant));
+      }
+      if (payload.secondaryMetrics != null) {
+        updated = setExperimentSecondaryMetrics(updated.id, payload.secondaryMetrics);
+      }
+      return updated;
+    });
     result({ experiment });
     return;
   }
