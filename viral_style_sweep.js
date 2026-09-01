@@ -1,4 +1,4 @@
-import { NICHE_GROUPS } from './strategy.js';
+import { getActiveContentGroups, getXSearchQueryGroups } from './strategy.js';
 import { viralStyleResearch } from './viral_style_research.js';
 
 export const VIRAL_SWEEP_THRESHOLDS = Object.freeze({
@@ -29,19 +29,14 @@ function historicalWindows(days, windowDays, analysisNow = Date.now()) {
   return result;
 }
 
-function quoteTerm(term) {
-  return `"${String(term || '').replaceAll('"', '\\"')}"`;
-}
-
-function queryFor(group, threshold, window) {
-  const topic = group.terms.map(quoteTerm).join(' OR ');
-  return `(${topic}) min_faves:${threshold.minFaves} min_retweets:${threshold.minRetweets} min_replies:${threshold.minReplies} since:${window.since} until:${window.until} lang:en -filter:replies -filter:retweets`;
+function queryFor(topicQuery, threshold, window) {
+  return `(${topicQuery}) min_faves:${threshold.minFaves} min_retweets:${threshold.minRetweets} min_replies:${threshold.minReplies} since:${window.since} until:${window.until} lang:en -filter:replies -filter:retweets`;
 }
 
 export function buildViralSweepJobs({
   days = 21,
   windowDays = 7,
-  niches = NICHE_GROUPS.map((group) => group.tag),
+  niches = getActiveContentGroups().map((group) => group.tag),
   thresholds = ['strong'],
   analysisNow = Date.now(),
 } = {}) {
@@ -49,7 +44,7 @@ export function buildViralSweepJobs({
   const selectedThresholds = thresholds.map((name) => VIRAL_SWEEP_THRESHOLDS[name]).filter(Boolean);
   const windows = historicalWindows(days, windowDays, analysisNow);
   const jobs = [];
-  for (const group of NICHE_GROUPS) {
+  for (const group of getXSearchQueryGroups()) {
     if (!selectedNiches.has(group.tag)) continue;
     for (const window of windows) {
       for (const threshold of selectedThresholds) {
@@ -59,7 +54,7 @@ export function buildViralSweepJobs({
           threshold: threshold.name,
           since: window.since,
           until: window.until,
-          query: queryFor(group, threshold, window),
+          query: queryFor(group.query, threshold, window),
         });
       }
     }
@@ -70,7 +65,7 @@ export function buildViralSweepJobs({
 export async function runViralSweep({
   days = 21,
   windowDays = 7,
-  niches = NICHE_GROUPS.map((group) => group.tag),
+  niches = getActiveContentGroups().map((group) => group.tag),
   thresholds = ['strong'],
   limitPerQuery = 5,
   controlsPerSeed = 0,

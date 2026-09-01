@@ -1,6 +1,6 @@
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { scoreOpportunity } from './opportunity.js';
-import { postTweetBrowser } from './x_browser_publish.js';
+import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
   captureQueueApproval,
@@ -132,8 +132,8 @@ export function recommendationContext(candidate, scores, context = {}) {
   const first1000 = accountFollowers != null && accountFollowers >= 0 && accountFollowers < 1_000;
   const bootstrapReply = first1000
     && candidate?.source === 'x'
-    && Number(scores.breakdown?.reach?.freshness || 0) >= 10
-    && scores.conversationPotential >= 40;
+    && Number(scores.breakdown?.reach?.freshness || 0) >= 8
+    && scores.conversationPotential >= 35;
   return {
     ...context,
     accountFollowers,
@@ -350,10 +350,10 @@ export function setRelevanceDecision(key, { decision, reason = '', actor = 'huma
     throw new Error('Growth fit is unknown. Rescore candidates from Growth Focus before choosing to use this opportunity.');
   }
   if (growthFit.state !== 'outside') {
-    throw new Error(`Growth Focus override is only needed for outside-focus opportunities; current state is ${growthFit.state}.`);
+    throw new Error(`Growth Focus override is only needed for outside-scope opportunities; current state is ${growthFit.state}.`);
   }
   const explanation = String(reason || '').trim();
-  if (!explanation) throw new Error('Using an outside-focus opportunity requires a short human reason.');
+  if (!explanation) throw new Error('Using an outside-scope opportunity requires a short human reason.');
   const humanOverride = {
     accepted: true,
     reason: explanation,
@@ -546,7 +546,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
         throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
       }
       if (!growthFit.allowed) {
-        throw new Error('This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
+        throw new Error('This opportunity is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
       }
     }
     const state = routeState(pipeline);
@@ -622,7 +622,7 @@ export function approveQueueItem(key) {
   if (queueItem.pipeline === 'repost') {
     const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem.relevance?.humanOverride || null });
     if (growthFit.state === 'unknown') throw new Error('Growth fit needs a current classification before repost approval.');
-    if (!growthFit.allowed) throw new Error('This repost is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before approval.');
+    if (!growthFit.allowed) throw new Error('This repost is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before approval.');
   } else {
     draft = getDraftByCandidate(key);
     if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
@@ -789,6 +789,12 @@ async function sendEngagementReplyTransport({
   transport,
 }) {
   if (!authToken) throw new Error('Sending a reply through the browser requires AUTH_TOKEN.');
+  const contentGate = authorizeReplyBrowserContent({
+    candidateKey: candidate.key,
+    text,
+    targetTweetId: queueItem.targetTweetId,
+    authority,
+  });
   const publishingItem = saveQueueItem({
     ...queueItem,
     status: 'publishing',
@@ -801,7 +807,11 @@ async function sendEngagementReplyTransport({
   });
   let result;
   try {
-    result = await transport(text, { authToken }, { account, replyTo: publishingItem.targetTweetId });
+    result = await transport(text, { authToken }, {
+      account,
+      replyTo: publishingItem.targetTweetId,
+      contentGate,
+    });
   } catch (error) {
     if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
       saveQueueItem({
@@ -930,6 +940,13 @@ export async function sendApprovedEngagementReply(key, {
   if (currentText !== queueItem.approvedText) {
     saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
     throw new Error('Reply text changed after approval; approval was invalidated.');
+  }
+  const currentAnalysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
+  if (!currentAnalysis.publishable || currentAnalysis.gates?.checks?.understandable !== true) {
+    saveDraft({ ...draft, gates: currentAnalysis.gates, qualityScore: currentAnalysis.score, status: 'draft' });
+    invalidateQueueApproval(key, { actor: 'system', reason: 'Current content gates changed after approval; reply requires review again.' });
+    const firstFailure = currentAnalysis.gates?.failures?.[0];
+    throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
   }
   return sendEngagementReplyTransport({
     candidate,

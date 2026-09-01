@@ -3,9 +3,10 @@ import { useRelevanceDecision, type StrategicRelevance } from '../../api/client'
 import { Badge } from '../../components/primitives'
 
 const STATE_LABELS: Record<StrategicRelevance['state'], string> = {
-  core: 'Core',
-  adjacent: 'Adjacent',
-  outside: 'Outside current focus',
+  core: 'Preferred niche',
+  adjacent: 'Adjacent niche',
+  exploratory: 'Emerging tech',
+  outside: 'Outside technical scope',
   unknown: 'Needs refresh',
 }
 
@@ -32,7 +33,7 @@ export function GrowthFitPanel({
   const [reason, setReason] = useState('')
   const tone: 'success' | 'info' | 'warning' | 'neutral' = growthFit.state === 'core'
     ? 'success'
-    : growthFit.state === 'adjacent'
+    : ['adjacent', 'exploratory'].includes(growthFit.state)
       ? 'info'
       : growthFit.state === 'outside' ? 'warning' : 'neutral'
 
@@ -53,7 +54,11 @@ export function GrowthFitPanel({
       <p className="mt-2 text-sm text-slate-700">{growthFit.explanation}</p>
 
       {growthFit.state === 'unknown' && (
-        <div className="mt-3 text-xs text-amber-800">This is not being treated as Outside current focus. Refresh candidate classification from Growth Focus before approval.</div>
+        <div className="mt-3 text-xs text-amber-800">This is not being treated as outside technical scope. Refresh candidate classification from Growth Focus before approval.</div>
+      )}
+
+      {growthFit.state === 'exploratory' && (
+        <div className="mt-3 text-xs text-sky-800">This topic is not a registered content niche. It is allowed because it falls inside the broader configured technical universe, so live momentum can justify using it without permanently adding a niche.</div>
       )}
 
       {growthFit.humanOverride && (

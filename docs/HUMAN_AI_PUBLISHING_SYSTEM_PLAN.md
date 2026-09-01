@@ -8,7 +8,7 @@
 
 ## Global Constraints
 
-- Preserve the account identity: **AI-native developer + builder**.
+- Preserve the account identity: **developer + builder in tech**; registered Growth Focus topics are preferences, while unregistered technical topics remain eligible through open-world exploration. AI-assisted development remains one pillar rather than the parent category.
 - The account promise is: **turn fast-moving AI/software signals into developer decisions: what changed, what actually works, what breaks, why it matters, and how to use it.**
 - Bookmarking a research signal means keep it for reference/taste memory. Choosing a workflow action such as Draft/Research/Watch must ensure a human-visible queue item independently of bookmark state.
 - AI may recommend a distribution format, but the human can override it.

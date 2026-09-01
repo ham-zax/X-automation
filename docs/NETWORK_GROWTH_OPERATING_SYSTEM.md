@@ -80,7 +80,7 @@ When someone visits `@ham_zax`, recent originals should demonstrate:
 - technical depth;
 - experiments rather than summaries;
 - useful judgment;
-- a coherent AI-native developer identity;
+- a coherent developer + builder in tech identity that leans toward registered Growth Focus topics without becoming a closed topical whitelist;
 - clear evidence that future posts will save research time.
 
 Conversation topics and owned content should reinforce each other.
@@ -88,10 +88,10 @@ Conversation topics and owned content should reinforce each other.
 Example:
 
 ```text
-reply about MCP failure
+reply about a Node.js API failure
 -> profile visit
--> pinned MCP debugging experiment
--> recent agent-memory benchmark
+-> pinned backend debugging experiment
+-> recent JavaScript, database, systems, devtools, or AI-assisted engineering proof
 -> recent coding-model comparison
 -> follow becomes rational
 ```

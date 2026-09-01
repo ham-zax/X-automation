@@ -1,53 +1,121 @@
 export const NICHE_GROUPS = [
   {
     tag: 'agents',
-    label: 'AI coding & agents',
-    weight: 18,
-    terms: ['coding agent', 'coding agents', 'ai agent', 'ai agents', 'claude code', 'codex', 'cursor', 'opencode', 'windsurf', 'copilot', 'github copilot', 'cline', 'roo code', 'aider', 'zed', 'vs code', 'mcp', 'model context protocol', 'agentic', 'software agent', 'software agents', 'developer agent', 'subagents', 'multi-agent', 'agent orchestration', 'agent framework', 'agent runtime', 'agent host', 'agent protocol', 'agent memory', 'tool calling', 'computer use', 'browser agent', 'terminal agent', 'code review agent', 'autonomous coding', 'agent skills', 'skill file', 'ide agents', 'ai ide', 'ai pair programmer', 'vibe coding'],
+    label: 'AI-assisted development',
+    weight: 16,
+    role: 'core',
+    targetShare: 12,
+    researchTier: 2,
+    terms: ['coding agent', 'coding agents', 'ai agent', 'ai agents', 'claude code', 'codex', 'cursor', 'opencode', 'windsurf', 'copilot', 'github copilot', 'cline', 'roo code', 'aider', 'mcp', 'model context protocol', 'agentic', 'developer agent', 'software agent', 'agent runtime', 'agent memory', 'tool calling', 'computer use', 'browser agent', 'terminal agent', 'code review agent', 'autonomous coding', 'agent skills', 'ai ide', 'ai pair programmer', 'vibe coding'],
   },
   {
     tag: 'models',
     label: 'Models & inference',
+    weight: 12,
+    role: 'core',
+    targetShare: 8,
+    researchTier: 2,
+    terms: ['llm', 'ai model', 'open source model', 'reasoning model', 'coding model', 'open model', 'open weights', 'local llm', 'local model', 'openai', 'anthropic', 'claude', 'gemini', 'grok', 'qwen', 'deepseek', 'glm', 'minimax', 'mistral', 'llama', 'inference', 'tokens per second', 'context window', 'structured output', 'function calling', 'tool use', 'multimodal', 'terminal-bench', 'swe-bench', 'quantization', 'fine-tuning', 'ollama', 'vllm'],
+  },
+  {
+    tag: 'frontend',
+    label: 'JavaScript, TypeScript & frontend',
     weight: 16,
-    terms: ['llm', 'ai model', 'open source model', 'reasoning model', 'coding model', 'open model', 'open weights', 'local llm', 'local model', 'openai', 'anthropic', 'claude', 'gemini', 'grok', 'qwen', 'deepseek', 'glm', 'minimax', 'mistral', 'llama', 'inference', 'inference speed', 'tokens per second', 'context window', 'long context', 'structured output', 'function calling', 'tool use', 'multimodal', 'benchmark', 'terminal-bench', 'swe-bench', 'quantization', 'fine-tuning', 'ollama', 'vllm'],
+    role: 'core',
+    targetShare: 14,
+    researchTier: 1,
+    terms: ['frontend', 'front-end', 'javascript', 'typescript', 'react', 'reactjs', 'react.js', 'next.js', 'nextjs', 'vue', 'vuejs', 'svelte', 'sveltekit', 'astro', 'css', 'html', 'browser performance', 'web performance', 'vite', 'tailwind', 'tailwindcss', 'redux', 'zustand'],
+  },
+  {
+    tag: 'backend',
+    label: 'Node.js, backend & APIs',
+    weight: 16,
+    role: 'core',
+    targetShare: 14,
+    researchTier: 1,
+    terms: ['backend', 'back-end', 'node.js', 'nodejs', 'express.js', 'expressjs', 'fastify', 'nestjs', 'nest.js', 'api', 'api design', 'rest api', 'graphql', 'grpc', 'trpc', 'server', 'microservice', 'microservices', 'bun', 'deno'],
+  },
+  {
+    tag: 'python',
+    label: 'Python engineering',
+    weight: 14,
+    role: 'core',
+    targetShare: 10,
+    researchTier: 1,
+    terms: ['python', 'django', 'flask', 'fastapi', 'pytest', 'pip', 'uv', 'poetry', 'pydantic'],
+  },
+  {
+    tag: 'systems',
+    label: 'Rust, Go & systems',
+    weight: 14,
+    role: 'core',
+    targetShare: 10,
+    researchTier: 1,
+    terms: ['rust', 'rustlang', 'golang', 'go programming', 'c++', 'cpp', 'zig', 'systems programming', 'systems engineer', 'concurrency', 'memory safety', 'webassembly', 'wasm'],
+  },
+  {
+    tag: 'data',
+    label: 'Databases & data systems',
+    weight: 14,
+    role: 'core',
+    targetShare: 8,
+    researchTier: 2,
+    terms: ['database', 'databases', 'postgres', 'postgresql', 'mysql', 'sqlite', 'redis', 'mongodb', 'sql', 'nosql', 'clickhouse', 'dynamodb', 'orm', 'prisma', 'drizzle'],
   },
   {
     tag: 'devtools',
-    label: 'Developer tools',
-    weight: 16,
-    terms: ['developer tool', 'devtools', 'developer experience', 'sdk', 'cli', 'github', 'vercel', 'supabase', 'open source', 'typescript', 'node.js', 'python', 'vscode', 'vs code', 'ide'],
+    label: 'Developer tools & open source',
+    weight: 14,
+    role: 'core',
+    targetShare: 10,
+    researchTier: 1,
+    terms: ['developer tool', 'developer tools', 'devtools', 'developer experience', 'sdk', 'cli', 'github', 'git', 'vscode', 'vs code', 'neovim', 'open source', 'open-source', 'oss', 'npm', 'pnpm', 'yarn', 'cargo', 'package manager', 'testing tool', 'debugging'],
   },
   {
     tag: 'infra',
-    label: 'Infra & architecture',
+    label: 'Infrastructure & architecture',
     weight: 14,
-    terms: ['docker', 'kubernetes', 'ci/cd', 'serverless', 'mlops', 'latency', 'api design', 'database', 'postgres', 'vector db', 'cloud cost', 'observability', 'sandbox', 'webassembly', 'webgpu'],
+    role: 'core',
+    targetShare: 9,
+    researchTier: 2,
+    terms: ['docker', 'kubernetes', 'k8s', 'ci/cd', 'serverless', 'cloudflare', 'vercel', 'supabase', 'aws', 'azure', 'gcp', 'observability', 'linux', 'terraform', 'ansible', 'latency', 'cloud cost', 'distributed systems', 'software architecture'],
+  },
+  {
+    tag: 'builders',
+    label: 'Building & shipping software',
+    weight: 12,
+    role: 'core',
+    targetShare: 5,
+    researchTier: 2,
+    terms: ['indie hacker', 'developer founder', 'micro-saas', 'build in public', 'building in public', 'shipping software', 'ship products', 'product launch', 'technical founder', 'software founder', 'saas'],
   },
   {
     tag: 'jobs/career',
-    label: 'Jobs & career',
-    weight: 12,
+    label: 'Developer careers',
+    weight: 10,
+    role: 'adjacent',
+    targetShare: 0,
+    researchTier: 3,
+    discover: false,
     requiresTechnicalContext: true,
     terms: ['software engineer job', 'developer job', 'ai engineer', 'hiring developers', 'engineering jobs', 'internship', 'job search', 'developer career', 'engineering career', 'technical interview', 'remote job'],
   },
   {
-    tag: 'builders',
-    label: 'Builders & SaaS',
-    weight: 12,
-    requiresTechnicalContext: true,
-    terms: ['indie hacker', 'developer founder', 'ai saas', 'micro-saas', 'build in public', 'shipping', 'launched', 'product launch', 'technical founder'],
-  },
-  {
     tag: 'business',
-    label: 'Business & productization',
+    label: 'Developer business & productization',
     weight: 10,
+    role: 'adjacent',
+    targetShare: 0,
+    researchTier: 3,
+    discover: false,
     requiresTechnicalContext: true,
     terms: ['pricing', 'revenue', 'customers', 'distribution', 'sales', 'consulting', 'productized service', 'api monetization', 'developer marketing', 'sponsorship'],
   },
 ];
 
+export const GROWTH_FOCUS_PROFILE_VERSION = 5;
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 3;
+export const CANDIDATE_CLASSIFIER_VERSION = 7;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
@@ -55,16 +123,6 @@ export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'technical_authority',
   'balanced',
 ]);
-
-const DEFAULT_CONTENT_ROLES = Object.freeze({
-  agents: 'core',
-  models: 'core',
-  devtools: 'core',
-  infra: 'core',
-  'jobs/career': 'adjacent',
-  builders: 'adjacent',
-  business: 'adjacent',
-});
 
 const DISCOVERY_CRYPTO_SIGNALS = [
   'crypto', 'cryptocurrency', 'blockchain', 'web3', 'defi', 'nft', 'memecoin', 'on-chain', 'airdrop', 'tokenomics',
@@ -81,6 +139,7 @@ export const AUDIENCE_NICHE_GROUPS = [
     tag: 'agents',
     label: 'AI & agents',
     weight: 18,
+    discover: false,
     terms: [
       'ai', 'artificial intelligence', 'machine learning', 'ml', 'deep learning',
       'coding agent', 'coding agents', 'ai agent', 'ai agents', 'developer agent', 'agentic', 'agentic workflow', 'agentic workflows',
@@ -149,9 +208,26 @@ export const AUDIENCE_NICHE_GROUPS = [
     ],
   },
   {
+    tag: 'engineering',
+    label: 'Broader engineering & emerging tech',
+    weight: 14,
+    terms: [
+      'engineering', 'engineer', 'hardware', 'computer hardware', 'semiconductor', 'semiconductors', 'chip', 'chips', 'chip design',
+      'cpu', 'gpu', 'cuda', 'nvidia', 'amd', 'arm', 'risc-v', 'fpga', 'asic', 'electronics', 'electrical engineering',
+      'robotics', 'robot', 'robots', 'autonomous systems', 'embedded', 'embedded engineering', 'firmware', 'iot', 'internet of things',
+      'operating system', 'operating systems', 'kernel', 'compiler', 'compilers', 'runtime', 'distributed systems', 'networking',
+      'network engineering', 'protocol', 'protocols', 'cybersecurity', 'security research', 'reverse engineering', 'cryptography',
+      'computer vision', 'computer graphics', 'graphics programming', 'simulation', 'high performance computing', 'hpc',
+      'mechanical engineering', 'aerospace', 'aerospace engineering', 'space technology', 'drone', 'drones', 'autonomous vehicle', 'autonomous vehicles',
+      'battery technology', 'energy technology', 'clean tech', 'materials science', '3d printing', 'additive manufacturing',
+      'biotechnology', 'bioengineering', 'medical device', 'medical devices', 'quantum computing', 'quantum computer',
+    ],
+  },
+  {
     tag: 'jobs/career',
     label: 'Developer education & careers',
     weight: 12,
+    discover: false,
     terms: [
       'tech education', 'technical education', 'coding education', 'programming education', 'developer education', 'developer training',
       'tech school', 'coding bootcamp', 'tech bootcamp', 'coding course', 'coding courses', 'programming course', 'developer courses',
@@ -166,6 +242,7 @@ export const AUDIENCE_NICHE_GROUPS = [
     tag: 'builders',
     label: 'Builders & startups',
     weight: 12,
+    discover: false,
     terms: [
       'indie hacker', 'indie hackers', 'indie dev', 'indie developer', 'micro-saas', 'ai saas', 'dev saas', 'b2b saas',
       'tech founder', 'technical founder', 'developer founder', 'build in public', 'building in public',
@@ -176,6 +253,7 @@ export const AUDIENCE_NICHE_GROUPS = [
     tag: 'communities',
     label: 'Technical communities',
     weight: 12,
+    discover: false,
     terms: [
       'technical community', 'tech community', 'developer community', 'engineering community', 'open communities', 'open community',
       'it professionals', 'tech professionals', 'tech meetup', 'developer meetup', 'user group',
@@ -203,12 +281,27 @@ const AUDIENCE_EXCLUSION_SIGNALS = [
   'retweet to win', 'comment to win', 'free money', 'horoscope', 'astrology',
 ];
 
+function clampNumber(value, fallback, min, max) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.max(min, Math.min(max, numeric)) : fallback;
+}
+
+function normalizeTag(value, fallback = '') {
+  const normalized = String(value || fallback).trim().toLowerCase()
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized.slice(0, 64);
+}
+
 function cloneNicheGroup(group) {
   return {
     tag: group.tag,
     label: group.label,
     weight: group.weight,
     ...(group.role ? { role: group.role } : {}),
+    ...(group.targetShare != null ? { targetShare: group.targetShare } : {}),
+    ...(group.researchTier != null ? { researchTier: group.researchTier } : {}),
+    ...(group.discover != null ? { discover: group.discover !== false } : {}),
     ...(group.requiresTechnicalContext ? { requiresTechnicalContext: true } : {}),
     terms: [...group.terms],
   };
@@ -222,18 +315,73 @@ function normalizeGrowthObjective(value) {
   return GROWTH_FOCUS_OBJECTIVES.includes(value) ? value : 'qualified_growth';
 }
 
-function normalizeTerms(values, fallback) {
-  if (!Array.isArray(values)) return [...fallback];
-  return [...new Set(values.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))].slice(0, 500);
+function normalizeTerms(values, fallback = []) {
+  const source = Array.isArray(values) ? values : fallback;
+  return [...new Set(source.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))].slice(0, 500);
+}
+
+function normalizeGroup(group, fallback = {}, { content = false } = {}) {
+  const tag = normalizeTag(group?.tag, fallback.tag);
+  if (!tag) return null;
+  const label = String(group?.label || fallback.label || tag).trim().slice(0, 120) || tag;
+  const normalized = {
+    tag,
+    label,
+    weight: clampNumber(group?.weight, Number(fallback.weight || 12), 1, 50),
+    ...(content ? { role: normalizeContentRole(group?.role, fallback.role || 'core') } : {}),
+    ...(content ? { targetShare: clampNumber(group?.targetShare, Number(fallback.targetShare || 0), 0, 100) } : {}),
+    ...(content ? { researchTier: Math.round(clampNumber(group?.researchTier, Number(fallback.researchTier || 2), 1, 3)) } : {}),
+    discover: (group?.discover ?? fallback.discover) !== false,
+    ...((group?.requiresTechnicalContext ?? fallback.requiresTechnicalContext) ? { requiresTechnicalContext: true } : {}),
+    terms: normalizeTerms(group?.terms, fallback.terms || []),
+  };
+  return normalized;
+}
+
+function normalizeGroups(groups, fallbacks, { content = false, mergeLegacyDefaults = false } = {}) {
+  const supplied = Array.isArray(groups) ? groups : [];
+  const fallbackByTag = new Map((fallbacks || []).map((group) => [group.tag, group]));
+  const source = mergeLegacyDefaults
+    ? [
+        ...(fallbacks || []).map((fallback) => ({ ...fallback, ...(supplied.find((group) => normalizeTag(group?.tag) === fallback.tag) || {}) })),
+        ...supplied.filter((group) => !fallbackByTag.has(normalizeTag(group?.tag))),
+      ]
+    : supplied;
+  const result = [];
+  const seen = new Set();
+  for (const group of source) {
+    const requestedTag = normalizeTag(group?.tag);
+    if (!requestedTag) throw new Error('Growth Focus groups require a non-empty tag.');
+    const fallback = fallbackByTag.get(requestedTag) || {};
+    const normalized = normalizeGroup(group, fallback, { content });
+    if (!normalized) throw new Error(`Invalid Growth Focus group: ${requestedTag}.`);
+    if (seen.has(normalized.tag)) throw new Error(`Duplicate Growth Focus tag: ${normalized.tag}.`);
+    seen.add(normalized.tag);
+    result.push(normalized);
+  }
+  return result.slice(0, 100);
 }
 
 export function getDefaultNicheProfile() {
   return {
+    schemaVersion: GROWTH_FOCUS_PROFILE_VERSION,
     defaultObjective: 'qualified_growth',
-    contentGroups: NICHE_GROUPS.map((group) => ({
-      ...cloneNicheGroup(group),
-      role: DEFAULT_CONTENT_ROLES[group.tag] || 'core',
-    })),
+    topicBalance: {
+      windowSize: 30,
+      strength: 0.25,
+      maxAdjustment: 6,
+    },
+    exploration: {
+      enabled: true,
+      weight: 6,
+      maxSearchQueries: 4,
+    },
+    discovery: {
+      latestQueryBudget: 4,
+      momentumQueryBudget: 4,
+      rotationMinutes: 15,
+    },
+    contentGroups: NICHE_GROUPS.map(cloneNicheGroup),
     audienceGroups: AUDIENCE_NICHE_GROUPS.map(cloneNicheGroup),
     deprioritizedTerms: [...AUDIENCE_DEPRIORITY_SIGNALS],
     exclusionTerms: [...AUDIENCE_EXCLUSION_SIGNALS],
@@ -244,19 +392,35 @@ let ACTIVE_NICHE_PROFILE = getDefaultNicheProfile();
 
 export function setActiveNicheProfile(profile = {}) {
   const defaults = getDefaultNicheProfile();
-  const suppliedContent = new Map((profile.contentGroups || []).map((group) => [String(group?.tag || ''), group]));
-  const suppliedAudience = new Map((profile.audienceGroups || []).map((group) => [String(group?.tag || ''), group]));
+  const schemaVersion = Number(profile.schemaVersion || 0);
+  const legacyFixedGroups = schemaVersion < 2;
+  const contentGroups = normalizeGroups(profile.contentGroups, defaults.contentGroups, {
+    content: true,
+    mergeLegacyDefaults: legacyFixedGroups,
+  });
+  const audienceGroups = normalizeGroups(profile.audienceGroups, defaults.audienceGroups, {
+    mergeLegacyDefaults: legacyFixedGroups,
+  });
   ACTIVE_NICHE_PROFILE = {
+    schemaVersion: GROWTH_FOCUS_PROFILE_VERSION,
     defaultObjective: normalizeGrowthObjective(profile.defaultObjective),
-    contentGroups: defaults.contentGroups.map((group) => ({
-      ...group,
-      role: normalizeContentRole(suppliedContent.get(group.tag)?.role, group.role),
-      terms: normalizeTerms(suppliedContent.get(group.tag)?.terms, group.terms),
-    })),
-    audienceGroups: defaults.audienceGroups.map((group) => ({
-      ...group,
-      terms: normalizeTerms(suppliedAudience.get(group.tag)?.terms, group.terms),
-    })),
+    topicBalance: {
+      windowSize: Math.round(clampNumber(profile.topicBalance?.windowSize, defaults.topicBalance.windowSize, 10, 100)),
+      strength: clampNumber(profile.topicBalance?.strength, defaults.topicBalance.strength, 0, 1),
+      maxAdjustment: Math.round(clampNumber(profile.topicBalance?.maxAdjustment, defaults.topicBalance.maxAdjustment, 0, 20)),
+    },
+    exploration: {
+      enabled: profile.exploration?.enabled !== false,
+      weight: clampNumber(profile.exploration?.weight, defaults.exploration.weight, 0, 50),
+      maxSearchQueries: Math.round(clampNumber(profile.exploration?.maxSearchQueries, defaults.exploration.maxSearchQueries, 0, 20)),
+    },
+    discovery: {
+      latestQueryBudget: Math.round(clampNumber(profile.discovery?.latestQueryBudget, defaults.discovery.latestQueryBudget, 1, 30)),
+      momentumQueryBudget: Math.round(clampNumber(profile.discovery?.momentumQueryBudget, defaults.discovery.momentumQueryBudget, 1, 30)),
+      rotationMinutes: Math.round(clampNumber(profile.discovery?.rotationMinutes, defaults.discovery.rotationMinutes, 1, 120)),
+    },
+    contentGroups: legacyFixedGroups && !Array.isArray(profile.contentGroups) ? defaults.contentGroups.map(cloneNicheGroup) : contentGroups,
+    audienceGroups: legacyFixedGroups && !Array.isArray(profile.audienceGroups) ? defaults.audienceGroups.map(cloneNicheGroup) : audienceGroups,
     deprioritizedTerms: normalizeTerms(profile.deprioritizedTerms, defaults.deprioritizedTerms),
     exclusionTerms: normalizeTerms(profile.exclusionTerms, defaults.exclusionTerms),
   };
@@ -266,7 +430,11 @@ export function setActiveNicheProfile(profile = {}) {
 
 export function getActiveNicheProfile() {
   return {
+    schemaVersion: ACTIVE_NICHE_PROFILE.schemaVersion,
     defaultObjective: ACTIVE_NICHE_PROFILE.defaultObjective,
+    topicBalance: { ...ACTIVE_NICHE_PROFILE.topicBalance },
+    exploration: { ...ACTIVE_NICHE_PROFILE.exploration },
+    discovery: { ...ACTIVE_NICHE_PROFILE.discovery },
     contentGroups: ACTIVE_NICHE_PROFILE.contentGroups.map(cloneNicheGroup),
     audienceGroups: ACTIVE_NICHE_PROFILE.audienceGroups.map(cloneNicheGroup),
     deprioritizedTerms: [...ACTIVE_NICHE_PROFILE.deprioritizedTerms],
@@ -274,30 +442,90 @@ export function getActiveNicheProfile() {
   };
 }
 
+export function getNicheLabels() {
+  return Object.fromEntries(ACTIVE_NICHE_PROFILE.contentGroups.map(({ tag, label }) => [tag, label]));
+}
+
+export function getAudienceNicheLabels() {
+  return Object.fromEntries(ACTIVE_NICHE_PROFILE.audienceGroups.map(({ tag, label }) => [tag, label]));
+}
+
+export function getActiveContentGroups({ includeOff = false } = {}) {
+  return ACTIVE_NICHE_PROFILE.contentGroups
+    .filter((group) => includeOff || group.role !== 'off')
+    .map(cloneNicheGroup);
+}
+
+function quoteXSearchTerm(term) {
+  const text = String(term || '').trim().replaceAll('"', '');
+  if (!text) return '';
+  return /^[a-z0-9_@.#/+:-]+$/i.test(text) ? text : `"${text}"`;
+}
+
+function chunkXSearchTerms(terms, maxLength = 360) {
+  const chunks = [];
+  let current = '';
+  for (const term of terms.map(quoteXSearchTerm).filter(Boolean)) {
+    const next = current ? `${current} OR ${term}` : term;
+    if (current && next.length > maxLength) {
+      chunks.push(current);
+      current = term;
+    } else {
+      current = next;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function roundRobinGroupTerms(groups) {
+  const output = [];
+  const seen = new Set();
+  const maxTerms = Math.max(0, ...groups.map((group) => group.terms.length));
+  for (let index = 0; index < maxTerms; index++) {
+    for (const group of groups) {
+      const term = String(group.terms[index] || '').trim().toLowerCase();
+      if (!term || seen.has(term)) continue;
+      seen.add(term);
+      output.push(term);
+    }
+  }
+  return output;
+}
+
+export function getXSearchQueryGroups() {
+  const groups = [];
+  const activeContentGroups = getActiveContentGroups();
+  for (const group of activeContentGroups.filter((item) => item.discover !== false)) {
+    chunkXSearchTerms(group.terms).forEach((query, index) => groups.push({
+      tag: group.tag,
+      label: group.label,
+      targetShare: Number(group.targetShare || 0),
+      query,
+      chunk: index,
+      exploratory: false,
+    }));
+  }
+
+  if (ACTIVE_NICHE_PROFILE.exploration.enabled && ACTIVE_NICHE_PROFILE.exploration.maxSearchQueries > 0) {
+    const preferredTerms = new Set(activeContentGroups.flatMap((group) => group.terms.map((term) => String(term).trim().toLowerCase())));
+    const explorationTerms = roundRobinGroupTerms(ACTIVE_NICHE_PROFILE.audienceGroups.filter((group) => group.discover !== false))
+      .filter((term) => !preferredTerms.has(term));
+    chunkXSearchTerms(explorationTerms)
+      .slice(0, ACTIVE_NICHE_PROFILE.exploration.maxSearchQueries)
+      .forEach((query, index) => groups.push({
+        tag: '__explore__',
+        label: 'Tech exploration',
+        targetShare: 0,
+        query,
+        chunk: index,
+        exploratory: true,
+      }));
+  }
+  return groups;
+}
+
 const AUDIENCE_PROFILE_CLASSIFICATION_CACHE = new Map();
-
-const TECHNICAL_ANCHORS = [
-  'developer', 'software', 'engineer', 'engineering', 'coding', 'code', 'programming',
-  'ai', 'llm', 'agent', 'model', 'api', 'sdk', 'cli', 'github', 'open source', 'saas',
-  'typescript', 'javascript', 'python', 'node', 'cloud', 'database', 'infra', 'devops',
-];
-
-export const X_DISCOVERY_QUERIES = [
-  '"Claude Code" OR Codex OR Cursor OR OpenCode OR MCP OR "coding agent" OR "vibe coding"',
-  'Qwen OR DeepSeek OR GLM OR Llama OR "open source model" OR inference OR Ollama OR vLLM',
-  '"developer tools" OR devtools OR GitHub OR Vercel OR Supabase OR "open source" OR SDK OR CLI',
-  'Docker OR Kubernetes OR serverless OR MLOps OR WebGPU OR WebAssembly OR Postgres OR "API design"',
-  '"AI engineer" OR "software engineer job" OR "developer job" OR "engineering career" OR "technical interview"',
-  '"AI SaaS" OR "indie hacker" OR "developer founder" OR "build in public" OR "technical founder"',
-];
-
-export const X_VIRAL_QUERIES = [
-  '"Claude Code" OR Codex OR Cursor OR OpenCode OR MCP OR Qwen OR DeepSeek OR GLM',
-  '"developer tools" OR devtools OR "software engineering" OR GitHub OR Vercel OR Supabase OR "open source"',
-  'Docker OR Kubernetes OR serverless OR MLOps OR WebGPU OR WebAssembly OR Postgres OR "AI infrastructure"',
-  '"AI engineer" OR "software engineer" OR "developer job" OR "tech jobs" OR "developer career" OR internship',
-  '"AI startup" OR "AI SaaS" OR "indie hacker" OR "build in public" OR "developer founder" OR "developer productivity" OR "vibe coding"',
-];
 
 const TERM_PATTERNS = new Map();
 
@@ -332,24 +560,44 @@ export function assessDiscoveryQuality(text) {
 
 export function classifyNiche(text) {
   const haystack = String(text || '').toLowerCase().replace(/([a-z])(?=\d)/g, '$1 ');
-  const hasTechnicalContext = TECHNICAL_ANCHORS.some((term) => containsTerm(haystack, term));
+  const audienceMatches = ACTIVE_NICHE_PROFILE.exploration.enabled
+    ? ACTIVE_NICHE_PROFILE.audienceGroups.map((group) => ({
+        group,
+        matchedTerms: group.terms.filter((term) => containsTerm(haystack, term)),
+      })).filter(({ matchedTerms }) => matchedTerms.length)
+    : [];
+  const groupMatches = ACTIVE_NICHE_PROFILE.contentGroups.map((group) => ({
+    group,
+    matchedTerms: group.terms.filter((term) => containsTerm(haystack, term)),
+  }));
+  const hasTechnicalContext = audienceMatches.length > 0
+    || groupMatches.some(({ group, matchedTerms }) => !group.requiresTechnicalContext && matchedTerms.length > 0);
   const tags = [];
   const matches = [];
   let score = 0;
 
-  for (const group of ACTIVE_NICHE_PROFILE.contentGroups) {
-    const matchedTerms = group.terms.filter((term) => containsTerm(haystack, term));
+  for (const { group, matchedTerms } of groupMatches) {
     if (!matchedTerms.length) continue;
     if (group.requiresTechnicalContext && !hasTechnicalContext) continue;
     tags.push(group.tag);
     matches.push(...matchedTerms);
-    score += group.weight;
+    if (group.role !== 'off') score += group.weight;
   }
+
+  const explorationTags = [...new Set(audienceMatches.map(({ group }) => group.tag))];
+  const explorationMatches = [...new Set(audienceMatches.flatMap(({ matchedTerms }) => matchedTerms))];
+  const groupsByTag = new Map(ACTIVE_NICHE_PROFILE.contentGroups.map((group) => [group.tag, group]));
+  const registered = tags.some((tag) => ['core', 'adjacent'].includes(groupsByTag.get(tag)?.role));
+  const exploratory = ACTIVE_NICHE_PROFILE.exploration.enabled && !registered && explorationMatches.length > 0;
+  if (exploratory) score = Math.max(score, ACTIVE_NICHE_PROFILE.exploration.weight);
 
   return {
     score: Math.min(50, score),
     tags,
     matches: [...new Set(matches)],
+    exploratory,
+    explorationTags,
+    explorationMatches,
   };
 }
 
@@ -410,20 +658,25 @@ export function assessStrategicRelevance(candidate = {}, { objective, humanOverr
   const coreTags = tags.filter((tag) => groups.get(tag)?.role === 'core');
   const adjacentTags = tags.filter((tag) => groups.get(tag)?.role === 'adjacent');
   const offTags = tags.filter((tag) => groups.get(tag)?.role === 'off');
-  const state = offTags.length ? 'outside' : adjacentTags.length ? 'adjacent' : coreTags.length ? 'core' : 'outside';
+  const exploratory = niche.exploratory === true;
+  const state = offTags.length ? 'outside' : coreTags.length ? 'core' : adjacentTags.length ? 'adjacent' : exploratory ? 'exploratory' : 'outside';
   const reasonCodes = state === 'core'
     ? ['CORE_GROUP_MATCH']
     : state === 'adjacent'
       ? ['ADJACENT_GROUP_MATCH']
-      : offTags.length ? ['OFF_GROUP_MATCH'] : ['NO_ACTIVE_GROUP_MATCH'];
+      : state === 'exploratory'
+        ? ['TECH_EXPLORATION_MATCH']
+        : offTags.length ? ['OFF_GROUP_MATCH'] : ['OUTSIDE_TECH_SCOPE'];
   const labels = (values) => values.map((tag) => groups.get(tag)?.label || tag).join(', ');
   let explanation = state === 'core'
-    ? `Matches core Growth Focus groups: ${labels(coreTags)}.`
+    ? `Matches preferred Growth Focus groups: ${labels(coreTags)}.`
     : state === 'adjacent'
-      ? `Matches adjacent Growth Focus groups: ${labels(adjacentTags)}.${coreTags.length ? ` Supporting core signals: ${labels(coreTags)}.` : ''}`
-      : offTags.length
-        ? `Matches a Growth Focus group currently set to Off: ${labels(offTags)}.`
-        : 'The current classifier found no topic group configured as Core or Adjacent.';
+      ? `Matches adjacent Growth Focus groups: ${labels(adjacentTags)}.${coreTags.length ? ` Supporting preferred signals: ${labels(coreTags)}.` : ''}`
+      : state === 'exploratory'
+        ? `No registered content niche matched, but the candidate is inside the configured broader technical audience scope (${(niche.explorationMatches || []).slice(0, 6).join(', ')}). It may compete on momentum without being promoted into a permanent niche.`
+        : offTags.length
+          ? `Matches a Growth Focus group currently set to Off: ${labels(offTags)}.`
+          : 'The current classifier found no registered niche or broader configured technical-scope match.';
   const acceptedOverride = validOverride ? {
     accepted: true,
     reason: String(humanOverride.reason).trim(),
@@ -439,9 +692,11 @@ export function assessStrategicRelevance(candidate = {}, { objective, humanOverr
 
   return {
     state,
-    allowed: state === 'core' || state === 'adjacent' || Boolean(acceptedOverride),
+    allowed: state === 'core' || state === 'adjacent' || state === 'exploratory' || Boolean(acceptedOverride),
     topicScore: Number(niche.score),
     tags,
+    explorationTags: [...new Set(niche.explorationTags || [])],
+    explorationMatches: [...new Set(niche.explorationMatches || [])],
     objective: selectedObjective,
     reasonCodes,
     explanation,
@@ -489,18 +744,11 @@ export function classifyAudienceProfile(profile) {
   }
 
   const contentNiche = classifyNiche(`${displayName} ${bio}`);
-  for (const tag of contentNiche.tags || []) {
-    if (!tags.includes(tag)) tags.push(tag);
-  }
-  matches.push(...(contentNiche.matches || []));
-  score = Math.max(score, contentNiche.score || 0);
-
   const uniqueMatches = [...new Set(matches)];
   const deprioritizationMatches = profileMatches(ACTIVE_NICHE_PROFILE.deprioritizedTerms);
   const exclusionMatches = profileMatches(ACTIVE_NICHE_PROFILE.exclusionTerms);
   const negativeMatches = [...new Set([...deprioritizationMatches, ...exclusionMatches])];
-  const hasDeveloperContext = Boolean(contentNiche.tags?.length)
-    || tags.some((tag) => ['devtools', 'software', 'infra'].includes(tag));
+  const hasDeveloperContext = Boolean(contentNiche.tags?.length);
   let relevanceScore = 0;
   let fitBucket = 'uncertain';
 
@@ -553,8 +801,8 @@ export function personalizeCandidates(candidates = [], preference = {}) {
 
 export function isOpportunityCandidate(candidate) {
   if (candidate?.niche?.status !== 'current') return false;
-  const tags = candidate.niche.tags || [];
-  return tags.some((tag) => ['jobs/career', 'builders', 'business'].includes(tag));
+  const groups = new Map(ACTIVE_NICHE_PROFILE.contentGroups.map((group) => [group.tag, group]));
+  return (candidate.niche.tags || []).some((tag) => groups.get(tag)?.role === 'adjacent');
 }
 
 export function recommendDistributionAction(candidate, context = {}) {
@@ -569,19 +817,19 @@ export function recommendDistributionAction(candidate, context = {}) {
     return { action: 'ignore', reason: 'Growth fit is unknown until the candidate classification is refreshed.' };
   }
   if (!growthFit.allowed) {
-    return { action: 'ignore', reason: 'Outside current Growth Focus. A human can explicitly choose to use the opportunity anyway.' };
+    return { action: 'ignore', reason: 'Outside the configured technical scope. A human can explicitly choose to use the opportunity anyway.' };
   }
 
   const accountFollowers = context.accountFollowers == null ? null : Number(context.accountFollowers);
   const first1000 = accountFollowers != null && Number.isFinite(accountFollowers) && accountFollowers >= 0 && accountFollowers < 1_000;
   const opportunityScores = context.opportunityScores || {};
   const reach = opportunityScores.breakdown?.reach || {};
-  const bootstrapFresh = first1000 && candidate?.source === 'x' && Number(reach.freshness || 0) >= 10;
+  const bootstrapFresh = first1000 && candidate?.source === 'x' && Number(reach.freshness || 0) >= 8;
   const bootstrapMomentum = bootstrapFresh
-    && Number(opportunityScores.reachPotential || 0) >= 50
-    && Number(reach.freshness || 0) >= 10
-    && Number(reach.momentum || 0) >= 10
-    && Number(reach.traction || 0) >= 8;
+    && Number(opportunityScores.reachPotential || 0) >= 45
+    && Number(reach.freshness || 0) >= 8
+    && Number(reach.momentum || 0) >= 8
+    && Number(reach.traction || 0) >= 6;
 
   if (context.originalStandalone || context.ourExperiment || context.multipleSources) {
     return { action: 'direct', reason: 'The insight stands on its own and should build our own author identity.' };

@@ -151,8 +151,8 @@ export function buildWriterPacket({
     && hashtagExperimentCount <= 2;
   return {
     account: {
-      identity: 'AI-native developer + builder',
-      promise: 'turn fast-moving AI/software signals into developer decisions',
+      identity: 'developer + builder in tech',
+      promise: 'make useful technical ideas understandable and actionable, leaning toward registered Growth Focus topics without hard-blocking strong emerging tech',
       language: 'English',
     },
     pipeline,
@@ -303,6 +303,61 @@ function sentenceCount(text) {
   return (clean.match(/[^.!?]+(?:[.!?]+|$)/g) || []).map((part) => part.trim()).filter(Boolean).length;
 }
 
+function readabilityWords(text) {
+  const clean = String(text || '')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/[@#][\p{L}\p{N}_]+/gu, ' ');
+  return [...clean.matchAll(/\p{L}[\p{L}'’-]*/gu)].map((match) => match[0]);
+}
+
+function allowedReadabilityTerms(candidate, draft) {
+  const allowed = new Set();
+  const values = [
+    ...(candidate?.niche?.matches || []),
+    ...(draft?.editor?.semanticAnchors || []),
+  ];
+  for (const value of values) {
+    for (const word of readabilityWords(value)) allowed.add(word.toLowerCase());
+  }
+  return allowed;
+}
+
+export function assessUnderstandability(text, candidate = {}, draft = {}) {
+  const words = readabilityWords(text);
+  const allowed = allowedReadabilityTerms(candidate, draft);
+  const unexplainedWords = words.filter((word) => {
+    const normalized = word.toLowerCase().replace(/[’'-]/g, '');
+    if (normalized.length < 10 || allowed.has(word.toLowerCase())) return false;
+    if (/[A-Z].*[A-Z]|^[A-Z][a-z]+[A-Z]/.test(word)) return false;
+    return true;
+  });
+  const unexplainedTerms = [...new Set(unexplainedWords.map((word) => word.toLowerCase()))];
+  const sentences = (String(text || '').replace(/https?:\/\/\S+/g, 'URL').match(/[^.!?]+(?:[.!?]+|$)/g) || [])
+    .map((part) => readabilityWords(part).length)
+    .filter(Boolean);
+  const maxSentenceWords = sentences.length ? Math.max(...sentences) : 0;
+  const averageSentenceWords = sentences.length ? sentences.reduce((sum, count) => sum + count, 0) / sentences.length : 0;
+  const unexplainedRatio = words.length ? unexplainedWords.length / words.length : 0;
+  const compressionMarks = (String(text || '').match(/(?:\s[+→]\s|\/\p{L}|;|—|->)/gu) || []).length;
+  const tooDense = words.length >= 12 && (
+    maxSentenceWords > 34
+    || (unexplainedWords.length >= 4 && unexplainedRatio >= 0.08 && compressionMarks >= 2)
+    || (unexplainedWords.length >= 7 && unexplainedRatio >= 0.16 && maxSentenceWords >= 24)
+  );
+  return {
+    passed: !tooDense,
+    wordCount: words.length,
+    maxSentenceWords,
+    averageSentenceWords: Math.round(averageSentenceWords * 10) / 10,
+    unexplainedWordCount: unexplainedWords.length,
+    unexplainedRatio: Math.round(unexplainedRatio * 1000) / 1000,
+    unexplainedTerms,
+    compressionMarks,
+  };
+}
+
 function allCapsLine(line) {
   const letters = String(line || '').match(/\p{L}/gu) || [];
   if (letters.length <= 5 || line !== line.toUpperCase()) return false;
@@ -374,6 +429,7 @@ export function evaluateDraftGates(draft, candidate, {
     additiveValue: true,
     originality: true,
     scannability: true,
+    understandable: true,
     noPlaceholders: true,
     length: true,
     ctaIntegrity: true,
@@ -403,9 +459,22 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'GROWTH_FIT_UNKNOWN', 'Growth fit needs a current classification. Rescore candidates from Growth Focus before approval.');
   } else if (!growthFit.allowed) {
     checks.growthFocus = false;
-    addIssue(failures, 'GROWTH_FOCUS_DECISION_REQUIRED', 'This opportunity is outside the current Growth Focus. Choose “Use this opportunity anyway” and provide a reason before approval.');
+    addIssue(failures, 'GROWTH_FOCUS_DECISION_REQUIRED', 'This opportunity is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before approval.');
   } else if (growthFit.state === 'outside' && growthFit.humanOverride) {
-    addIssue(warnings, 'OUTSIDE_GROWTH_FOCUS_ACCEPTED', `Human decision to use an outside-focus opportunity: ${growthFit.humanOverride.reason}`);
+    addIssue(warnings, 'OUTSIDE_TECH_SCOPE_ACCEPTED', `Human decision to use an outside-scope opportunity: ${growthFit.humanOverride.reason}`);
+  }
+
+  const understandabilityUnits = units.map((unit) => assessUnderstandability(unit, candidate, draft));
+  const opaqueUnit = understandabilityUnits.find((assessment) => !assessment.passed);
+  if (opaqueUnit) {
+    checks.understandable = false;
+    const terms = opaqueUnit.unexplainedTerms.slice(0, 6).join(', ');
+    addIssue(failures, 'UNDERSTANDABILITY_TOO_DENSE', `Rewrite so the point lands on one read. Humor, technical language, and a smart voice are fine; this version stacks too much compressed or unexplained wording${terms ? ` (${terms})` : ''}.`);
+  } else {
+    const borderline = understandabilityUnits.find((assessment) => assessment.compressionMarks >= 2 && assessment.unexplainedWordCount >= 3);
+    if (borderline) {
+      addIssue(warnings, 'UNDERSTANDABILITY_REVIEW', `This draft is compressed around several unexplained terms (${borderline.unexplainedTerms.slice(0, 6).join(', ')}). Keep the style if the point still lands immediately; otherwise unpack one phrase.`);
+    }
   }
 
   const sourceText = candidate?.text || '';
@@ -656,10 +725,16 @@ export function scoreDraft(draft, candidate, context = {}) {
   const resolvedEvidence = (Array.isArray(context?.evidence) ? context.evidence : [])
     .filter((item) => citedEvidenceIds.has(String(item?.id ?? '').trim()));
   const hasResolvedEvidence = resolvedEvidence.some((item) => ['primary_supported', 'source_claim'].includes(String(item?.status || '')));
-  const hasStrongEvidence = hasResolvedEvidence || (usefulText(evidenceText, 30)
-    && /(\d|benchmark|latency|ms|sec|token|cost|install|npm|pnpm|curl|git |python |node |output|result|tested|measured|source|docs|release notes)/i.test(evidenceText));
+  const hasEvidenceMarker = usefulText(evidenceText, 30)
+    && /(?:\b\d+(?:\.\d+)?(?:%|x|ms|s|gb|mb|k|m)?\b|\b(?:benchmark|latency|token|cost|install|npm|pnpm|curl|git|python|node|result|tested|measured|source|docs|release notes)\b)/i.test(evidenceText);
   const hasSource = /https?:\/\//i.test(evidenceText) || hasResolvedEvidence;
-  const evidence = !evidenceText.trim() ? 0 : hasStrongEvidence ? 10 : usefulText(evidenceText, 30) && hasSource ? 6 : usefulText(evidenceText, 40) ? 4 : 1;
+  const evidence = !evidenceText.trim()
+    ? 0
+    : hasResolvedEvidence
+      ? 10
+      : usefulText(evidenceText, 30) && (hasEvidenceMarker || hasSource)
+        ? 6
+        : usefulText(evidenceText, 40) ? 4 : 1;
   const hasAction = /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|keep|check|measure|benchmark|configure|ship|test)\b)/i.test(finalBlock);
   const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;
   const sourceSimilarity = similarity(body, candidate?.text || '');

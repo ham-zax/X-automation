@@ -2,7 +2,7 @@
 
 This document is the source of truth for what `@ham_zax` should publish, reply with, or quote-post.
 
-It is deliberately stricter than "write something engaging." The account should become recognizable as an **AI-native developer + builder** who filters, tests, explains, and applies useful developments in AI, coding agents, developer tooling, open source, software products, and the business of building software.
+It is deliberately stricter than "write something engaging." The account should become recognizable as a **developer + builder in tech** who makes useful engineering ideas easy to understand. Registered Growth Focus topics are preferred lanes, not the entire allowed universe. AI-assisted development is one pillar inside that technical identity.
 
 The core audience promise is:
 
@@ -22,20 +22,20 @@ These apply to original posts, replies, quote posts, and threads.
 
 ### MUST
 
-1. **Add information, judgment, or experience.**
+1. **Be understandable on one normal read.**
+   - Most technically curious readers should be able to state the point without translating internal architecture/report vocabulary first.
+   - Humor, wit, attitude, uncommon wording, and technical vocabulary are allowed when the meaning still lands immediately.
+   - Precise product, language, API, protocol, and library names are welcome; stacked unexplained abstractions are a problem only when they make the idea hard to follow.
+
+2. **Add information, judgment, or experience.**
    - Do not merely restate a headline or another person's post.
    - Every outbound item must contribute at least one of: explanation, comparison, experiment, implication, opinion with reasoning, implementation detail, useful question, or synthesis.
 
-2. **Fit the account's topic cluster.**
-   A normal post should clearly fit at least one:
-   - AI models and model releases
-   - coding agents / agentic development
-   - developer tools and infrastructure
-   - open-source software
-   - practical software engineering
-   - building and shipping software products
-   - developer-to-founder/business lessons
-   - useful networking or discovery of builders in the same ecosystem
+3. **Fit the technical universe; prefer active Growth Focus.**
+   - Registered content groups are runtime preferences, not a fixed admission list.
+   - The broader configurable technical audience is the exploration boundary. An unregistered but clearly technical topic may be used as an exploratory opportunity when its momentum/value is strong.
+   - The default preferred profile covers software-development topics and AI-assisted engineering, while the broader technical scope includes other engineering and emerging-tech areas.
+   - Groups may be added, removed, renamed, reweighted, or disabled without changing this standard.
 
 4. **Have a specific reader benefit.**
    At least one must be true:
@@ -318,7 +318,7 @@ Score each dimension 0–5.
 
 | Dimension | 0 | 3 | 5 |
 | --- | --- | --- | --- |
-| Niche fit | unrelated | adjacent | core AI/dev/builder topic |
+| Niche fit | unrelated | adjacent | core active Growth Focus topic |
 | Utility | no reader benefit | useful context | immediately actionable / saves real time |
 | Novelty | duplicate summary | some framing | non-obvious finding or original result |
 | Evidence | unsupported | credible source | primary source + experiment/data |

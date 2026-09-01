@@ -10,7 +10,7 @@ The goal is not to maximize low-quality follower count at any cost. The goal is 
 
 The 2026-08-19 playbook snapshot recorded 41 followers and zero strongly niche-aligned followers at the current profile-classification threshold. On 2026-08-24 the live account showed 42 followers; the operator reports that only one newly gained follower is clearly from the target niche.
 
-That is a cold-start account. At this size, waiting for a perfect original thesis before participating in a live AI/developer conversation has a large opportunity cost. The account needs repeated presence in the market while topics are moving, not day-long research on every individual tweet.
+That is a cold-start account. At this size, waiting for a perfect original thesis before participating in a live software-development conversation has a large opportunity cost. The account needs repeated presence in the market while topics are moving, not day-long research on every individual tweet.
 
 ## Bottleneck that triggered this mode
 
@@ -44,7 +44,7 @@ Until 1,000 followers, use this priority:
 
 > **Niche floor -> momentum -> speed -> useful contribution -> deeper authority.**
 
-A source must still be relevant to the AI/developer target audience. Once that floor is met, current momentum and shelf life should matter much more than existing relationship history or whether we can produce a research-grade thesis.
+A source must still be relevant to the active Growth Focus and target software-developer audience. Once that floor is met, current momentum and shelf life should matter much more than existing relationship history or whether we can produce a research-grade thesis.
 
 Silence is not neutral at this stage. Missing a live distribution window means losing one of the few ways a cold account can appear around conversations that already have attention.
 
@@ -74,7 +74,7 @@ Quote when a distinct angle is available quickly.
 
 The standard is not a miniature essay. One concrete implication, comparison, caveat, field observation, or useful question is enough when the source carries the factual context.
 
-Prefer short, scannable copy that can be read line by line. The current Viral Styles evidence supports short observations directionally; recent high-performing AI/dev posts also commonly use short first lines and spaced visual beats.
+Prefer short, scannable copy that can be read line by line when that format suits the idea. The current Viral Styles evidence supports short observations directionally; do not turn this into an AI-only source preference or a mandatory writing formula.
 
 ### Reply
 
@@ -162,17 +162,17 @@ The 2026-08-24 repair implements this policy in the source-routing path.
 
 `pipeline.js:recommendationContext()` reads the latest stored account follower snapshot. When it is below 1,000, it passes the account stage and the real opportunity-score breakdown into `strategy.js:recommendDistributionAction()`.
 
-Current bootstrap heuristics are deliberately explicit and empirical:
+Current bootstrap heuristics are deliberately explicit and empirical (soft-tuned 2026-09-01 for honest velocity):
 
-- a cold Reply may qualify without relationship history when the X source is at most 24 hours old (`freshness >= 10`) and `conversationPotential >= 40`;
+- a cold Reply may qualify without relationship history when the X source is at most 24 hours old (`freshness >= 8`) and `conversationPotential >= 35`;
 - a quick Quote may use a distinct concise contribution without the normal `sourceIsEvidence` requirement while that same freshness condition holds;
-- a momentum-only Repost may qualify when `reachPotential >= 50`, freshness is at least `10`, momentum is at least `10`, and traction is at least `8`;
+- a momentum-only Repost may qualify when `reachPotential >= 45`, freshness is at least `8`, momentum is at least `8`, and traction is at least `6`;
 - at 1,000 followers, the normal conservative recommendation behavior resumes;
 - already-used candidates, stale low-value sources, and candidates outside Growth Focus remain skippable;
 - duplicate prevention, hard review gates, scheduler integrity, and publication transport are unchanged; a separately started `live` First-1,000 mission may delegate Original / Quote / Thread approval to the mission agent with stored provenance, while replies, Reposts, human approval, and `AUTO_POST` remain separate authority paths;
 - the explicit human `Use anyway` override remains available for genuinely ignored candidates.
 
-These numeric thresholds are bootstrap heuristics, not claimed X platform laws. They should be revised from observed account outcomes, not folklore.
+These numeric thresholds are bootstrap heuristics, not claimed X platform laws (`EMPIRICAL_VARIABLE` per `ALGORITHM_EVIDENCE_LEDGER.md:5`). They should be revised from observed account outcomes, not folklore. The `8/35/45/8/6` values are the current soft-tuned defaults; `POST_GENERATION_PROMPT.md:9` and `GROWTH_DISTRIBUTION_PLAYBOOK.md:5` remain consistent with this relaxation.
 
 ## Exit condition
 

@@ -6,9 +6,9 @@ The strategic architecture is **network-first**: use research to find useful con
 
 ## Account identity
 
-Target identity: **AI-native developer + builder**.
+Target identity: **developer + builder in tech**.
 
-Prefer content that gives developers leverage through AI coding agents, models/inference, devtools, infrastructure/architecture, jobs/career, builders/SaaS, and technical productization.
+Growth Focus is preference, not a closed whitelist. Registered content groups describe the topics the account should lean toward; the broader configurable technical audience defines an open-world exploration surface. A strong unregistered tech topic—new tooling, hardware, chips, robotics, security, systems, another engineering field, or a newly emerging category—may compete on live momentum without first being hardcoded as a niche. AI is one pillar inside that technical identity, not the parent category.
 
 Every proposed original should aim for:
 
@@ -78,7 +78,7 @@ When a user manually supplies an X post or URL:
 
 1. inspect the exact source and surrounding context;
 2. persist the exact text/metrics available when the source should enter research memory; for an immediate live action or exact skip/defer, `record-action` / `record-disposition` may capture the live source inline without a separate `ingest` round trip;
-3. during First 1,000 operation, start with `operator-status` for the compact cross-lane cockpit, then use `growth-next` as the detailed read-only view over the current last-known-good X Latest + X Momentum snapshots: it ranks unhandled candidates, exposes momentum/distribution leverage, claim exposure, execution path, and transferable source-style shape; use `growth-refresh` explicitly when source state needs refreshing, but never block next-action selection on a slow refresh; then inspect the exact live X source before acting;
+3. during First 1,000 operation, start with `operator-status` for the compact cross-lane cockpit, then use `growth-next` as the detailed read-only view over the current last-known-good X Latest, X Momentum, GitHub Trending, and HN Top snapshots: it ranks unhandled candidates, exposes momentum/distribution leverage, topic balance, execution path, and transferable source-style shape; use `growth-refresh` explicitly when source state needs refreshing, but never block next-action selection on a slow refresh; for an X interaction, inspect the exact live X source before acting, while GitHub/HN candidates normally feed owned Original/Thread research rather than borrowed-distribution actions;
 4. use `decide` plus `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md` to choose DIRECT / QUOTE / REPOST / REPLY / IGNORE; while the account is below 1,000 followers, apply `docs/FIRST_1000_GROWTH_MODE.md` as the higher-priority bootstrap policy when the conservative recommendation conflicts with fresh niche-relevant momentum;
 5. create an original angle rather than paraphrasing the source when authoring text; a First 1,000 Repost may amplify a strong source without forcing commentary;
 6. use `docs/POST_GENERATION_PROMPT.md` for the final writing/editing pass when producing outbound text; transfer viral structure/information density rather than wording;
@@ -102,13 +102,15 @@ An approved main-feed text draft requires >=40/50 and a passing Phase-2 hard-gat
 - Never request review or human approval for a scaffold that still contains placeholders.
 - Never silently enable `AUTO_POST`.
 - Never bypass the queue for ordinary scheduled publishing.
+- Never compose authored Reply / Quote / Original / Thread text freehand in X and then click Send/Post. The authenticated browser is transport only. The exact outbound text must first pass the current repository content gate; repository browser transports reject text without current gate provenance.
+- Understandability is a hard content invariant. Humor, wit, attitude, technical vocabulary, and a smart voice are allowed; if most technically curious readers would still have to decode the sentence before getting the point, rewrite it before approval or send.
 - Never turn a source tweet into a near-copy.
 - Keep explicit saved-post preferences and actual performance data separate from guessed preferences.
 - Preserve the standards in `docs/CONTENT_OPERATING_STANDARD.md`, `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md`, and `docs/POST_GENERATION_PROMPT.md`; while the account is below 1,000 followers, `docs/FIRST_1000_GROWTH_MODE.md` has precedence for bootstrap distribution volume and route selection.
 - Do not treat cold `relationshipPotential = 0` or the fallback `No sufficiently additive distribution action yet` as sufficient reasons to ignore a fresh high-momentum niche source during First 1,000 mode. Repost, concise Quote, or useful Reply are valid bootstrap actions subject to the existing duplicate, relevance, approval, and publication-authority boundaries.
 - Treat `docs/ALGORITHM_EVIDENCE_LEDGER.md` as the authority for whether a growth claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
 - Optimize network recommendations around target relevance, conversation quality, relationship potential, and qualified follower conversion; do not reduce target selection to follower count.
-- Keep the executable niche taxonomy in `strategy.js` aligned with `docs/NICHE_AND_KEYWORDS.md`.
+- Growth Focus is the runtime source of truth for preferred niche groups and the broader technical exploration universe. `strategy.js` supplies configurable defaults and schema/normalization only; content/audience groups may be added, removed, renamed, reweighted, disabled, or rebalanced without code changes. Registered groups receive preference; unregistered topics inside the broader configured technical scope remain eligible as exploratory opportunities. Keep `docs/NICHE_AND_KEYWORDS.md` aligned with defaults, not as a competing whitelist.
 - Phase 1A triage/routing/review interfaces remain current: use `queue`, `route`, and `workflow`; explicit dashboard human approval remains the ordinary approval path, with the sole delegated exception of the running `live` First-1,000 Original / Quote / Thread mission-agent path described above.
 - Phase 1B Relationship Intelligence is current: use `relationship-targets`, `relationship-inspect`, and `relationship-events` for strategic relationship reads. `audience_profiles` remains raw observation; `relationship_profiles` and append-only `relationship_events` own strategic state/history.
 - Phase 2 content integration is current: use `writer-packet` / `apply-writer-output`, persisted thread/editor/gate metadata, and dashboard hard-gate review. The persisted media enum is `none|screenshot|chart|code|diagram`; operator-attached JPEG/PNG/WebP/GIF images provide real attachment readiness, and required media stays blocked until an attachment plus complete media plan exists.

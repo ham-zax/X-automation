@@ -20,7 +20,11 @@ const OBJECTIVES: { value: EditorialObjective; label: string }[] = [
 
 function cloneProfile(profile: GrowthFocusProfile): GrowthFocusProfile {
   return {
+    schemaVersion: profile.schemaVersion,
     defaultObjective: profile.defaultObjective,
+    topicBalance: { ...profile.topicBalance },
+    exploration: { ...profile.exploration },
+    discovery: { ...profile.discovery },
     contentGroups: profile.contentGroups.map((group) => ({ ...group, terms: [...group.terms] })),
     audienceGroups: profile.audienceGroups.map((group) => ({ ...group, terms: [...group.terms] })),
     deprioritizedTerms: [...profile.deprioritizedTerms],
@@ -34,45 +38,124 @@ function splitTerms(value: string) {
 
 function GroupEditor({
   group,
+  content,
   onChange,
-  onRoleChange,
+  onRemove,
 }: {
   group: GrowthFocusGroup
-  onChange: (terms: string[]) => void
-  onRoleChange?: (role: 'core' | 'adjacent' | 'off') => void
+  content: boolean
+  onChange: (patch: Partial<GrowthFocusGroup>) => void
+  onRemove: () => void
 }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <div className="font-semibold text-slate-900">{group.label}</div>
-          <div className="mt-1 text-xs text-slate-500">{group.terms.length} matching terms</div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid flex-1 gap-2 sm:grid-cols-2">
+          <label className="text-xs font-medium text-slate-600">
+            Label
+            <input
+              value={group.label}
+              onChange={(event) => onChange({ label: event.target.value })}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Tag
+            <input
+              value={group.tag}
+              onChange={(event) => onChange({ tag: event.target.value })}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs text-slate-800"
+            />
+          </label>
         </div>
-        <div className="flex items-center gap-2">
-          {group.requiresTechnicalContext && <Badge tone="neutral">Needs technical context</Badge>}
-          {onRoleChange && (
-            <select
-              value={group.role || 'core'}
-              onChange={(event) => onRoleChange(event.target.value as 'core' | 'adjacent' | 'off')}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-700"
-              aria-label={`${group.label} Growth Focus role`}
-            >
-              <option value="core">Core</option>
-              <option value="adjacent">Adjacent</option>
-              <option value="off">Off</option>
-            </select>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+        >
+          Remove
+        </button>
       </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="text-xs font-medium text-slate-600">
+          Match weight
+          <input
+            type="number"
+            min={1}
+            max={50}
+            value={group.weight}
+            onChange={(event) => onChange({ weight: Number(event.target.value) })}
+            className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+          />
+        </label>
+        {content && (
+          <>
+            <label className="text-xs font-medium text-slate-600">
+              Role
+              <select
+                value={group.role || 'core'}
+                onChange={(event) => onChange({ role: event.target.value as 'core' | 'adjacent' | 'off' })}
+                className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+              >
+                <option value="core">Preferred</option>
+                <option value="adjacent">Adjacent</option>
+                <option value="off">Off (explicit block)</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Target share %
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={group.targetShare ?? 0}
+                onChange={(event) => onChange({ targetShare: Number(event.target.value) })}
+                className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Research tier
+              <select
+                value={group.researchTier ?? 2}
+                onChange={(event) => onChange({ researchTier: Number(event.target.value) })}
+                className="mt-1 block rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+              >
+                <option value={1}>1 — primary</option>
+                <option value={2}>2 — supporting</option>
+                <option value={3}>3 — occasional</option>
+              </select>
+            </label>
+          </>
+        )}
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            checked={group.discover !== false}
+            onChange={(event) => onChange({ discover: event.target.checked })}
+          />
+          {content ? 'Use for X discovery' : 'Use for open-world X discovery'}
+        </label>
+        <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+          <input
+            type="checkbox"
+            checked={group.requiresTechnicalContext === true}
+            onChange={(event) => onChange({ requiresTechnicalContext: event.target.checked })}
+          />
+          Needs another technical-topic match
+        </label>
+      </div>
+
+      <div className="mt-3 text-xs text-slate-500">{group.terms.length} matching terms</div>
       <textarea
         value={group.terms.join('\n')}
-        onChange={(event) => onChange(splitTerms(event.target.value))}
+        onChange={(event) => onChange({ terms: splitTerms(event.target.value) })}
         rows={7}
         spellCheck={false}
-        className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs text-slate-800"
+        className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-xs text-slate-800"
         aria-label={`${group.label} terms`}
       />
-      <p className="mt-2 text-xs text-slate-500">One term per line. Remove a term to stop matching it; add a term to broaden this category.</p>
+      <p className="mt-2 text-xs text-slate-500">One term per line. Discovery and classification both use these active terms.</p>
     </div>
   )
 }
@@ -108,17 +191,31 @@ export function NicheSettings() {
   if (error) return <Error message={error.message} onRetry={() => refetch()} />
   if (!data || !draft) return <Error message="Growth Focus is unavailable." />
 
-  const updateGroup = (kind: 'contentGroups' | 'audienceGroups', tag: string, terms: string[]) => {
+  const updateGroup = (kind: 'contentGroups' | 'audienceGroups', index: number, patch: Partial<GrowthFocusGroup>) => {
     setDraft((current) => current ? {
       ...current,
-      [kind]: current[kind].map((group) => group.tag === tag ? { ...group, terms } : group),
+      [kind]: current[kind].map((group, groupIndex) => groupIndex === index ? { ...group, ...patch } : group),
     } : current)
   }
-  const updateContentRole = (tag: string, role: 'core' | 'adjacent' | 'off') => {
+  const removeGroup = (kind: 'contentGroups' | 'audienceGroups', index: number) => {
     setDraft((current) => current ? {
       ...current,
-      contentGroups: current.contentGroups.map((group) => group.tag === tag ? { ...group, role } : group),
+      [kind]: current[kind].filter((_, groupIndex) => groupIndex !== index),
     } : current)
+  }
+  const addGroup = (kind: 'contentGroups' | 'audienceGroups') => {
+    setDraft((current) => {
+      if (!current) return current
+      const suffix = current[kind].length + 1
+      const group: GrowthFocusGroup = {
+        tag: `topic-${suffix}`,
+        label: 'New topic',
+        weight: 12,
+        ...(kind === 'contentGroups' ? { role: 'core' as const, targetShare: 0, researchTier: 2, discover: true } : { discover: true }),
+        terms: [],
+      }
+      return { ...current, [kind]: [...current[kind], group] }
+    })
   }
 
   return (
@@ -128,7 +225,7 @@ export function NicheSettings() {
           <a href="#/settings" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Settings</a>
           <h2 className="mt-2 text-2xl font-semibold text-slate-900">Growth Focus</h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Choose the audience-growth goal and how deterministic topic matches should be interpreted. Topic classification remains evidence; these roles decide whether an opportunity is Core, Adjacent, or Outside current focus.
+            Choose what the account prefers without turning those preferences into a whitelist. Preferred and Adjacent groups receive stronger topic signals; unregistered technical topics can still enter as Emerging tech through the broader configurable universe. Off is the explicit block.
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <Badge tone={data.customized ? 'info' : 'neutral'}>{data.customized ? 'Customized' : 'Using defaults'}</Badge>
@@ -194,33 +291,169 @@ export function NicheSettings() {
           </select>
         </label>
         <p className="mt-2 text-xs text-slate-500">Qualified growth remains the default: relevant followers first, while reach, authority, relationships, and opportunities stay distinct outcomes.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="text-xs font-medium text-slate-600">
+            Balance window
+            <input
+              type="number"
+              min={10}
+              max={100}
+              value={draft.topicBalance.windowSize}
+              onChange={(event) => setDraft((current) => current ? { ...current, topicBalance: { ...current.topicBalance, windowSize: Number(event.target.value) } } : current)}
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Balance strength
+            <input
+              type="number"
+              min={0}
+              max={1}
+              step={0.05}
+              value={draft.topicBalance.strength}
+              onChange={(event) => setDraft((current) => current ? { ...current, topicBalance: { ...current.topicBalance, strength: Number(event.target.value) } } : current)}
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-600">
+            Max priority adjustment
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={draft.topicBalance.maxAdjustment}
+              onChange={(event) => setDraft((current) => current ? { ...current, topicBalance: { ...current.topicBalance, maxAdjustment: Number(event.target.value) } } : current)}
+              className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-slate-500">Topic balance is a soft ranking correction. Set strength or max adjustment to 0 to disable it without changing topic groups.</p>
+        <div className="mt-5 border-t border-slate-200 pt-4">
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+            <input
+              type="checkbox"
+              checked={draft.exploration.enabled}
+              onChange={(event) => setDraft((current) => current ? { ...current, exploration: { ...current.exploration, enabled: event.target.checked } } : current)}
+            />
+            Allow unregistered tech topics to compete
+          </label>
+          <p className="mt-1 text-xs text-slate-500">When enabled, posts inside the broader configured technical audience can surface even when they do not match a registered content niche. Registered niches still receive the stronger preference and balance signals.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-medium text-slate-600">
+              Exploratory topic score
+              <input
+                type="number"
+                min={0}
+                max={50}
+                value={draft.exploration.weight}
+                onChange={(event) => setDraft((current) => current ? { ...current, exploration: { ...current.exploration, weight: Number(event.target.value) } } : current)}
+                className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Broad X search queries
+              <input
+                type="number"
+                min={0}
+                max={20}
+                value={draft.exploration.maxSearchQueries}
+                onChange={(event) => setDraft((current) => current ? { ...current, exploration: { ...current.exploration, maxSearchQueries: Number(event.target.value) } } : current)}
+                className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+          </div>
+        </div>
+        <div className="mt-5 border-t border-slate-200 pt-4">
+          <div className="text-sm font-semibold text-slate-900">Discovery budget and rotation</div>
+          <p className="mt-1 text-xs text-slate-500">Bound how many configured X query groups each refresh executes. The selected groups rotate over time so refresh stays fast without permanently favoring the first categories in the list.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            <label className="text-xs font-medium text-slate-600">
+              Latest query budget
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={draft.discovery.latestQueryBudget}
+                onChange={(event) => setDraft((current) => current ? { ...current, discovery: { ...current.discovery, latestQueryBudget: Number(event.target.value) } } : current)}
+                className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Momentum query budget
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={draft.discovery.momentumQueryBudget}
+                onChange={(event) => setDraft((current) => current ? { ...current, discovery: { ...current.discovery, momentumQueryBudget: Number(event.target.value) } } : current)}
+                className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+            <label className="text-xs font-medium text-slate-600">
+              Rotate every (minutes)
+              <input
+                type="number"
+                min={1}
+                max={120}
+                value={draft.discovery.rotationMinutes}
+                onChange={(event) => setDraft((current) => current ? { ...current, discovery: { ...current.discovery, rotationMinutes: Number(event.target.value) } } : current)}
+                className="mt-1 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-800"
+              />
+            </label>
+          </div>
+        </div>
       </section>
 
       <section>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Topics and their role</h3>
-          <p className="mt-1 text-sm text-slate-600">Terms drive deterministic classification. The role controls strategy: Core is normal focus, Adjacent is allowed when technically relevant, and Off is treated as outside current focus unless you explicitly choose to use an opportunity anyway.</p>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Topics and their role</h3>
+            <p className="mt-1 text-sm text-slate-600">These groups now drive classification and X discovery. Target share is a planning signal used to counter repeated over-selection; it does not force weak posts.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => addGroup('contentGroups')}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Add topic
+          </button>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {draft.contentGroups.map((group) => (
+          {draft.contentGroups.map((group, index) => (
             <GroupEditor
-              key={group.tag}
+              key={`${group.tag}-${index}`}
               group={group}
-              onChange={(terms) => updateGroup('contentGroups', group.tag, terms)}
-              onRoleChange={(role) => updateContentRole(group.tag, role)}
+              content
+              onChange={(patch) => updateGroup('contentGroups', index, patch)}
+              onRemove={() => removeGroup('contentGroups', index)}
             />
           ))}
         </div>
       </section>
 
       <section>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Who we want in the audience</h3>
-          <p className="mt-1 text-sm text-slate-600">Broader profile-language matches used to decide whether a follower or followed account fits the target technical network.</p>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">Broader tech universe and audience</h3>
+            <p className="mt-1 text-sm text-slate-600">These groups describe the wider technical world around the account. They still classify audience fit, and—when open-world exploration is enabled—they also let new or unregistered tech topics enter discovery without becoming permanent niches.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => addGroup('audienceGroups')}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Add audience group
+          </button>
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {draft.audienceGroups.map((group) => (
-            <GroupEditor key={group.tag} group={group} onChange={(terms) => updateGroup('audienceGroups', group.tag, terms)} />
+          {draft.audienceGroups.map((group, index) => (
+            <GroupEditor
+              key={`${group.tag}-${index}`}
+              group={group}
+              content={false}
+              onChange={(patch) => updateGroup('audienceGroups', index, patch)}
+              onRemove={() => removeGroup('audienceGroups', index)}
+            />
           ))}
         </div>
       </section>
@@ -241,7 +474,7 @@ export function NicheSettings() {
       </section>
 
       <div className="rounded-lg border border-slate-200 bg-slate-100 p-4 text-sm text-slate-600">
-        <strong className="text-slate-800">Current scope:</strong> Growth Focus changes how current candidate classification is interpreted and how audience fit is reviewed. It does not rewrite live X source-search queries, approve content, or change Writer strategy behavior.
+        <strong className="text-slate-800">Current scope:</strong> Registered content groups are preferences, not the whole universe. Growth Focus can also admit unregistered technical topics through the broader audience scope, so emerging tech can compete on live momentum without being hardcoded into the niche first. Content approval and Writer quality gates remain separate controls.
       </div>
     </div>
   )

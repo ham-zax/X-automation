@@ -1,18 +1,18 @@
 # Niche and Keyword Map
 
-This document defines the audience, topic boundaries, and keyword universe for `@ham_zax`. The executable taxonomy used by discovery and ranking lives in `strategy.js`; keep that file aligned with material changes to this map.
+This document describes the default preferences and technical universe for `@ham_zax`. The runtime source of truth is the persisted Growth Focus profile; `strategy.js` supplies defaults plus schema/normalization. Preferred content groups and broader audience/scope groups can be added, removed, renamed, reweighted, or disabled without code changes. Preferred groups bias selection; they do not hard-block a strong unregistered technical opportunity.
 
-The goal is not to become a generic technology-news account. The account should be recognizable as an **AI-native developer and builder account** that helps developers discover leverage, make better technical decisions, and turn software skills into useful products.
+The goal is not to become a generic technology-news account or an AI-only account. The account should be recognizable as a **developer and builder in tech**: strongly inclined toward software development and the registered Growth Focus topics, but able to exploit worthwhile adjacent or newly emerging technical conversations. AI-assisted development is one topic family inside that identity.
 
 ## 1. Positioning
 
 Primary positioning:
 
-> I test what is changing in AI and software development, then share the tools, workflows, experiments, and product lessons that actually help developers build.
+> I make software development easier to understand and use, from frontend and backend to Python, Rust, databases, devtools, infrastructure, shipping products, and AI-assisted engineering.
 
 Short form:
 
-> AI-native developer + builder.
+> Software developer + builder.
 
 Audience promise:
 
@@ -39,9 +39,9 @@ Secondary audience:
 
 ## 3. Core content pillars
 
-### A. AI coding and coding agents
+### A. AI-assisted development and coding agents
 
-Highest-priority pillar.
+One important default pillar, not the parent category for the account.
 
 Examples:
 
@@ -181,16 +181,19 @@ The purpose is genuine network formation, not synthetic engagement.
 
 ## 4. Content mix target
 
-Use this as a planning bias, not a rigid quota:
+Use the active Growth Focus `targetShare` values as a planning bias, not rigid quotas. The default profile currently allocates:
 
-- 30% AI coding agents, models, and agent infrastructure;
-- 20% developer tools and open source;
-- 20% experiments, builds, and firsthand technical findings;
-- 15% developer-to-business / founder lessons;
-- 10% technical opinions and mental models;
-- 5% networking, humor, or culture strongly related to the niche.
+- 20% AI-assisted development + models/inference;
+- 14% JavaScript/TypeScript/frontend;
+- 14% Node.js/backend/APIs;
+- 10% Python engineering;
+- 10% Rust/Go/systems;
+- 8% databases/data systems;
+- 10% developer tools/open source;
+- 9% infrastructure/architecture;
+- 5% building and shipping software.
 
-A week can deviate when one topic has unusual momentum.
+The percentages are normalized at runtime. Change them in Growth Focus rather than editing ranking code. A short window can deviate when one topic has unusually strong evidence or momentum; topic balance is a bounded ranking adjustment, not a quota that forces weak content.
 
 ## 5. Core keyword groups
 

@@ -1,4 +1,5 @@
 import { applyAcceptedLearnedRules } from './learning.js';
+import { getActiveContentGroups } from './strategy.js';
 
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, Number(value || 0)));
@@ -98,12 +99,11 @@ function discussion(candidate) {
   return round(replyVolume + replyRate);
 }
 
-function identityScore(tags, text) {
-  const set = new Set(tags || []);
-  if (['agents', 'models', 'devtools', 'infra'].some((tag) => set.has(tag))) return 10;
-  const technical = /(developer|engineer|code|coding|api|sdk|cli|agent|model|infra|software)/i.test(String(text || ''));
-  if (technical && (set.has('builders') || set.has('jobs/career'))) return 7;
-  if (technical && set.has('business')) return 4;
+function identityScore(tags) {
+  const roles = new Map(getActiveContentGroups({ includeOff: true }).map((group) => [group.tag, group.role]));
+  const matchedRoles = unique(tags).map((tag) => roles.get(tag)).filter(Boolean);
+  if (matchedRoles.includes('core')) return 10;
+  if (matchedRoles.includes('adjacent')) return 6;
   return 0;
 }
 
@@ -160,7 +160,7 @@ export function scoreOpportunity(candidate, context = {}) {
     preference: preferenceScore(candidate, context.preference || {}),
     specificity: Math.min(20, Math.min(12, matches.length * 3) + Math.min(8, countMarkers(text, specificityMarkers, 3) * 3)),
     utility: Math.min(20, countMarkers(text, utilityGroups, 20) * 3),
-    identity: identityScore(tags, text),
+    identity: identityScore(tags),
   };
 
   const hasQuestionOrTradeoff = /\?|\b(?:compare|comparison|vs\.?|versus|better|worse|trade-?off|bottleneck|failure|fails)\b/i.test(text);

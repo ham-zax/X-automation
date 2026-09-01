@@ -1,7 +1,18 @@
 import { loginWithCookie, postComposer } from 'xactions';
+import {
+  getAccountHealthSummary,
+  getAutonomousReplyDecision,
+  getAutonomousReplyGrantState,
+  getDraftByCandidate,
+  getMainFeedScheduleItem,
+  getQueueApprovalAuthority,
+  getQueueItemByCandidate,
+} from './store.js';
 import { createBrowser, createPage } from './x_browser.js';
 
 const STATUS_ID = /\/status\/(\d+)/;
+const CONTENT_GATE_TTL_MS = 120_000;
+const CONTENT_GATE_RECEIPTS = new WeakMap();
 const TWEET_ARTICLE = 'article[data-testid="tweet"]';
 const TWEET_TEXT = '[data-testid="tweetText"]';
 
@@ -20,6 +31,97 @@ function targetUrl(value) {
   if (!raw) return '';
   if (/^https?:\/\//.test(raw)) return raw;
   return /^\d+$/.test(raw) ? `https://x.com/i/status/${raw}` : raw;
+}
+
+function issueContentGate(metadata) {
+  const receipt = {};
+  CONTENT_GATE_RECEIPTS.set(receipt, { ...metadata, issuedAt: Date.now(), consumed: false });
+  return receipt;
+}
+
+function consumeContentGate(receipt, expected) {
+  const metadata = receipt && typeof receipt === 'object' ? CONTENT_GATE_RECEIPTS.get(receipt) : null;
+  if (!metadata || metadata.consumed) throw new Error('Browser publication requires a current repository-issued content gate receipt.');
+  if (Date.now() - Number(metadata.issuedAt || 0) > CONTENT_GATE_TTL_MS) throw new Error('Browser publication content gate receipt expired; re-run the current repository gate.');
+  for (const [key, value] of Object.entries(expected || {})) {
+    if (String(metadata[key] ?? '') !== String(value ?? '')) throw new Error(`Browser publication content gate mismatch: ${key}.`);
+  }
+  metadata.consumed = true;
+  return metadata;
+}
+
+export function authorizeReplyBrowserContent({ candidateKey, text, targetTweetId, authority } = {}) {
+  const key = String(candidateKey || '').trim();
+  const body = String(text || '').trim();
+  const target = String(targetTweetId || '').trim();
+  if (!key || !body || !target) throw new Error('Reply browser authorization requires candidateKey, exact text, and targetTweetId.');
+  const draft = getDraftByCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!draft || String(draft.body || '').trim() !== body) throw new Error('Reply browser authorization failed: persisted draft text does not match the exact outbound text.');
+  if (draft.gates?.passed !== true || draft.gates?.checks?.understandable !== true) {
+    throw new Error('Reply browser authorization failed: the persisted draft has not passed the current understandability/content gates.');
+  }
+  if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply' || String(queueItem.targetTweetId || '') !== target) {
+    throw new Error('Reply browser authorization failed: persisted engagement target does not match the requested reply target.');
+  }
+
+  const type = String(authority?.type || '');
+  if (type === 'human') {
+    const savedAuthority = getQueueApprovalAuthority(queueItem);
+    if (savedAuthority?.type !== 'human' || String(queueItem.approvedText || '').trim() !== body) {
+      throw new Error('Reply browser authorization failed: exact human approval is missing or stale.');
+    }
+  } else if (type === 'autonomous') {
+    const decision = getAutonomousReplyDecision(Number(authority?.decisionId));
+    const grant = getAutonomousReplyGrantState() || {};
+    if (!decision
+      || decision.decision !== 'sending'
+      || decision.candidateKey !== key
+      || String(decision.targetTweetId || '') !== target
+      || String(decision.exactReply || '').trim() !== body
+      || Number(decision.grantRevision) !== Number(authority?.grantRevision)
+      || grant.state !== 'running'
+      || grant.mode !== 'live'
+      || Number(grant.revision) !== Number(authority?.grantRevision)
+      || queueItem.humanApprovedAt
+      || queueItem.approvedText) {
+      throw new Error('Reply browser authorization failed: autonomous authority/provenance is missing, stale, or mismatched.');
+    }
+    if (getAccountHealthSummary().health.state === 'constrained') {
+      throw new Error('Reply browser authorization failed: Account Health is constrained.');
+    }
+  } else {
+    throw new Error('Reply browser authorization requires human or autonomous authority.');
+  }
+
+  return issueContentGate({ kind: 'reply', candidateKey: key, exactText: body, targetTweetId: target, authorityType: type });
+}
+
+export function authorizeMainFeedBrowserContent(item) {
+  const key = String(item?.candidateKey || '').trim();
+  if (!key) throw new Error('Main-feed browser authorization requires candidateKey.');
+  const current = getMainFeedScheduleItem(key);
+  if (!current
+    || current.status !== 'approved'
+    || current.gatesPassed !== true
+    || current.draft?.gates?.passed !== true
+    || current.draft?.gates?.checks?.understandable !== true
+    || current.approvalSnapshotMismatch === true
+    || !current.approvalAuthority) {
+    throw new Error('Main-feed browser authorization failed: current approved content/gate state is missing or stale.');
+  }
+  const pipeline = String(current.pipeline || '');
+  const exactText = pipeline === 'thread'
+    ? String(current.threadParts?.[0] || '').trim()
+    : String(current.body || current.text || '').trim();
+  if (!exactText) throw new Error('Main-feed browser authorization failed: current approved text is empty.');
+  return issueContentGate({
+    kind: 'main_feed',
+    candidateKey: key,
+    pipeline,
+    exactText,
+    approvalContentHash: String(current.approvalSnapshot?.contentHash || ''),
+  });
 }
 
 function sourceTweetUrl(item) {
@@ -237,10 +339,16 @@ export async function postTweetBrowser(text, credentials, {
   account = process.env.X_ACCOUNT || 'ham_zax',
   replyTo = null,
   mediaAttachment = null,
+  contentGate = null,
   headless = true,
 } = {}) {
   const body = String(text || '').trim();
   if (!body) throw new Error('Browser publication requires non-empty text.');
+  consumeContentGate(contentGate, {
+    kind: 'reply',
+    exactText: body,
+    targetTweetId: String(replyTo || '').trim(),
+  });
   const { browser, page } = await openAuthenticatedBrowser(credentials, { headless });
   try {
     const includeReplies = Boolean(replyTo);
@@ -264,6 +372,7 @@ export async function postTweetBrowser(text, credentials, {
 
 export async function publishMainFeedBrowser(item, credentials, {
   account = process.env.X_ACCOUNT || 'ham_zax',
+  contentGate = null,
   headless = true,
 } = {}) {
   const pipeline = String(item?.pipeline || '');
@@ -290,6 +399,13 @@ export async function publishMainFeedBrowser(item, credentials, {
     ? threadParts[0]
     : String(item?.body || item?.text || '').trim();
   if (!expectedText) throw new Error(`${pipeline || 'Main-feed'} publication requires final text.`);
+  consumeContentGate(contentGate, {
+    kind: 'main_feed',
+    candidateKey: String(item?.candidateKey || '').trim(),
+    pipeline,
+    exactText: expectedText,
+    approvalContentHash: String(item?.approvalSnapshot?.contentHash || ''),
+  });
 
   const { browser, page } = await openAuthenticatedBrowser(credentials, { headless });
   let verificationBrowser = null;

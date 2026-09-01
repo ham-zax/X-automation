@@ -1,6 +1,6 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers AI/developer signals, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, proposes evidence-backed learned strategy rules, and publishes approved queued drafts through the authenticated Clearcote browser UI.
+Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers software-development signals across the active Growth Focus, learns from saved posts, stores research in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware health-aware Engage Next opportunities, turns sources into scored drafts, measures fixed-window content/network outcomes, compares declared observational experiments, proposes evidence-backed learned strategy rules, and publishes approved queued drafts through the authenticated Clearcote browser UI.
 
 ## Components
 
@@ -90,7 +90,7 @@ node tech_news.js --x --limit=3
 node tech_news.js --json --limit=5
 ```
 
-X discovery is driven by the taxonomy in `strategy.js`: AI coding agents, models/inference, developer tools, infrastructure/architecture, jobs/career, builders/SaaS, and technical productization. **X Latest** is the configured Latest-search source view in real post-time order. **X Momentum** is the configured Top-search/momentum view; neither is labeled as X's global Trends product. **GitHub Trending** reads the actual GitHub Trending source order and enriches repositories with authoritative metadata. **HN Top Stories** preserves the current Hacker News top-stories order and metadata.
+X discovery is generated from the persisted Growth Focus topic groups. The default profile spans frontend/JavaScript/TypeScript, Node.js/backend/APIs, Python, Rust/Go/systems, databases, developer tools/open source, infrastructure, building/shipping software, and AI-assisted development; groups can be added, removed, renamed, reweighted, disabled, or rebalanced without changing discovery code. **X Latest** is the configured Latest-search source view in real post-time order. **X Momentum** is the configured Top-search/momentum view; neither is labeled as X's global Trends product. **GitHub Trending** reads the actual GitHub Trending source order and enriches repositories with authoritative metadata. **HN Top Stories** preserves the current Hacker News top-stories order and metadata.
 
 Research candidates are persisted in `.x-research.sqlite`, but live source snapshots are distinct from workflow history. **To review** contains unresolved persisted candidates; **Bookmarks** means explicit reference state; **Handled** is derived from real publication/quote/reply/repost history; **All sources** is persisted history rather than a live upstream feed. Starting a draft does not implicitly bookmark its source.
 

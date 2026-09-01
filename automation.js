@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
 import { refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
-import { publishMainFeedBrowser } from './x_browser_publish.js';
+import { authorizeMainFeedBrowserContent, publishMainFeedBrowser } from './x_browser_publish.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
@@ -285,6 +285,7 @@ export async function processMainFeedQueue({
   if (!autoPost) return { action: 'preview', decision, decisions };
   if (!authToken) throw new Error('AUTO_POST=true browser publication requires AUTH_TOKEN.');
 
+  const contentGate = authorizeMainFeedBrowserContent(decision.item);
   const claimed = claimQueueItem(decision.item.id, {
     expectedUpdatedAt: decision.item.updatedAt,
     now: currentTime,
@@ -293,7 +294,7 @@ export async function processMainFeedQueue({
 
   let output;
   try {
-    output = await transport(decision.item, { authToken }, { account });
+    output = await transport(decision.item, { authToken }, { account, contentGate });
   } catch (error) {
     if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
       const queueItem = saveQueueItem({

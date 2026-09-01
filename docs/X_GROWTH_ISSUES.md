@@ -23,6 +23,7 @@ This is not an implementation plan. Each issue should be fixed only after its ow
 | XG-09 | Late or collapsed measurement windows weaken experiment interpretation | observed measurement problem | P0 |
 | XG-10 | Live autonomous replies use the configured transport boundary | resolved implementation constraint | P1 |
 | XG-11 | Bootstrap distribution surface is not sufficiently tested | observed strategic gap | P0 |
+| XG-12 | Growth Focus and understandability gates can collapse development into AI-heavy, hard-to-follow output | observed defect | P0 |
 
 ## XG-01 — Editorial can select work the distribution owner will reject
 
@@ -350,18 +351,64 @@ Those observations do not establish causality, but they are strong enough to mak
 
 Run explicit matched-age comparisons across distribution surfaces such as Original, Quote, and other eligible main-feed formats. Track reach, profile visits, follows, and qualified-follower outcomes separately from hook treatment. Do not promote a preferred surface from isolated posts; require repeated directional evidence under reasonably comparable conditions.
 
+## XG-12 — Growth Focus and understandability gates can collapse development into AI-heavy, hard-to-follow output
+
+**Class:** observed defect
+**Priority:** P0
+**Primary owner:** Growth Focus profile/taxonomy, X discovery query construction, operator candidate ordering, deterministic drafting gates, and outbound browser mutation boundary.
+
+### Problem
+
+The intended niche is software development and building, with AI-assisted development as one important pillar. The production path can instead converge on AI-heavy content and still approve copy that a normal software developer has to decode.
+
+The defect is a chain rather than one bad prompt:
+
+- Growth Focus stores editable terms but `setActiveNicheProfile()` rebuilds the profile from a fixed default group list, so categories cannot actually be added or removed;
+- content classification is narrower than audience classification, so ordinary JavaScript, React, Rust, frontend, and backend content can score zero while AI-agent/model content matches multiple weighted groups;
+- X search queries are maintained separately from Growth Focus and the fast momentum path takes the first two fixed query buckets, which are AI-heavy;
+- `growth-next` ranks momentum/reach without a configurable recent-topic balance term;
+- deterministic `scannability` checks layout rather than one-pass comprehension, so jargon-heavy copy can pass;
+- repository browser transports are quality-gated when entered through queue/reply workflows, but an operator can still compose freehand in an authenticated browser unless the governing workflow explicitly forbids that bypass.
+
+### Evidence
+
+Representative current classifier probes before this repair:
+
+- `JavaScript performance tips for the browser` -> score `0`;
+- `React 20 improves frontend rendering` -> score `0`;
+- `Rust makes this backend service faster` -> score `0`;
+- `Node.js API with Fastify` -> score `16`;
+- `Python FastAPI backend` -> score `16`;
+- `Claude Code with Qwen for coding agents` -> score `34`.
+
+A shortened version of the rejected Vercel reply remained `44/50`, `strong`, and publishable under the existing deterministic gate once unrelated length/current-classification blockers were removed. The gate therefore did not encode the human requirement that a competent general software developer should understand the point on one pass.
+
+### Impact
+
+- Topic selection can recursively train itself toward AI because discovery, saved preferences, and source momentum all see the same skewed pool.
+- The account can describe itself as a developer account while ordinary development topics are under-discovered or classified outside focus.
+- A technically correct post can still reduce follow conversion because the reader has to translate internal engineering vocabulary before receiving the payoff.
+- Prompt-only voice corrections are not reliable because the transport/operator can bypass them.
+
+### Desired condition
+
+Growth Focus is the single configurable preference/scope source of truth. Content groups can be added, removed, renamed, reweighted, and assigned a target share without code changes; audience groups define a broader technical universe for open-world exploration. Registered topics receive preference, but an unregistered technical topic may still enter discovery and compete on momentum without first becoming a permanent niche. Discovery queries are derived from both configured preferred groups and the configurable broader technical scope rather than a fixed AI-first list. Candidate ordering exposes a bounded topic-balance adjustment instead of silently repeating the dominant category.
+
+Every authored outbound item must also pass an understandability gate that is separate from visual scannability. This gate does not require a plain or neutral voice; humor, technical language, attitude, and stylistic variation are allowed when the point still lands on one read. Repository-owned browser transports may only send text carrying current approval/gate provenance, and the live operator must not type freehand authored copy directly into X.
+
 ## Dependency order
 
 The issues should not be attacked as one refactor. The current dependency order is:
 
-1. XG-02 and XG-09 — make the mission reward and measurement windows trustworthy.
-2. XG-11 — learn which distribution surfaces can reliably earn bootstrap reach and conversion.
-3. XG-03 — collect enough formal A/B/C evidence to change writing decisions inside those surfaces.
-4. XG-01 and XG-07 — remove avoidable Editorial/distribution disagreement and wasted candidate reasoning.
-5. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses without conflating proof ownership with distribution surface.
-6. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
-7. XG-08 — optimize engagement for relationship outcomes rather than volume.
-8. XG-10 — use the configured autonomous reply transport under the explicit grant and budget.
+1. XG-12 — restore configurable topic ownership and comprehension as preconditions for every subsequent content experiment.
+2. XG-02 and XG-09 — make the mission reward and measurement windows trustworthy.
+3. XG-11 — learn which distribution surfaces can reliably earn bootstrap reach and conversion.
+4. XG-03 — collect enough formal A/B/C evidence to change writing decisions inside those surfaces.
+5. XG-01 and XG-07 — remove avoidable Editorial/distribution disagreement and wasted candidate reasoning.
+6. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses without conflating proof ownership with distribution surface.
+7. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
+8. XG-08 — optimize engagement for relationship outcomes rather than volume.
+9. XG-10 — use the configured autonomous reply transport under the explicit grant and budget.
 
 This order is a triage view, not authorization to implement all items.
 

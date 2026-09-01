@@ -426,6 +426,11 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
   }
   const exactReply = String(generated.draft.body || '').trim();
   const gates = autonomousGateResult(item, candidate, generated.draft, generated.recentReplies, generated.recentReplyArchetypes);
+  const checkedDraft = {
+    ...generated.draft,
+    gates: gates.analysis.gates,
+    qualityScore: gates.analysis.score,
+  };
   const checks = {
     ...base.checks,
     writingScore: gates.analysis.score,
@@ -433,7 +438,7 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
     deterministicFailures: gates.deterministicFailures,
   };
   if (generated.output.decision === 'DO_NOT_POST') {
-    return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'skipped', reasons: [boundedReason('WRITER_DO_NOT_REPLY', 'The Writer found no strong reply worth sending.')] };
+    return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: checkedDraft, checks, decision: 'skipped', reasons: [boundedReason('WRITER_DO_NOT_REPLY', 'The Writer found no strong reply worth sending.')] };
   }
   if (!gates.passed) {
     const first = gates.deterministicFailures[0];
@@ -441,13 +446,13 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
       ...base,
       exactReply,
       aiExecution: generated.output.execution || null,
-      generatedDraft: generated.draft,
+      generatedDraft: checkedDraft,
       checks,
       decision: 'review',
       reasons: [boundedReason('DETERMINISTIC_GATE_REVIEW', first?.message || 'The generated reply needs human review before sending.')],
     };
   }
-  return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: generated.draft, checks, decision: 'send', reasons: [] };
+  return { ...base, exactReply, aiExecution: generated.output.execution || null, generatedDraft: checkedDraft, checks, decision: 'send', reasons: [] };
 }
 
 function persistDecision(item, grant, evaluation, decision) {

@@ -16,7 +16,7 @@ import { getAutonomousMainFeedMissionStatus } from './autonomous_main_feed.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
-import { assessDiscoveryQuality, classifyNiche, recommendDistributionAction } from './strategy.js';
+import { assessDiscoveryQuality, classifyNiche, getActiveContentGroups, getActiveNicheProfile, recommendDistributionAction } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
 import {
   EDITORIAL_OBJECTIVES,
@@ -424,7 +424,70 @@ function schedulerContext(now) {
   };
 }
 
-function growthOperatorPacket(candidate, sourceKinds = []) {
+function recentTopicBalance(windowSize = null) {
+  const settings = getActiveNicheProfile().topicBalance;
+  const boundedWindow = Math.max(10, Math.min(100, Number(windowSize ?? settings.windowSize)));
+  const groups = getActiveContentGroups().filter((group) => Number(group.targetShare || 0) > 0);
+  const targetTotal = groups.reduce((sum, group) => sum + Number(group.targetShare || 0), 0);
+  if (!groups.length || targetTotal <= 0) return { sampleSize: 0, groups: {}, enabled: false };
+
+  const eligibleTags = new Set(groups.map((group) => group.tag));
+  const recent = [
+    ...listRecentMainFeedPublications({ limit: boundedWindow }),
+    ...listRecentPublishedContent({ kind: 'reply', limit: boundedWindow }),
+  ]
+    .sort((left, right) => Number(right.publishedAt || right.updatedAt || 0) - Number(left.publishedAt || left.updatedAt || 0))
+    .slice(0, boundedWindow);
+  const counts = new Map(groups.map((group) => [group.tag, 0]));
+  let sampleSize = 0;
+
+  for (const item of recent) {
+    const candidate = getCandidate(item.candidateKey);
+    const tags = (candidate?.niche?.status === 'current' ? candidate.niche.tags : classifyNiche(item.text || item.body || '').tags)
+      .filter((tag) => eligibleTags.has(tag));
+    if (!tags.length) continue;
+    sampleSize += 1;
+    const share = 1 / tags.length;
+    for (const tag of tags) counts.set(tag, Number(counts.get(tag) || 0) + share);
+  }
+
+  return {
+    enabled: Number(settings.strength || 0) > 0 && Number(settings.maxAdjustment || 0) > 0,
+    settings: { ...settings, windowSize: boundedWindow },
+    sampleSize,
+    groups: Object.fromEntries(groups.map((group) => {
+      const targetShare = (Number(group.targetShare || 0) / targetTotal) * 100;
+      const observedShare = sampleSize ? (Number(counts.get(group.tag) || 0) / sampleSize) * 100 : 0;
+      return [group.tag, {
+        targetShare: Math.round(targetShare * 10) / 10,
+        observedShare: Math.round(observedShare * 10) / 10,
+        deficit: Math.round((targetShare - observedShare) * 10) / 10,
+      }];
+    })),
+  };
+}
+
+function candidateTopicBalance(candidate, topicBalance) {
+  if (!topicBalance?.enabled) return { adjustment: 0, matchedTags: [], reason: 'Topic balance is disabled because no active target shares are configured.' };
+  const matchedTags = (candidate?.niche?.tags || []).filter((tag) => topicBalance.groups[tag]);
+  if (!matchedTags.length) return { adjustment: 0, matchedTags: [], reason: 'Candidate does not match a target-share topic.' };
+  const strongest = matchedTags
+    .map((tag) => ({ tag, ...topicBalance.groups[tag] }))
+    .sort((left, right) => right.deficit - left.deficit)[0];
+  const strength = Number(topicBalance.settings?.strength || 0);
+  const maxAdjustment = Number(topicBalance.settings?.maxAdjustment || 0);
+  const adjustment = Math.max(-maxAdjustment, Math.min(maxAdjustment, Math.round(strongest.deficit * strength)));
+  return {
+    adjustment,
+    matchedTags,
+    targetShare: strongest.targetShare,
+    observedShare: strongest.observedShare,
+    deficit: strongest.deficit,
+    reason: `${strongest.tag} is ${strongest.deficit >= 0 ? 'under' : 'over'} its configured rolling target by ${Math.abs(strongest.deficit)} percentage points.`,
+  };
+}
+
+function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) {
   const opportunity = inspectGrowthOpportunity(candidate.key);
   const disposition = getCandidateDisposition(candidate.key);
   const sourceKind = sourceKinds.includes('x_momentum') ? 'x_momentum' : sourceKinds[0] || null;
@@ -450,6 +513,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
       : ageHours != null && ageHours <= 12
         ? 'soon'
         : 'normal';
+  const topicBalanceDecision = candidateTopicBalance(candidate, topicBalance);
   const operatorPriority = Math.round(
     scores.reachPotential * 0.45
       + scores.conversationPotential * 0.25
@@ -457,6 +521,7 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
       + scores.relationshipPotential * 0.10
       + (borrowedDistribution ? 8 : 0)
       + (urgency === 'now' ? 8 : urgency === 'soon' ? 3 : 0)
+      + topicBalanceDecision.adjustment
       - (recommendation.action === 'ignore' ? 60 : 0)
   );
   return {
@@ -469,7 +534,8 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
     metrics: candidate.metrics || {},
     recommendation,
     operatorPriority,
-    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution and freshness bonuses. Not an X ranking-law claim.',
+    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution, freshness, and bounded configured topic-balance adjustments. Not an X ranking-law claim.',
+    topicBalance: topicBalanceDecision,
     urgency,
     distribution: {
       borrowed: borrowedDistribution,
@@ -532,22 +598,23 @@ function growthOperatorPacket(candidate, sourceKinds = []) {
 }
 
 function growthRead(payload = {}) {
-  const snapshots = ['x_latest', 'x_momentum'].map((kind) => getDiscoverSnapshot(kind));
+  const snapshots = ['x_latest', 'x_momentum', 'github_trending', 'hn_top'].map((kind) => getDiscoverSnapshot(kind));
   const merged = new Map();
   for (const snapshot of snapshots) {
     for (const candidate of snapshot.candidates) {
-      if (candidate.source !== 'x' || sourceUsername(candidate) === 'ham_zax') continue;
+      if (candidate.source === 'x' && sourceUsername(candidate) === 'ham_zax') continue;
       const current = merged.get(candidate.key) || { candidate, sourceKinds: [] };
       if (snapshot.kind === 'x_momentum') current.candidate = candidate;
       if (!current.sourceKinds.includes(snapshot.kind)) current.sourceKinds.push(snapshot.kind);
       merged.set(candidate.key, current);
     }
   }
+  const topicBalance = recentTopicBalance(payload.topicWindow == null ? null : Number(payload.topicWindow));
   const includeIgnored = payload.includeIgnored === true;
   const includeDisposed = payload.includeDisposed === true;
   const includeLowSignal = payload.includeLowSignal === true;
   const items = [...merged.values()]
-    .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds))
+    .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds, topicBalance))
     .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
     .filter((item) => includeLowSignal || item.discoveryQuality.allowed)
     .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
@@ -563,6 +630,7 @@ function growthRead(payload = {}) {
       error: snapshot.error,
       legacyFallback: snapshot.legacyFallback,
     })),
+    topicBalance,
     items,
   };
 }
@@ -1334,9 +1402,10 @@ async function main() {
         error: refresh.error || null,
       })),
       snapshots: growth.snapshots,
+      topicBalance: growth.topicBalance,
       items: growth.items,
       readOnlyPlanning: true,
-      nextStep: 'Open the exact source on X, inspect thread context, then act once and verify the live result before record-action; use record-disposition for an exact skip/defer.',
+      nextStep: 'For X items, inspect the exact live source/thread before acting and verify the result before record-action. For GitHub/HN items, inspect the primary source before routing or drafting. Use record-disposition for an exact skip/defer.',
     });
     return;
   }

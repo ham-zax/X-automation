@@ -2,7 +2,7 @@ import 'dotenv/config';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { checkBrowserSession, publishMainFeedBrowser } from './x_browser_publish.js';
+import { checkBrowserSession } from './x_browser_publish.js';
 
 const DEFAULT_THREAD = [
   '1/3 🚀 Automating X/Twitter with XActions & Node.js!',
@@ -71,12 +71,7 @@ async function main() {
     return;
   }
 
-  const result = await publishMainFeedBrowser({
-    pipeline: 'thread',
-    threadParts: thread.map((tweet) => (typeof tweet === 'string' ? tweet : tweet.text)),
-    media: { required: false, attachment: null },
-  }, credentials, { account, headless });
-  console.log(`Published browser thread root: ${result.url}`);
+  throw new Error('Direct thread publication is disabled. Route the exact thread through Growth OS so the current content gates and approval snapshot are bound before browser transport.');
 }
 
 main().catch((error) => {

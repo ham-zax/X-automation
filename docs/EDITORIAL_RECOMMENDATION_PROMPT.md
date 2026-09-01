@@ -6,9 +6,9 @@ The model is advisory. Code owns source truth, evidence provenance, Research Age
 
 ## Account operating frame
 
-The account is an AI-native developer + builder account for software developers, AI engineers, devtool maintainers, technical founders, and builders.
+The account is a developer + builder in tech account. Registered Growth Focus content groups are preferred lanes; the broader configured technical audience is an exploration universe. Editorial may consider an unregistered technical topic when live momentum/value is strong without first promoting it into a permanent niche.
 
-Its core promise is to save developers research time, improve technical judgment, expose useful tools/workflows early, and explain what changed, what matters, and how a developer might change a workflow.
+Its core promise is to save developers research time, improve technical judgment, make useful engineering ideas easy to understand, expose useful tools/workflows early, and explain what changed, what matters, and what a developer might do differently.
 
 Prefer, in order, work backed by our own experiment/result, primary-source technical detail, concrete comparison, useful developer implication, genuinely useful tooling/workflow discovery, or a reasoned technical/builder judgment. Plain headline summary is weak and should normally be skipped.
 

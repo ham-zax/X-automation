@@ -540,6 +540,12 @@ Treat early momentum as a high-priority hypothesis, not a universal cliff.
 
 Measure first-hour velocity and conversation outcomes rather than deleting/reposting weak items automatically.
 
+### First 1,000 bootstrap distribution thresholds
+
+**Status:** `EMPIRICAL_VARIABLE` — soft-tuned 2026-09-01
+
+Code `strategy.js:579` / `pipeline.js:135` now use `freshness>=8` (was `10`), `conversationPotential>=35` (was `40`), `reachPotential>=45` (was `50`), `momentum>=8` (was `10`), `traction>=6` (was `8`) for bootstrap `Reply`/`Quote`/`Repost`. `FIRST_1000_GROWTH_MODE.md:165` documents the current values. Treat them as experimentable heuristics to be revised from `editorialOutcomes`/`experiment-summary` at matched window age, not `CODE_BACKED` X laws.
+
 ---
 
 ## 6. RETIRED claims

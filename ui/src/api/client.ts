@@ -67,10 +67,12 @@ export interface GrowthPackagingReview {
 }
 
 export interface StrategicRelevance {
-  state: 'core' | 'adjacent' | 'outside' | 'unknown'
+  state: 'core' | 'adjacent' | 'exploratory' | 'outside' | 'unknown'
   allowed: boolean
   topicScore: number | null
   tags: string[]
+  explorationTags?: string[]
+  explorationMatches?: string[]
   objective: EditorialObjective
   reasonCodes: string[]
   explanation: string
@@ -1120,12 +1122,31 @@ export interface GrowthFocusGroup {
   label: string
   weight: number
   role?: 'core' | 'adjacent' | 'off'
+  targetShare?: number
+  researchTier?: number
+  discover?: boolean
   requiresTechnicalContext?: boolean
   terms: string[]
 }
 
 export interface GrowthFocusProfile {
+  schemaVersion: number
   defaultObjective: EditorialObjective
+  topicBalance: {
+    windowSize: number
+    strength: number
+    maxAdjustment: number
+  }
+  exploration: {
+    enabled: boolean
+    weight: number
+    maxSearchQueries: number
+  }
+  discovery: {
+    latestQueryBudget: number
+    momentumQueryBudget: number
+    rotationMinutes: number
+  }
   contentGroups: GrowthFocusGroup[]
   audienceGroups: GrowthFocusGroup[]
   deprioritizedTerms: string[]

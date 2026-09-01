@@ -39,7 +39,7 @@ import {
   startAutonomousReplies,
   stopAutonomousReplies,
 } from './autonomous_reply.js';
-import { AUDIENCE_NICHE_LABELS, NICHE_GROUPS, NICHE_LABELS, assessStrategicRelevance, isOpportunityCandidate } from './strategy.js';
+import { assessStrategicRelevance, getActiveContentGroups, getAudienceNicheLabels, getNicheLabels, isOpportunityCandidate } from './strategy.js';
 import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
@@ -194,8 +194,9 @@ function normalizeViralResearchConfig(payload = {}) {
   const days = Number(payload.days || 21);
   if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw new Error('Viral research window must be 14, 21, or 30 days.');
 
-  const validNiches = new Set(NICHE_GROUPS.map((group) => group.tag));
-  const niches = [...new Set((Array.isArray(payload.niches) ? payload.niches : NICHE_GROUPS.map((group) => group.tag)).map(String))]
+  const contentGroups = getActiveContentGroups();
+  const validNiches = new Set(contentGroups.map((group) => group.tag));
+  const niches = [...new Set((Array.isArray(payload.niches) ? payload.niches : contentGroups.map((group) => group.tag)).map(String))]
     .filter((tag) => validNiches.has(tag));
   if (!niches.length) throw new Error('Select at least one viral research niche.');
 
@@ -396,7 +397,7 @@ async function viralResearchView(days = 21, postLimit = 200) {
   return {
     options: {
       windows: [14, 21, 30],
-      niches: NICHE_GROUPS.map((group) => ({ tag: group.tag, label: group.label })),
+      niches: getActiveContentGroups().map((group) => ({ tag: group.tag, label: group.label })),
       thresholds: Object.values(VIRAL_SWEEP_THRESHOLDS),
       runtimeTypes: [...VIRAL_RESEARCH_RUNTIME_TYPES],
     },
@@ -555,7 +556,9 @@ function opportunityLabel(score) {
 }
 
 function nicheTagLabel(tag) {
-  return AUDIENCE_NICHE_LABELS[tag] || NICHE_LABELS[tag] || tag;
+  const audienceLabels = getAudienceNicheLabels();
+  const contentLabels = getNicheLabels();
+  return audienceLabels[tag] || contentLabels[tag] || tag;
 }
 
 // ---------------------------------------------------------------------------
@@ -859,7 +862,7 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
           : { points: metrics.points, comments: metrics.comments, kind: 'hn_legacy' }
         : { views: metrics.views, likes: metrics.likes, retweets: metrics.retweets, replies: metrics.replies, kind: 'x' },
     niche: {
-      tags: (niche.tags || []).map((tag) => ({ tag, label: NICHE_LABELS[tag] || tag })),
+      tags: (niche.tags || []).map((tag) => ({ tag, label: getNicheLabels()[tag] || tag })),
       matches: niche.matches || [],
       score: niche.score ?? null,
       status: niche.status || 'unclassified',
@@ -2096,7 +2099,7 @@ export async function handleApi(req, res, requestUrl) {
         sourceError,
         legacyFallback,
         editorialObjective: objective,
-        topicFilters: Object.entries(NICHE_LABELS).map(([value, labelText]) => ({ value, label: labelText })),
+        topicFilters: Object.entries(getNicheLabels()).map(([value, labelText]) => ({ value, label: labelText })),
         candidates: visible,
         total: candidates.length,
       });

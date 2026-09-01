@@ -1411,7 +1411,11 @@ function buildMainFeedScheduleItem(queueItem) {
   const approvalAuthority = getQueueApprovalAuthority(queueItem);
   const gatesPassed = isRepost
     ? approvalAuthority?.type === 'human'
-    : Boolean(draft && draft.status === 'ready' && draft.gates?.passed === true && mediaReady);
+    : Boolean(draft
+      && draft.status === 'ready'
+      && draft.gates?.passed === true
+      && draft.gates?.checks?.understandable === true
+      && mediaReady);
   const threadParts = Array.isArray(draft?.threadParts) ? draft.threadParts : [];
   const body = String(draft?.body || '');
   const text = queueItem.pipeline === 'thread' ? String(threadParts[0] || '') : body;
@@ -4434,7 +4438,7 @@ export function listRecentPublishedContent({ kind = 'main', limit = 20, excludeC
       ? row.queue_pipeline
       : (kind === 'reply' ? 'reply' : 'original');
     const text = pipeline === 'thread' ? String(draft.threadParts?.[0] || '') : String(draft.body || '');
-    return { candidateKey: draft.candidateKey, pipeline, text };
+    return { candidateKey: draft.candidateKey, pipeline, text, updatedAt: draft.updatedAt || null };
   }).filter((item) => item.text.trim());
 }
 

@@ -3,7 +3,7 @@ import { Scraper } from 'xactions';
 import { createBrowser, createPage } from './x_browser.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { X_DISCOVERY_QUERIES, X_VIRAL_QUERIES, classifyNiche } from './strategy.js';
+import { classifyNiche, getActiveContentGroups, getActiveNicheProfile, getXSearchQueryGroups } from './strategy.js';
 
 // ============================================================================
 // ANSI Color Formatting
@@ -670,8 +670,8 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
     const page = await createPage(browser);
     await setAuthenticatedXPageCookies(page);
     const queries = Array.isArray(query) ? query : [query];
-    const allCollected = new Map();
-    const perQueryLimit = Math.max(10, Math.ceil(limit / queries.length));
+    const queryBuckets = [];
+    const perQueryLimit = Math.max(10, Math.ceil(limit / Math.max(1, queries.length)));
 
     for (const searchQuery of queries) {
       await page.goto(`https://x.com/search?q=${encodeURIComponent(searchQuery)}&src=typed_query&f=${filter}`, {
@@ -724,10 +724,23 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
         await new Promise((resolve) => setTimeout(resolve, 1200));
       }
 
-      for (const post of collected.values()) allCollected.set(post.id, post);
+      queryBuckets.push([...collected.values()]);
     }
 
-    const posts = [...allCollected.values()].slice(0, limit).map((post) => ({
+    const balanced = [];
+    const seen = new Set();
+    const maxBucketSize = Math.max(0, ...queryBuckets.map((bucket) => bucket.length));
+    for (let index = 0; index < maxBucketSize && balanced.length < limit; index++) {
+      for (const bucket of queryBuckets) {
+        const post = bucket[index];
+        if (!post || seen.has(post.id)) continue;
+        seen.add(post.id);
+        balanced.push(post);
+        if (balanced.length >= limit) break;
+      }
+    }
+
+    const posts = balanced.map((post) => ({
       source: 'x',
       id: post.id,
       username: post.username,
@@ -750,8 +763,49 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
   }
 }
 
+function selectRotatingXQueryGroups(kind, now = Date.now()) {
+  const profile = getActiveNicheProfile();
+  const all = getXSearchQueryGroups();
+  const configuredBudget = kind === 'momentum'
+    ? profile.discovery?.momentumQueryBudget
+    : profile.discovery?.latestQueryBudget;
+  const budget = Math.max(1, Math.min(all.length || 1, Number(configuredBudget || 1)));
+  if (all.length <= budget) return all;
+
+  const byTag = new Map();
+  for (const group of all) {
+    const bucket = byTag.get(group.tag) || [];
+    bucket.push(group);
+    byTag.set(group.tag, bucket);
+  }
+  const tags = [...byTag.keys()];
+  if (!tags.length) return [];
+  const rotationMinutes = Math.max(1, Number(profile.discovery?.rotationMinutes || 15));
+  const slot = Math.floor(Number(now) / (rotationMinutes * 60_000));
+  const sourceOffset = kind === 'momentum' ? Math.floor(tags.length / 2) : 0;
+  const start = ((slot * budget) + sourceOffset) % tags.length;
+  const orderedTags = Array.from({ length: tags.length }, (_, index) => tags[(start + index) % tags.length]);
+  const selected = [];
+  for (let depth = 0; selected.length < budget; depth++) {
+    let added = false;
+    for (const tag of orderedTags) {
+      const bucket = byTag.get(tag) || [];
+      if (depth >= bucket.length) continue;
+      const index = bucket.length > 1 ? (slot + depth) % bucket.length : 0;
+      const query = bucket[index];
+      if (selected.some((item) => item.query === query.query)) continue;
+      selected.push(query);
+      added = true;
+      if (selected.length >= budget) break;
+    }
+    if (!added) break;
+  }
+  return selected;
+}
+
 export async function fetchXNichePosts(limit = 30) {
-  const queries = X_DISCOVERY_QUERIES.map((query) => `(${query}) lang:en -filter:replies -filter:retweets`);
+  const queries = selectRotatingXQueryGroups('latest').map(({ query }) => `(${query}) lang:en -filter:replies -filter:retweets`);
+  if (!queries.length) return { posts: [], error: 'Growth Focus has no preferred or exploratory technical terms for X discovery.' };
   const result = await fetchXSearchPosts(queries, limit, 'live', 3);
   if (result.error) return result;
   return {
@@ -763,9 +817,11 @@ export async function fetchXNichePosts(limit = 30) {
 export async function fetchXViralPosts(limit = 60, passes = 4, fast = false) {
   const cutoff = Date.now() - 24 * 3_600_000;
   const since = new Date(cutoff).toISOString().slice(0, 10);
-  const queries = X_VIRAL_QUERIES.map((query) => `(${query}) since:${since} lang:en -filter:replies -filter:retweets`);
-  const search = fast ? queries.slice(0, 2) : queries;
-  const result = await fetchXSearchPosts(search, limit, 'top', passes);
+  const queryGroups = getXSearchQueryGroups();
+  const selectedGroups = fast ? selectRotatingXQueryGroups('momentum') : queryGroups;
+  const queries = selectedGroups.map(({ query }) => `(${query}) since:${since} lang:en -filter:replies -filter:retweets`);
+  if (!queries.length) return { posts: [], error: 'Growth Focus has no preferred or exploratory technical terms for X momentum discovery.' };
+  const result = await fetchXSearchPosts(queries, limit, 'top', passes);
   if (result.error) return result;
   return {
     posts: result.posts.filter((post) => post.timestamp >= cutoff && post.timestamp <= Date.now() + 300_000),
@@ -810,10 +866,15 @@ export function generateNewsThread(hnStories, ghRepos, xPosts) {
 }
 
 function configuredTopics() {
-  return (process.env.TOPICS || 'ai,agents,llm,mcp,coding,developer,devtools,open source,typescript,node,automation')
-    .split(',')
-    .map((topic) => topic.trim().toLowerCase())
-    .filter(Boolean);
+  if (process.env.TOPICS) {
+    return process.env.TOPICS.split(',').map((topic) => topic.trim().toLowerCase()).filter(Boolean);
+  }
+  const profile = getActiveNicheProfile();
+  const preferred = getActiveContentGroups().flatMap((group) => group.terms);
+  const exploratory = profile.exploration.enabled
+    ? profile.audienceGroups.filter((group) => group.discover !== false).flatMap((group) => group.terms)
+    : [];
+  return [...new Set([...preferred, ...exploratory])];
 }
 
 function relevanceScore(text, topics) {

@@ -1,14 +1,14 @@
 # Deep Research Agenda
 
-This document defines the research areas `@ham_zax` should develop deeply enough to produce original tests, judgment, implementation guidance, and recurring content—not just release summaries.
+This document contains research methods and example deep-dive backlogs for `@ham_zax`. **It is not the runtime topic-priority list.** Recurring research topics and tiers come from registered Growth Focus content groups. A one-off or emerging technical topic does not need to be registered before the operator can use it; open-world exploratory topics can compete on momentum first and only become a recurring research niche if they prove worth registering. The detailed AI sections retained below are useful backlog examples, not evidence that AI should dominate current content.
 
 ## 1. Research thesis
 
 The account should become known for answering:
 
-> **How do we make AI actually useful as a software engineer and builder?**
+> **What actually helps a software developer build and ship better software?**
 
-That question is broad enough to support models, agents, tools, infrastructure, careers, and productization while remaining coherent.
+That question can cover JavaScript/TypeScript/frontend, Node.js/backend/APIs, Python, Rust/Go/systems, databases, devtools/open source, infrastructure, product building, and AI-assisted development. Growth Focus decides which of those—or later-added groups—are active and how strongly they should be represented.
 
 The research advantage should come from four behaviors:
 
@@ -430,7 +430,7 @@ Before spending several hours on a topic, score it 0-2 on each:
 
 | Dimension | Question |
 | --- | --- |
-| Niche | Is this central to AI-native developers/builders? |
+| Niche | Is this central to the active software developer/builder Growth Focus? |
 | Developer decision | Could the answer change what someone uses/builds? |
 | Testability | Can we gather primary evidence or run something? |
 | Novelty | Is there room for a non-obvious conclusion? |

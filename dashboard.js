@@ -5,7 +5,7 @@ import path from 'path';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems } from './scheduler.js';
-import { NICHE_LABELS } from './strategy.js';
+import { getNicheLabels } from './strategy.js';
 import { handleApi, schedulerContext } from './web_api.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
@@ -71,6 +71,7 @@ function relationshipComponentBadge(profile, key, label) {
 }
 
 function relationshipsView(className = '', stage = '') {
+  const nicheLabels = getNicheLabels();
   const summaryCounts = getRelationshipSummary();
   const profiles = listRelationshipProfiles({ className: className || undefined, stage: stage || undefined, limit: 100 });
   const stageCounts = summaryCounts.stages;
@@ -88,7 +89,7 @@ function relationshipsView(className = '', stage = '') {
   const cards = profiles.map((profile) => {
     const reasons = Object.values(profile.scoreExplanation?.classReasons || {}).filter(Boolean);
     const missing = profile.scoreExplanation?.missingComponents || [];
-    const topics = (profile.primaryTopics || []).map((tag) => NICHE_LABELS[tag] || tag);
+    const topics = (profile.primaryTopics || []).map((tag) => nicheLabels[tag] || tag);
     const followState = profile.mutual ? 'mutual' : profile.followsYou ? 'follows you' : profile.youFollow ? 'you follow' : 'no follow link';
     const learnedComponents = Object.entries(profile.scoreExplanation?.learning || {})
       .filter(([, value]) => Number(value?.learnedAdjustment || 0) !== 0)

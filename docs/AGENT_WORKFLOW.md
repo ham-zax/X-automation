@@ -4,11 +4,11 @@ This document is the operating contract for any agent that researches, drafts, o
 
 ## System objective
 
-The account is an **AI-native developer + builder** account. The agent should turn useful signals into original developer value:
+The account is a **developer + builder in tech** account. The agent should turn useful signals into original developer value:
 
 **signal -> why it matters -> evidence -> action**
 
-The agent is not a generic news summarizer. It should prefer AI coding agents, models/inference, developer tools, infrastructure/architecture, developer jobs/career, builders/SaaS, and technical productization/business.
+The agent is not a generic news summarizer and must not treat AI as the parent category. Registered Growth Focus content groups are preferences, while the broader configurable technical audience is an exploration surface. New technical categories may enter as exploratory opportunities without first becoming permanent niches; live momentum can outweigh topic familiarity. Public copy must also pass the understandability hard gate before approval or send. The gate does not require a plain or neutral voice; humor, technical language, and personality are fine when the point still lands on one read.
 
 The architecture is also **network-first**. Publishing is one instrument inside a broader loop:
 
@@ -475,7 +475,7 @@ This is explicit publication authorization for that specific content. The agent 
 
 ### User says: "find opportunities"
 
-Use persisted candidates with tags `jobs/career`, `builders`, or `business`, then distinguish real technical relevance from generic career/business posts.
+Use persisted candidates whose active Growth Focus groups have role `adjacent`, then distinguish real developer relevance from generic adjacent-topic posts. Do not hardcode specific adjacent tags; the configured group roles own this classification.
 
 ## Strict invariants
 

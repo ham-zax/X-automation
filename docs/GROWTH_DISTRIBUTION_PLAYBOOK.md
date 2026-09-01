@@ -1,6 +1,6 @@
 # Growth & Distribution Playbook
 
-This document defines how `@ham_zax` turns research signals into distribution and how the account recruits a better AI/developer audience without mechanical engagement farming.
+This document defines how `@ham_zax` turns research signals into distribution and how the account recruits a better software-developer/builder audience across the active Growth Focus without mechanical engagement farming.
 
 **Bootstrap precedence:** while the account is below 1,000 followers, `FIRST_1000_GROWTH_MODE.md` governs when it conflicts with conservative guidance here. In that phase, fresh niche-relevant momentum can justify immediate Repost, Quote, or Reply even when relationship history is absent or a research-grade additive thesis is not ready yet.
 
@@ -17,7 +17,7 @@ Snapshot captured 2026-08-19:
 
 Interpretation:
 
-> The account is already looking at the right AI/dev ecosystem, but that ecosystem is not yet following the account back.
+> The account may be looking at relevant developer ecosystems, but relevance alone does not mean those developers are following the account back.
 
 The main growth job is therefore **audience replacement and relationship conversion**, not simply increasing follower count. New followers should increasingly be developers, AI builders, technical founders, devtool maintainers, model/tool practitioners, and relevant engineering-career accounts.
 
@@ -68,7 +68,7 @@ Do not quote merely with `this`, `huge`, `wow`, a paraphrase, or generic praise.
 
 ### REPOST
 
-Outside First 1,000 mode, plain reposts are deliberately rare. During First 1,000 mode, use `FIRST_1000_GROWTH_MODE.md`: timely niche-relevant amplification is a valid bootstrap action and does not need to be exceptional.
+Outside First 1,000 mode, plain reposts are deliberately rare. During First 1,000 mode, use `FIRST_1000_GROWTH_MODE.md:69,165` (soft-tuned 2026-09-01 to `freshness>=8`, `reach>=45`, `momentum/traction>=8/6`): timely niche-relevant amplification is a valid bootstrap action and does not need to be exceptional when those `EMPIRICAL_VARIABLE` thresholds pass.
 
 In normal mode, choose **REPOST** only when:
 

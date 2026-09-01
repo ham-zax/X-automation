@@ -1,4 +1,4 @@
-import { NICHE_GROUPS, classifyNiche } from './strategy.js';
+import { classifyNiche, getActiveContentGroups } from './strategy.js';
 import { applyAcceptedLearnedRules } from './learning.js';
 
 export const TARGET_CLASSES = ['distribution', 'relationship', 'authority', 'customer_density', 'source'];
@@ -89,8 +89,9 @@ function observedComponent(profile, context, component) {
 
 function topicFit(profile) {
   const niche = profileNiche(profile);
-  const maxGroupWeight = Math.max(...NICHE_GROUPS.map((group) => group.weight));
-  const groupWeights = new Map(NICHE_GROUPS.map((group) => [group.tag, group.weight]));
+  const contentGroups = getActiveContentGroups({ includeOff: true });
+  const maxGroupWeight = Math.max(1, ...contentGroups.map((group) => group.weight));
+  const groupWeights = new Map(contentGroups.map((group) => [group.tag, group.weight]));
   const nicheOverlap = clamp((niche.relevanceScore / 50) * 100);
   const keywordOverlap = clamp(niche.matchedKeywords.length * 25);
   const agendaWeights = niche.tags
@@ -139,9 +140,7 @@ function customerDensity(profile, topicFitValue, context = {}) {
   if (finite(context.customerDensity)) return clamp(context.customerDensity);
   if (finite(profile?.customerDensity) && Number(profile.customerDensity) > 0) return clamp(profile.customerDensity);
   if (!finite(context.audienceEvidenceScore)) return 0;
-  const niche = profileNiche(profile);
-  const commercialTags = niche.tags.filter((tag) => ['devtools', 'infra', 'builders', 'business', 'jobs/career'].includes(tag)).length;
-  return round(clamp(context.audienceEvidenceScore * 0.65 + topicFitValue * 0.20 + Math.min(15, commercialTags * 5)));
+  return round(clamp(context.audienceEvidenceScore * 0.75 + topicFitValue * 0.25));
 }
 
 export function summarizeRelationshipEvents(events = []) {

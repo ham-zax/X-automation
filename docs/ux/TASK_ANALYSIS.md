@@ -18,7 +18,7 @@ No interviews, task observations, usability sessions, card sorts, or tree tests 
 
 ### Stakeholder-stated product purpose
 
-The product should help a human operator turn relevant AI/developer/builder attention into durable audience capital and, eventually, observable business opportunities. The default strategic target is **qualified growth velocity**, not raw reach or likes.
+The product should help a human operator turn relevant software-developer/builder attention across the active Growth Focus into durable audience capital and, eventually, observable business opportunities. The default strategic target is **qualified growth velocity**, not raw reach or likes.
 
 The intended outcome hierarchy is:
 

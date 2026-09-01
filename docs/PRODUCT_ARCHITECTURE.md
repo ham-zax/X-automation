@@ -6,11 +6,11 @@ Implementation details live in `docs/plans/`. Current operational contracts live
 
 ## Product objective
 
-Build a local, human-controlled operating system for growing a qualified AI/developer audience on X.
+Build a local, human-controlled operating system for growing a qualified software-developer/builder audience on X across the active Growth Focus.
 
 The system should help `@ham_zax` answer five questions:
 
-1. What is happening now in the parts of AI/software that matter to this account?
+1. What is happening now in the software-development topics that matter to this account under the active Growth Focus?
 2. Which current story, conversation, or relationship deserves attention?
 3. What action should the account take: Original, Quote, Thread, Reply, Repost, Research More, Skip, or no action?
 4. What can the account say that is useful, differentiated, and follow-worthy?
