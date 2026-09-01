@@ -1007,6 +1007,7 @@ try {
 } catch {}
 
 export function getCandidate(key) {
+  if (!key || typeof key !== 'string' || !key.trim()) return undefined;
   return decodeCandidate(db.prepare('SELECT * FROM candidates WHERE key = ?').get(key));
 }
 
@@ -1147,6 +1148,7 @@ export function getQueueItem(id) {
 }
 
 export function getQueueItemByCandidate(candidateKey) {
+  if (!candidateKey || typeof candidateKey !== 'string' || !candidateKey.trim()) return null;
   return decodeQueueItem(db.prepare('SELECT * FROM queue_items WHERE candidate_key = ?').get(candidateKey));
 }
 
@@ -2409,10 +2411,12 @@ export function recordCandidateAction({
 }
 
 export function listCandidateActions(key) {
+  if (!key || typeof key !== 'string' || !key.trim()) return [];
   return db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? ORDER BY created_at DESC').all(key).map(decodeCandidateAction);
 }
 
 export function hasCandidateAction(key, action = null) {
+  if (!key || typeof key !== 'string' || !key.trim()) return false;
   const row = action
     ? db.prepare('SELECT 1 AS found FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action)
     : db.prepare('SELECT 1 AS found FROM candidate_actions WHERE candidate_key = ? LIMIT 1').get(key);
@@ -2435,6 +2439,7 @@ function decodeCandidateDisposition(row, now = Date.now()) {
 }
 
 export function getCandidateDisposition(key, { now = Date.now() } = {}) {
+  if (!key || typeof key !== 'string' || !key.trim()) return null;
   return decodeCandidateDisposition(
     db.prepare('SELECT * FROM candidate_dispositions WHERE candidate_key = ?').get(key),
     Number(now),
@@ -4388,6 +4393,7 @@ export function getDraft(id) {
 }
 
 export function getDraftByCandidate(key) {
+  if (!key || typeof key !== 'string' || !key.trim()) return null;
   return decodeDraft(db.prepare('SELECT * FROM drafts WHERE candidate_key = ?').get(key));
 }
 

@@ -134,6 +134,7 @@ async function readInput() {
 }
 
 function requireCandidate(key) {
+  if (!key || typeof key !== 'string' || !key.trim()) throw new Error('Candidate key is required (provide "key").');
   const candidate = getCandidate(key);
   if (!candidate) throw new Error(`Candidate not found: ${key}`);
   return candidate;
@@ -1020,6 +1021,9 @@ async function main() {
   }
 
   if (command === 'inspect') {
+    if (!payload.key || typeof payload.key !== 'string' || !payload.key.trim()) {
+      throw new Error('inspect requires "key" (candidate URL). Use operator-status for the cockpit, or growth-next / queue for discoverable keys.');
+    }
     const workflow = inspectWorkflow(payload.key);
     result({
       candidate: workflow.candidate,
@@ -1208,6 +1212,9 @@ async function main() {
   }
 
   if (command === 'workflow') {
+    if (!payload.key || typeof payload.key !== 'string' || !payload.key.trim()) {
+      throw new Error('workflow requires "key" (candidate URL).');
+    }
     result(inspectWorkflow(payload.key));
     return;
   }
