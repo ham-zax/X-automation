@@ -27,11 +27,11 @@ const PRIORITY_WEIGHTS = {
   contributionStrength: 0.10,
 };
 const CONTRIBUTION_BASELINES = {
-  benchmark_or_result: { strength: 100, verificationRequired: true },
+  benchmark_or_result: { strength: 100 },
   implementation_detail: { strength: 90 },
   caveat_or_edge_case: { strength: 85 },
   comparison: { strength: 80 },
-  correction: { strength: 80, verificationRequired: true },
+  correction: { strength: 80 },
   informed_question: { strength: 75 },
   synthesis: { strength: 70 },
 };
@@ -127,18 +127,12 @@ export function qualifyContribution(contribution = {}) {
   const rule = CONTRIBUTION_BASELINES[archetype];
   const suppliedBaseline = finite(contribution.baselineStrength) ? scoreValue(contribution.baselineStrength) : null;
   const baselineStrength = rule?.strength ?? suppliedBaseline;
-  const verificationRequired = Boolean(rule?.verificationRequired || archetype === 'reproduction');
-
   if (baselineStrength == null && CONTRIBUTION_ARCHETYPES.includes(archetype)) {
     rejectionReasons.push(rejection(
       'MISSING_BASELINE',
       `${archetype} has no plan-defined starting strength; the caller must supply baselineStrength.`,
     ));
   }
-  if (verificationRequired && contribution.verified !== true) {
-    rejectionReasons.push(rejection('VERIFICATION_REQUIRED', `${archetype} requires verified evidence before it can qualify.`));
-  }
-
   const evidenceAdjustment = negativeAdjustment(contribution.evidenceAdjustment);
   const contextAdjustment = negativeAdjustment(contribution.contextAdjustment);
   const strength = baselineStrength == null
@@ -159,7 +153,6 @@ export function qualifyContribution(contribution = {}) {
     evidenceAdjustment,
     contextAdjustment,
     strength,
-    verificationRequired,
     verified: contribution.verified === true,
     qualified: rejectionReasons.length === 0,
     rejectionReasons,
@@ -409,7 +402,7 @@ export function proposeEngagementContribution(candidate = {}, { response = false
     if (directQuestion) {
       return {
         archetype: 'implementation_detail',
-        summary: 'Answer the target\'s direct question with one concrete implementation detail or explicitly verified fact.',
+        summary: 'Answer the target\'s direct question with one concrete implementation detail or concrete fact.',
         contextAdjustment: -15,
       };
     }
@@ -652,7 +645,6 @@ export async function refreshEngagementOpportunities({
         firstObservedAt: existingEngagement?.engagement?.firstObservedAt || existingEngagement?.createdAt || now,
         source: context.source || 'target_timeline',
         sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
-        recipientOptIn: context.recipientOptIn === true || context.response === true,
       },
     });
     if (item.lane !== 'engagement') {
@@ -701,7 +693,6 @@ export async function refreshEngagementOpportunities({
       persistOpportunity(candidate, profile, {
         source: 'target_response',
         sourceClass: 'active',
-        recipientOptIn: true,
         response: true,
         directQuestion: candidate.text.includes('?'),
         targetUsername: response.targetUsername,

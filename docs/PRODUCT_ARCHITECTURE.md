@@ -13,7 +13,7 @@ The system should help `@ham_zax` answer five questions:
 1. What is happening now in the parts of AI/software that matter to this account?
 2. Which current story, conversation, or relationship deserves attention?
 3. What action should the account take: Original, Quote, Thread, Reply, Repost, Research More, Skip, or no action?
-4. What can the account say that is useful, evidence-backed, differentiated, and follow-worthy?
+4. What can the account say that is useful, differentiated, and follow-worthy?
 5. What did the action actually produce, and what should change next time?
 
 The default optimization target is **qualified developer growth**, not raw impressions or raw follower count.
@@ -28,7 +28,7 @@ Current X / GitHub / Hacker News / conversation signals
         v
 RESEARCH
 What is actually true?
-Primary sources, linked evidence, unresolved questions
+Source material, optional context, unresolved questions
         |
         v
 AI EDITORIAL DIRECTOR
@@ -42,7 +42,7 @@ Select, override, research more, dismiss, or do nothing
         v
 WRITER
 Turn the selected editorial plan into publication copy
-using only supplied evidence/context
+using supplied source/context
         |
         v
 YOU
@@ -100,7 +100,7 @@ Current repository state:
 - `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode uses its documented SDK/server structured-output contract when available; OpenCode 2 remains separately capability-gated rather than being simulated through undocumented output parsing.
 - Operator-attached JPEG/PNG/WebP/GIF media now has a real local readiness, preview, and authenticated publication path. Required proof media must still remain blocked until the attachment and media plan are complete; Writer-planned media does not create files by itself.
 
-Phase-6 editorial planning is current runtime behavior and remains advisory: human route selection, main-feed approval, repost completion, and publication authority stay separate. Reply authority has two explicit paths: exact human approval/send, or the off-by-default autonomous-reply grant with deterministic policy/value checks and atomic autonomous claim.
+Phase-6 editorial planning is current runtime behavior and remains advisory: human route selection, main-feed approval, repost completion, and publication authority stay separate. Reply authority has two explicit paths: exact human approval/send, or the off-by-default autonomous-reply grant with deterministic eligibility checks and atomic autonomous claim.
 
 ## Phase map
 
@@ -109,7 +109,7 @@ Phase-6 editorial planning is current runtime behavior and remains advisory: hum
 | 1A | Implemented | Workflow foundation and four-dimensional triage | `queue_items`, route selection, approval boundary, Reach/Follow/Conversation/Relationship potentials |
 | 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages |
 | 1C | Implemented | Engage Next + autonomous reply operator | ranked reply/follow-up opportunities, exact human send, and off-by-default persistent autonomous dry-run/live authority |
-| 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus evidence-backed diagnostics |
+| 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus observed diagnostics |
 | 2 | Implemented | Content quality and profile proof | writer packet, drafts, hard gates, quality score, human editorial review |
 | 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
 | 4 | Implemented | Measurement and experiments | 15m/1h/6h/24h outcomes, follower/relationship attribution context, experiment summaries |
@@ -197,7 +197,7 @@ It owns:
 - the ProfileProofCoverage packet/editorial contract plus the strict published-only runtime owner shared by Today and the writer;
 - final human editorial review.
 
-The writer must not independently decide what is true. Phase 6 supplies persisted research evidence with stable IDs/claim scope; the writer consumes that evidence and the human confirms the final factual assertions.
+The writer uses the available source and working context. Phase 6 may supply persisted research material with stable IDs and claim metadata; the writer can use or extend that context, while human approval remains a separate workflow action.
 
 ### Phase 3 — Main-feed distribution
 
@@ -354,7 +354,7 @@ No combined value may be presented as an X/Phoenix score.
 
 ## Research and evidence contract
 
-The system should research before asking the writer to make factual claims.
+The system may research when additional context would improve an editorial angle.
 
 For shortlisted stories, controlled code may inspect:
 
@@ -366,7 +366,7 @@ For shortlisted stories, controlled code may inspect:
 - directly linked pages/articles;
 - operator-supplied additional research URLs.
 
-Evidence is stored claim by claim with provenance.
+Research material is stored with provenance when available.
 
 Evidence status:
 
@@ -377,9 +377,9 @@ contradicted
 unresolved
 ```
 
-`primary_supported` means the cited primary artifact supports the exact stored claim within its claim type. It does not mean the source verifies every broader marketing/performance/security claim.
+`primary_supported` records that the cited primary artifact was associated with the stored claim within its claim type. It does not represent a general ranking or publication requirement.
 
-If automatic controlled research cannot answer a material question, the product returns **Research More — manual/external research required** and shows the unresolved questions. The operator may find another source externally and attach its URL through the controlled fetch boundary.
+If automatic controlled research leaves useful questions open, the product may return **Research More — manual/external research suggested** and show the unresolved questions. The operator may find another source externally and attach its URL through the controlled fetch boundary.
 
 The initial Phase-6 design does not add a general web-search provider.
 
@@ -396,11 +396,11 @@ AI is used for semantic tasks that benefit from language-model reasoning:
 2. FINAL EDITORIAL PASS
    propose thesis/format/why-now/desired-reader-outcome;
    classify the bounded novel-angle type;
-   reference only supplied evidence and algorithm tags.
+   use supplied source context and algorithm tags when relevant.
 
 3. WRITER
    produce publication copy from the selected plan,
-   supplied evidence, profile proof, relationship context,
+   supplied source context, profile proof, relationship context,
    and the canonical writing contract.
 ```
 
@@ -659,7 +659,7 @@ measurement                  Phase 4
 learned-rule acceptance      operator
 ```
 
-A cheaper local model may produce a worse recommendation. It may not gain extra authority because it is local, and a more expensive model may not bypass evidence or approval because it is stronger.
+A cheaper local model may produce a worse recommendation. It may not gain extra authority because it is local, and a more expensive model may not bypass approval because it is stronger.
 
 ## Product surfaces
 
@@ -675,7 +675,7 @@ It should answer:
 - what objective is selected;
 - what the best main-feed/relationship/research actions are;
 - why each action is timely;
-- what evidence supports it;
+- what source/context informs it;
 - what is unresolved;
 - which AI profile produced the advisory reasoning.
 
@@ -751,7 +751,7 @@ The product must fail visibly rather than manufacture certainty.
 
 - Source refresh fails -> retain last snapshot with its timestamp and show the source error/staleness.
 - No previous observation -> momentum delta is unavailable, not zero.
-- Research cannot support a material claim -> Research More, narrow the thesis, or Skip.
+- Additional research would improve the angle -> Research More is available, but it is not required before drafting.
 - AI runtime is missing -> profile unavailable; do not silently choose another runtime unless a configured fallback exists.
 - Provider/API key is invalid -> connection/run error; do not present old AI output as newly generated.
 - Model lacks usable structured output -> block that profile for structured roles or use the documented validated compatibility fallback.

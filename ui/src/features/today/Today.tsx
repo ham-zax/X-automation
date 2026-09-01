@@ -79,7 +79,7 @@ function ResearchSourceForm({ recommendationId }: { recommendationId: number }) 
       }}
     >
       <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder="Source URL" className="rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm" />
-      <input value={claim} onChange={(event) => setClaim(event.target.value)} placeholder="What claim should this source support?" className="rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm" />
+      <input value={claim} onChange={(event) => setClaim(event.target.value)} placeholder="What context should this source add?" className="rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm" />
       <button type="submit" disabled={addSource.isPending || !url.trim() || !claim.trim()} className="rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 disabled:opacity-50">
         {addSource.isPending ? 'Adding…' : 'Add source'}
       </button>
@@ -158,7 +158,7 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
 
       {recommendation.decision === 'RESEARCH_MORE' && (
         <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <strong>Manual/external research required.</strong>
+          <strong>Manual/external research suggested.</strong>
           {recommendation.researchQuestions.length > 0 && (
             <ul className="mt-2 list-disc pl-5">{recommendation.researchQuestions.map((question) => <li key={question}>{question}</li>)}</ul>
           )}

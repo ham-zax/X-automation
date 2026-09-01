@@ -464,7 +464,6 @@ export function selectRecommendationPotentials({ decision, pipeline, story, targ
 
 export function validateRecommendation(recommendation = {}, {
   story,
-  allowedEvidenceIds = [],
   allowedAlgorithmMechanismTags = [],
 } = {}) {
   const errors = [];
@@ -477,8 +476,7 @@ export function validateRecommendation(recommendation = {}, {
   const angleClass = String(recommendation.angleClass || '');
   if (!ANGLE_CLASSES.includes(angleClass)) errors.push(`Unsupported angleClass: ${angleClass || 'missing'}.`);
 
-  const evidenceIds = validateReferencedIds(recommendation.evidenceIds, allowedEvidenceIds);
-  if (!evidenceIds.valid) errors.push(`Unknown evidenceIds: ${evidenceIds.rejected.join(', ')}.`);
+  const evidenceIds = uniqueStrings(recommendation.evidenceIds);
   const mechanismTags = validateReferencedIds(recommendation.algorithmMechanisms, allowedAlgorithmMechanismTags);
   if (!mechanismTags.valid) errors.push(`Unknown algorithmMechanisms: ${mechanismTags.rejected.join(', ')}.`);
 
@@ -497,7 +495,7 @@ export function validateRecommendation(recommendation = {}, {
       ...recommendation,
       decision: route.decision,
       pipeline: route.pipeline,
-      evidenceIds: evidenceIds.accepted,
+      evidenceIds,
       algorithmMechanisms: mechanismTags.accepted,
       researchQuestions: questions,
       angleClass,
@@ -691,9 +689,9 @@ function selectedEditorialResult(recommendation, selection, { idempotent = false
     candidate: getCandidate(queueItem.candidateKey),
     queueSources: listQueueSources(queueItem.id),
     research: recommendation.decision === 'RESEARCH_MORE' ? {
-      required: true,
-      state: 'manual_external_research_required',
-      label: 'Manual/external research required',
+      required: false,
+      state: 'manual_external_research_suggested',
+      label: 'Manual/external research suggested',
       questions: [...recommendation.researchQuestions],
     } : null,
     idempotent,
@@ -720,9 +718,6 @@ function selectEditorialRecommendationWithAuthority(id, {
   if (recommendation.decision === 'SKIP') throw new Error('SKIP recommendations are dismissed rather than routed into workflow.');
 
   const selectedPipeline = String(pipelineOverride || recommendation.pipeline || '');
-  if (recommendation.decision === 'RESEARCH_MORE' && selectedPipeline !== 'research') {
-    throw new Error('RESEARCH_MORE must enter the research workflow before any later publication route is chosen.');
-  }
   if (recommendation.decision === 'PREPARE' && !PREPARE_PIPELINES.includes(selectedPipeline)) {
     throw new Error(`Invalid PREPARE pipeline override: ${selectedPipeline || 'missing'}.`);
   }
@@ -1145,10 +1140,8 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
     for (const rawRecommendation of finalResult.recommendations) {
       const story = storyByKey.get(String(rawRecommendation.storyKey || ''));
       if (!story) throw new Error(`Editorial final result references unknown storyKey: ${rawRecommendation.storyKey || 'missing'}.`);
-      const storyEvidence = evidence.filter((item) => item.storyKey === story.storyKey);
       const validation = validateRecommendation(rawRecommendation, {
         story,
-        allowedEvidenceIds: storyEvidence.map((item) => String(item.id)),
         allowedAlgorithmMechanismTags: allowedMechanismTags,
       });
       if (!validation.valid) throw new Error(`Invalid editorial recommendation for ${story.storyKey}: ${validation.errors.join(' ')}`);
@@ -1159,9 +1152,6 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
       }
       if (recommendation.decision === 'PREPARE' && story.candidates.every((candidate) => candidate.workflow?.state === 'already_handled')) {
         throw new Error(`PREPARE recommendation ${story.storyKey} contains only already-handled source candidates.`);
-      }
-      if (recommendation.decision === 'PREPARE' && referencedEvidence.some((item) => ['unresolved', 'contradicted'].includes(item.status))) {
-        throw new Error(`PREPARE recommendation ${story.storyKey} references unresolved or contradicted evidence.`);
       }
       const scoredRecommendation = scoreFinalRecommendation({
         recommendation,

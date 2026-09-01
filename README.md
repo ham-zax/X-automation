@@ -65,7 +65,7 @@ Phases 1A–6 plus the shared AI runtime/provider layer are current runtime beha
 - **continuous-scan background consumer** — the `continuous_scan` role is configurable but intentionally shown as **Not active** until a concrete background semantic consumer is implemented;
 - **OpenCode structured execution** — the installed OpenCode runtime uses its documented SDK/server JSON-schema path; OpenCode 2 remains separately capability-gated and no undocumented TUI parsing is used.
 
-Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed an evidence-bounded two-pass AI Editorial Plan; code owns story/recommendation scoring and final order; the human selects or overrides a recommendation; selected work enters the existing writer/gates/approval workflow; publication measurements preserve recommendation vs selected vs final route provenance. AI runtime/provider/model choice never changes approval or publication authority.
+Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed a source-context-aware two-pass AI Editorial Plan; code owns story/recommendation scoring and final order; the human selects or overrides a recommendation; selected work enters the existing writer/gates/approval workflow; publication measurements preserve recommendation vs selected vs final route provenance. AI runtime/provider/model choice never changes approval or publication authority.
 
 `docs/PRODUCT_ARCHITECTURE.md` owns the end-to-end product map. `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic network model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system implementation/history map. `docs/plans/` owns implementation order and exact file/interface changes.
 
@@ -139,7 +139,7 @@ npm start
 
 The guided dashboard shell is organized around user goals instead of implementation modules:
 
-- **Today** — the current AI Editorial Plan above prioritized workflow attention: objective selector, source freshness, evidence-bounded recommendations, explicit refresh/select/dismiss/research-source actions, useful conversations, review work, and account status.
+- **Today** — the current AI Editorial Plan above prioritized workflow attention: objective selector, source freshness, context-aware recommendations, explicit refresh/select/dismiss/research-source actions, useful conversations, review work, and account status.
 - **Discover** — source truth and source workflow context: To review, X Latest, X Momentum, Opportunities, GitHub Trending, HN Top Stories, Bookmarks, Handled, and All sources.
 - **Conversations** — active/new conversation opportunities plus relationship and audience context.
 - **Posts** — items to review and drafts, while preserving the existing review/approval/scheduler owners underneath.

@@ -273,7 +273,7 @@ Disposition: not advanced. The synthesis had useful primary evidence but lower c
 
 Editorial recommendation: Original.
 
-Disposition: not advanced. The source set was well supported, but an owned-only Original from the current small account offered less immediate distribution leverage than the two additive current conversations. No post was manufactured to fill the quota.
+Disposition: not advanced. The source set was well supported, but an owned-only Original from the current small account offered less immediate distribution leverage than the two additive current conversations. No additional post was created to fill the quota.
 
 ## Measurement state
 

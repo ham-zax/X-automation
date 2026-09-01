@@ -47,29 +47,24 @@ These apply to original posts, replies, quote posts, and threads.
    - gives a reusable workflow, command, repo, technique, or mental model;
    - identifies an opportunity or risk a developer can act on.
 
-5. **Do not manufacture engagement.**
-   - No generic engagement bait.
-   - No fake controversy.
-   - No "reply YES", "drop your link", "like if..." or equivalent unless the interaction itself is genuinely necessary to the content.
-
-6. **Do not copy another creator's wording or structure too closely.**
+5. **Do not copy another creator's wording or structure too closely.**
    - Facts and source material can be synthesized.
    - The thesis, wording, examples, and framing should be ours.
 
-7. **Do not publish low-confidence generated filler.**
+6. **Do not publish low-confidence generated filler.**
    - If the system cannot identify the value-add, it should produce no post rather than a weak post.
 
-8. **Do not publish substantially duplicate posts.**
+7. **Do not publish substantially duplicate posts.**
    - If the same story is revisited, the second post must have a materially new angle, result, experiment, or update.
 
-9. **Avoid redundant main-feed bursts.**
+8. **Avoid redundant main-feed bursts.**
    - A new main-feed item should be worth occupying another slot in a follower's feed.
    - This does not apply as a blanket slowdown to an active reply conversation; several substantive back-and-forth replies can be appropriate when the conversation is genuinely progressing.
    - Do not dump several weak posts because multiple feeds produced candidates at once.
 
-10. **Use links honestly.**
-    - Link to the real source or relevant destination.
-    - Never use misleading redirects or imply a source proves something it does not.
+9. **Use links when useful.**
+    - Link to the relevant source or destination when it helps the reader.
+    - A link can provide attribution, context, or an action path.
 
 ---
 
@@ -144,7 +139,7 @@ An excellent original post:
 
 ## 4. Replies
 
-Replies are primarily for **networking, learning, and demonstrating competence**, not mass distribution.
+Replies can support networking, learning, demonstrating competence, distribution, or any combination of those goals.
 
 ### MUST
 
@@ -171,7 +166,7 @@ Do not send:
 ### SHOULD
 
 - Prefer replying to builders/researchers whose work overlaps our niche.
-- Read the linked material before pretending to understand it.
+- Read the linked material when it helps understand the context.
 - Keep the reply proportional to the conversation.
 - Ask questions whose answers would actually change our understanding.
 - When disagreeing, attack the claim rather than the person.
@@ -296,7 +291,7 @@ Practical implications:
 - **Share-worthy utility is strategically strong.** Build things developers would genuinely send to another developer.
 - **Follow-worthy identity matters.** Every strong post should reinforce why this account deserves a follow.
 - **Relevant network topology matters.** Current public code includes in-/out-of-network mechanics and a bidirectional/mutual-follow reply-head boost for eligible original posts; repeated useful relationships are therefore strategically different from one-off borrowed reach.
-- **Do not flood.** Author-diversity logic reduces repeated-author presence in a candidate slate.
+- **Author diversity matters.** Author-diversity logic reduces repeated-author presence in a candidate slate.
 - **Differentiate the angle.** The VMRanker diversity stage uses semantic similarity, so being the 20th near-identical summary is strategically weak.
 - **Freshness matters for For You inventory.** The current public pipeline filters posts older than 48 hours from this candidate path; evergreen ideas should be republished only as genuinely new posts with new value.
 - **Small-account exploration exists, but is not guaranteed.** Public defaults include a cold-start mechanism for low-impression authors. Treat this as an opportunity to publish strong originals, not as guaranteed distribution.
@@ -354,16 +349,14 @@ Automation should prefer publishing nothing over publishing below the quality ba
 
 Before any original post, reply, or quote goes live:
 
-1. Is it true and sourced appropriately?
+1. What is the intended claim or angle?
 2. What new value are we adding?
 3. Which developer/building audience does this serve?
 4. Why would someone save, share, reply to, or follow from this?
-5. Is the hook accurate rather than exaggerated?
+5. Is the hook specific and clear?
 6. Is this materially different from our recent posts and the obvious summaries already circulating?
 7. Can anything be removed without losing value?
-9. Would we still be comfortable defending this publicly after the engagement numbers disappear?
-
-If #1, #2, #3, or #8 fails: **do not publish**.
+8. Would we still be comfortable publishing it after the engagement numbers disappear?
 
 ## 11. Final writing and human approval
 
@@ -378,7 +371,7 @@ Default editorial rules:
 - include 1-3 precise semantic anchors naturally when relevant;
 - default to zero hashtags and never use hashtag stuffing;
 - default to zero emoji;
-- recommend media only when it proves or explains something the text cannot;
+- recommend media only when it explains something the text cannot;
 - a question must seek useful information rather than comments for their own sake;
 - do not let the generation model self-authorize publication.
 

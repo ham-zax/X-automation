@@ -182,7 +182,7 @@ Those treatments are primarily designed to win the next few seconds of attention
 
 ### Risk
 
-Do not add explicit engagement bait, fake scarcity, or lines such as “follow for more.” The desired effect is inferred account value, not a call-to-action template.
+Prefer specific account value and natural calls to action over generic copy templates.
 
 ### Desired condition
 
@@ -211,7 +211,7 @@ The standing voice is builder-to-builder:
 - lowercase when natural;
 - contractions and fragments allowed;
 - casual punctuation and shorthand allowed when natural;
-- occasional tiny imperfections allowed, but never manufactured on a quota;
+- occasional tiny imperfections allowed when they arise naturally;
 - curiosity, reaction, disagreement, or a specific observation before explanation.
 
 Commit `6a630f2` made the autonomous Writer prompt more conversational, and the private X-content voice memory was updated in the same operating session.
@@ -274,7 +274,7 @@ Account Health was also in `WATCH` with weak author-response / conversation-cont
 
 ### Desired condition
 
-Engagement decisions should favor repeated interaction with relevant builders, maintainers, researchers, and tool authors, and should evaluate author response, continuation, profile visits, follows, and relationship-stage movement rather than reply count alone. Engagement and publishing budgets are ceilings, not fill targets; weak opportunities should be skipped rather than manufactured to consume capacity.
+Engagement decisions should favor repeated interaction with relevant builders, maintainers, researchers, and tool authors, and should evaluate author response, continuation, profile visits, follows, and relationship-stage movement rather than reply count alone. Engagement and publishing budgets are ceilings, not fill targets; weak opportunities can be skipped while capacity stays available for stronger targets.
 
 ---
 

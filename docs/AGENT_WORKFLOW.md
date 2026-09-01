@@ -72,7 +72,7 @@ npm run agent -- editorial-select <<<'{"recommendationId":1}'
 npm run agent -- editorial-add-source <<<'{"recommendationId":2,"url":"https://example.com/evidence","claim":"Claim to investigate","claimType":"other"}'
 ```
 
-`editorial-select` is route selection, not approval. Original/Quote/Thread/Reply enter the existing editable workflow, Repost enters its existing manual-review flow, and `RESEARCH_MORE` remains research-only with unresolved questions until the human explicitly chooses a publication route. Writer evidence references must resolve to persisted evidence IDs and claim scope; free-form AI labels such as `verified` are not proof.
+`editorial-select` is route selection, not approval. Original/Quote/Thread/Reply enter the existing editable workflow, Repost enters its existing manual-review flow, and `RESEARCH_MORE` opens the research route by default while a caller may explicitly override it into another editable route. Writer evidence references are optional context carried into the draft; free-form labels may remain descriptive context.
 
 ## Distribution decision before drafting or engaging
 
@@ -249,7 +249,7 @@ npm run agent -- health-under-the-hood <<<'{}'
 
 A snapshot is persisted only when the reader returns `available:true`. `available:false` is a clean read result and does not imply HEALTHY, WATCH, or CONSTRAINED.
 
-Target saturation, daily reply count, repeated reply archetype, crowded conversations, low reach, and InteractionYield are **not** automatic bans. A direct target question, active bidirectional exchange, or new verified evidence can neutralize WATCH-level priority pressure. WATCH never removes the explicit human review/send path. Exact/near-duplicate *draft text* remains a Phase-2 hard failure; archetype/style concentration remains advisory unless the actual text is genuinely duplicate/near-duplicate.
+Target saturation, daily reply count, repeated reply archetype, crowded conversations, low reach, and InteractionYield are **not** automatic bans. A direct target question, active bidirectional exchange, or new conversation context can neutralize WATCH-level priority pressure. WATCH never removes the explicit human review/send path. Exact/near-duplicate *draft text* remains a Phase-2 hard failure; archetype/style concentration remains advisory unless the actual text is genuinely duplicate/near-duplicate.
 
 There is no fixed daily reply quota and no human-looking jitter/circadian timing requirement. Health outputs are structured data for later Phase-4 measurement; downstream work must not reverse-engineer the dashboard text.
 
@@ -351,7 +351,7 @@ cat <<'JSON' | node agent_bridge.js apply-writer-output
     "finalText": "Final publication text.",
     "threadParts": [],
     "semanticAnchors": ["MCP"],
-    "evidenceUsed": ["verified primary-source fact"],
+    "evidenceUsed": ["supplied source context"],
     "discussionQuestion": "",
     "media": {"required": false, "type": "none", "reason": "", "source": "", "altText": ""},
     "riskFlags": [],

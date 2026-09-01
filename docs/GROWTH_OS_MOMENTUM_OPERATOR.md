@@ -286,7 +286,7 @@ Do not promote a permanent strategy rule from one post. Keep these as explicit o
 The first live run of the redesigned loop produced four different decisions instead of forcing every source into the same behavior:
 
 - **Damon Chen / xAI stack cost:** `growth-next` surfaced a roughly 0.6-hour-old source at about 1.9K views/hour, with stored observations implying roughly 3.0K views/hour acceleration. The source used a quantified cost comparison. The resulting Reply kept that quantified framing and shifted the decision metric from sticker price to which paid surface reaches its usage ceiling first. Live reply: `2092105631134364130`.
-- **Andy Konwinski / Headlong:** the source was a primary project announcement at roughly 121K views with substantial bookmarking and enough detail to stand alone. Growth OS chose Repost. No commentary was manufactured just to create text.
+- **Andy Konwinski / Headlong:** the source was a primary project announcement at roughly 121K views with substantial bookmarking and enough detail to stand alone. Growth OS chose Repost. No commentary was added solely to create text.
 - **Lou / GLM-5.3:** the source was still adding roughly 1.9K views/hour and made broad performance claims. The Reply asked for a per-category matrix with repeat success rate, wall time, and tokens. Live reply: `2092106772354113553`.
 - **Andrew Ho / computer-use automation:** the source was under an hour old with only four replies and roughly 1.8K live views when inspected. The thesis stood alone: an edge case can itself be the signal that deserves human attention. Growth OS chose Repost; X verified the repost count moving from 3 to 4.
 

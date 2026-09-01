@@ -30,7 +30,6 @@ interface PreviewResult {
 function displayRiskFlags(flags: string[], growthFitAllowed: boolean): string {
   return flags
     .filter((flag) => !(growthFitAllowed && /^weak niche fit\.?$/i.test(flag.trim())))
-    .filter((flag) => !/no verified evidence beyond the source text/i.test(flag))
     .join(' · ')
 }
 

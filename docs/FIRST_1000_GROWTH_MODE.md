@@ -34,7 +34,7 @@ The Quote and Repost branches had a similar problem: momentum alone did not set 
 
 The queue then makes the conservative recommendation operational. `pipeline.js:routeCandidate()` refreshes the recommendation before routing. When the refreshed recommendation is `ignore`, authored routes and Repost require a current explicit human `Use anyway` decision. In the 2026-08-24 local browser run, clicking `Start reply draft` on one of these candidates produced a `400` response from `/api/discover/triage` because that endpoint reaches the same `routeCandidate()` Ignore gate. The HTTP error was therefore a visible consequence of the routing defect, not a separate `Use anyway` wiring failure.
 
-The strict behavior was understandable in the 2026-08-21 recovery wave: the failed pilot had produced a weak post despite a high writing score, and the recovery mission explicitly said not to manufacture outbound items merely to consume authorization. That recovery constraint should not silently become the long-term acquisition strategy for a 42-follower account.
+The strict behavior was understandable in the 2026-08-21 recovery wave: the failed pilot had produced a weak post despite a high writing score, and the recovery mission did not create outbound items solely to consume authorization. That recovery constraint should not silently become the long-term acquisition strategy for a 42-follower account.
 
 Changing only the Growth Focus objective to `reach_momentum` is not enough. The editorial layer gives Reach more weight under that objective, but `assessStrategicRelevance()` does not change the route branches above, and the source-level distribution recommender still falls back to Ignore unless its action-specific context flags pass.
 
@@ -122,7 +122,7 @@ Skip when:
 - the source is outside the active niche;
 - it is stale relative to the live conversation;
 - the candidate has already been used without a genuinely new reason;
-- the source is dubious and the claim cannot be checked quickly enough for the intended action;
+- the source is too ambiguous to support a useful intended action;
 - the proposed copy is a near-duplicate of recent account output;
 - the action would add no market presence because the source itself has no meaningful current distribution or relevance.
 

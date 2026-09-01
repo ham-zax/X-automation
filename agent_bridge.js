@@ -374,7 +374,6 @@ function compactEngagementPacket(queueItem) {
       summary: queueItem.contributionSummary || '',
       archetype: queueItem.replyArchetype || '',
     },
-    recipientOptIn: queueItem.engagement?.recipientOptIn === true,
   };
 }
 

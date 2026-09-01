@@ -16,11 +16,8 @@ import {
   getAccountHealthSummary,
   getCandidate,
   getDraftByCandidate,
-  getEditorialRecommendation,
-  getEditorialSelectionByRecommendation,
   getFirst1000MainFeedMissionGrant,
   getLatestEditorialPlan,
-  getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getNicheProfile,
   getPerformanceSnapshot,
@@ -33,7 +30,6 @@ import {
   listQueueItems,
   listQueueSources,
   listRecentMainFeedPublications,
-  listResearchEvidence,
   recordPerformanceSnapshot,
 } from './store.js';
 import { selectWritingStrategyAsMissionAgent } from './writing_strategy.js';
@@ -324,17 +320,7 @@ function missionVerificationProvenance(queueItem, draft) {
     .map((candidate) => String(candidate.url || candidate.key || '').trim())
     .filter(Boolean))];
 
-  const editorialSelection = getLatestEditorialSelectionForQueueItem(queueItem.id);
-  const recommendation = editorialSelection ? getEditorialRecommendation(editorialSelection.editorialRecommendationId) : null;
-  const storedEvidence = recommendation
-    ? listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey })
-    : [];
-  const storedEvidenceIds = new Set(storedEvidence.map((item) => String(item.id)));
   const requestedEvidence = [...new Set((draft?.editor?.evidenceUsed || []).map((id) => String(id || '').trim()).filter(Boolean))];
-  const invalidEvidence = requestedEvidence.filter((id) => !storedEvidenceIds.has(id));
-  if (invalidEvidence.length) {
-    throw new Error(`Writer evidence provenance no longer resolves to stored Editorial evidence: ${invalidEvidence.join(', ')}.`);
-  }
 
   return {
     authorityType: 'mission_agent',

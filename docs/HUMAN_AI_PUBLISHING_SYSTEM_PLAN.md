@@ -66,7 +66,7 @@
 - Phase 5 suggested/accepted/retired learned strategy with bounded accepted adjustments;
 - current Discover source-truth split: X Latest, X Momentum, actual GitHub Trending, and current HN Top Stories snapshots are separate from the persistent To review/Bookmarks/Handled/history workflow views;
 - shared AI runtime/provider execution with Direct API/OpenRouter/OpenAI-compatible, Codex, installed AGY, safe secret references, global/per-role profiles, AI Settings, and per-run provenance;
-- Phase 6 canonical source snapshots/observations, evidence-bounded editorial planning, explicit human recommendation selection, writer evidence IDs/claim scope, Today/Discover product surfaces, and recommendation provenance into Phase-4 outcomes/Phase-5 context.
+- Phase 6 canonical source snapshots/observations, source-context-aware editorial planning, explicit human recommendation selection, writer context IDs/metadata, Today/Discover product surfaces, and recommendation provenance into Phase-4 outcomes/Phase-5 context.
 
 ### Remaining planned work
 
@@ -571,7 +571,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - Use: `docs/POST_GENERATION_PROMPT.md`
 
 **Interfaces:**
-- Consumes: pipeline type, candidate context, verified evidence, niche keywords, recent account posts, media availability.
+- Consumes: pipeline type, candidate context, available source material, niche keywords, recent account posts, media availability.
 - Produces: structured final draft packet appropriate to Original / Quote / Thread / Reply.
 
 **Steps:**
@@ -877,7 +877,7 @@ The scheduler/account-health layer must not convert any of these observations in
 - [ ] Implement advisory `SaturationPressure` and reply-archetype/text-repetition diagnostics using local/native facilities.
 - [ ] Hard-stop only actual duplicate/near-duplicate, no-contribution, exhausted same-source, expired/no-active-conversation, or observed platform/project constraint conditions.
 - [ ] Keep daily reply volume, target saturation, repeated archetype, target concentration, and conversation density as soft modifiers/experiment variables.
-- [ ] Treat active bidirectional conversation, direct target questions, and new verified evidence as valid soft-penalty overrides.
+- [ ] Treat active bidirectional conversation, direct target questions, and new conversation context as valid soft-penalty overrides.
 - [ ] Show Network Quality components and InteractionYield with raw numerator components.
 - [ ] Record Under the Hood visibility snapshots only when actually observable; return unavailable cleanly otherwise.
 - [ ] Add Account Health dashboard/bridge surfaces without pretending to expose an X bot/reputation score.
@@ -1024,7 +1024,7 @@ Phase 6 is advisory. It may recommend no action and cannot approve, publish, sen
 - Autonomous engagement remains bounded by an explicit operator grant, budget, deduplication, account-health checks, deterministic eligibility, and atomic claims.
 - The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait; if there are many genuinely useful conversations, a fixed daily cap must not suppress them.
 - Target saturation, repeated archetype, target concentration, and weak recent InteractionYield are advisory signals by default; they lower priority or warn rather than hard-blocking a useful human-approved interaction.
-- Active bidirectional conversation, a direct target question, or new verified evidence may offset soft health penalties.
+- Active bidirectional conversation, a direct target question, or new conversation context may offset soft health penalties.
 - Reach/Follow/Conversation/Relationship scores, TargetScore, EngagePriority, SaturationPressure, NetworkQualityScore, and InteractionYield are internal prioritization/diagnostic heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.
 - No scheduler can guarantee virality. The system optimizes prerequisites: topic fit, distinctiveness, evidence, usefulness, freshness, readability, media value, timing, and follower-conversion value.
 - `associated_follower_delta` is not direct causal attribution. Overlapping publications, profile changes, external mentions, or prior posts can contribute; attribution confidence must remain visible.
@@ -1069,9 +1069,9 @@ The program is complete when a user can:
 28. See algorithm/tactic claims remain traceable to CODE_BACKED / OFFICIAL_PRODUCT_OR_POLICY / EMPIRICAL_VARIABLE / RETIRED evidence classes.
 29. See Discover source tabs represent current upstream source snapshots while To review, Bookmarks, Handled, and All sources represent persisted workflow/reference/history state.
 30. See the current day's X/GitHub/HN/conversation signals clustered into a small set of stories instead of treating every URL as an isolated post idea.
-31. See controlled claim-level evidence and unresolved research questions before the final editorial recommendation or writer uses a material factual claim.
+31. See optional source context and research questions that can inform the final editorial recommendation or writer.
 32. Select an explicit editorial objective and see Prepare / Research More / Skip recommendations with transparent Reach/Follow/Conversation/Relationship/Authority inputs and code-owned ordering.
-33. See **Research More — manual/external research required** with concrete unresolved questions and an explicit path to attach another source.
+33. See **Research More — manual/external research suggested** with concrete open questions and an explicit path to attach another source.
 34. Select or override an editorial recommendation without granting approval, and preserve the original recommendation plus the human-selected route for later measurement.
 35. Choose AI profiles in the UI for continuous scan, editorial scan, editorial final, and writer, including Codex model/reasoning, OpenRouter, arbitrary OpenAI-compatible endpoints, and supported installed OpenCode/OpenCode 2/AGY runtimes.
 36. See the actual AI runtime/provider/model/reasoning used for a recommendation/draft plus token/cost data when observable, without exposing stored API keys.

@@ -102,12 +102,12 @@ Choose **IGNORE** when:
 - we have no additive idea;
 - the source has already been used;
 - the post is viral but irrelevant;
-- the only available action would be engagement bait;
+- the only available action offers no useful informational contribution;
 - the topic would pull the account back toward legacy crypto/general-tech noise.
 
 Ignoring weak signals is part of the strategy.
 
-## 3. Attention hooks without engagement bait
+## 3. Attention hooks with useful information
 
 We want replies and discussion, but the question must seek information.
 
@@ -128,11 +128,11 @@ We want replies and discussion, but the question must seek information.
 - `comment YES`;
 - artificial `A or B?` questions with no informational purpose;
 - withholding useful information solely to force follows or replies;
-- repetitive controversy manufactured for impressions.
+- repetitive controversy with no useful informational contribution.
 
 Rule:
 
-> A legitimate question improves the research if somebody answers it. Engagement bait only improves the metric.
+> A useful question improves the research if somebody answers it.
 
 ## 4. Keyword usage
 

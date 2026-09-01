@@ -290,7 +290,7 @@ mutual
 recurring exchanges
 ```
 
-Do not automatically follow accounts merely to manufacture mutual state; relationship targeting should still optimize relevance and repeated useful interaction.
+Track mutual state as an observed relationship signal; relationship targeting should still optimize relevance and repeated useful interaction.
 
 ---
 

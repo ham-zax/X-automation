@@ -449,7 +449,7 @@ function startAudienceUnfollowJob(username) {
 
 export const STATUS_LABELS = Object.freeze({
   triage: 'Needs a decision',
-  researching: 'Needs research',
+  researching: 'Research suggested',
   drafting: 'Draft in progress',
   needs_review: 'Needs review',
   approved: 'Approved',
@@ -506,7 +506,7 @@ export const HEALTH_STATE_COPY = Object.freeze({
 export const QUALITY_SIGNAL_LABELS = Object.freeze({
   hook: { label: 'Opening', max: 8, description: 'Whether the first line quickly gives someone a reason to keep reading.' },
   insight: { label: 'Useful insight', max: 10, description: 'Whether the post adds a concrete implication instead of repeating the source.' },
-  evidence: { label: 'Support', max: 10, description: 'Whether claims are backed by source material, data, steps, or observed results.' },
+  evidence: { label: 'Support', max: 10, description: 'Whether the draft uses useful source material, data, steps, or observed results.' },
   action: { label: 'Takeaway', max: 7, description: 'Whether the reader leaves with a useful next step, decision, or question.' },
   originality: { label: 'Original angle', max: 5, description: 'Whether the wording adds something distinct from the source.' },
 });
@@ -2315,7 +2315,7 @@ export async function handleApi(req, res, requestUrl) {
       const context = schedulerContext();
       const groups = [
         { id: 'ideas', title: 'Sources to decide', note: 'Choose a drafting route, research further, pause, or skip.', statuses: ['triage'] },
-        { id: 'research', title: 'Needs research', note: 'Sources you deliberately held until stronger evidence or context is available.', statuses: ['researching'] },
+        { id: 'research', title: 'Research suggested', note: 'Sources you deliberately held for additional context or a later decision.', statuses: ['researching'] },
         { id: 'onHold', title: 'On hold', note: 'Sources you paused so they do not compete with active decisions.', statuses: ['watching'] },
         { id: 'drafting', title: 'Drafts in progress', note: 'Posts currently being written or edited.', statuses: ['drafting'] },
         { id: 'needsReview', title: 'Needs review', note: 'Required review confirmations or your approval decision are still pending.', statuses: ['needs_review'] },

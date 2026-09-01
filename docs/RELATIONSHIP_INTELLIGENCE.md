@@ -392,7 +392,7 @@ Filter:
 - not already acted on in a way that exhausts the source;
 - potential contribution exists.
 
-Conversation saturation is **not** a hard filter. Phase 1D supplies `SaturationPressure` as a soft EngagePriority modifier. Active bidirectional conversation, a direct question, or new verified evidence may fully offset that pressure.
+Conversation saturation is **not** a hard filter. Phase 1D supplies `SaturationPressure` as a soft EngagePriority modifier. Active bidirectional conversation, a direct question, or new conversation context may fully offset that pressure.
 
 ### B. Responses to us
 

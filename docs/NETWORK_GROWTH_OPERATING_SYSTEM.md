@@ -170,7 +170,7 @@ Phase 1C Engage Next is current: bounded target timelines, Discover X observatio
 
 Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase 5 Learned Strategy is current: accepted rules make bounded transparent adjustments while suggestions remain inert until human acceptance.
 
-Phase 6 is current runtime behavior. The AI Editorial Director sits above individual source routing: canonical X/GitHub/HN/conversation snapshots -> story clustering -> controlled evidence -> objective-aware Prepare/Research More/Skip recommendation -> explicit human selection -> existing writer/gates/approval/scheduler. Publication measurements preserve AI-recommended, human-selected, and final-published route separately so later cohort analysis remains observational rather than rewriting history. The shared AI runtime/provider layer lets the operator choose Direct API/OpenRouter/OpenAI-compatible/local, Codex, or supported installed AGY profiles without changing network, evidence, approval, or learning authority; absent OpenCode variants remain unavailable. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
+Phase 6 is current runtime behavior. The AI Editorial Director sits above individual source routing: canonical X/GitHub/HN/conversation snapshots -> story clustering -> optional source context -> objective-aware Prepare/Research More/Skip recommendation -> explicit human selection -> existing writer/gates/approval/scheduler. Publication measurements preserve AI-recommended, human-selected, and final-published route separately so later cohort analysis remains observational rather than rewriting history. The shared AI runtime/provider layer lets the operator choose Direct API/OpenRouter/OpenAI-compatible/local, Codex, or supported installed AGY profiles without changing network, source context, approval, or learning authority; absent OpenCode variants remain unavailable. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
 
 ---
 
@@ -528,7 +528,7 @@ Sort primarily by:
 6. target score;
 7. source velocity.
 
-Apply target saturation, reply-archetype repetition, and target concentration as **soft warnings/modifiers**. They must not automatically block a useful human-approved interaction. A direct question, active bidirectional exchange, or new verified evidence can offset those soft penalties.
+Apply target saturation, reply-archetype repetition, and target concentration as **soft warnings/modifiers**. They must not automatically block a useful human-approved interaction. A direct question, active bidirectional exchange, or new conversation context can offset those soft penalties.
 
 Do not sort by follower count alone and do not impose a fixed daily reply quota.
 
@@ -559,7 +559,7 @@ Follow-up priority is higher when:
 - the relationship target is high value;
 - the conversation is still fresh.
 
-The system should not manufacture follow-ups when the conversation has naturally ended.
+Follow-ups can be omitted when the conversation has naturally ended.
 
 ---
 
