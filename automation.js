@@ -548,6 +548,17 @@ export async function runCycle() {
   }
 }
 
+function installAutomationSignalHandlers() {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      if (readAutomationRuntimeState().inProgress === true) {
+        recordAutomationCycleFailure(new Error(`Automation cycle interrupted by ${signal}.`));
+      }
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    });
+  }
+}
+
 async function main() {
   const once = process.argv.includes('--once');
   if (once) {
@@ -578,6 +589,7 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  installAutomationSignalHandlers();
   main().catch((error) => {
     console.error(`[automation] Fatal error: ${error.message}`);
     process.exit(1);

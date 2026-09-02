@@ -506,6 +506,11 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
     ? Math.round((sourceReplies / sourceViews) * 1_000 * 10) / 10
     : null;
   const discoveryQuality = assessDiscoveryQuality(candidate.text || '');
+  const lowSignal = candidate.source === 'x'
+    && sourceViews != null
+    && sourceViews < 100
+    && !candidate.viral?.tier
+    && scores.relationshipPotential <= 0;
   const urgency = recommendation.action === 'ignore'
     ? 'blocked'
     : candidate.viral?.tier === 'breakout' || (viewsPerHour != null && viewsPerHour >= 1_000) || (ageHours != null && ageHours <= 3)
@@ -522,6 +527,7 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
       + (borrowedDistribution ? 8 : 0)
       + (urgency === 'now' ? 8 : urgency === 'soon' ? 3 : 0)
       + topicBalanceDecision.adjustment
+      - (lowSignal ? 25 : 0)
       - (recommendation.action === 'ignore' ? 60 : 0)
   );
   return {
@@ -534,7 +540,7 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
     metrics: candidate.metrics || {},
     recommendation,
     operatorPriority,
-    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution, freshness, and bounded configured topic-balance adjustments. Not an X ranking-law claim.',
+    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution, freshness, bounded configured topic-balance adjustments, and a low-signal penalty for unproven X sources. Not an X ranking-law claim.',
     topicBalance: topicBalanceDecision,
     urgency,
     distribution: {
@@ -566,6 +572,12 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
     },
     growthFit: opportunity.growthFit,
     discoveryQuality,
+    signal: {
+      low: lowSignal,
+      reason: lowSignal
+        ? 'Fewer than 100 observed views, no viral tier, and no relationship signal; keep available for diagnostics but do not let freshness alone make it an execution leader.'
+        : 'No low-signal suppression matched.',
+    },
     sourceStyle: {
       hookLabels: style.hookLabels,
       styleLabels: style.styleLabels,
@@ -577,7 +589,7 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
       hashtagCount: style.hashtagCount,
     },
     disposition,
-    actionable: recommendation.action !== 'ignore' && disposition?.active !== true,
+    actionable: recommendation.action !== 'ignore' && disposition?.active !== true && !lowSignal,
     execution: {
       route,
       automaticMainFeedAfterApproval: ['original', 'quote', 'thread'].includes(route),
@@ -616,7 +628,8 @@ function growthRead(payload = {}) {
   const items = [...merged.values()]
     .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds, topicBalance))
     .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
-    .filter((item) => includeLowSignal || item.discoveryQuality.allowed)
+    .filter((item) => item.discoveryQuality.allowed)
+    .filter((item) => includeLowSignal || item.signal?.low !== true)
     .filter((item) => includeIgnored || item.recommendation.action !== 'ignore')
     .filter((item) => includeDisposed || item.disposition?.active !== true)
     .sort((left, right) => right.operatorPriority - left.operatorPriority)

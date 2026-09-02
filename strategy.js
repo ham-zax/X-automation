@@ -115,7 +115,7 @@ export const NICHE_GROUPS = [
 
 export const GROWTH_FOCUS_PROFILE_VERSION = 5;
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 7;
+export const CANDIDATE_CLASSIFIER_VERSION = 8;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
@@ -131,7 +131,12 @@ const DISCOVERY_CRYPTO_PROMOTION_SIGNALS = [
   'currency', 'token', 'miners', 'validators', 'staking', 'presale', 'holders', 'buy now',
 ];
 const DISCOVERY_JOB_AD_SIGNALS = [
-  'we are hiring', 'hiring now', 'job opening', 'open role', 'open roles', 'apply now', 'join our team',
+  'we are hiring', "we're hiring", 'we’re hiring', 'hiring now', 'hiring an engineer', 'hiring a developer',
+  'job opening', 'open role', 'open roles', 'apply now', 'join our team',
+];
+const DISCOVERY_ADULT_SPAM_SIGNALS = [
+  'adult content', '18+ only', 'nsfw', 'onlyfans', 'escort', 'porn', 'pornography',
+  'sex video', 'videosex', 'groupsex', 'sexy18',
 ];
 
 export const AUDIENCE_NICHE_GROUPS = [
@@ -545,13 +550,15 @@ export function assessDiscoveryQuality(text) {
   const cryptoPromotionMatches = DISCOVERY_CRYPTO_PROMOTION_SIGNALS.filter((term) => containsTerm(haystack, term));
   const tokenTicker = String(text || '').match(/\$[a-z][a-z0-9]{1,9}\b/i)?.[0] || null;
   const jobAdMatches = DISCOVERY_JOB_AD_SIGNALS.filter((term) => containsTerm(haystack, term));
+  const adultSpamMatches = DISCOVERY_ADULT_SPAM_SIGNALS.filter((term) => containsTerm(haystack, term));
   const reasonCodes = [];
   if (cryptoMatches.length && (cryptoPromotionMatches.length || tokenTicker)) reasonCodes.push('CRYPTO_PROMOTION');
   if (jobAdMatches.length) reasonCodes.push('JOB_AD');
+  if (adultSpamMatches.length) reasonCodes.push('ADULT_SPAM');
   return {
     allowed: reasonCodes.length === 0,
     reasonCodes,
-    matches: [...new Set([...cryptoMatches, ...cryptoPromotionMatches, ...jobAdMatches, ...(tokenTicker ? [tokenTicker] : [])])],
+    matches: [...new Set([...cryptoMatches, ...cryptoPromotionMatches, ...jobAdMatches, ...adultSpamMatches, ...(tokenTicker ? [tokenTicker] : [])])],
     explanation: reasonCodes.length
       ? `Discovery filter excluded ${reasonCodes.join(', ').toLowerCase().replaceAll('_', ' ')} content from the growth opportunity set.`
       : 'No hard discovery-quality exclusion matched.',
@@ -559,16 +566,28 @@ export function assessDiscoveryQuality(text) {
 }
 
 export function classifyNiche(text) {
-  const haystack = String(text || '').toLowerCase().replace(/([a-z])(?=\d)/g, '$1 ');
+  const sourceText = String(text || '').replace(/https?:\/\/\S+/gi, ' ');
+  const haystack = sourceText.toLowerCase().replace(/([a-z])(?=\d)/g, '$1 ');
+  const ambiguousTerms = new Set(['python', 'pip', 'bun']);
+  const genericTechnicalContext = /\b(?:code|coding|developer|programming|package|library|framework|runtime|compiler|script|benchmark|performance|install|dependency|api|cli|typescript|javascript|node|npm|pnpm|github|repo|server)\b/i.test(sourceText);
+  const hasUnambiguousTerm = ACTIVE_NICHE_PROFILE.contentGroups.some((group) =>
+    group.terms.some((term) => !ambiguousTerms.has(term) && containsTerm(haystack, term)));
+  const termMatches = (term) => {
+    if (!containsTerm(haystack, term)) return false;
+    if (term === 'pip') return /\bpip\b/.test(sourceText) || genericTechnicalContext || hasUnambiguousTerm;
+    if (term === 'python') return /\bPython(?:\s+\d+(?:\.\d+)*|\s+(?:release|released|devs?|developers?|package|library|code|programming|runtime|compiler|performance|benchmark))\b/.test(sourceText) || genericTechnicalContext || hasUnambiguousTerm;
+    if (term === 'bun') return /\bBun\b/.test(sourceText) || genericTechnicalContext || hasUnambiguousTerm;
+    return true;
+  };
   const audienceMatches = ACTIVE_NICHE_PROFILE.exploration.enabled
     ? ACTIVE_NICHE_PROFILE.audienceGroups.map((group) => ({
         group,
-        matchedTerms: group.terms.filter((term) => containsTerm(haystack, term)),
+        matchedTerms: group.terms.filter(termMatches),
       })).filter(({ matchedTerms }) => matchedTerms.length)
     : [];
   const groupMatches = ACTIVE_NICHE_PROFILE.contentGroups.map((group) => ({
     group,
-    matchedTerms: group.terms.filter((term) => containsTerm(haystack, term)),
+    matchedTerms: group.terms.filter(termMatches),
   }));
   const hasTechnicalContext = audienceMatches.length > 0
     || groupMatches.some(({ group, matchedTerms }) => !group.requiresTechnicalContext && matchedTerms.length > 0);
