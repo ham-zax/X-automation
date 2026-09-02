@@ -222,6 +222,15 @@ function observedMetric(metrics, ...names) {
   return undefined;
 }
 
+function manualSourceType(payloadSource, url) {
+  if (typeof payloadSource === 'string' && payloadSource.trim()) return payloadSource.trim();
+  if (/^https?:\/\/(?:www\.)?x\.com\//i.test(url)) return 'x';
+  if (/^https?:\/\/(?:www\.)?github\.com\//i.test(url)) return 'github';
+  if (/^https?:\/\/news\.ycombinator\.com\//i.test(url)) return 'hn';
+  if (/^https?:\/\//i.test(url)) return 'web';
+  return 'manual';
+}
+
 function manualCandidate(payload) {
   const text = String(payload.text || '').trim();
   const url = String(payload.url || '').trim();
@@ -241,7 +250,7 @@ function manualCandidate(payload) {
   const urlAuthor = url.match(/x\.com\/([^/]+)/i)?.[1];
   return {
     key: payload.key || url,
-    source: payload.source || 'x',
+    source: manualSourceType(payload.source, url),
     title: payload.author || payload.title || (urlAuthor ? `@${urlAuthor}` : '@manual'),
     text,
     url,
