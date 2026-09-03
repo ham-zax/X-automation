@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 4,
+  "startedAt": "2026-09-03T20:29:12.286Z",
+  "updatedAt": "2026-09-03T20:29:53.831Z",
+  "collectionWindow": {
+    "sinceDays": 365,
+    "since": "2025-09-03T20:29:12.286Z",
+    "anchor": "2026-09-03T20:29:12.286Z",
+    "semantics": "For each creator, collect up to the requested number of recent authored posts (originals + quotes) from X current live profile operation; low-cadence creators continue until the shared trailing-window boundary or the browser timeline stalls/exhausts."
+  },
+  "requested": {
+    "mainLimit": 100,
+    "replyLimit": 20,
+    "maxScrolls": 30,
+    "scrollDelayMs": 1500
+  },
+  "source": "Raw GraphQL payloads captured from X authenticated browser traffic using current live profile timelines, with X SearchTimeline as a separate fallback route when a profile timeline is incomplete or rate-limited; payloads are normalized in-repo to preserve note_tweet, null metric availability, quote context, and reply parent metadata.",
+  "limitations": [
+    "The current UserOriginalsTimeline operation excludes reposts; repost behavior is therefore not part of the repaired primary corpus.",
+    "Replies are a behavioral supplement and are not mixed into authored-post performance comparisons."
+  ],
+  "creators": [
+    {
+      "index": 34,
+      "name": "George Hotz",
+      "handle": "realGeorgeHotz",
+      "lane": "AI systems / hacker",
+      "phase1Followers": 303377,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:29:12.616Z",
+      "profile": {
+        "id": "771970414155182081",
+        "followersObserved": 303377,
+        "followingObserved": 202,
+        "postsObserved": 0,
+        "observedAt": "2026-09-03T20:29:12.616Z"
+      },
+      "main": {
+        "count": 0,
+        "original": 0,
+        "quote": 0,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 0,
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": null,
+        "newestObservedAt": null,
+        "stopReason": "timeline_stalled_or_exhausted",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 0,
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": null,
+        "newestObservedAt": null,
+        "stopReason": "timeline_stalled_or_exhausted",
+        "truncatedBeforeWindow": false
+      }
+    }
+  ],
+  "totals": {
+    "creatorsRequested": 1,
+    "creatorsComplete": 1,
+    "creatorsTruncated": 0,
+    "creatorsError": 0,
+    "mainRecords": 0,
+    "authoredRecords": 0,
+    "repostRecords": 0,
+    "replyRecords": 0
+  }
+}

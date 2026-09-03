@@ -1,0 +1,431 @@
+{
+  "schemaVersion": 4,
+  "startedAt": "2026-09-03T20:15:19.906Z",
+  "updatedAt": "2026-09-03T20:19:09.119Z",
+  "collectionWindow": {
+    "sinceDays": 365,
+    "since": "2025-09-03T20:15:19.906Z",
+    "anchor": "2026-09-03T20:15:19.906Z",
+    "semantics": "For each creator, collect up to the requested number of recent authored posts (originals + quotes) from X current live profile operation; low-cadence creators continue until the shared trailing-window boundary or the browser timeline stalls/exhausts."
+  },
+  "requested": {
+    "mainLimit": 100,
+    "replyLimit": 10,
+    "maxScrolls": 30,
+    "scrollDelayMs": 700
+  },
+  "source": "Raw GraphQL payloads captured from X authenticated browser traffic using the current live UserOriginalsTimeline and UserRepliesTimeline operations; payloads are normalized in-repo to preserve note_tweet, null metric availability, quote context, and reply parent metadata.",
+  "limitations": [
+    "The current UserOriginalsTimeline operation excludes reposts; repost behavior is therefore not part of the repaired primary corpus.",
+    "Replies are a behavioral supplement and are not mixed into authored-post performance comparisons."
+  ],
+  "creators": [
+    {
+      "index": 1,
+      "name": "Pieter Levels",
+      "handle": "levelsio",
+      "lane": "AI indie builder",
+      "phase1Followers": 947710,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:15:20.183Z",
+      "profile": {
+        "id": "1577241403",
+        "followersObserved": 949083,
+        "followingObserved": 3194,
+        "postsObserved": 179431,
+        "observedAt": "2026-09-03T20:15:20.183Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 10,
+        "quote": 90,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-08-21T15:09:57.000Z",
+        "newestObservedAt": "2026-09-03T15:29:42.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 20,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-09-03T11:48:36.000Z",
+        "newestObservedAt": "2026-09-03T20:02:38.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 2,
+      "name": "Theo Browne",
+      "handle": "theo",
+      "lane": "AI coding / developer",
+      "phase1Followers": 381057,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:15:36.327Z",
+      "profile": {
+        "id": "786375418685165568",
+        "followersObserved": 381634,
+        "followingObserved": 4219,
+        "postsObserved": 66216,
+        "observedAt": "2026-09-03T20:15:36.327Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 55,
+        "quote": 45,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-08-22T23:03:31.000Z",
+        "newestObservedAt": "2026-09-03T20:09:09.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 21,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-09-03T08:31:36.000Z",
+        "newestObservedAt": "2026-09-03T20:14:37.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 3,
+      "name": "Guillermo Rauch",
+      "handle": "rauchg",
+      "lane": "AI devtools / Vercel",
+      "phase1Followers": 845774,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:15:50.483Z",
+      "profile": {
+        "id": "15540222",
+        "followersObserved": 848847,
+        "followingObserved": 661,
+        "postsObserved": 53077,
+        "observedAt": "2026-09-03T20:15:50.483Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 34,
+        "quote": 66,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-07-31T22:32:17.000Z",
+        "newestObservedAt": "2026-09-03T15:28:38.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 20,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-09-01T03:40:17.000Z",
+        "newestObservedAt": "2026-09-03T19:28:21.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 4,
+      "name": "Aravind Srinivas",
+      "handle": "AravSrinivas",
+      "lane": "AI agents / search / founder",
+      "phase1Followers": 1100220,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:16:04.178Z",
+      "profile": {
+        "id": "759894532649545732",
+        "followersObserved": 1104067,
+        "followingObserved": 1545,
+        "postsObserved": 8980,
+        "observedAt": "2026-09-03T20:16:04.178Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 18,
+        "quote": 82,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-06-18T16:20:39.000Z",
+        "newestObservedAt": "2026-09-03T18:58:23.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 28,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-08-19T08:34:44.000Z",
+        "newestObservedAt": "2026-09-03T16:48:52.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 5,
+      "name": "Gergely Orosz",
+      "handle": "GergelyOrosz",
+      "lane": "Software engineering",
+      "phase1Followers": 352392,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:16:18.045Z",
+      "profile": {
+        "id": "30192824",
+        "followersObserved": 352632,
+        "followingObserved": 3064,
+        "postsObserved": 47133,
+        "observedAt": "2026-09-03T20:16:18.045Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 51,
+        "quote": 49,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-08-09T16:00:14.000Z",
+        "newestObservedAt": "2026-09-03T17:20:17.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 34,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-09-02T08:36:52.000Z",
+        "newestObservedAt": "2026-09-03T15:59:41.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 6,
+      "name": "Michael Truell",
+      "handle": "mntruell",
+      "lane": "AI coding / founder",
+      "phase1Followers": 226182,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:16:32.188Z",
+      "profile": {
+        "id": "2755860644",
+        "followersObserved": 226434,
+        "followingObserved": 911,
+        "postsObserved": 274,
+        "observedAt": "2026-09-03T20:16:32.188Z"
+      },
+      "main": {
+        "count": 38,
+        "original": 13,
+        "quote": 25,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 2,
+        "responseErrors": [],
+        "capturedWithinWindow": 38,
+        "hitLimit": false,
+        "coverageReachedSince": true,
+        "oldestObservedAt": "2025-07-15T17:15:17.000Z",
+        "newestObservedAt": "2026-08-29T02:52:39.000Z",
+        "stopReason": "time_window_covered",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 24,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-02-10T20:55:21.000Z",
+        "newestObservedAt": "2026-09-02T18:40:23.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 7,
+      "name": "Boris Cherny",
+      "handle": "bcherny",
+      "lane": "Claude Code / agentic coding",
+      "phase1Followers": 566988,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:16:39.556Z",
+      "profile": {
+        "id": "159337660",
+        "followersObserved": 567334,
+        "followingObserved": 134,
+        "postsObserved": 2264,
+        "observedAt": "2026-09-03T20:16:39.556Z"
+      },
+      "main": {
+        "count": 60,
+        "original": 27,
+        "quote": 33,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 3,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 60,
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-04-16T04:21:15.000Z",
+        "newestObservedAt": "2026-09-03T19:11:27.000Z",
+        "stopReason": "timeline_stalled_or_exhausted",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 10,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 1,
+        "responseErrors": [],
+        "capturedWithinWindow": 20,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "oldestObservedAt": "2026-09-02T00:31:13.000Z",
+        "newestObservedAt": "2026-09-03T19:29:09.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 8,
+      "name": "Peter Steinberger",
+      "handle": "steipete",
+      "lane": "AI agents / open source",
+      "phase1Followers": 582553,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @steipete: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:16:50.910Z"
+    },
+    {
+      "index": 9,
+      "name": "Dax",
+      "handle": "thdxr",
+      "lane": "OpenCode / developer tools",
+      "phase1Followers": 167117,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @thdxr: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:17:08.171Z"
+    },
+    {
+      "index": 10,
+      "name": "Matt Pocock",
+      "handle": "mattpocockuk",
+      "lane": "Developer education / AI coding",
+      "phase1Followers": 340894,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @mattpocockuk: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:17:25.444Z"
+    },
+    {
+      "index": 11,
+      "name": "Riley Brown",
+      "handle": "rileybrown",
+      "lane": "Agent-native / vibe coding",
+      "phase1Followers": 237852,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @rileybrown: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:17:42.717Z"
+    },
+    {
+      "index": 12,
+      "name": "Ethan Mollick",
+      "handle": "emollick",
+      "lane": "Applied AI",
+      "phase1Followers": 381603,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @emollick: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:18:00.015Z"
+    },
+    {
+      "index": 13,
+      "name": "Greg Brockman",
+      "handle": "gdb",
+      "lane": "Frontier AI / founder",
+      "phase1Followers": 1039856,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @gdb: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:18:17.277Z"
+    },
+    {
+      "index": 14,
+      "name": "Sam Altman",
+      "handle": "sama",
+      "lane": "Frontier AI / founder",
+      "phase1Followers": 6100665,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @sama: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:18:34.561Z"
+    },
+    {
+      "index": 15,
+      "name": "Dario Amodei",
+      "handle": "DarioAmodei",
+      "lane": "Frontier AI / founder",
+      "phase1Followers": 639380,
+      "status": "error",
+      "error": "UserOriginalsTimeline unavailable for @DarioAmodei: [{\"operation\":\"UserOriginalsTimeline\",\"status\":429}]",
+      "observedAt": "2026-09-03T20:18:51.857Z"
+    }
+  ]
+}

@@ -1,0 +1,1772 @@
+{
+  "schemaVersion": 4,
+  "startedAt": "2026-09-03T20:30:51.172Z",
+  "updatedAt": "2026-09-03T20:41:17.273Z",
+  "collectionWindow": {
+    "sinceDays": 90,
+    "since": "2026-06-05T20:32:15.171Z",
+    "anchor": "2026-09-03T20:32:15.171Z",
+    "semantics": "For each creator, collect up to the requested number of recent authored posts (originals + quotes) from X current live profile operation; low-cadence creators continue until the shared trailing-window boundary or the browser timeline stalls/exhausts."
+  },
+  "requested": {
+    "mainLimit": 100,
+    "replyLimit": 0,
+    "maxScrolls": 30,
+    "scrollDelayMs": 1800
+  },
+  "source": "Raw GraphQL payloads captured from X authenticated browser traffic using current live profile timelines, with X SearchTimeline as a separate fallback route when a profile timeline is incomplete or rate-limited; payloads are normalized in-repo to preserve note_tweet, null metric availability, quote context, and reply parent metadata.",
+  "limitations": [
+    "The current UserOriginalsTimeline operation excludes reposts; repost behavior is therefore not part of the repaired primary corpus.",
+    "Replies are a behavioral supplement and are not mixed into authored-post performance comparisons."
+  ],
+  "creators": [
+    {
+      "index": 9,
+      "name": "Dax",
+      "handle": "thdxr",
+      "lane": "OpenCode / developer tools",
+      "phase1Followers": 167117,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:32:15.511Z",
+      "profile": {
+        "id": "2870102861",
+        "followersObserved": 167503,
+        "followingObserved": 466,
+        "postsObserved": 44277,
+        "observedAt": "2026-09-03T20:32:15.511Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 65,
+        "quote": 35,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-19T02:29:48.000Z",
+        "newestObservedAt": "2026-09-03T19:27:30.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 10,
+      "name": "Matt Pocock",
+      "handle": "mattpocockuk",
+      "lane": "Developer education / AI coding",
+      "phase1Followers": 340894,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:32:29.130Z",
+      "profile": {
+        "id": "346640777",
+        "followersObserved": 342023,
+        "followingObserved": 805,
+        "postsObserved": 36558,
+        "observedAt": "2026-09-03T20:32:29.130Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 77,
+        "quote": 23,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 10,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-02T06:48:27.000Z",
+        "newestObservedAt": "2026-09-03T16:47:09.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 5,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 95,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": "2026-08-03T08:19:10.000Z",
+            "newestObservedAt": "2026-09-03T16:47:09.000Z",
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-02T06:48:27.000Z",
+            "newestObservedAt": "2026-09-03T16:47:09.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 11,
+      "name": "Riley Brown",
+      "handle": "rileybrown",
+      "lane": "Agent-native / vibe coding",
+      "phase1Followers": 237852,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:32:55.695Z",
+      "profile": {
+        "id": "1601693298707628035",
+        "followersObserved": 239291,
+        "followingObserved": 2902,
+        "postsObserved": 11288,
+        "observedAt": "2026-09-03T20:32:55.695Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 60,
+        "quote": 40,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-28T20:33:50.000Z",
+        "newestObservedAt": "2026-09-03T01:22:05.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-28T20:33:50.000Z",
+            "newestObservedAt": "2026-09-03T01:22:05.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 12,
+      "name": "Ethan Mollick",
+      "handle": "emollick",
+      "lane": "Applied AI",
+      "phase1Followers": 381603,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:33:27.633Z",
+      "profile": {
+        "id": "39125788",
+        "followersObserved": 381902,
+        "followingObserved": 593,
+        "postsObserved": 36739,
+        "observedAt": "2026-09-03T20:33:27.633Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 56,
+        "quote": 44,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-13T14:35:41.000Z",
+        "newestObservedAt": "2026-09-03T20:15:27.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-13T14:35:41.000Z",
+            "newestObservedAt": "2026-09-03T20:15:27.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 13,
+      "name": "Greg Brockman",
+      "handle": "gdb",
+      "lane": "Frontier AI / founder",
+      "phase1Followers": 1039856,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:30:51.622Z",
+      "profile": {
+        "id": "162124540",
+        "followersObserved": 1040817,
+        "followingObserved": 8,
+        "postsObserved": 6418,
+        "observedAt": "2026-09-03T20:30:51.622Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 18,
+        "quote": 82,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-14T03:56:16.000Z",
+        "newestObservedAt": "2026-09-03T19:44:36.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 14,
+      "name": "Sam Altman",
+      "handle": "sama",
+      "lane": "Frontier AI / founder",
+      "phase1Followers": 6100665,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:31:05.536Z",
+      "profile": {
+        "id": "1605",
+        "followersObserved": 6111846,
+        "followingObserved": 1025,
+        "postsObserved": 7928,
+        "observedAt": "2026-09-03T20:31:05.536Z"
+      },
+      "main": {
+        "count": 87,
+        "original": 42,
+        "quote": 45,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 5,
+        "responseErrors": [],
+        "capturedWithinWindow": 87,
+        "hitLimit": false,
+        "coverageReachedSince": true,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-05-21T17:33:05.000Z",
+        "newestObservedAt": "2026-09-03T19:54:52.000Z",
+        "stopReason": "time_window_covered",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 16,
+      "name": "Amjad Masad",
+      "handle": "amasad",
+      "lane": "AI coding / founder",
+      "phase1Followers": 487157,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:33:59.819Z",
+      "profile": {
+        "id": "166138615",
+        "followersObserved": 487431,
+        "followingObserved": 1565,
+        "postsObserved": 29920,
+        "observedAt": "2026-09-03T20:33:59.819Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 19,
+        "quote": 81,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-16T17:07:24.000Z",
+        "newestObservedAt": "2026-09-03T20:24:09.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-16T17:07:24.000Z",
+            "newestObservedAt": "2026-09-03T20:24:09.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 17,
+      "name": "Greg Isenberg",
+      "handle": "gregisenberg",
+      "lane": "AI products / founder",
+      "phase1Followers": 704232,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:31:16.817Z",
+      "profile": {
+        "id": "14642331",
+        "followersObserved": 705518,
+        "followingObserved": 992,
+        "postsObserved": 63999,
+        "observedAt": "2026-09-03T20:31:16.817Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 77,
+        "quote": 23,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-06-08T18:38:00.000Z",
+        "newestObservedAt": "2026-09-03T20:27:43.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 18,
+      "name": "Alex Finn",
+      "handle": "AlexFinn",
+      "lane": "Vibe coding / solo building",
+      "phase1Followers": 472969,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:31:29.098Z",
+      "profile": {
+        "id": "1369348853414178822",
+        "followersObserved": 473099,
+        "followingObserved": 8914,
+        "postsObserved": 64810,
+        "observedAt": "2026-09-03T20:31:29.098Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 74,
+        "quote": 26,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-06-13T23:21:13.000Z",
+        "newestObservedAt": "2026-09-03T18:33:54.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 19,
+      "name": "Marc Lou",
+      "handle": "marclou",
+      "lane": "Indie building / AI",
+      "phase1Followers": 382530,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:34:29.822Z",
+      "profile": {
+        "id": "2311987360",
+        "followersObserved": 383048,
+        "followingObserved": 1246,
+        "postsObserved": 36778,
+        "observedAt": "2026-09-03T20:34:29.822Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 49,
+        "quote": 51,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-07T07:49:53.000Z",
+        "newestObservedAt": "2026-09-03T15:19:07.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-07T07:49:53.000Z",
+            "newestObservedAt": "2026-09-03T15:19:07.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 21,
+      "name": "Matt Shumer",
+      "handle": "mattshumer_",
+      "lane": "AI builder / investor",
+      "phase1Followers": 385834,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:34:59.794Z",
+      "profile": {
+        "id": "1194889317388374016",
+        "followersObserved": 386186,
+        "followingObserved": 1638,
+        "postsObserved": 11244,
+        "observedAt": "2026-09-03T20:34:59.794Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 45,
+        "quote": 55,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-26T16:57:56.000Z",
+        "newestObservedAt": "2026-09-03T20:27:49.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-26T16:57:56.000Z",
+            "newestObservedAt": "2026-09-03T20:27:49.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 23,
+      "name": "Harrison Chase",
+      "handle": "hwchase17",
+      "lane": "LangChain / agents",
+      "phase1Followers": 128609,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:35:30.478Z",
+      "profile": {
+        "id": "2728439146",
+        "followersObserved": 128748,
+        "followingObserved": 585,
+        "postsObserved": 17464,
+        "observedAt": "2026-09-03T20:35:30.478Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 24,
+        "quote": 76,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-13T21:42:41.000Z",
+        "newestObservedAt": "2026-09-03T16:47:28.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-13T21:42:41.000Z",
+            "newestObservedAt": "2026-09-03T16:47:28.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 25,
+      "name": "shadcn",
+      "handle": "shadcn",
+      "lane": "UI/devtools / AI building",
+      "phase1Followers": 239725,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:36:00.817Z",
+      "profile": {
+        "id": "31206819",
+        "followersObserved": 239871,
+        "followingObserved": 436,
+        "postsObserved": 7595,
+        "observedAt": "2026-09-03T20:36:00.817Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 60,
+        "quote": 40,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-06-30T07:38:59.000Z",
+        "newestObservedAt": "2026-09-02T17:43:27.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-06-30T07:38:59.000Z",
+            "newestObservedAt": "2026-09-02T17:43:27.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 26,
+      "name": "swyx",
+      "handle": "swyx",
+      "lane": "AI engineering / developer community",
+      "phase1Followers": 187704,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:36:31.384Z",
+      "profile": {
+        "id": "33521530",
+        "followersObserved": 187951,
+        "followingObserved": 3930,
+        "postsObserved": 78274,
+        "observedAt": "2026-09-03T20:36:31.384Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 30,
+        "quote": 70,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-12T04:04:58.000Z",
+        "newestObservedAt": "2026-08-26T06:02:53.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-12T04:04:58.000Z",
+            "newestObservedAt": "2026-08-26T06:02:53.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 28,
+      "name": "Elvis Saravia",
+      "handle": "omarsar0",
+      "lane": "AI research / agents education",
+      "phase1Followers": 316003,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:37:04.635Z",
+      "profile": {
+        "id": "3448284313",
+        "followersObserved": 316434,
+        "followingObserved": 999,
+        "postsObserved": 19666,
+        "observedAt": "2026-09-03T20:37:04.635Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 44,
+        "quote": 56,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-22T15:06:07.000Z",
+        "newestObservedAt": "2026-09-03T19:55:42.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-22T15:06:07.000Z",
+            "newestObservedAt": "2026-09-03T19:55:42.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 30,
+      "name": "Francois Chollet",
+      "handle": "fchollet",
+      "lane": "AI research / reasoning",
+      "phase1Followers": 721485,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:37:35.523Z",
+      "profile": {
+        "id": "68746721",
+        "followersObserved": 721958,
+        "followingObserved": 827,
+        "postsObserved": 25653,
+        "observedAt": "2026-09-03T20:37:35.523Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 71,
+        "quote": 29,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-06-10T02:59:44.000Z",
+        "newestObservedAt": "2026-09-03T20:09:58.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-06-10T02:59:44.000Z",
+            "newestObservedAt": "2026-09-03T20:09:58.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 33,
+      "name": "Alexandr Wang",
+      "handle": "alexandr_wang",
+      "lane": "Frontier AI / Meta",
+      "phase1Followers": 648712,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:38:06.634Z",
+      "profile": {
+        "id": "615818451",
+        "followersObserved": 652962,
+        "followingObserved": 886,
+        "postsObserved": 2706,
+        "observedAt": "2026-09-03T20:38:06.634Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 11,
+        "quote": 89,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-07-10T18:42:58.000Z",
+        "newestObservedAt": "2026-09-03T19:28:42.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-07-10T18:42:58.000Z",
+            "newestObservedAt": "2026-09-03T19:28:42.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 36,
+      "name": "Yann LeCun",
+      "handle": "ylecun",
+      "lane": "AI research",
+      "phase1Followers": 1287400,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:38:38.239Z",
+      "profile": {
+        "id": "48008938",
+        "followersObserved": 1288526,
+        "followingObserved": 794,
+        "postsObserved": 27208,
+        "observedAt": "2026-09-03T20:38:38.239Z"
+      },
+      "main": {
+        "count": 6,
+        "original": 1,
+        "quote": 5,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 1,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 6,
+        "hitLimit": false,
+        "coverageReachedSince": true,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-06-24T12:53:20.000Z",
+        "newestObservedAt": "2026-08-16T09:42:31.000Z",
+        "stopReason": "time_window_covered",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 1,
+            "responseErrors": [],
+            "capturedWithinWindow": 6,
+            "hitLimit": false,
+            "coverageReachedSince": true,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-04-26T13:51:41.000Z",
+            "newestObservedAt": "2026-08-16T09:42:31.000Z",
+            "stopReason": "time_window_covered",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 44,
+      "name": "Bindu Reddy",
+      "handle": "bindureddy",
+      "lane": "AI models / founder",
+      "phase1Followers": 380079,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:39:01.975Z",
+      "profile": {
+        "id": "6398252",
+        "followersObserved": 381436,
+        "followingObserved": 377,
+        "postsObserved": 18615,
+        "observedAt": "2026-09-03T20:39:01.975Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 100,
+        "quote": 0,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-04T06:24:11.000Z",
+        "newestObservedAt": "2026-09-03T19:56:58.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-04T06:24:11.000Z",
+            "newestObservedAt": "2026-09-03T19:56:58.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 46,
+      "name": "Dan Shipper",
+      "handle": "danshipper",
+      "lane": "Applied AI / media founder",
+      "phase1Followers": 122203,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:39:32.180Z",
+      "profile": {
+        "id": "19829693",
+        "followersObserved": 122301,
+        "followingObserved": 2148,
+        "postsObserved": 26987,
+        "observedAt": "2026-09-03T20:39:32.180Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 39,
+        "quote": 61,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-10T17:35:33.000Z",
+        "newestObservedAt": "2026-09-03T19:35:11.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-10T17:35:33.000Z",
+            "newestObservedAt": "2026-09-03T19:35:11.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 48,
+      "name": "DHH",
+      "handle": "dhh",
+      "lane": "Software engineering / founder",
+      "phase1Followers": 864024,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:40:02.378Z",
+      "profile": {
+        "id": "14561327",
+        "followersObserved": 866387,
+        "followingObserved": 377,
+        "postsObserved": 72944,
+        "observedAt": "2026-09-03T20:40:02.378Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 50,
+        "quote": 50,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-30T10:59:14.000Z",
+        "newestObservedAt": "2026-09-03T19:31:53.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-30T10:59:14.000Z",
+            "newestObservedAt": "2026-09-03T19:31:53.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 51,
+      "name": "Peter Yang",
+      "handle": "petergyang",
+      "lane": "Practical AI / product",
+      "phase1Followers": 281588,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:40:33.463Z",
+      "profile": {
+        "id": "84490044",
+        "followersObserved": 282352,
+        "followingObserved": 2210,
+        "postsObserved": 28732,
+        "observedAt": "2026-09-03T20:40:33.463Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 65,
+        "quote": 35,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline+SearchTimeline",
+        "operationResponses": 5,
+        "responseErrors": [
+          {
+            "operation": "UserOriginalsTimeline",
+            "status": 429
+          }
+        ],
+        "capturedWithinWindow": 100,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-11T17:27:31.000Z",
+        "newestObservedAt": "2026-09-03T19:46:34.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false,
+        "routes": [
+          {
+            "operationName": "UserOriginalsTimeline",
+            "operationResponses": 0,
+            "responseErrors": [
+              {
+                "operation": "UserOriginalsTimeline",
+                "status": 429
+              }
+            ],
+            "capturedWithinWindow": 0,
+            "hitLimit": false,
+            "coverageReachedSince": false,
+            "rateLimited": true,
+            "complete": false,
+            "oldestObservedAt": null,
+            "newestObservedAt": null,
+            "stopReason": "rate_limited",
+            "truncatedBeforeWindow": true
+          },
+          {
+            "operationName": "SearchTimeline",
+            "operationResponses": 5,
+            "responseErrors": [],
+            "capturedWithinWindow": 100,
+            "hitLimit": true,
+            "coverageReachedSince": false,
+            "rateLimited": false,
+            "complete": true,
+            "oldestObservedAt": "2026-08-11T17:27:31.000Z",
+            "newestObservedAt": "2026-09-03T19:46:34.000Z",
+            "stopReason": "sample_target_reached",
+            "truncatedBeforeWindow": false
+          }
+        ]
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    },
+    {
+      "index": 52,
+      "name": "Linus Ekenstam",
+      "handle": "LinusEkenstam",
+      "lane": "AI tools / creator",
+      "phase1Followers": 240025,
+      "status": "complete",
+      "error": null,
+      "observedAt": "2026-09-03T20:41:04.099Z",
+      "profile": {
+        "id": "3888491",
+        "followersObserved": 240148,
+        "followingObserved": 3885,
+        "postsObserved": 61721,
+        "observedAt": "2026-09-03T20:41:04.099Z"
+      },
+      "main": {
+        "count": 100,
+        "original": 52,
+        "quote": 48,
+        "repost": 0,
+        "operationName": "UserOriginalsTimeline",
+        "operationResponses": 6,
+        "responseErrors": [],
+        "capturedWithinWindow": 114,
+        "hitLimit": true,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "oldestObservedAt": "2026-08-10T08:48:34.000Z",
+        "newestObservedAt": "2026-09-03T20:38:36.000Z",
+        "stopReason": "sample_target_reached",
+        "truncatedBeforeWindow": false
+      },
+      "replies": {
+        "count": 0,
+        "operationName": "UserRepliesTimeline",
+        "operationResponses": 0,
+        "responseErrors": [],
+        "hitLimit": false,
+        "coverageReachedSince": false,
+        "rateLimited": false,
+        "complete": true,
+        "truncatedBeforeWindow": false
+      }
+    }
+  ],
+  "totals": {
+    "creatorsRequested": 23,
+    "creatorsComplete": 23,
+    "creatorsTruncated": 0,
+    "creatorsError": 0,
+    "mainRecords": 2193,
+    "authoredRecords": 2193,
+    "repostRecords": 0,
+    "replyRecords": 0
+  }
+}
