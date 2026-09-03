@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
+import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   getAutonomousReplyGrant,
@@ -36,6 +37,7 @@ import {
   rescoreCandidateRelevance,
   routeCandidate,
   saveCandidateToWorkflow,
+  setBehaviorDecision,
   sendApprovedEngagementReply,
 } from './pipeline.js';
 import {
@@ -72,7 +74,9 @@ import {
   getNicheProfile,
   getPublicationMeasurements,
   getPerformanceSnapshot,
+  getCurrentPersonaStances,
   getQueueItem,
+  getQueueItemByCandidate,
   getRelationshipProfile,
   getSourceMomentum,
   hasCandidateAction,
@@ -88,6 +92,7 @@ import {
   listExperiments,
   listApprovedMainFeedItems,
   listPublicationMeasurementSeries,
+  listPersonaStanceEvents,
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
@@ -100,6 +105,7 @@ import {
   recordCandidateDisposition,
   recordGrowthOperatorMemoryReview,
   recordPerformanceSnapshot,
+  recordPersonaStanceEvent,
   recordRelationshipEvent,
   recordUnderTheHoodSnapshot,
   refreshLearnedRuleSuggestion,
@@ -606,15 +612,15 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
       manualFinalActionRequired: route === 'repost',
     },
     styleTransfer: {
-      principle: 'Transfer structure and information density, never wording.',
+      principle: 'Source style is observational context only. Transfer no wording and do not turn source morphology into a writing rule.',
       directives: [
-        route === 'reply' ? 'Prefer one compact paragraph with one concrete contribution.' : 'Prefer 2-4 short visual blocks when the idea benefits from vertical scanability.',
-        'Open with a concrete product, result, constraint, or number; remove generic setup.',
-        'Put the payoff in the first 1-2 blocks and use short sentences around concrete nouns.',
-        'Use a concrete number near the top when it changes the reader decision.',
-        'Default to zero hashtags; use 1-2 only when they are canonical and tied to an active topic/search surface.',
+        'Select and persist the behavior purpose/mode/affect/depth before final writing.',
+        'Use only the structure and information depth that the selected act actually needs; short social acts and long technical explanations are both valid.',
+        'Keep the object and point legible without forcing a hook, block count, question, number, hashtag treatment, or technical wrinkle.',
+        'Let the versioned persona govern decisiveness, warmth, humor, skepticism, and social range; factual and biographical provenance remain separate.',
       ],
     },
+    persona: getPersonaModelSummary(),
   };
 }
 
@@ -781,6 +787,7 @@ function operatorStatus(payload = {}) {
   return {
     generatedAt: now,
     account: getPerformanceSnapshot(1)?.account || null,
+    persona: getPersonaModelSummary(),
     accountHealth: { state: accountHealth.health.state, reasons: accountHealth.health.reasons, generatedAt: accountHealth.generatedAt },
     laneChampions: {
       activeConversationKey: activeConversations[0]?.candidateKey || null,
@@ -1742,6 +1749,58 @@ async function main() {
     return;
   }
 
+  if (command === 'persona-model') {
+    const consumer = String(payload.consumer || '').trim();
+    result({
+      model: getPersonaModelSummary(),
+      ...(consumer ? { slice: getPersonaSlice(consumer) } : {}),
+      currentStances: getCurrentPersonaStances({ limit: Math.max(1, Math.min(500, Number(payload.limit || 200))) }),
+    });
+    return;
+  }
+
+  if (command === 'persona-stances') {
+    const subject = String(payload.subject || '').trim();
+    const status = String(payload.status || '').trim();
+    result({
+      current: getCurrentPersonaStances({ limit: Math.max(1, Math.min(500, Number(payload.limit || 200))) }),
+      history: listPersonaStanceEvents({
+        subject: subject || null,
+        status: status || null,
+        limit: Math.max(1, Math.min(1000, Number(payload.historyLimit || payload.limit || 200))),
+      }),
+    });
+    return;
+  }
+
+  if (command === 'persona-stance-record') {
+    if (payload.confirmRecord !== true) throw new Error('persona-stance-record requires confirmRecord=true.');
+    const stance = recordPersonaStanceEvent({
+      subject: payload.subject,
+      position: payload.position,
+      confidence: payload.confidence || 'medium',
+      status: payload.status || 'provisional',
+      basis: payload.basis,
+      sourceRef: payload.sourceRef ?? payload.source_ref ?? '',
+      provenance: {
+        ...(payload.provenance && typeof payload.provenance === 'object' && !Array.isArray(payload.provenance) ? payload.provenance : {}),
+        recordedBy: 'human_bridge',
+      },
+      supersedesId: payload.supersedesId ?? payload.supersedes_id ?? null,
+      observedAt: payload.observedAt ?? payload.observed_at ?? Date.now(),
+    });
+    result({ stance, current: getCurrentPersonaStances({ limit: 500 }) });
+    return;
+  }
+
+  if (command === 'behavior-select') {
+    const key = String(payload.key || '').trim();
+    if (!key) throw new Error('behavior-select requires key.');
+    const selected = setBehaviorDecision(key, payload.behavior || {}, { actor: 'human' });
+    result(selected);
+    return;
+  }
+
   if (command === 'relationship-targets') {
     result({
       targets: listRelationshipProfiles({
@@ -1790,7 +1849,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

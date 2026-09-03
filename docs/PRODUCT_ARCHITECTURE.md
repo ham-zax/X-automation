@@ -8,13 +8,14 @@ Implementation details live in `docs/plans/`. Current operational contracts live
 
 Build a local, human-controlled operating system for growing a qualified software-developer/builder audience on X across the active Growth Focus.
 
-The system should help `@ham_zax` answer five questions:
+The system should help `@ham_zax` answer six questions:
 
-1. What is happening now in the software-development topics that matter to this account under the active Growth Focus?
+1. What is happening now in the software-development topics and relationships that matter to this account?
 2. Which current story, conversation, or relationship deserves attention?
-3. What action should the account take: Original, Quote, Thread, Reply, Repost, Research More, Skip, or no action?
-4. What can the account say that is useful, differentiated, and follow-worthy?
-5. What did the action actually produce, and what should change next time?
+3. What legitimate purpose could Hamza serve here—or should the system remain silent?
+4. Which mode, affect, information depth, conversation stage, and format best realize that purpose?
+5. What factual and biographical provenance constrains the wording?
+6. What did the action actually produce, and what should change next time?
 
 The default optimization target is **qualified developer growth**, not raw impressions or raw follower count.
 
@@ -33,7 +34,12 @@ Source material, optional context, unresolved questions
         v
 AI EDITORIAL DIRECTOR
 What is worth doing about it for this account now?
-Objective + story + format + thesis + evidence + rationale
+Objective + story + purpose + mode + affect + depth + format
+        |
+        v
+BEHAVIOR + PERSONA DECISION
+Validate reason to exist, conversation stage, stance context,
+provenance, and active Hamza model version
         |
         v
 YOU
@@ -41,8 +47,8 @@ Select, override, research more, dismiss, or do nothing
         |
         v
 WRITER
-Turn the selected editorial plan into publication copy
-using supplied source/context
+Realize the selected behavior in publication copy
+using supplied source/context and bounded persona slice
         |
         v
 YOU
@@ -77,7 +83,10 @@ DISCOVER CONVERSATION
 RELATIONSHIP + CONVERSATION PRIORITY
         |
         v
-AI CONTRIBUTION / REPLY DRAFT
+PURPOSE / MODE / AFFECT / DEPTH / STAGE
+        |
+        v
+AI REPLY REALIZATION
         |
         v
 YOU REVIEW + SEND / IGNORE
@@ -106,15 +115,16 @@ Phase-6 editorial planning is current runtime behavior and remains advisory: hum
 
 | Phase | Status | Main job | Primary output |
 | --- | --- | --- | --- |
-| 1A | Implemented | Workflow foundation and four-dimensional triage | `queue_items`, route selection, approval boundary, Reach/Follow/Conversation/Relationship potentials |
-| 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages |
-| 1C | Implemented | Engage Next + autonomous reply operator | ranked reply/follow-up opportunities, exact human send, and off-by-default persistent autonomous dry-run/live authority |
+| 1A | Implemented | Workflow foundation and behavior-aware triage | `queue_items`, behavior/route selection, approval boundary, Reach/Follow/Conversation/Relationship potentials |
+| 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages, social and technical interaction outcomes |
+| 1C | Implemented | Engage Next + autonomous reply operator | purpose-aware reply/follow-up opportunities, exact human send, and off-by-default persistent autonomous dry-run/live authority |
 | 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus observed diagnostics |
-| 2 | Implemented | Content quality and profile proof | writer packet, drafts, hard gates, quality score, human editorial review |
+| 2 | Implemented | Behavior realization, content quality, and profile proof | behavior/persona-aware writer packet, drafts, purpose/provenance gates, quality score, human editorial review |
 | 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
-| 4 | Implemented | Measurement and experiments | 15m/1h/6h/24h outcomes, follower/relationship attribution context, experiment summaries |
-| 5 | Implemented | Learned strategy | suggested/accepted/retired bounded learned rules |
-| 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware ranked editorial recommendations, human selection provenance, writer evidence, outcome context |
+| 4 | Implemented | Measurement and experiments | fixed-window content, follower, relationship, and behavior outcomes plus experiment summaries |
+| 5 | Implemented | Learned strategy | suggested/accepted/retired bounded learned rules; persona beliefs do not auto-mutate |
+| 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware behavior/format recommendations, human selection provenance, writer context, outcome context |
+| P | Implemented alpha | Versioned persona and stance memory | owner-tuned `persona/hamza-v1.json`, bounded persona slices, append-only stance events, per-action persona version |
 
 ### Phase 1A — Workflow foundation
 
@@ -153,7 +163,7 @@ The purpose is to grow a useful network, not merely reply to large accounts.
 
 Phase 1C answers:
 
-> Which conversation deserves a useful contribution now?
+> Which conversation deserves a purposeful Hamza action now, and what should that action be?
 
 It owns:
 
@@ -161,7 +171,9 @@ It owns:
 - recent target-post opportunities;
 - freshness/expiry;
 - EngagePriority;
-- contribution archetypes;
+- contextual purpose validity and reply archetypes;
+- conversation-stage context;
+- persisted behavior decisions;
 - reviewable Reply/Quote choices;
 - one-by-one human send/ignore decisions.
 
@@ -184,20 +196,20 @@ Low reach alone is not proof of an account-level constraint. WATCH signals norma
 
 ### Phase 2 — Content quality and profile proof
 
-Phase 2 turns a selected route into defensible publication content.
+Phase 2 turns a selected behavior and route into defensible publication content.
 
 It owns:
 
-- Original / Quote / Thread / Reply writing contracts;
-- canonical writer packets;
-- structured writer output;
-- hard niche/originality/scannability/integrity gates;
-- the separate 50-point draft-quality score;
+- Original / Quote / Thread / Reply realization contracts;
+- behavior/persona-aware Writer packets;
+- structured Writer output;
+- purpose, factual/biographical provenance, originality, understandability, format, treatment, and media gates;
+- the purpose-aware 50-point draft-quality score;
 - media-plan metadata;
-- the ProfileProofCoverage packet/editorial contract plus the strict published-only runtime owner shared by Today and the writer;
+- the ProfileProofCoverage packet/editorial contract plus the strict published-only runtime owner shared by Today and the Writer;
 - final human editorial review.
 
-The writer uses the available source and working context. Phase 6 may supply persisted research material with stable IDs and claim metadata; the writer can use or extend that context, while human approval remains a separate workflow action.
+The Writer receives the selected purpose, mode, affect, affect provenance, information depth, conversation stage, persona version, source, and working context. It may improve wording; it must not silently replace the behavior decision. Human approval remains separate.
 
 ### Phase 3 — Main-feed distribution
 
@@ -394,14 +406,19 @@ AI is used for semantic tasks that benefit from language-model reasoning:
    identify useful research questions.
 
 2. FINAL EDITORIAL PASS
-   propose thesis/format/why-now/desired-reader-outcome;
-   classify the bounded novel-angle type;
-   use supplied source context and algorithm tags when relevant.
+   propose purpose/format/why-now/desired-reader-outcome;
+   select an inspectable mode, affect, depth, and conversation stage;
+   use supplied source context and evidence classifications when relevant.
 
-3. WRITER
-   produce publication copy from the selected plan,
+3. BEHAVIOR + PERSONA REALIZATION
+   validate reason to exist and route compatibility;
+   apply the active Hamza model and stance context;
+   preserve factual, experiential, relational, and emotional-history boundaries.
+
+4. WRITER
+   produce publication copy from the selected behavior,
    supplied source context, profile proof, relationship context,
-   and the canonical writing contract.
+   bounded persona slice, and canonical writing contract.
 ```
 
 AI does not own:
@@ -716,7 +733,7 @@ Advanced retains detailed diagnostics. AI Settings owns runtime/provider/model c
 | Draft text | Yes | Yes after work exists | Human edits/rejects |
 | Approve main-feed item | No | No | Human only |
 | Send human-reviewed reply | No | No | Human exact approval/send |
-| Send autonomous reply | AI may choose allowed intent/tone and exact text | Live send requires an explicitly started persisted grant, deterministic eligibility, remaining operator budget, exact persisted text/provenance, and an atomic claim through the configured transport. | Human configures/pauses/stops/revokes the grant; autonomous decisions never create `humanApprovedAt` |
+| Send autonomous reply | AI may choose an allowed purpose/mode/affect/depth decision and exact text | Live send requires an explicitly started persisted grant, deterministic eligibility, remaining operator budget, exact persisted behavior/text/provenance, and an atomic claim through the configured transport. | Human configures/pauses/stops/revokes the grant; autonomous decisions never create `humanApprovedAt` |
 | Complete repost | No | No | Human records manual action |
 | Schedule suggestion | Yes | Yes, advisory calculation | Human can override |
 | Publish approved main-feed item | No recommendation authority | Existing automation may transport an already approved eligible item when enabled | Approval remains human authority |
@@ -732,10 +749,11 @@ source snapshots
   -> story cluster
   -> research evidence rows
   -> editorial run
-  -> editorial recommendation
-  -> human selection / route override
+  -> editorial recommendation + proposed behavior
+  -> human selection / route and behavior override
+  -> normalized behavior snapshot + persona version
   -> queue item + source links
-  -> draft + evidence IDs
+  -> draft + evidence IDs + bounded persona slice
   -> approval
   -> publication
   -> 15m/1h/6h/24h measurements
@@ -777,14 +795,18 @@ Examples:
 
 ## Detailed source-of-truth documents
 
+- `docs/CONTENT_OPERATING_STANDARD.md` — universal outbound purpose, provenance, and quality contract.
 - `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` — account/network strategy and metrics hierarchy.
+- `docs/RELATIONSHIP_INTELLIGENCE.md` — relationship state, interaction selection, and relationship outcomes.
+- `docs/POST_GENERATION_PROMPT.md` — final Writer realization contract.
+- `behavior.js` — shared purpose/mode/affect/depth/stage vocabulary and normalization.
+- `persona.js` plus `persona/hamza-v1.json` — active versioned experimental persona owner and bounded consumer slices.
+- `docs/AGENT_WORKFLOW.md` — current agent operations and bridge commands.
 - `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` — cross-system implementation/history map.
-- `docs/CONTENT_OPERATING_STANDARD.md` — outbound content quality/integrity requirements.
 - `docs/NICHE_AND_KEYWORDS.md` — niche taxonomy and source themes.
 - `docs/RESEARCH_AGENDA.md` — research priorities.
-- `docs/ALGORITHM_EVIDENCE_LEDGER.md` — code-backed/official/empirical/retired X mechanism evidence.
-- `docs/POST_GENERATION_PROMPT.md` — writer contract.
-- `docs/AGENT_WORKFLOW.md` — current agent operations.
-- `docs/plans/README.md` — authoritative phase-plan index.
+- `docs/ALGORITHM_EVIDENCE_LEDGER.md` — evidence registry for claims about X mechanisms; not content/persona/route authority.
+- `docs/plans/README.md` — implementation-plan index.
+- `docs/plans/X_CONTENT_PERSONA_SYSTEM_OVERHAUL.md` — implementation history and remaining calibration frontier.
 - `docs/plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md` — detailed Phase-6 editorial plan.
 - `docs/plans/AI_RUNTIME_PROVIDER_LAYER.md` — runtime/provider/model selection and AI Settings plan.

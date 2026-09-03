@@ -1,23 +1,28 @@
 # Relationship Intelligence
 
+**Status:** canonical relationship-state and interaction-outcome contract
+**Content contract:** `CONTENT_OPERATING_STANDARD.md`
+**Research anchor:** `research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md`
+
 This document defines the current Phase-1B relationship-memory/target-selection layer for `@ham_zax` and the implemented Phase-1C Engage Next workflow that consumes it.
 
-The system should stop treating every X post as an isolated content opportunity. It should remember **who** the account interacts with, **why** they matter, **what topics overlap**, **how prior conversations went**, and **whether the relationship is compounding**.
+The system should stop treating every X post as an isolated content opportunity. It should remember **who** the account interacts with, **why** they matter, **what topics overlap**, **how prior conversations went**, **which social and technical roles Hamza used**, and **whether recognition and reciprocity are compounding**.
 
-Relationship intelligence sits between discovery/audience sync and the Engage Next queue.
+Relationship intelligence sits between discovery/audience sync and the Engage Next queue. It measures relationship evidence; it does not require every relationship-building act to carry technical information.
 
 ---
 
 ## 1. Objective
 
-Answer four questions reliably:
+Answer five questions reliably:
 
 1. **Who is worth paying attention to?**
 2. **Which recent conversation is worth entering now?**
-3. **What can we add that is actually useful?**
-4. **Which relationships are becoming more valuable over time?**
+3. **What legitimate purpose could an action serve here?**
+4. **How should behavior change with relationship and conversation depth?**
+5. **Which relationships are becoming more valuable over time?**
 
-The system should optimize repeated useful interaction with the right network rather than maximize the raw number of accounts touched.
+The system should optimize repeated purposeful interaction with the right network rather than maximize the raw number of accounts touched. Purpose may be technical, social, supportive, humorous, exploratory, corrective, or relational.
 
 ---
 
@@ -153,7 +158,7 @@ Do not fabricate follower-overlap precision when the data is unavailable. Missin
 
 ### ConversationQuality
 
-Estimate whether entering their threads is likely to produce technical exchange.
+Estimate whether entering their threads is likely to produce a real exchange, not merely exposure.
 
 Signals:
 
@@ -161,9 +166,13 @@ Signals:
 technical reply density
 specific-question density
 author response behavior
-ratio of substantive replies to praise/noise
+substantive social or technical replies versus generic noise
 repeat commenters
+conversation continuation
+repair, credit, support, and callback behavior
 ```
+
+A short answer, joke, thanks, or congratulations can be substantive when it responds to real context. Generic praise is still noise when it exists only to obtain visibility.
 
 Initial implementation may use a bounded manual/heuristic score until enough observed interactions exist.
 
@@ -193,13 +202,14 @@ Strongest signals:
 prior target reply
 prior continued conversation
 recurring shared topics
+recognition or callback across separate threads
 current follow state
 mutual status
 accessible account scale
-historical response to informed commenters
+historical response to informed, supportive, or socially distinctive commenters
 ```
 
-This score should increase with demonstrated bidirectional interaction, not merely with follower count.
+This score should increase with demonstrated bidirectional interaction and recognition, not merely with follower count or the technical density of Hamza's replies.
 
 ---
 
@@ -342,16 +352,28 @@ Events are append-only history. Relationship profile counters/stage are derived 
 
 Not every reply should increment `meaningful_interactions` equally.
 
-A meaningful outbound interaction should meet at least one:
+A meaningful outbound interaction has a contextual purpose and is not generic activity. It may meet at least one of these:
+
+### Technical or learning evidence
 
 - contains a concrete technical claim;
 - contains evidence/measurement;
 - contains implementation detail;
-- identifies a specific trade-off/caveat;
-- asks an informed question tied to the source;
-- provides a useful reproduction/correction.
+- identifies a consequential trade-off/caveat;
+- asks a useful question tied to the source;
+- provides a reproduction/correction.
 
-Generic praise or low-information acknowledgment should not improve relationship score.
+### Social or relationship evidence
+
+- directly answers the person in front of Hamza;
+- gives specific credit, thanks, support, or congratulations;
+- makes a context-dependent joke or useful emotional contrast;
+- repairs a misunderstanding;
+- recalls or continues prior shared context;
+- receives or plausibly invites a substantive response;
+- participates in an actual milestone or shared moment rather than emitting generic praise.
+
+`meaningful` should be stored with purpose/mode/context metadata where available. Generic praise or low-context acknowledgment should not improve relationship score merely because it was sent.
 
 ---
 
@@ -365,14 +387,17 @@ Useful metadata:
 
 ```text
 source text summary
-our contribution summary
+our purpose / mode / affect / depth
+our contribution or social act summary
 their response summary
+conversation stage
 unresolved question
-shared topic
+shared topic or recurring stance
+repair / credit / callback signal
 next useful follow-up
 ```
 
-This enables future reply drafting to avoid repetitive introductions and to refer to prior technical context naturally.
+This enables future reply drafting to avoid repetitive introductions, use shared context naturally, and become less formal as a real exchange deepens without weakening factual precision.
 
 ---
 
@@ -390,7 +415,7 @@ Filter:
 - post inside freshness window or still actively conversational;
 - topic fit above threshold;
 - not already acted on in a way that exhausts the source;
-- potential contribution exists.
+- at least one plausible technical, social, relationship, support, celebration, humor, taste, judgment, learning, correction, or de-escalation purpose exists.
 
 Conversation saturation is **not** a hard filter. Phase 1D supplies `SaturationPressure` as a soft EngagePriority modifier. Active bidirectional conversation, a direct question, or new conversation context may fully offset that pressure.
 
@@ -418,13 +443,14 @@ Suggested model:
 
 ```text
 EngagePriority =
-  0.25 * ConversationPotential
-+ 0.20 * RelationshipPotential
-+ 0.20 * TargetScore
-+ 0.15 * Freshness
-+ 0.10 * ReplyVisibility
-+ 0.10 * ContributionStrength
+  0.28 * ConversationPotential
++ 0.22 * RelationshipPotential
++ 0.22 * TargetScore
++ 0.17 * Freshness
++ 0.11 * ReplyVisibility
 ```
+
+Purpose is an eligibility/context decision, not an intrinsic numeric component. The system should not encode `benchmark > humor > agreement` or another universal purpose hierarchy; later outcome evidence may compare purposes without making one globally superior.
 
 Then apply event boosts and health context:
 
@@ -434,8 +460,8 @@ direct question to us       +15
 active recurring thread     +10
 soft saturation/repetition  bounded negative modifier
 active-conversation override may offset soft modifier
-already acted on same source with no new value reject
-no concrete contribution    reject
+already acted on same source with no new purpose/context reject
+no legitimate purpose       reject
 exact/near-duplicate reply  reject
 observed hard constraint    reject
 ```
@@ -459,7 +485,7 @@ When a sent reply receives a target response:
 5. mark the item with `follow_up = true`;
 6. prioritize above new cold opportunities when a concrete response is warranted.
 
-A follow-up may be resolved without replying if no additional technical contribution is useful.
+A follow-up may be technical, social, humorous, supportive, or brief. It may also be resolved without replying when no legitimate next purpose remains.
 
 ---
 
@@ -509,7 +535,13 @@ Group by:
 - account-size bucket;
 - reply age bucket;
 - relationship stage before interaction;
-- reply archetype.
+- reply archetype;
+- primary purpose;
+- social mode;
+- affect strategy;
+- information depth;
+- conversation stage;
+- persona model version.
 
 ### Mutual conversion
 
@@ -528,7 +560,7 @@ Track the transparent internal diagnostic defined in `ACCOUNT_HEALTH_AND_VISIBIL
 / meaningful interactions
 ```
 
-Use it comparatively by target class/archetype/topic rather than as a universal threshold.
+Use it comparatively by target class, purpose, mode, archetype, topic, and conversation stage rather than as a universal threshold.
 
 ### Network quality
 
@@ -536,9 +568,11 @@ Also expose target diversity, target-class diversity, topic diversity, and top-t
 
 ---
 
-## 15. Reply archetypes for analytics
+## 15. Reply behavior for analytics
 
-Classify outbound replies as one primary archetype:
+Persist **purpose** independently from reply archetype. The archetype describes the visible act; purpose explains why it was selected.
+
+Technical archetypes:
 
 ```text
 implementation_detail
@@ -546,15 +580,46 @@ benchmark_or_result
 caveat_or_edge_case
 comparison
 correction
+independent_judgment
 informed_question
 synthesis
 reproduction
 personal_experience
 ```
 
+Social/interaction archetypes:
+
+```text
+direct_answer
+status_response
+agreement
+gratitude
+support
+celebration
+enthusiasm
+humor
+social_observation
+de_escalation
+relationship_callback
+```
+
+Also retain:
+
+```text
+primary_purpose
+social_mode
+affect_strategy
+affect_provenance
+information_depth
+conversation_stage
+persona_model_version
+```
+
 This enables experiments such as:
 
-> Which reply archetypes produce the most target responses among relationship targets?
+> Which purposes and reply archetypes produce target responses, continued conversations, recurring relationships, profile visits, or follows for each relationship class?
+
+Do not infer that a social act failed merely because it contains little information. Evaluate whether it produced the relationship or conversation outcome it was selected for.
 
 ---
 
@@ -637,8 +702,8 @@ The **Engage Next** view separates **Active Conversations** from **New Opportuni
 
 - exact source post and age;
 - target identity/classes, TargetScore, and relationship stage;
-- Conversation + Relationship Potential plus freshness/ReplyVisibility/contribution components;
-- concrete contribution archetype/summary;
+- Conversation + Relationship Potential plus freshness/ReplyVisibility and purpose/behavior context;
+- selected purpose, mode, affect/depth when available, plus the visible reply archetype/summary;
 - drafted reply and Phase-2 hard-gate state when available;
 - expiry and active-conversation override state;
 - soft saturation/repetition warning context;
@@ -673,4 +738,4 @@ Phase 1B Relationship Intelligence is implemented when the system can:
 6. refresh strategic relationship state from raw audience observations without erasing omitted profiles or prior history;
 7. inspect relationship profiles/events through the dashboard and bridge without an engagement-send or approval bypass.
 
-Phase 1C is also implemented: the system surfaces bounded recent target posts, current Discover X observations, and observed responses; distinguishes active follow-up from cold insertion; ranks Engage Next opportunities; and requires a concrete contribution. The human path still drafts/reviews through Phase-2 gates and sends only exact human-approved text. A separate persisted autonomous grant is off by default; when started in Dry run or Live mode, the existing daemon continuously refreshes and serially evaluates newly observed opportunities, preserving durable target decisions across restart. Dry-run records exact proposed replies without transport. Live autonomous send requires deterministic autonomous eligibility, remaining operator budget, exact persisted text/provenance, an atomic claim, and the configured publication transport; autonomous decisions never set `humanApprovedAt`. Successful human/autonomous sends share candidate-action and relationship-event recording with distinct authority metadata. Later phases still own Account Health, richer visibility/saturation diagnostics, measurement/experiments, and learned strategy.
+Phase 1C is also implemented: the system surfaces bounded recent target posts, current Discover X observations, and observed responses; distinguishes active follow-up from cold insertion; ranks Engage Next opportunities; and requires a legitimate contextual purpose rather than mandatory technical additivity. The human path still drafts/reviews through Phase-2 gates and sends only exact human-approved text. A separate persisted autonomous grant is off by default; when started in Dry run or Live mode, the existing daemon continuously refreshes and serially evaluates newly observed opportunities, preserving durable target decisions across restart. Dry-run records exact proposed replies without transport. Live autonomous send requires deterministic autonomous eligibility, remaining operator budget, exact persisted text/provenance, an atomic claim, and the configured publication transport; autonomous decisions never set `humanApprovedAt`. Successful human/autonomous sends share candidate-action and relationship-event recording with distinct authority metadata. Later phases still own Account Health, richer visibility/saturation diagnostics, measurement/experiments, and learned strategy.

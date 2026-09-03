@@ -1,8 +1,8 @@
 # Growth OS Momentum Operator
 
-**Status:** active First-1,000 operating design, added 2026-08-25; live feedback-state path repaired 2026-08-25.
+**Status:** active momentum-discovery/operator reference, added 2026-08-25; purpose/persona authority updated 2026-09-04.
 
-This document turns the live First-1,000 observations into an agent-operable Growth OS loop. It complements `FIRST_1000_GROWTH_MODE.md`: that document defines bootstrap policy; this document defines how an operating agent finds the next action without getting stranded between Discover, Viral Styles, routing, and the live X browser.
+This document turns the earlier cold-start observations into an agent-operable Growth OS discovery loop. `FIRST_1000_GROWTH_MODE.md` is now historical evidence only; current action legitimacy and behavior selection come from the canonical content/network contracts and active persona. This document still describes how an operating agent finds live opportunities without getting stranded between Discover, Viral Styles, routing, and the X browser.
 
 To start or resume a continuous operating session, use [`PERSISTENT_GROWTH_OPERATOR_PROMPT.md`](PERSISTENT_GROWTH_OPERATOR_PROMPT.md). It defines the invocation contract, reward hierarchy, anti-drift checks, completion criteria, authority boundaries, and continuation behavior; this document remains the design and evidence reference for momentum operation.
 
@@ -55,7 +55,7 @@ Growth OS had the right pieces but made the agent assemble them manually:
 
 The pieces did not converge into one answer to the operating question:
 
-> What is the best useful thing to do on X right now, why is the window open, and what shape should the copy take?
+> What purposeful Hamza action—technical, social, relational, supportive, humorous, amplifying, or silent—best fits this live context, why is the window open, and what depth/affect should realize it?
 
 A second failure made the fragmentation worse. `refreshSourceSnapshot()` previously saved a successful zero-result refresh as the new canonical snapshot. A transient empty X fetch could therefore turn a useful Momentum view into an empty view even when a last-known-good snapshot existed.
 
@@ -83,9 +83,9 @@ The structural insight is that **candidate selection, distribution leverage, and
 
 ## New operator loop
 
-Use this loop during First 1,000 mode:
+Use this loop during live Growth OS operation:
 
-`operator-status -> select lane champions -> refresh only when useful -> preserve last good -> inspect exact source -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
+`operator-status -> select lane champions -> refresh only when useful -> preserve last good -> inspect exact source -> select purpose/mode/affect/depth or silence -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
 
 ### 1. Refresh without destroying useful state
 
@@ -136,7 +136,7 @@ The response includes:
 - transfer guidance for the outbound copy;
 - current exact-candidate operator disposition when one exists. Active `skip` / `defer` dispositions are suppressed from the normal actionable result set; `includeDisposed: true` exposes them for inspection.
 - explicit claim exposure, including whether a Repost inherits source claims without corrective context;
-- execution-path facts: scheduler-owned main-feed after valid human or Live First-1,000 mission-agent approval, autonomous-reply candidacy under its separate grant, or manual final action.
+- execution-path facts: scheduler-owned main-feed after valid human or explicitly active delegated mission-agent approval, autonomous-reply candidacy under its separate grant, or manual final action. The legacy grant name does not create content doctrine.
 - hard discovery-quality exclusions for crypto promotion and direct job ads; `includeLowSignal: true` exposes them for inspection without making them normal growth candidates.
 
 The operator-priority formula is deliberately inspectable and empirical:
@@ -159,8 +159,8 @@ Before a live action:
 2. read the full post and relevant thread context;
 3. confirm the visible metrics and timestamp are still materially current;
 4. confirm we have not already acted on the source;
-5. choose the shortest honest contribution supported by the source;
-6. send once;
+5. choose and persist the strongest purposeful behavior supported by the source, relationship, social field, and current growth objective;
+6. realize it at the depth it actually needs and send once;
 7. verify the live result before recording it.
 
 If a consequential click is ambiguous, do not blind-retry. Establish whether the action exists on the source thread, account profile, search, or network mutation result first.
@@ -187,15 +187,15 @@ For X candidates, use three layers:
 
 A source can therefore be high-reach because it is already large, because it is moving quickly, or both.
 
-During First 1,000 mode:
+Momentum can increase expected discovery value and reduce the time available for deliberation, but it does not manufacture purpose.
 
-- a fresh source with strong borrowed distribution should outrank an equally relevant static source;
-- a clean Repost is valid when commentary would miss the window;
-- a Reply is preferred when one compact contribution can enter the conversation;
-- a Quote is preferred when the source is visible and we have a distinct thesis quickly;
-- an Original is preferred when the idea needs to become owned profile proof rather than another attachment to someone else's graph.
+- a fresh source with strong borrowed distribution may outrank an equally relevant static source when both have legitimate behavior options;
+- a Repost is valid when amplification itself is the purpose;
+- a Reply fits when the act belongs inside the conversation;
+- a Quote fits when source context belongs on Hamza's profile;
+- an Original fits when the object should become owned profile proof or identity.
 
-High velocity reduces decision latency.
+High velocity may reduce decision latency. It does not impose one format or a universal minute cutoff.
 
 ## Viral style: transfer the shape, not the wording
 
@@ -215,31 +215,17 @@ The Writer packet now exposes the current source's shape as `candidate.sourceSty
 
 Apply the following transfer rules:
 
-### Concrete nouns first
+### Orient the selected act
 
-The first line should name the object, result, constraint, product, model, tool, benchmark, price, latency number, or failure mode when one is actually present.
+For a factual or technical act, name the object, result, constraint, product, model, tool, benchmark, price, or failure mode early enough that the intended reader understands it.
 
-Prefer:
+For a social-only Reply or Quote, the visible source may carry the referent and a short reaction, joke, answer, or celebration may be complete.
 
-- `Ox Alpha used ~3x fewer output tokens on the same repo bug.`
-- `Remote MCP moves the auth problem to the server boundary.`
-- `Codex's 5-hour limit needs a usage meter, not another policy paragraph.`
+Orientation quality matters; there is no first-line character target.
 
-Over:
+### Depth and structure follow the job
 
-- `Something interesting is happening with AI agents.`
-- `This changes everything.`
-- `A few thoughts on the latest developments.`
-
-This is a writing heuristic, not a noun-count ranking theory.
-
-### Payoff early
-
-Do not spend the first block introducing the topic. Put the useful contrast or implication in the first one or two blocks.
-
-### Short visual blocks
-
-For Originals and Quotes, prefer 2-4 short blocks when the idea benefits from vertical scanning. For Replies, prefer one compact paragraph unless a second block materially improves comprehension.
+V4 directly observes both very short social replies and long structured utility posts. Do not force a fixed number of blocks. Put enough value or social meaning early for the chosen format while preserving the structure a guide, argument, warning, or artifact genuinely needs.
 
 ### Verified numbers earn space
 
@@ -257,27 +243,26 @@ Default to zero. Use one or two only when the tag is canonical and tied to a liv
 
 The normal authored path should now be understood as:
 
-`growth-next -> exact-source inspection -> route -> writing-strategy -> writer-packet -> draft -> live verification`
+`growth-next -> exact-source inspection -> behavior decision -> route -> optional writing-strategy -> writer-packet -> purpose-aware gates -> approval/send authority -> live verification`
 
 `writing-strategy` remains the evidence-aware way to choose a presentation approach from Viral Styles, own-account outcomes, explicit experiments, and learned rules.
 
-`writer-packet` now includes the selected candidate's observable source style even when no Writing Strategy is applied. The writer may use that shape as context, but higher-authority facts and the selected route still govern the copy.
+`writer-packet` includes the selected behavior, active persona slice, conversation/relationship context, and observable source style. Source shape is optional context. Facts, behavior purpose/mode/affect/depth, and the selected route govern the copy.
 
 ## What the OS should learn next
 
-The current system should accumulate evidence around decisions that matter to a cold account:
+The current system should accumulate evidence around decisions that matter to this account:
 
+- purpose, social mode, affect, information depth, conversation stage, and persona version;
 - borrowed distribution versus owned-only distribution;
-- source views/hour at action time;
-- reply-density at action time;
-- Reply versus Quote versus Repost conversion;
-- first-line hook family;
-- paragraph/block count;
-- verified-number presence;
-- 0 versus 1-2 relevant hashtags on non-duplicate comparable content;
-- detail expands and profile visits;
-- associated follower delta and niche quality;
-- author response / recurring relationship creation.
+- source views/hour and reply-density at action time;
+- Reply versus Quote versus Repost versus Original outcomes;
+- short social acts versus compact reasons versus long explanations/artifacts;
+- known versus inferred versus strategic affect;
+- verified-number/resource/media presence when relevant;
+- assigned hashtag treatments on non-duplicate comparable content;
+- detail expands, profile visits, follows, and follower quality;
+- author response, second-turn conversation, and recurring relationship creation.
 
 Do not promote a permanent strategy rule from one post. Keep these as explicit observational variables until repeated account outcomes support a directional rule.
 
@@ -300,7 +285,7 @@ Do not respond to this redesign by adding more dashboard surface area. The actio
 2. **Deepen media readiness.** A later classifier may distinguish `needs_media_inspection` and `clean_to_amplify`; until then the live operator owns that judgment.
 3. **Learn reply-density and bookmark-density direction before weighting either.** Keep both as observational evidence. Only add a ranking bonus after enough own-account outcomes show a repeated directional relationship with impressions, author responses, profile visits, or follows.
 4. **Make refresh durable, not blocking.** `growth-refresh` is already separated from `growth-next`. The next runtime step is to let the existing automation/terminal layer refresh snapshots durably while the operator keeps consuming last-known-good state.
-5. **Promote style rules only from repeated outcomes.** Measure hook family, first-line length, block count, number presence, and hashtag use against account outcomes. A viral source is a style sample; our own repeated outcomes decide whether a style becomes an account rule.
+5. **Promote behavior or presentation lessons only from repeated outcomes.** Compare purpose, mode, affect, depth, conversation stage, format, number/resource/media use, and experiment treatments against separate account outcomes. Do not resurrect fixed length, block, or opener rules merely because one cohort performed well.
 
 ## Agent stopping rule
 

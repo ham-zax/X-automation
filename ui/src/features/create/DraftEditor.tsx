@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useDraftAction, useDraftMediaRemove, useDraftMediaUpload, type DraftEditorData, type GrowthPackagingReview } from '../../api/client'
+import {
+  useBehaviorSelect,
+  useDraftAction,
+  useDraftMediaRemove,
+  useDraftMediaUpload,
+  useSession,
+  type BehaviorDecision,
+  type DraftEditorData,
+  type GrowthPackagingReview,
+} from '../../api/client'
 import {
   Badge,
   Disclosure,
@@ -74,6 +83,168 @@ function GrowthPackagingPanel({ review }: { review: GrowthPackagingReview | null
         </div>
       )}
     </div>
+  )
+}
+
+function humanizeBehaviorValue(value: string | null | undefined): string {
+  if (!value) return 'Not selected'
+  return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: boolean }) {
+  const session = useSession()
+  const selectBehavior = useBehaviorSelect()
+  const current = useMemo<BehaviorDecision | null>(() => {
+    const queueBehavior = data.queueItem?.behavior
+    if (queueBehavior?.decision === 'ACT') return queueBehavior
+    const draftBehavior = data.draft.behavior || data.draft.editor?.behavior
+    return draftBehavior?.decision === 'ACT' ? draftBehavior : null
+  }, [data])
+  const options = session.data?.labels.behavior
+  const purposes = options?.purposes || ['technical_value', 'profile_proof', 'discovery', 'relationship', 'support', 'celebration', 'humor', 'taste', 'judgment', 'learning', 'correction', 'de_escalation', 'social_presence']
+  const modes = options?.socialModes || ['builder', 'experimenter', 'explainer', 'curious_peer', 'enthusiast', 'skeptic', 'opinionated_peer', 'taste_maker', 'supporter', 'humorist', 'listener', 'personal_update']
+  const affects = options?.affectStrategies || ['neutral', 'match', 'amplify', 'contrast', 'de_escalate', 'bridge', 'reward', 'energize', 'understate']
+  const affectSources = options?.affectProvenance || ['none', 'known', 'inferred', 'strategic']
+  const depths = options?.informationDepths || ['social_only', 'judgment', 'compact_reason', 'technical_explanation', 'reusable_artifact']
+  const stages = options?.conversationStages || ['initial', 'reciprocal', 'ongoing', 'familiar', 'self_extension']
+
+  const [primaryPurpose, setPrimaryPurpose] = useState(current?.primaryPurpose || 'technical_value')
+  const [secondaryPurposes, setSecondaryPurposes] = useState<string[]>(current?.secondaryPurposes || [])
+  const [socialMode, setSocialMode] = useState(current?.socialMode || 'explainer')
+  const [affectStrategy, setAffectStrategy] = useState(current?.affectStrategy || 'neutral')
+  const [affectProvenance, setAffectProvenance] = useState(current?.affectProvenance || 'none')
+  const [informationDepth, setInformationDepth] = useState(current?.informationDepth || 'compact_reason')
+  const [conversationStage, setConversationStage] = useState(current?.conversationStage || 'initial')
+  const [reasonToExist, setReasonToExist] = useState(current?.reasonToExist || data.queueItem?.routingReason || '')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    setPrimaryPurpose(current?.primaryPurpose || 'technical_value')
+    setSecondaryPurposes(current?.secondaryPurposes || [])
+    setSocialMode(current?.socialMode || 'explainer')
+    setAffectStrategy(current?.affectStrategy || 'neutral')
+    setAffectProvenance(current?.affectProvenance || 'none')
+    setInformationDepth(current?.informationDepth || 'compact_reason')
+    setConversationStage(current?.conversationStage || 'initial')
+    setReasonToExist(current?.reasonToExist || data.queueItem?.routingReason || '')
+    setSaved(false)
+  }, [current, data.queueItem?.routingReason])
+
+  const toggleSecondary = (purpose: string) => {
+    setSaved(false)
+    setSecondaryPurposes((values) => values.includes(purpose)
+      ? values.filter((value) => value !== purpose)
+      : [...values, purpose])
+  }
+
+  const saveBehavior = () => {
+    if (!reasonToExist.trim() || !data.queueItem) return
+    selectBehavior.mutate({
+      key: data.draft.candidateKey,
+      behavior: {
+        decision: 'ACT',
+        pipeline: data.pipeline,
+        primaryPurpose,
+        secondaryPurposes: secondaryPurposes.filter((purpose) => purpose !== primaryPurpose),
+        socialMode,
+        affectStrategy,
+        affectProvenance,
+        informationDepth,
+        conversationStage,
+        reasonToExist: reasonToExist.trim(),
+        selectionSource: 'human',
+        personaModelVersion: current?.personaModelVersion || '',
+        provenance: current?.provenance || {},
+        selectedAt: Date.now(),
+      },
+    }, { onSuccess: () => setSaved(true) })
+  }
+
+  if (readOnly) {
+    return (
+      <Disclosure summary={`Behavior & persona · ${humanizeBehaviorValue(current?.primaryPurpose)} · ${humanizeBehaviorValue(current?.socialMode)} · ${humanizeBehaviorValue(current?.informationDepth)}`}>
+        <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Purpose</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.primaryPurpose)}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Mode</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.socialMode)}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Affect</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.affectStrategy)} ({humanizeBehaviorValue(current?.affectProvenance)})</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Depth</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.informationDepth)}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Conversation</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.conversationStage)}</dd></div>
+          <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Persona</dt><dd className="mt-1 text-slate-800">{current?.personaModelVersion || data.draft.personaModelVersion || 'Legacy / unknown'}</dd></div>
+        </dl>
+        <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm leading-6 text-slate-700">{current?.reasonToExist || 'No behavior rationale was recorded.'}</div>
+      </Disclosure>
+    )
+  }
+
+  return (
+    <Disclosure summary={`Behavior & persona · ${humanizeBehaviorValue(primaryPurpose)} · ${humanizeBehaviorValue(socialMode)} · ${humanizeBehaviorValue(informationDepth)}`}>
+      <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+        <div className="text-sm font-semibold text-slate-900">Choose the act before editing the prose</div>
+        <p className="mt-1 text-sm leading-6 text-slate-600">Every action needs a purpose. A social-only reply may be complete; a technical correction still needs evidence. Saving a change invalidates stale review gates but does not approve or publish.</p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <label className="text-sm font-medium text-slate-700">Primary purpose
+            <select value={primaryPurpose} onChange={(event) => { setPrimaryPurpose(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {purposes.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">Social mode
+            <select value={socialMode} onChange={(event) => { setSocialMode(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {modes.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">Information depth
+            <select value={informationDepth} onChange={(event) => { setInformationDepth(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {depths.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">Affect strategy
+            <select value={affectStrategy} onChange={(event) => {
+              const value = event.target.value
+              setAffectStrategy(value)
+              if (value !== 'neutral' && affectProvenance === 'none') setAffectProvenance('strategic')
+              if (value === 'neutral' && affectProvenance === 'strategic') setAffectProvenance('none')
+              setSaved(false)
+            }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {affects.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">Affect provenance
+            <select value={affectProvenance} onChange={(event) => { setAffectProvenance(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {affectSources.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">Conversation stage
+            <select value={conversationStage} onChange={(event) => { setConversationStage(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+              {stages.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="mt-4 block text-sm font-medium text-slate-700">Reason to exist
+          <textarea value={reasonToExist} onChange={(event) => { setReasonToExist(event.target.value); setSaved(false) }} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Why this exact action belongs in this exact context" />
+        </label>
+        <div className="mt-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Secondary purposes</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {purposes.filter((purpose) => purpose !== primaryPurpose).map((purpose) => {
+              const selected = secondaryPurposes.includes(purpose)
+              return (
+                <button key={purpose} type="button" onClick={() => toggleSecondary(purpose)} className={`rounded-full border px-3 py-1 text-xs font-medium ${selected ? 'border-indigo-400 bg-indigo-100 text-indigo-800' : 'border-slate-200 bg-white text-slate-600'}`}>
+                  {humanizeBehaviorValue(purpose)}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={saveBehavior} disabled={!data.queueItem || !reasonToExist.trim() || selectBehavior.isPending} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            {selectBehavior.isPending ? 'Saving behavior…' : 'Save behavior'}
+          </button>
+          <span className="text-xs text-slate-500">Persona: {current?.personaModelVersion || data.draft.personaModelVersion || 'active model on save'}</span>
+          {saved && <span className="text-xs font-semibold text-emerald-700">Behavior saved; review gates reset.</span>}
+          {selectBehavior.error && <span className="text-xs text-red-700">{selectBehavior.error.message}</span>}
+        </div>
+      </div>
+    </Disclosure>
   )
 }
 
@@ -264,6 +435,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           )}
         </div>
       )}
+
+      <BehaviorPanel data={data} readOnly={readOnly} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

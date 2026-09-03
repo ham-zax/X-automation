@@ -1,3 +1,5 @@
+import { normalizeBehaviorDecision, validateBehaviorDecision } from './behavior.js';
+import { getPersonaSlice } from './persona.js';
 import { scoreOpportunity } from './opportunity.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { classifyResearchStory, matchResearchTopics } from './research_topics.js';
@@ -57,6 +59,8 @@ export const ANGLE_CLASSES = Object.freeze([
   'multi_source_synthesis',
   'evidence_backed_interpretation',
   'source_dependent_commentary',
+  'relationship_action',
+  'social_context_action',
   'summary_only',
 ]);
 
@@ -78,6 +82,8 @@ const ANGLE_VALUE = Object.freeze({
   multi_source_synthesis: 10,
   evidence_backed_interpretation: 6,
   source_dependent_commentary: 3,
+  relationship_action: 2,
+  social_context_action: 1,
   summary_only: 0,
 });
 const TARGETED_PIPELINES = new Set(['quote', 'reply', 'repost']);
@@ -483,6 +489,21 @@ export function validateRecommendation(recommendation = {}, {
   const questions = uniqueStrings(recommendation.researchQuestions);
   if (route.decision === 'RESEARCH_MORE' && questions.length === 0) errors.push('RESEARCH_MORE requires at least one concrete research question.');
 
+  const expectedBehaviorDecision = route.decision === 'PREPARE' ? 'ACT' : route.decision === 'RESEARCH_MORE' ? 'RESEARCH' : 'SILENT';
+  const behavior = normalizeBehaviorDecision(recommendation.behavior || {}, {
+    pipeline: route.pipeline || '',
+    defaultPersonaModelVersion: getPersonaSlice('editorial').version,
+    defaultSelectionSource: 'editorial_ai',
+  });
+  const behaviorValidation = validateBehaviorDecision(behavior, {
+    pipeline: route.pipeline || '',
+    requireAct: route.decision === 'PREPARE',
+  });
+  if (!behaviorValidation.valid) errors.push(`Invalid behavior decision: ${behaviorValidation.errors.join(' ')}`);
+  if (behavior.decision !== expectedBehaviorDecision) {
+    errors.push(`${route.decision} requires behavior.decision=${expectedBehaviorDecision}.`);
+  }
+
   if (route.valid && route.decision === 'PREPARE' && TARGETED_PIPELINES.has(route.pipeline)) {
     const target = findStoryCandidate(story, String(recommendation.targetCandidateKey || ''));
     if (!target || target?.source !== 'x') errors.push(`${route.pipeline} requires targetCandidateKey to reference a supplied X candidate.`);
@@ -499,6 +520,7 @@ export function validateRecommendation(recommendation = {}, {
       algorithmMechanisms: mechanismTags.accepted,
       researchQuestions: questions,
       angleClass,
+      behavior: behaviorValidation.behavior,
     },
   };
 }
@@ -737,7 +759,12 @@ function selectEditorialRecommendationWithAuthority(id, {
     reason: selectedBy === 'mission_agent'
       ? `Delegated First-1,000 mission agent selected editorial recommendation ${recommendation.id}.`
       : `Human selected editorial recommendation ${recommendation.id}.`,
-    routeContext: { multipleSources: sources.length > 1 },
+    routeContext: {
+      multipleSources: sources.length > 1,
+      behavior: recommendation.behavior,
+      preferredPipeline: selectedPipeline,
+      reasonToExist: recommendation.behavior?.reasonToExist || recommendation.whyNow || recommendation.thesis || '',
+    },
   });
   queueItem = saveQueueItem({
     ...queueItem,
@@ -745,6 +772,16 @@ function selectEditorialRecommendationWithAuthority(id, {
     followPotential: Number(recommendation.potentials?.followPotential || 0),
     conversationPotential: Number(recommendation.potentials?.conversationPotential || 0),
     relationshipPotential: Number(recommendation.potentials?.relationshipPotential || 0),
+    behavior: normalizeBehaviorDecision({
+      ...recommendation.behavior,
+      pipeline: selectedPipeline,
+      selectedAt: Date.now(),
+      selectionSource: recommendation.behavior?.selectionSource || 'editorial_ai',
+    }, {
+      pipeline: selectedPipeline,
+      defaultPersonaModelVersion: recommendation.behavior?.personaModelVersion || getPersonaSlice('editorial').version,
+      defaultSelectionSource: 'editorial_ai',
+    }),
   });
   const queueSources = linkEditorialSources(queueItem, sources, selected.primarySourceKey);
   const selectedAt = Date.now();
@@ -1131,6 +1168,7 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
       recentOwnedContent: context.recentOwnedContent,
       distributionSurfaceOutcomes: context.distributionSurfaceOutcomes,
       acceptedLearnedRules: context.acceptedLearnedRules,
+      persona: getPersonaSlice('editorial'),
     };
     const finalResult = await runEditorialFinal(finalPacket);
     const storyByKey = new Map(researchStories.map((story) => [story.storyKey, story]));
@@ -1182,6 +1220,7 @@ export async function refreshEditorialPlan({ objective = 'qualified_growth', ref
       whyNow: item.whyNow,
       whyThisFormat: item.whyThisFormat,
       desiredReaderOutcome: item.desiredReaderOutcome,
+      behavior: item.behavior,
       candidateKeys: item.story.candidates.map((candidate) => candidate.key),
       targetCandidateKey: item.targetCandidateKey,
       potentials: {

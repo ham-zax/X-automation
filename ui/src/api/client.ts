@@ -88,6 +88,56 @@ export interface StrategicRelevance {
   } | null
 }
 
+export interface BehaviorDecision {
+  schemaVersion?: number
+  decision: 'ACT' | 'SILENT' | 'RESEARCH' | 'UNKNOWN'
+  pipeline: string
+  primaryPurpose: string | null
+  secondaryPurposes: string[]
+  socialMode: string | null
+  affectStrategy: string
+  affectProvenance: string
+  informationDepth: string | null
+  conversationStage: string
+  reasonToExist: string
+  selectionSource: string
+  personaModelVersion: string
+  provenance: {
+    ownerFactsAllowed?: boolean
+    ownerExperienceAllowed?: boolean
+    sourceClaims?: string[]
+    ownerClaims?: string[]
+    restrictions?: string[]
+    summary?: string
+  }
+  selectedAt: number | null
+}
+
+export interface PersonaModelSummary {
+  schemaVersion: number
+  version: string
+  status: string
+  identity: Record<string, unknown>
+  operatorDecisions: Record<string, unknown>
+  candidateBeliefs: { id?: string; statement?: string; status?: string; confidence?: string; basis?: string }[]
+  knownUnknowns: string[]
+  sourceArtifacts: string[]
+}
+
+export interface PersonaStanceEvent {
+  id: number
+  subject: string
+  position: string
+  confidence: 'low' | 'medium' | 'high'
+  status: 'exploring' | 'provisional' | 'held' | 'revised' | 'abandoned'
+  basis: string
+  sourceRef: string
+  provenance: Record<string, unknown>
+  supersedesId: number | null
+  observedAt: number
+  createdAt: number
+}
+
 export interface DraftView {
   id: number
   candidateKey: string
@@ -98,6 +148,8 @@ export interface DraftView {
   body: string
   threadParts: string[]
   editor: DraftEditorMetadata
+  behavior?: BehaviorDecision | null
+  personaModelVersion?: string
   gates: Record<string, unknown>
   gatesView: GatesView
   growthPackaging: GrowthPackagingReview | null
@@ -129,6 +181,8 @@ export interface QueueItemView {
   statusLabel: string
   lane: string
   targetUsername: string | null
+  behavior: BehaviorDecision | null
+  personaModelVersion: string
   draftId: number | null
   draft: DraftView | null
   recommendedPipeline: string | null
@@ -182,6 +236,14 @@ export interface SessionData {
     qualitySignals: Record<string, string>
     dimensionGroups: { content: string[]; network: string[] }
     metricsByKind: { content: string[]; network: string[] }
+    behavior: {
+      purposes: string[]
+      socialModes: string[]
+      affectStrategies: string[]
+      affectProvenance: string[]
+      informationDepths: string[]
+      conversationStages: string[]
+    }
   }
 }
 
@@ -190,6 +252,44 @@ export function useSession() {
     queryKey: ['session'],
     queryFn: () => fetchApi<SessionData>('/session'),
     staleTime: 60_000,
+  })
+}
+
+export interface PersonaData {
+  model: PersonaModelSummary
+  slice?: Record<string, unknown>
+  currentStances: PersonaStanceEvent[]
+}
+
+export function usePersona(consumer?: 'editorial' | 'engagement' | 'writer') {
+  const suffix = consumer ? `?consumer=${consumer}` : ''
+  return useQuery({
+    queryKey: ['persona', consumer || 'summary'],
+    queryFn: () => fetchApi<PersonaData>(`/persona${suffix}`),
+    staleTime: 30_000,
+  })
+}
+
+export interface PersonaStancePayload {
+  subject: string
+  position: string
+  confidence?: 'low' | 'medium' | 'high'
+  status?: 'exploring' | 'provisional' | 'held' | 'revised' | 'abandoned'
+  basis: string
+  sourceRef?: string
+  supersedesId?: number | null
+  observedAt?: number
+  confirmRecord: true
+}
+
+export function useRecordPersonaStance() {
+  const queryClient = useQueryClient()
+  return useMutation<{ stance: PersonaStanceEvent; current: PersonaStanceEvent[] }, Error, PersonaStancePayload>({
+    mutationFn: (payload) => postApi('/persona/stances', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['persona'] })
+      void queryClient.invalidateQueries({ queryKey: ['draft'] })
+    },
   })
 }
 
@@ -257,6 +357,7 @@ export interface EditorialRecommendationView {
   whyNow: string
   whyThisFormat: string
   desiredReaderOutcome: string
+  behavior: BehaviorDecision | null
   candidateKeys: string[]
   targetCandidateKey: string | null
   potentials: Record<string, number | string | null>
@@ -565,6 +666,7 @@ export interface AutonomousReplyDecision {
   tone: string | null
   exactReply: string
   selection: Record<string, unknown>
+  behavior: BehaviorDecision | null
   relationshipContext: Record<string, unknown>
   aiExecution: Record<string, unknown>
   checks: Record<string, unknown>
@@ -800,6 +902,25 @@ export function useQueueAction(action: string) {
       void queryClient.invalidateQueries({ queryKey: ['discover'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
       void queryClient.invalidateQueries({ queryKey: ['conversation'] })
+    },
+  })
+}
+
+export function useBehaviorSelect() {
+  const queryClient = useQueryClient()
+  return useMutation<{
+    behavior: BehaviorDecision
+    queueItem: QueueItemView
+    draft: DraftEditorData | null
+  }, Error, { key: string; behavior: Partial<BehaviorDecision> }>({
+    mutationFn: (payload) => postApi('/behavior/select', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['create'] })
+      void queryClient.invalidateQueries({ queryKey: ['draft'] })
+      void queryClient.invalidateQueries({ queryKey: ['discover'] })
+      void queryClient.invalidateQueries({ queryKey: ['today'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversation'] })
+      void queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },
   })
 }
@@ -1826,6 +1947,8 @@ export interface WriterGenerationProvenance {
 }
 
 export interface DraftEditorMetadata extends Record<string, unknown> {
+  behavior?: BehaviorDecision | null
+  personaModelVersion?: string
   generation?: WriterGenerationProvenance
   generationHistory?: WriterGenerationProvenance[]
 }

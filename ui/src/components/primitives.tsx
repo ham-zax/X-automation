@@ -156,7 +156,7 @@ export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailure
   )
 }
 
-const QUALITY_SIGNALS: { key: string; label: string; max: number; description: string }[] = [
+const LEGACY_QUALITY_SIGNALS: { key: string; label: string; max: number; description: string }[] = [
   { key: 'hook', label: 'Opening', max: 8, description: 'Whether the first line quickly gives someone a reason to keep reading.' },
   { key: 'insight', label: 'Useful insight', max: 10, description: 'Whether the post adds a concrete implication instead of repeating the source.' },
   { key: 'evidence', label: 'Support', max: 10, description: 'Whether claims are backed by source material, data, steps, or observed results.' },
@@ -164,10 +164,21 @@ const QUALITY_SIGNALS: { key: string; label: string; max: number; description: s
   { key: 'originality', label: 'Original angle', max: 5, description: 'Whether the wording adds something distinct from the source.' },
 ]
 
+const PURPOSE_QUALITY_SIGNALS: { key: string; label: string; max: number; description: string }[] = [
+  { key: 'purpose', label: 'Purpose', max: 10, description: 'Whether the draft visibly fulfills the selected technical, social, relationship, or growth purpose.' },
+  { key: 'clarity', label: 'Clarity', max: 10, description: 'Whether the intended act lands at its selected depth and conversation stage.' },
+  { key: 'provenance', label: 'Provenance', max: 10, description: 'Whether factual and implied autobiographical claims stay inside the available evidence.' },
+  { key: 'originality', label: 'Originality', max: 10, description: 'Whether the wording avoids source/recent duplication and repetitive response patterns.' },
+  { key: 'realization', label: 'Realization', max: 10, description: 'Whether the final form, length, context, and behavior alignment make the selected act complete.' },
+]
+
 export function QualityBreakdown({ breakdown }: { breakdown: Record<string, number> }) {
+  const signals = Object.prototype.hasOwnProperty.call(breakdown, 'purpose')
+    ? PURPOSE_QUALITY_SIGNALS
+    : LEGACY_QUALITY_SIGNALS
   return (
     <dl className="grid gap-3 sm:grid-cols-2">
-      {QUALITY_SIGNALS.map((signal) => (
+      {signals.map((signal) => (
         <div key={signal.key} className="rounded-xl border border-slate-200 bg-white p-3">
           <dt className="text-sm font-medium text-slate-800">{signal.label}</dt>
           <dd className="mt-1 text-lg font-semibold text-slate-900">

@@ -2,7 +2,8 @@
 
 **Date:** 2026-09-04  
 **Repository:** `/home/hamza/repo/x_test`  
-**Status:** design/implementation plan; no runtime behavior is changed merely by this document  
+**Status:** V4-reanchored implementation largely integrated; Hamza-specific calibration and live outcome evidence remain intentionally open
+**Research anchor:** `docs/research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md`
 **Goal:** Replace the current technically useful-but-overconstrained X content system with a coherent behavioral system that can pursue aggressive growth, act socially like Hamza, preserve factual provenance, and later learn from `@ham_zax` outcomes without collapsing back into repetitive AI formulas.
 
 **Architecture:** First clean the doctrine and authority hierarchy, then remove old content assumptions from the runtime, then model Hamza, then integrate that model upstream of writing, and finally learn from real account outcomes. The Writer should become the final realization layer of a prior behavioral decision, not the component that invents the account's role from scratch.
@@ -18,12 +19,13 @@
 - Social purposes are legitimate: humor, support, celebration, warmth, de-escalation, relationship maintenance, taste signaling, curiosity, and simple participation can be valid actions.
 - A reply must not exist merely because the system wants another reply.
 - Strategic imbalance is allowed while the account is small. The account does not need a perfectly balanced portfolio of modes.
-- Performed social affect is allowed. The system may choose excitement, warmth, humor, calm, skepticism, teasing, or other socially useful affect even when Hamza's exact private feeling is unknown.
-- Performed affect must not become fabricated biography or fabricated evidence.
+- Strategic social affect is allowed as an explicit operator/persona policy. The system may choose socially useful tone or behavior — warmth, humor, confidence, annoyance, skepticism, teasing, celebration, de-escalation, or understatement — even when Hamza's exact private feeling is unknown.
+- Immediate first-person evaluative affect may be strategically performed when it is compatible with the active Hamza model and current object: `I love this`, `I'm sold`, `I hate this UI`, or `I'm not buying this argument` are public stance acts, not automatically autobiographical history.
+- Strategic affect must not become fabricated biography, longstanding emotional history, intimate personal stakes, grief/trauma, first-hand product experience, or fabricated evidence. Those deeper/history-bearing claims still require owner basis.
 - Factual first-person claims remain provenance-sensitive: tests, usage, project history, access, achievements, relationships, results, events, and other autobiographical facts may not be invented.
 - Implied experiential authority must be treated with the same care as explicit `I tested` / `I used` claims.
 - The system must not rebuild Hamza as a weighted blend of other creators.
-- The seven-creator corpus remains a behavior reference library, not persona DNA.
+- The seven-creator curated reference set remains a useful behavior library inside the broader 52-creator V4 evidence base; it is not persona DNA and does not supersede the full corpus.
 - The Oracle reports and creator corpus are research evidence, not production authority.
 - `FIRST_1000_GROWTH_MODE.md` and `ALGORITHM_EVIDENCE_LEDGER.md` are not to be treated as canonical strategy merely because older documents reference them. Salvage useful ideas only after independent review.
 - Do not make platform-mechanic folklore into hard product rules.
@@ -31,6 +33,36 @@
 - Do not redesign the UI merely because the content model changes. UI work should follow stable runtime contracts.
 - This plan intentionally separates doctrine cleanup, runtime cleanup, modelling, integration, and learning. Do not jump directly to a giant Hamza prompt.
 - No testing work is added by this plan. Testing/verification implementation should be authorized separately if required by the implementation mission or repository policy.
+- V4 directly observes short social replies, long technical replies, repeated targets, self-replies, repair, credit, and role switching. Social-only behavior is therefore a first-class observed mode, not merely a theoretical allowance.
+- V4 retracts fixed 25–60-word, 1–3-block, and first-line-character defaults. Long structured utility posts and short contextual social acts must both be representable.
+- V4 observes public affect but not private emotional truth. Strategic affect remains an explicit operator/persona policy, and its provenance must be stored as known, inferred, or strategic rather than misrepresented as a corpus-proven fact.
+- Conversation depth must change reorientation, formality, and proof display without weakening factual precision.
+- Beliefs must support temporal stance history and revision rather than existing only as static persona constants.
+
+---
+
+# V4 re-anchor decisions
+
+The promoted V4 package supersedes earlier corpus assumptions for this overhaul:
+
+- 4,517 authored posts, 2,413 replies, no native repost contamination;
+- 1,206 authored texts over 280 characters and 1,037 authored `note_tweet` rows;
+- 99.27% quote-context coverage;
+- a 3,422-post complete-author 72-hour inferential slice and a 3,077-post 168-hour sensitivity slice;
+- strong outcome separation, including reach ↔ reply rate around -0.365 and like rate ↔ combined interaction around +0.923;
+- original/quote reach near parity but materially stronger original response rates;
+- a reply median of 65 characters alongside a substantial long-reply tail;
+- 402 self-replies and repeated outside targets for 48 creators with reply data.
+
+The V4 implementation consequences are binding for this plan:
+
+1. no universal length, block, or opener target;
+2. no universal technical payload for replies;
+3. no universal emotional preface for analysis;
+4. purpose-aware outcome interpretation;
+5. conversation-state-aware realization;
+6. living stance memory;
+7. strategic affect recorded as a design choice, not inferred research truth.
 
 ---
 
@@ -182,6 +214,7 @@ It may guide experiments and model design, but its candidate beliefs must not si
 
 Research informs decisions but does not directly constrain production behavior:
 
+- `docs/research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md` — current promoted-corpus reassessment and primary research anchor for this overhaul
 - `docs/research/x_creator_phase2/ORACLE_CREATOR_CORPUS_AUDIT.md`
 - `docs/research/x_creator_phase2/ORACLE_HAMZA_PERSONA_REVIEW.md`
 - `docs/research/x_creator_phase2/CANONICAL_X_WRITING_STUDY.md`
@@ -205,7 +238,7 @@ The following should not govern the new system:
 `FIRST_1000_GROWTH_MODE.md`:
 
 - salvage the useful concept that small-account growth may require strategic imbalance, speed, borrowed distribution, and repeated recognizable participation;
-- those ideas already live more cleanly in Persona V2 and should be moved into the appropriate canonical growth contract;
+- those ideas already live more cleanly in Persona V3 and should be moved into the appropriate canonical growth contract;
 - after references are removed, retire/delete the document rather than preserving a competing growth doctrine.
 
 `ALGORITHM_EVIDENCE_LEDGER.md`:
@@ -238,6 +271,7 @@ support
 celebration
 humor
 taste
+judgment
 learning
 correction
 de_escalation
@@ -254,6 +288,7 @@ Definitions:
 - `celebration` — participate in a launch/milestone/success with appropriate energy.
 - `humor` — add wit, absurdity, shared-builder recognition, or social relief.
 - `taste` — express a product/engineering/design/DX judgment that contributes to recognizable identity.
+- `judgment` — state a defensible preference, ranking, prediction, rejection, agreement, disagreement, or conclusion when the value is the call itself rather than an explanation or correction.
 - `learning` — ask or surface something whose answer improves understanding.
 - `correction` — correct a consequential claim or boundary.
 - `de_escalation` — improve a tense conversation by lowering hostility or bridging disagreement.
@@ -272,6 +307,7 @@ explainer
 curious_peer
 enthusiast
 skeptic
+opinionated_peer
 taste_maker
 supporter
 humorist
@@ -371,8 +407,9 @@ genuine_or_social_question
 Important distinction:
 
 - `owner_experience` requires factual basis.
-- `strategic_affect` does not claim literal private emotional truth.
-- `analytical_judgment` may be strong without pretending Hamza personally ran the system.
+- `inferred_affect` records affect supported by Hamza-specific evidence.
+- `strategic_affect` may control immediate social tone and may realize a present first-person evaluative stance when compatible with the active Hamza model and current object. It does not authorize invented emotional history, intimate stakes, biography, or first-hand experience.
+- `analytical_judgment` may be strong, blunt, and first-person without pretending Hamza personally ran the system.
 - implied experience must be checked even when no first-person pronoun appears.
 
 ## 4.6 Behavior decision record
@@ -451,6 +488,84 @@ After a behavior is selected:
 
 The system should not spend Pass B proving that a social-only action secretly contains technical value.
 
+## Conversation-state dynamicity
+
+The surviving opportunity should carry enough conversation state to realize the act proportionately:
+
+```text
+initial
+reciprocal
+ongoing
+familiar
+self_extension
+```
+
+The exact names may change during implementation, but the distinction must remain.
+
+As depth/familiarity increase:
+
+- repeated orientation can decrease;
+- self-positioning can decrease;
+- formality can decrease;
+- shorthand and callbacks can increase;
+- proof display can become lighter when shared context already contains the proof.
+
+Required factual precision does not decrease.
+
+## Living stance and narrative memory
+
+The persona cannot be only a static list of beliefs. Persist timestamped stance events with:
+
+```text
+subject
+position
+confidence
+basis/provenance
+status
+observedAt
+supersedes
+sourceRef
+```
+
+Suggested stance statuses:
+
+```text
+exploring
+provisional
+held
+revised
+abandoned
+```
+
+Generated content must not silently mutate a stance. Owner evidence, verified project experience, explicit modelling feedback, or an explicitly accepted learning event is required.
+
+## Relationship-relative behavior
+
+Use relationship and interaction context rather than a crude follower-status hierarchy:
+
+- relationship stage;
+- prior exchanges and callbacks;
+- whether the person addressed Hamza directly;
+- domain authority for the specific topic;
+- target class;
+- conversation role;
+- active hostility/support context.
+
+An unknown expert, familiar expert, recurring peer, new learner, and engagement farmer should not receive the same realization defaults.
+
+## Event-driven rhythm
+
+Allow bursts and silence to emerge from real opportunity state:
+
+- actual live events;
+- actual active conversations;
+- known owner work state;
+- source momentum;
+- relationship responses;
+- interestingness density.
+
+Do not simulate humanity with arbitrary posting jitter, fake sleep cycles, scheduled mood changes, or invented build activity.
+
 ---
 
 # 6. Canonical document overhaul
@@ -463,7 +578,7 @@ This phase comes before implementation changes.
 
 The current MUST rules require every outbound item to add information/judgment/experience and to provide a specific developer benefit. The reply section hard-rejects generic excitement/praise and treats technical substance as the normal definition of legitimacy.
 
-This conflicts with Persona V2 and the intended social model.
+This conflicts with Persona V3 and the intended social model.
 
 ### Target role
 
@@ -490,7 +605,7 @@ Make this the smallest universal contract that all formats obey.
 - A purposeful joke, congratulations, or excitement reply can pass the canonical standard without pretending to add a technical wrinkle.
 - A random low-context engagement reply still fails because it has no sufficient purpose.
 - A technical correction still requires evidence proportional to its consequence.
-- The document no longer contradicts Persona V2's performed-affect model.
+- The document no longer contradicts Persona V3.1's affect-provenance boundary: immediate evaluative affect may be strategically performed, while factual experience, biography, longstanding emotional history, and intimate personal stakes remain grounded.
 
 ## 6.2 `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md`
 
@@ -584,8 +699,8 @@ The Writer should realize an upstream behavioral decision faithfully.
 - For technical-value actions, retain technical/evidence quality.
 - Remove `The interesting part is not X...` as a positive example.
 - Remove universal rejection of `this is insane`/similar phrases; judge them by purpose/context/repetition rather than phrase alone.
-- Allow performed affect consistent with behavior decision.
-- Add implied-biography checks.
+- Allow strategic social tone/behavior consistent with the behavior decision, including immediate first-person evaluative affect when compatible with the active persona and current object.
+- Add implied-biography, first-hand-experience, and emotional-history checks; do not mistake present public stance for autobiographical history.
 - Permit humor to be the complete contribution when the selected purpose/mode says so.
 - Permit simple congratulations/support when relationship/social purpose is explicit.
 - Keep source copying, fabricated evidence, duplicate, safety, length, and route constraints.
@@ -1066,7 +1181,7 @@ Determine when the system may safely infer:
 - pride;
 - disappointment.
 
-Separately define how strategic affect may be performed when private emotion is unknown.
+Separately calibrate which immediate first-person evaluative stances may be strategically performed when private emotion is unknown, versus which history-bearing or high-stakes emotional claims require known/inferred owner basis. The mere presence of `I` is not the boundary; invented duration, biography, experience, relationship, or personal stakes are.
 
 ### G. Language realization
 
@@ -1310,21 +1425,21 @@ Do not let one viral result rewrite the persona.
 - Demote/retire after reference cleanup: `docs/ALGORITHM_EVIDENCE_LEDGER.md`
 
 **Interfaces:**
-- Consumes: Persona V2, Oracle findings, current Growth OS architecture.
+- Consumes: Persona V3, V4 reassessment, Oracle findings, current Growth OS architecture.
 - Produces: one coherent canonical doctrine for implementation.
 
 **Steps:**
-- [ ] Replace universal technical-additivity language with purpose-based legitimacy.
-- [ ] Define social-only behavior as legitimate when purpose/context supports it.
-- [ ] Add performed-affect and implied-biography boundaries.
-- [ ] Preserve factual truth/provenance requirements.
-- [ ] Remove references that make the two spur-of-the-moment strategy docs authoritative.
-- [ ] Ensure every canonical document points to the same behavioral hierarchy instead of restating a competing one.
+- [x] Replace universal technical-additivity language with purpose-based legitimacy.
+- [x] Define social-only behavior as legitimate when purpose/context supports it.
+- [x] Add affect-provenance, immediate-performed-affect, emotional-history, and implied-biography boundaries.
+- [x] Preserve factual truth/provenance requirements.
+- [x] Remove references that make the two spur-of-the-moment strategy docs authoritative.
+- [x] Ensure every canonical document points to the same behavioral hierarchy instead of restating a competing one.
 
 **Acceptance criteria:**
 - No canonical doc claims every reply must contain technical information.
 - No canonical doc treats generic activity as valid merely because it may produce distribution.
-- Persona V2 and canonical content/runtime docs no longer contradict each other.
+- Persona V3 and canonical content/runtime docs no longer contradict each other.
 
 ---
 
@@ -1344,11 +1459,11 @@ Do not let one viral result rewrite the persona.
 - Produces: normalized inspectable behavior decisions for runtime consumers.
 
 **Steps:**
-- [ ] Implement stable behavior enums and normalization.
-- [ ] Represent ACT vs SILENT explicitly.
-- [ ] Carry human-readable `reasonToExist`.
-- [ ] Keep Hamza-specific data out of this module.
-- [ ] Make legacy paths represent missing behavior as `legacy/unknown` rather than inventing one.
+- [x] Implement stable behavior enums and normalization.
+- [x] Represent ACT vs SILENT explicitly.
+- [x] Carry human-readable `reasonToExist`.
+- [x] Keep Hamza-specific data out of this module.
+- [x] Make legacy paths represent missing behavior as `legacy/unknown` rather than inventing one.
 
 **Acceptance criteria:**
 - All major content paths can carry one normalized behavior decision.
@@ -1366,13 +1481,13 @@ Do not let one viral result rewrite the persona.
 - Produces: purpose-aware hard gates and quality/readiness analysis.
 
 **Steps:**
-- [ ] Replace universal technical `additiveValue` assumptions.
-- [ ] Preserve source/recent duplicate detection.
-- [ ] Distinguish generic filler from explicit valid social purpose.
-- [ ] Make reader-payoff checks purpose-aware.
-- [ ] Make scoring purpose-aware or reduce universal scoring to genuinely universal dimensions.
-- [ ] Add explicit/implicit biography provenance checks at the appropriate layer.
-- [ ] Keep technical/evidence gates strict for consequential technical claims.
+- [x] Replace universal technical `additiveValue` assumptions.
+- [x] Preserve source/recent duplicate detection.
+- [x] Distinguish generic filler from explicit valid social purpose.
+- [x] Make reader-payoff checks purpose-aware.
+- [x] Make scoring purpose-aware or reduce universal scoring to genuinely universal dimensions.
+- [x] Add explicit/implicit biography provenance checks at the appropriate layer.
+- [x] Keep technical/evidence gates strict for consequential technical claims.
 
 **Acceptance criteria:**
 - `purpose=celebration` does not fail because it lacks evidence/action language.
@@ -1393,11 +1508,11 @@ Do not let one viral result rewrite the persona.
 - Produces: route + behavior decision or silence.
 
 **Steps:**
-- [ ] Separate purpose from technical contribution strength.
-- [ ] Allow social/relationship actions when they have real contextual value.
-- [ ] Preserve rejection of no-purpose activity.
-- [ ] Make format decisions from purpose/source relationship rather than universal additivity.
-- [ ] Preserve deterministic route/authority boundaries.
+- [x] Separate purpose from technical contribution strength.
+- [x] Allow social/relationship actions when they have real contextual value.
+- [x] Preserve rejection of no-purpose activity.
+- [x] Make format decisions from purpose/source relationship rather than universal additivity.
+- [x] Preserve deterministic route/authority boundaries.
 
 **Acceptance criteria:**
 - High momentum alone is insufficient.
@@ -1416,10 +1531,10 @@ Do not let one viral result rewrite the persona.
 - Produces: exact reply candidate under existing autonomous authority boundaries.
 
 **Steps:**
-- [ ] Replace/augment `replyStrategy.intent + tone` with behavior decision fields.
-- [ ] Permit social acts to be complete acts.
-- [ ] Keep stricter autonomous review fallback when risk/relationship evidence is insufficient.
-- [ ] Preserve budget, health, duplicate, exact-claim, and transport protections.
+- [x] Replace/augment `replyStrategy.intent + tone` with behavior decision fields.
+- [x] Permit social acts to be complete acts.
+- [x] Keep stricter autonomous review fallback when risk/relationship evidence is insufficient.
+- [x] Preserve budget, health, duplicate, exact-claim, and transport protections.
 
 **Acceptance criteria:**
 - Autonomous limitations are described as automation-risk policy, not as the definition of valid human behavior.
@@ -1439,10 +1554,10 @@ Do not let one viral result rewrite the persona.
 - Produces: versioned behavior metadata linked to draft/queue/publication measurements.
 
 **Steps:**
-- [ ] Persist a versioned behavior snapshot.
-- [ ] Preserve legacy rows.
-- [ ] Carry behavior metadata through generation, approval, publication, and measurement.
-- [ ] Expose enough fields for later cohort analysis.
+- [x] Persist a versioned behavior snapshot.
+- [x] Preserve legacy rows.
+- [x] Carry behavior metadata through generation, approval, publication, and measurement.
+- [x] Expose enough fields for later cohort analysis.
 
 **Acceptance criteria:**
 - A later query can compare outcomes by purpose/mode/affect/depth/persona version.
@@ -1462,34 +1577,61 @@ Do not let one viral result rewrite the persona.
 - Produces: relationship metrics across both technical and social interactions.
 
 **Steps:**
-- [ ] Add social reply archetypes.
-- [ ] Keep primary purpose separate from archetype.
-- [ ] Ensure response/continuation/recurrence can validate a social interaction.
-- [ ] Avoid treating generic praise as relationship success absent outcome/context evidence.
+- [x] Add social reply archetypes.
+- [x] Keep primary purpose separate from archetype.
+- [x] Ensure response/continuation/recurrence can validate a social interaction.
+- [x] Avoid treating generic praise as relationship success absent outcome/context evidence.
 
 **Acceptance criteria:**
 - The system can learn whether humor/support/celebration creates real recurring relationships.
 
 ---
 
-## Task 8: Run the Hamza modelling program
+## Task 8: Add conversation state and living stance memory
+
+**Files:**
+- Modify: `behavior.js`
+- Modify: `store.js`
+- Modify: `engagement.js`
+- Modify: `pipeline.js`
+- Modify: `agent_bridge.js`
+
+**Interfaces:**
+- Consumes: relationship events, queue conversation context, owner/model stance updates.
+- Produces: conversation-stage context and append-only stance history for persona consumers.
+
+**Steps:**
+- [x] Derive and persist conversation stage where behavior is selected.
+- [x] Lower reorientation/formality as shared context deepens without lowering factual precision.
+- [x] Add append-only stance events with explicit provenance and supersession.
+- [x] Expose read and explicit human-record commands through the bridge.
+- [x] Prevent generated output from silently changing persona beliefs.
+
+**Acceptance criteria:**
+- A turn-three reply can be realized differently from a cold initial reply while preserving the same technical fact.
+- A tool stance can move from exploring to held to revised without erasing history.
+
+---
+
+## Task 9: Run the Hamza modelling program
 
 **Files:**
 - Create: a dedicated versioned modelling artifact under `docs/research/` or another explicitly chosen model-source location.
-- Modify: `docs/research/x_creator_phase2/HAMZA_X_PERSONA_EXPERIMENT.md` only to supersede candidate sections with evidence from actual modelling.
+- Modify: `docs/research/x_creator_phase2/HAMZA_X_PERSONA_EXPERIMENT.md` in two bounded phases: first re-anchor research-backed sections to V4 before modelling; later supersede Hamza-specific candidate sections only with evidence from actual modelling.
 
 **Interfaces:**
 - Consumes: owner forced choices, real technical history, reactions, rejected examples, social calibration.
 - Produces: Hamza Model V1.
 
 **Steps:**
+- [x] Confirm the Persona Experiment is V4-reanchored before calibration; keep creator-corpus evidence, operator policy, and Hamza-specific evidence explicitly separate.
 - [ ] Run forced-choice calibration across technical and social X situations.
-- [ ] Build technical first-person sandbox.
-- [ ] Calibrate asymmetric beliefs/tastes.
+- [x] Build the technical first-person sandbox structure; populate it only from verified owner evidence.
+- [ ] Calibrate asymmetric beliefs/tastes beyond the owner directions already captured.
 - [ ] Calibrate humor/teasing/profanity/social boundaries.
-- [ ] Calibrate known vs inferred vs strategic affect.
-- [ ] Record negative examples and `never write this` patterns.
-- [ ] Model language only after behavioral calibration.
+- [ ] Calibrate known vs inferred vs strategic affect across representative situations.
+- [x] Record current negative examples and `never write this` patterns; expand them during forced-choice calibration.
+- [x] Treat current language realization as owner-tuned alpha until behavioral calibration is broad enough to promote it.
 
 **Acceptance criteria:**
 - Model contains specific asymmetric Hamza preferences rather than universal developer virtues.
@@ -1497,11 +1639,11 @@ Do not let one viral result rewrite the persona.
 
 ---
 
-## Task 9: Create the versioned persona runtime owner
+## Task 10: Create the versioned persona runtime owner
 
 **Files:**
 - Create: `persona.js`
-- Create or modify: one versioned persona-model source artifact chosen by Task 8.
+- Create or modify: one versioned persona-model source artifact chosen by Task 9.
 - Modify: `store.js` only if active-model metadata needs persistence.
 
 **Interfaces:**
@@ -1509,17 +1651,17 @@ Do not let one viral result rewrite the persona.
 - Produces: bounded persona slices and `personaModelVersion` for consumers.
 
 **Steps:**
-- [ ] Load one active model version.
-- [ ] Expose behavior, provenance, affect, and language slices separately.
-- [ ] Keep publication/route/source authority outside persona module.
-- [ ] Preserve inspectability and rollback.
+- [x] Load one active model version.
+- [x] Expose behavior, provenance, affect, and language slices separately.
+- [x] Keep publication/route/source authority outside persona module.
+- [x] Preserve inspectability and rollback.
 
 **Acceptance criteria:**
 - Changing the persona version does not require editing multiple prompts.
 
 ---
 
-## Task 10: Integrate persona upstream of writing
+## Task 11: Integrate persona upstream of writing
 
 **Files:**
 - Modify: `editorial.js`
@@ -1535,18 +1677,18 @@ Do not let one viral result rewrite the persona.
 - Produces: behavior decision before Writer generation.
 
 **Steps:**
-- [ ] Generate/select plausible behavior candidates using Hamza model.
-- [ ] Apply growth/relationship objective to choose among plausible behaviors.
-- [ ] Persist the selected decision.
-- [ ] Pass the decision to Writer.
-- [ ] Ensure Writer cannot silently rewrite the purpose/mode/affect/depth.
+- [x] Generate/select plausible behavior candidates using Hamza model.
+- [x] Apply growth/relationship objective to choose among plausible behaviors.
+- [x] Persist the selected decision.
+- [x] Pass the decision to Writer.
+- [x] Ensure Writer cannot silently rewrite the purpose/mode/affect/depth.
 
 **Acceptance criteria:**
 - The system can choose `joke`, `support`, `technical correction`, `hype`, or `silence` before wording begins.
 
 ---
 
-## Task 11: Close the behavior-to-outcome learning loop
+## Task 12: Close the behavior-to-outcome learning loop
 
 **Files:**
 - Modify: `experiments.js`
@@ -1558,10 +1700,10 @@ Do not let one viral result rewrite the persona.
 - Produces: observational evidence about Hamza-specific behavior performance.
 
 **Steps:**
-- [ ] Add behavior dimensions to cohort analysis.
-- [ ] Preserve matched observation windows and confounder visibility.
-- [ ] Keep observations/candidate lessons separate from accepted learned rules.
-- [ ] Do not automatically mutate persona beliefs from one result.
+- [x] Add behavior dimensions to cohort analysis.
+- [x] Preserve matched observation windows and confounder visibility.
+- [x] Keep observations/candidate lessons separate from accepted learned rules.
+- [x] Do not automatically mutate persona beliefs from one result.
 
 **Acceptance criteria:**
 - The system can answer which Hamza behaviors correlate with discovery, profile conversion, and recurring relationships separately.
@@ -1592,7 +1734,7 @@ If historical classification is useful, store it explicitly as later analysis/in
 Do not:
 
 - rewrite all creator research into the new philosophy;
-- make Persona V2 permanent memory before modelling;
+- make Persona V3 permanent memory before modelling;
 - replace the old robot with a rigid `purpose score` robot;
 - require every action to hit a numeric threshold such as `7/10 humor`;
 - create quotas for social vs technical modes;
@@ -1721,10 +1863,14 @@ The overhaul is complete when all of the following are true:
 
 # 19. Immediate next action
 
-Start with **Wave 1 only**:
+The doctrine/runtime/integration waves are now implemented far enough to support real Hamza calibration. Do **not** reopen generic creator theorizing or reintroduce First-1,000 precedence.
 
-> Rewrite and reconcile the canonical X docs, retire competing authority, and produce a clean behavioral contract before changing executable code.
+Next frontier:
 
-Once Wave 1 is frozen, perform a bounded source audit to map every current hardcoded assumption that conflicts with it. Then begin Wave 2 implementation.
+1. Run forced-choice Hamza calibration across technical judgment, disagreement, hype, humor, teasing, support, status, product taste, and relationship contexts.
+2. Populate the first-person technical sandbox only from verified owner work/usage/results.
+3. Keep the current raw/decisive/self-possessed direction as held owner evidence, but treat the rest of the persona model as `owner_tuned_alpha` until representative calibration broadens it.
+4. Use live publications/replies carrying behavior metadata to build matched outcome cohorts by purpose/mode/affect/depth/persona version.
+5. Promote only repeated account-specific evidence; do not let one successful post, one creator pattern, or one owner reaction silently rewrite the whole persona.
 
-The Hamza modelling phase begins only after the runtime is capable of representing the person we are trying to model.
+The remaining work is therefore **calibration + live evidence**, not another architecture rewrite.

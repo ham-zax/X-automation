@@ -1,5 +1,7 @@
 # Phase 1C Engage Next Implementation Plan
 
+**Status:** historical execution contract. Current purpose/behavior semantics are owned by `docs/RELATIONSHIP_INTELLIGENCE.md`, `docs/CONTENT_OPERATING_STANDARD.md`, and `behavior.js`; old `contributionStrength` formulas and mandatory technical-contribution wording below are retained only as implementation history.
+
 **Goal:** Turn relationship intelligence into a human-reviewed, freshness-aware engagement workflow that surfaces the best current technical conversations, drafts one useful contribution, follows up on responses, and records relationship outcomes.
 
 **Architecture:** Reuse Phase-1 `queue_items` rather than creating a second queue table. Engagement items use `lane = engagement` and `pipeline = reply`; `engagement.js` owns discovery, per-post opportunity scoring, expiry, and follow-up prioritization. Relationship history remains owned by `relationship.js`/`relationship_events`. Outbound replies may use the human-reviewed path or an explicitly started autonomous grant.

@@ -786,16 +786,16 @@ The scheduler/account-health layer must not convert any of these observations in
 - [ ] Persist append-only relationship events and derive stages `observed -> interacted -> responsive -> recurring -> connected -> mutual` from history/follow state.
 - [ ] Reuse `queue_items` rather than creating a second queue table; engagement is a lane with different scheduling/sending rules.
 - [ ] Discover responses to our existing conversations before cold opportunities, then recent posts from high-value relationship/distribution/authority targets and reply-suitable research candidates.
-- [ ] Create an engagement item only when the system can state a concrete contribution such as a result, implementation detail, caveat, comparison, correction, or informed question.
-- [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, contribution archetype, and the reason the reply would be useful.
-- [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and contribution strength rather than follower count alone.
+- [ ] Create an engagement item only when the system can state a legitimate contextual purpose such as a direct answer, technical addition, judgment, question, support, celebration, humor, repair, or relationship continuation.
+- [ ] Store `target_username`, `target_tweet_id`, target/relationship context, Conversation Potential, Relationship Potential, freshness, `expires_at`, behavior/purpose state, reply archetype where useful, and the reason the action should exist.
+- [ ] Add **Relationships** and **Engage Next** dashboard views. Engage Next sorts active follow-ups above comparable cold opportunities and prioritizes freshness, conversation quality, relationship value, target score, and ReplyVisibility; purpose is an eligibility/context decision rather than a universal numeric strength ladder.
 - [x] Let AI draft a reply and move it to `needs_review`; the human path requires one exact approval/send action for each outbound reply.
 - [x] Keep autonomous replies off by default. When explicitly started in Dry run or Live mode, the existing daemon may evaluate newly observed opportunities continuously and process eligible items serially. Live automated replies require an explicit remaining operator budget, deterministic eligibility, an atomic claim, exact persisted text/provenance, and the configured publication transport.
 - [ ] Expire opportunities whose source conversation is no longer timely instead of sending stale replies.
 - [ ] Record successful replies in `candidate_actions` plus `relationship_events`, then feed target responses, conversation continuation, follower/connection changes, and recurring relationships into analytics.
 
 **Acceptance criteria:**
-- The dashboard can explain who is worth engaging, why this particular conversation matters now, what prior relationship exists, and what useful contribution we can make; target responses can re-enter Engage Next as higher-priority follow-ups. Queue entry alone never grants send authority: the human path needs exact approval, and the autonomous path needs the explicit persisted grant plus its deterministic claim contract.
+- The dashboard can explain who is worth engaging, why this particular conversation matters now, what prior relationship exists, and what legitimate technical or social purpose the action serves; target responses can re-enter Engage Next as higher-priority follow-ups. Queue entry alone never grants send authority: the human path needs exact approval, and the autonomous path needs the explicit persisted grant plus its deterministic claim contract.
 - The detailed execution contracts are `plans/PHASE_1B_RELATIONSHIP_INTELLIGENCE.md` and `plans/PHASE_1C_ENGAGE_NEXT.md`.
 
 ### Task 15: Add the Experiment Engine
@@ -1022,7 +1022,7 @@ Phase 6 is advisory. It may recommend no action and cannot approve, publish, sen
 
 - X private web endpoints are not a stable public API contract. Publication transport may break independently of queue correctness.
 - Autonomous engagement remains bounded by an explicit operator grant, budget, deduplication, account-health checks, deterministic eligibility, and atomic claims.
-- The Engagement Queue must never become a reply quota. If there is no concrete contribution, the correct action is `ignore` or wait; if there are many genuinely useful conversations, a fixed daily cap must not suppress them.
+- The Engagement Queue must never become a reply quota. If no legitimate technical, social, relationship, support, humor, learning, correction, or other contextual purpose survives review, the correct action is `ignore` or wait; if there are many genuinely useful conversations, a fixed daily cap must not suppress them.
 - Target saturation, repeated archetype, target concentration, and weak recent InteractionYield are advisory signals by default; they lower priority or warn rather than hard-blocking a useful human-approved interaction.
 - Active bidirectional conversation, a direct target question, or new conversation context may offset soft health penalties.
 - Reach/Follow/Conversation/Relationship scores, TargetScore, EngagePriority, SaturationPressure, NetworkQualityScore, and InteractionYield are internal prioritization/diagnostic heuristics. They can be wrong and must show their component reasoning rather than masquerading as X's actual ranking score.

@@ -72,7 +72,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
 
         <div className="mt-4">
           <div className="text-sm font-semibold text-slate-900">What you can add</div>
-          <div className="mt-1 text-slate-700">{data.contribution || 'Review the source and decide whether you have a concrete contribution.'}</div>
+          <div className="mt-1 text-slate-700">{data.contribution || 'Review the source and decide whether there is a legitimate reason to act.'}</div>
         </div>
 
         {data.relationship && (

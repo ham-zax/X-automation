@@ -1,14 +1,18 @@
 # Network Growth Operating System
 
-This document is the strategic source of truth for how `@ham_zax` should grow on X.
+**Status:** canonical network-growth strategy
+**Content contract:** `CONTENT_OPERATING_STANDARD.md`
+**Behavior/persona research:** `research/x_creator_phase2/HAMZA_X_PERSONA_EXPERIMENT.md` and `research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md`
 
-The system is not primarily a posting bot. It is a **human + AI network-construction system** that uses research, conversations, relationships, original technical content, and measurement to increase the probability that the right developers repeatedly encounter useful work from the account and choose to follow it.
+This document is the strategic source of truth for how `@ham_zax` should grow on X. It owns growth and network objectives; it does not define factual source truth, final wording, or publication authority.
+
+The system is not primarily a posting bot. It is a **human + AI network-construction system** that uses research, conversations, relationships, owned content, behavioral judgment, and measurement to increase the probability that the right people repeatedly encounter Hamza, remember him, interact with him, and choose to follow.
 
 The operating thesis is:
 
-> **conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion**
+> **purposeful participation -> repeated recognition -> relationship and profile curiosity -> follow -> stronger future distribution -> owned-content conversion**
 
-Publishing remains important, but it is one instrument inside this loop rather than the whole system.
+Publishing remains important, but it is one instrument inside this loop rather than the whole system. Every action needs a purpose; not every action needs technical information.
 
 ---
 
@@ -16,23 +20,24 @@ Publishing remains important, but it is one instrument inside this loop rather t
 
 Primary objective:
 
-> Build a dense audience of AI engineers, software developers, devtool maintainers, technical founders, builders, and technically credible practitioners who have a rational reason to follow `@ham_zax` for future utility.
+> Build a dense audience of AI engineers, software developers, devtool maintainers, technical founders, builders, and credible practitioners who want future access to Hamza's work, judgment, taste, questions, humor, and participation.
 
-The account promise remains:
+The account promise is deliberately broader than a tool-review feed:
 
-> **I test the AI tools developers are talking about and explain what actually works, what breaks, why it matters, and whether it is worth changing your workflow.**
+> **Follow a working technical builder who shows real work, notices consequential details, has recognizable taste, learns in public, participates socially, and changes depth and tone with the moment.**
 
 The account should optimize for:
 
 1. qualified developer reach;
-2. recurring technical conversations;
+2. recurring conversations and recognition;
 3. relationship formation with relevant people;
 4. profile-to-follow conversion;
 5. follower quality and audience density;
-6. durable original technical assets;
-7. useful downstream commercial density.
+6. durable original technical and builder assets;
+7. a recognizable portfolio of judgment, taste, work, and social behavior;
+8. useful downstream commercial density.
 
-Raw likes are an intermediate observation, not the objective.
+Raw likes are an intermediate observation, not the objective. Reach, likes, replies, reposts, bookmarks, profile visits, follows, and recurring relationships remain separate outcomes.
 
 ---
 
@@ -40,20 +45,22 @@ Raw likes are an intermediate observation, not the objective.
 
 ### 2.1 Conversation insertion
 
-Enter already-distributed technical conversations when we have a real contribution.
+Enter already-distributed relevant conversations when Hamza has a real purpose.
 
-Good contributions include:
+Legitimate purposes include:
 
-- a benchmark;
-- a reproduction result;
-- a concrete edge case;
-- a command or implementation detail;
-- a technical correction;
-- a useful comparison;
-- an architectural consequence;
-- an informed question whose answer improves our research.
+- a benchmark, reproduction, implementation detail, comparison, or consequential correction;
+- a useful or socially generative question;
+- a direct answer;
+- humor or de-escalation;
+- support, gratitude, credit, or celebration;
+- product/engineering taste;
+- a relationship callback or ordinary reciprocal response;
+- a memorable reaction whose context supplies the meaning.
 
-The purpose is not to maximize reply count. The purpose is to place demonstrated competence inside relevant conversations that already contain the audience we want.
+The purpose is not to maximize reply count or to prove intelligence in every thread. The purpose is to create qualified discovery, recognition, relationship, learning, support, or technical value inside conversations that already contain people we want to know.
+
+A short social reply can be purposeful. Generic activity under an arbitrary large account is not.
 
 ### 2.2 Relationship conversion
 
@@ -64,7 +71,8 @@ Relationship value compounds when a target:
 - responds to us;
 - recognizes us across multiple conversations;
 - follows us;
-- repeatedly exchanges useful technical information with us;
+- repeatedly exchanges useful technical or social context with us;
+- recognizes our humor, support, questions, work, or judgment across conversations;
 - becomes a mutual follow naturally;
 - quotes/reposts/references our work;
 - becomes a source of future research or distribution.
@@ -75,13 +83,15 @@ The system should therefore optimize repeated high-quality interactions, not one
 
 Conversation visibility only creates opportunity. The profile must convert it.
 
-When someone visits `@ham_zax`, recent originals should demonstrate:
+When someone visits `@ham_zax`, recent originals should collectively demonstrate:
 
-- technical depth;
-- experiments rather than summaries;
-- useful judgment;
-- a coherent developer + builder in tech identity that leans toward registered Growth Focus topics without becoming a closed topical whitelist;
-- clear evidence that future posts will save research time.
+- real work, experiments, decisions, and artifacts;
+- technical depth when the subject warrants it;
+- useful and recognizable judgment;
+- product and engineering taste;
+- a coherent developer + builder identity that leans toward registered Growth Focus topics without becoming a closed topical whitelist;
+- enough social and emotional range to make the account feel like a person rather than a technical extraction service;
+- evidence that future posts may save research time, surface useful work, provoke thought, or simply be worth hearing from.
 
 Conversation topics and owned content should reinforce each other.
 
@@ -109,7 +119,34 @@ Instead ask:
 - would they follow because the account promise is reinforced?
 - would the content avoid negative feedback from being misleading, repetitive, or irrelevant?
 
-The strategic objective is to create information and relationships that make several valuable downstream actions plausible for the same viewer.
+The strategic objective is to create work, information, identity, and relationships that make several valuable downstream actions plausible for the same viewer.
+
+### 2.5 Behavior selection before writing
+
+The network system should select a behavior before the Writer selects prose.
+
+The shared behavior record separates:
+
+```text
+purpose
+social mode
+affect strategy
+affect provenance
+information depth
+conversation stage
+reason to exist
+persona version
+```
+
+A behavior can be technically deep, socially complete, humorous, supportive, corrective, or silent. The Writer realizes that decision; it does not default every opportunity back into `human reaction + technical wrinkle`.
+
+Fast triage should eliminate obvious irrelevant, duplicate, exhausted, or unsafe opportunities before expensive persona reasoning. Surviving opportunities may still be rejected after contextual review.
+
+### 2.6 Strategic imbalance without purposeless activity
+
+While native distribution is small, the system may over-index on relevant live conversations, borrowed context, recurring territories, and memorable behavior. That is a growth posture, not a requirement to answer every high-momentum source.
+
+Use actual opportunity state, relationships, and source movement. Do not simulate humanity with uniform schedules, fake inactivity, or random delay.
 
 ---
 
@@ -549,7 +586,7 @@ sent
 -> resolved
 ```
 
-If an existing relationship target replies/quotes one of our tracked posts or replies, that observed response appends relationship history and re-enters **Engage Next** as an elevated `follow_up` or `own_post_response` item when a concrete contribution exists.
+If an existing relationship target replies/quotes one of our tracked posts or replies, that observed response appends relationship history and re-enters **Engage Next** as an elevated `follow_up` or `own_post_response` item when a legitimate next purpose exists. That purpose may be a direct answer, technical continuation, judgment, joke, thanks, support, repair, or another context-appropriate act.
 
 Follow-up priority is higher when:
 
@@ -599,7 +636,7 @@ A practical day should begin with network opportunities, not an arbitrary postin
 1. Refresh relationship targets and relevant recent posts.
 2. Surface conversation follow-ups first.
 3. Review top new Engage Next opportunities.
-4. Approve only replies with a concrete contribution.
+4. Approve only replies with a concrete contextual purpose; do not require technical additivity when the selected act is socially complete.
 5. Check viral/trend queue for urgent owned-content opportunities.
 
 ### Main-feed work
@@ -765,7 +802,7 @@ Learning cannot override hard content gates, expiry, required human approval, an
 
 ## 18. Algorithm evidence discipline
 
-All strategic claims must be categorized using `ALGORITHM_EVIDENCE_LEDGER.md`.
+Claims about X mechanisms, ranking behavior, or tactic evidence must be categorized using `ALGORITHM_EVIDENCE_LEDGER.md`. The ledger does not own Hamza's strategy, persona, or behavioral purpose.
 
 Three main evidence levels:
 

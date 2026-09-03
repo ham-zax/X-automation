@@ -209,7 +209,7 @@ Strong override evidence can neutralize the penalty for a specific opportunity:
 - a new technical issue creates genuinely different value;
 - the current conversation is actively bidirectional.
 
-The only automatic reject remains `no concrete contribution`, `actual duplicate/near-duplicate`, `already acted on the exact source where another action adds no value`, or a hard platform/content constraint.
+The only automatic reject remains `no legitimate technical, social, relationship, identity, learning, or growth purpose`, `actual duplicate/near-duplicate`, `already acted on the exact source where another action adds no value`, or a hard platform/content constraint.
 
 All numeric saturation bands are `EMPIRICAL_VARIABLE` project defaults and should be learned over time.
 

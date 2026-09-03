@@ -2,7 +2,16 @@ import fs from 'fs/promises';
 import path from 'path';
 import { randomUUID } from 'node:crypto';
 import { ACCOUNT_PERFORMANCE_CAPABILITIES, fetchAccountPerformance } from './tech_news.js';
+import {
+  ACTION_PURPOSES,
+  AFFECT_PROVENANCE,
+  AFFECT_STRATEGIES,
+  CONVERSATION_STAGES,
+  INFORMATION_DEPTHS,
+  SOCIAL_MODES,
+} from './behavior.js';
 import { applyWriterOutput, buildWriterPacket, scoreDraft } from './drafting.js';
+import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { matchResearchTopics } from './research_topics.js';
@@ -27,6 +36,7 @@ import {
   requestQueueReview,
   resolveEngagementItem,
   routeCandidate,
+  setBehaviorDecision,
   setRelevanceDecision,
   setRoutingDecision,
   sendApprovedEngagementReply,
@@ -75,6 +85,7 @@ import {
   getNicheProfile,
   getPerformanceSnapshot,
   getPreferenceProfile,
+  getCurrentPersonaStances,
   getQueueItem,
   getQueueItemByCandidate,
   getRelationshipProfile,
@@ -95,12 +106,14 @@ import {
   listExperiments,
   listPublicationMeasurementSeries,
   listPublishedMainFeedContent,
+  listPersonaStanceEvents,
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
   listResearchEvidence,
   markCandidateSaved,
   recordPerformanceSnapshot,
+  recordPersonaStanceEvent,
   refreshLearnedRuleSuggestion,
   resetNicheProfile,
   retireLearnedRule,
@@ -582,8 +595,14 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
   const queueItem = getQueueItemByCandidate(candidate.key);
   const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
   const evidence = writerEditorialContext(candidate, queueItem).evidence;
+  const username = String(queueItem?.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '')
+    .replace(/^@/, '')
+    .trim();
+  const relationship = username ? getRelationshipProfile(username) : null;
   return scoreDraft(draft, candidate, {
     pipeline,
+    behavior: queueItem?.behavior?.decision === 'ACT' ? queueItem.behavior : draft?.editor?.behavior || null,
+    relationship,
     evidence,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies: pipeline === 'reply' ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }) : [],
@@ -737,6 +756,7 @@ function formatEditorialRecommendationView(recommendation) {
     whyNow: recommendation.whyNow,
     whyThisFormat: recommendation.whyThisFormat,
     desiredReaderOutcome: recommendation.desiredReaderOutcome,
+    behavior: recommendation.behavior || null,
     candidateKeys: recommendation.candidateKeys,
     targetCandidateKey: recommendation.targetCandidateKey,
     potentials: recommendation.potentials || {},
@@ -897,6 +917,7 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
       pipeline: editorialRecommendation.pipeline,
       status: editorialRecommendation.status,
       title: editorialRecommendation.title,
+      behavior: editorialRecommendation.behavior || null,
     } : null,
     queue: queueItem
       ? {
@@ -908,6 +929,8 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
           recommendedPipeline: queueItem.recommendedPipeline || null,
           recommendedPipelineLabel: queueItem.recommendedPipeline ? label(PIPELINE_LABELS, queueItem.recommendedPipeline) : null,
           routingReason: queueItem.routingReason || '',
+          behavior: queueItem.behavior || null,
+          personaModelVersion: queueItem.behavior?.personaModelVersion || draft?.editor?.personaModelVersion || '',
           routingDecision: queueItem.routingDecision || {},
           draftId: queueItem.draftId ?? null,
           draftQualityScore: draft?.qualityScore ?? null,
@@ -962,6 +985,8 @@ function formatDraft(draft, { analysis = null } = {}) {
     body: draft.body || '',
     threadParts: draft.threadParts || [],
     editor,
+    behavior: editor?.behavior || null,
+    personaModelVersion: editor?.personaModelVersion || editor?.behavior?.personaModelVersion || '',
     gates: currentGates,
     gatesView: formatGates(currentGates),
     growthPackaging: analysis?.growthPackaging || null,
@@ -1002,6 +1027,8 @@ function formatQueueItem(queueItem) {
     statusLabel: queueStatusLabel(queueItem),
     lane: queueItem.lane,
     targetUsername: queueItem.targetUsername || null,
+    behavior: queueItem.behavior || null,
+    personaModelVersion: queueItem.behavior?.personaModelVersion || draft?.editor?.personaModelVersion || '',
     draftId: queueItem.draftId ?? null,
     draft: formatDraft(draft, {
       analysis: draft
@@ -1633,7 +1660,69 @@ export async function handleApi(req, res, requestUrl) {
             network: EXPERIMENT_DIMENSIONS.network,
           },
           metricsByKind: { content: CONTENT_METRICS, network: NETWORK_METRICS },
+          behavior: {
+            purposes: ACTION_PURPOSES,
+            socialModes: SOCIAL_MODES,
+            affectStrategies: AFFECT_STRATEGIES,
+            affectProvenance: AFFECT_PROVENANCE,
+            informationDepths: INFORMATION_DEPTHS,
+            conversationStages: CONVERSATION_STAGES,
+          },
         },
+      });
+    }
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'persona') {
+      const consumer = String(query.get('consumer') || '').trim();
+      if (consumer && !['editorial', 'engagement', 'writer'].includes(consumer)) {
+        throw new Error('Persona consumer must be editorial, engagement, or writer.');
+      }
+      return sendSuccess({
+        model: getPersonaModelSummary(),
+        ...(consumer ? { slice: getPersonaSlice(consumer) } : {}),
+        currentStances: getCurrentPersonaStances({ limit: Math.max(1, Math.min(500, Number(query.get('limit') || 200))) }),
+      });
+    }
+
+    if (method === 'GET' && segments.length === 2 && segments[0] === 'persona' && segments[1] === 'stances') {
+      const subject = String(query.get('subject') || '').trim();
+      const status = String(query.get('status') || '').trim();
+      const limit = Math.max(1, Math.min(1000, Number(query.get('limit') || 200)));
+      return sendSuccess({
+        current: getCurrentPersonaStances({ limit: Math.min(500, limit) }),
+        history: listPersonaStanceEvents({ subject: subject || null, status: status || null, limit }),
+      });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'persona' && segments[1] === 'stances') {
+      const payload = await readBody();
+      if (payload.confirmRecord !== true) throw new Error('Recording a persona stance requires confirmRecord=true.');
+      const stance = recordPersonaStanceEvent({
+        subject: payload.subject,
+        position: payload.position,
+        confidence: payload.confidence || 'medium',
+        status: payload.status || 'provisional',
+        basis: payload.basis,
+        sourceRef: payload.sourceRef ?? payload.source_ref ?? '',
+        provenance: {
+          ...(payload.provenance && typeof payload.provenance === 'object' && !Array.isArray(payload.provenance) ? payload.provenance : {}),
+          recordedBy: 'human_web',
+        },
+        supersedesId: payload.supersedesId ?? payload.supersedes_id ?? null,
+        observedAt: payload.observedAt ?? payload.observed_at ?? Date.now(),
+      });
+      return sendSuccess({ stance, current: getCurrentPersonaStances({ limit: 500 }) });
+    }
+
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'behavior' && segments[1] === 'select') {
+      const payload = await readBody();
+      const key = String(payload.key || '').trim();
+      if (!key) throw new Error('Behavior selection requires candidate key.');
+      const selected = setBehaviorDecision(key, payload.behavior || {}, { actor: 'human' });
+      return sendSuccess({
+        behavior: selected.behavior,
+        queueItem: formatQueueItem(selected.queueItem),
+        draft: selected.draft ? draftEditorPayload(selected.draft.id) : null,
       });
     }
 
@@ -1984,7 +2073,7 @@ export async function handleApi(req, res, requestUrl) {
         actions.push({
           eyebrow: 'Worth considering',
           title: `A conversation with @${item.targetUsername || 'this account'} looks useful`,
-          body: item.contributionSummary || 'There is a fresh conversation opportunity with a concrete contribution available.',
+          body: item.contributionSummary || 'There is a fresh conversation opportunity with a legitimate reason to act.',
           href: `#/conversations/${encodeURIComponent(item.candidateKey)}`,
           action: 'Review opportunity',
           tone: 'primary',

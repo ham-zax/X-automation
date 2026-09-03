@@ -1,10 +1,12 @@
 # First 1,000 Followers Growth Mode
 
-**Status:** implemented bootstrap policy, effective 2026-08-24.
+**Status:** RETIRED as governing policy on 2026-09-04. Historical bootstrap evidence/reference only.
 
-This mode governs `@ham_zax` until the account reaches 1,000 followers or the operator explicitly ends it. When this document conflicts with the normal conservative distribution heuristics in `GROWTH_DISTRIBUTION_PLAYBOOK.md`, this document wins for the bootstrap phase.
+This document records the cold-start diagnosis, experiments, and heuristics that shaped the earlier bootstrap system. It no longer governs `@ham_zax`, has no precedence over current purpose/persona behavior, and must not be used to bypass the active behavior decision or current route/authority contracts.
 
-The goal is not to maximize low-quality follower count at any cost. The goal is to maximize **relevant distribution surface area and follower-acquisition velocity** while the account has almost no native distribution.
+Current authority lives in `CONTENT_OPERATING_STANDARD.md`, `NETWORK_GROWTH_OPERATING_SYSTEM.md`, `RELATIONSHIP_INTELLIGENCE.md`, the active versioned Hamza persona, and the owning runtime modules. Useful observations below remain historical evidence; account-size thresholds and old route heuristics remain empirical hypotheses unless the current runtime explicitly uses them.
+
+The historical goal was not to maximize low-quality follower count at any cost. It was to maximize **relevant distribution surface area and follower-acquisition velocity** while the account had almost no native distribution.
 
 ## Current account stage
 
@@ -156,9 +158,9 @@ Track separately by Original, Quote, Reply, and Repost:
 
 Do not treat one post as causal proof. Use repeated outcomes to decide which bootstrap actions deserve more volume.
 
-## Runtime implementation
+## Historical runtime implementation
 
-The 2026-08-24 repair implements this policy in the source-routing path.
+The 2026-08-24 repair implemented this policy in the source-routing path. The 2026-09-04 persona/purpose overhaul superseded the account-size bootstrap override with explicit purpose-aware behavior selection; the details below describe the retired implementation, not current route authority.
 
 `pipeline.js:recommendationContext()` reads the latest stored account follower snapshot. When it is below 1,000, it passes the account stage and the real opportunity-score breakdown into `strategy.js:recommendDistributionAction()`.
 

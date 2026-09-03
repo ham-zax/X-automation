@@ -1,3 +1,5 @@
+import { normalizeBehaviorDecision } from './behavior.js';
+
 export const NICHE_GROUPS = [
   {
     tag: 'agents',
@@ -839,46 +841,55 @@ export function recommendDistributionAction(candidate, context = {}) {
     return { action: 'ignore', reason: 'Outside the configured technical scope. A human can explicitly choose to use the opportunity anyway.' };
   }
 
-  const accountFollowers = context.accountFollowers == null ? null : Number(context.accountFollowers);
-  const first1000 = accountFollowers != null && Number.isFinite(accountFollowers) && accountFollowers >= 0 && accountFollowers < 1_000;
-  const opportunityScores = context.opportunityScores || {};
-  const reach = opportunityScores.breakdown?.reach || {};
-  const bootstrapFresh = first1000 && candidate?.source === 'x' && Number(reach.freshness || 0) >= 8;
-  const bootstrapMomentum = bootstrapFresh
-    && Number(opportunityScores.reachPotential || 0) >= 45
-    && Number(reach.freshness || 0) >= 8
-    && Number(reach.momentum || 0) >= 8
-    && Number(reach.traction || 0) >= 6;
+  const behavior = normalizeBehaviorDecision(context.behavior || {}, {
+    pipeline: context.pipeline || '',
+    defaultSelectionSource: 'legacy',
+  });
+  const purposeful = behavior.decision === 'ACT'
+    && Boolean(behavior.primaryPurpose)
+    && Boolean(behavior.reasonToExist);
+  const sourceIsX = candidate?.source === 'x';
+  const preferredPipeline = String(context.preferredPipeline || behavior.pipeline || '').trim();
+  const socialReplyPurposes = new Set(['relationship', 'support', 'celebration', 'humor', 'learning', 'correction', 'de_escalation', 'social_presence']);
+  const profilePurposes = new Set(['profile_proof', 'taste', 'judgment', 'technical_value']);
 
+  if (purposeful) {
+    if (preferredPipeline === 'original' || preferredPipeline === 'thread') {
+      return { action: 'direct', reason: `Selected ${behavior.primaryPurpose} behavior belongs on the owned profile surface.` };
+    }
+    if (sourceIsX && preferredPipeline === 'reply') {
+      return { action: 'reply', reason: `Selected ${behavior.primaryPurpose} behavior belongs inside the current conversation.` };
+    }
+    if (sourceIsX && preferredPipeline === 'quote') {
+      return { action: 'quote', reason: `Selected ${behavior.primaryPurpose} behavior should keep the source visible on Hamza's main profile.` };
+    }
+    if (sourceIsX && preferredPipeline === 'repost') {
+      return { action: 'repost', reason: `Selected ${behavior.primaryPurpose} behavior is amplification-only; no commentary is being forced.` };
+    }
+    if (context.originalStandalone || context.ourExperiment || context.multipleSources || profilePurposes.has(behavior.primaryPurpose) && !sourceIsX) {
+      return { action: 'direct', reason: `The selected ${behavior.primaryPurpose} behavior stands on its own and should build owned account identity.` };
+    }
+    if (sourceIsX && socialReplyPurposes.has(behavior.primaryPurpose)) {
+      return { action: 'reply', reason: `The selected ${behavior.primaryPurpose} behavior is a purposeful conversation act.` };
+    }
+    if (sourceIsX && ['taste', 'judgment', 'profile_proof', 'discovery', 'technical_value'].includes(behavior.primaryPurpose)) {
+      return { action: 'quote', reason: `The selected ${behavior.primaryPurpose} behavior benefits from visible source context on the profile.` };
+    }
+  }
+
+  // Compatibility path for candidates created before behavior decisions existed.
   if (context.originalStandalone || context.ourExperiment || context.multipleSources) {
-    return { action: 'direct', reason: 'The insight stands on its own and should build our own author identity.' };
+    return { action: 'direct', reason: 'Legacy context says the object stands on its own; select and persist a behavior before writing.' };
+  }
+  if (context.canAddReplyValue && context.relationshipValue) {
+    return { action: 'reply', reason: 'Legacy context identifies a purposeful conversation opportunity; select and persist its behavior before writing.' };
+  }
+  if (sourceIsX && context.addsMaterialValue && context.sourceIsEvidence) {
+    return { action: 'quote', reason: 'Legacy context identifies a source-bearing profile action; select and persist its behavior before writing.' };
+  }
+  if (sourceIsX && context.amplificationOnly && Number(candidate?.viral?.score || candidate?.score || 0) >= 70) {
+    return { action: 'repost', reason: 'The source is unusually useful and amplification is the selected purpose; no commentary is being forced.' };
   }
 
-  if (context.canAddReplyValue && (context.relationshipValue || first1000)) {
-    return {
-      action: 'reply',
-      reason: first1000
-        ? 'First 1,000 mode: a useful contribution can enter this active relevant conversation without requiring prior relationship history.'
-        : 'A specific useful contribution can start or deepen a relevant relationship.',
-    };
-  }
-
-  if (candidate?.source === 'x' && context.addsMaterialValue && (context.sourceIsEvidence || bootstrapFresh)) {
-    return {
-      action: 'quote',
-      reason: bootstrapFresh && !context.sourceIsEvidence
-        ? 'First 1,000 mode: a distinct concise contribution is enough to quote a relevant source while it is current.'
-        : 'The source is useful evidence and our commentary creates a new information object.',
-    };
-  }
-
-  if (candidate?.source === 'x' && context.amplificationOnly && Number(candidate?.viral?.score || candidate?.score || 0) >= 70) {
-    return { action: 'repost', reason: 'The source is unusually useful and amplification is the point; no commentary is being forced.' };
-  }
-
-  if (bootstrapMomentum) {
-    return { action: 'repost', reason: 'First 1,000 mode: this fresh, high-momentum niche source is worth amplifying while the distribution window is open.' };
-  }
-
-  return { action: 'ignore', reason: 'No sufficiently additive distribution action yet; research it or wait for a stronger angle.' };
+  return { action: 'ignore', reason: 'No purposeful technical, social, relationship, identity, learning, or growth action has been established.' };
 }

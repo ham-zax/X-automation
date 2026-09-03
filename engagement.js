@@ -1,4 +1,5 @@
 import { applyAcceptedLearnedRules } from './learning.js';
+import { selectBehaviorDecision } from './persona.js';
 
 export const ENGAGEMENT_KINDS = ['initial_reply', 'follow_up', 'own_post_response'];
 
@@ -8,32 +9,33 @@ export const CONTRIBUTION_ARCHETYPES = [
   'caveat_or_edge_case',
   'comparison',
   'correction',
+  'independent_judgment',
   'informed_question',
   'synthesis',
   'reproduction',
   'personal_experience',
+  'direct_answer',
+  'status_response',
+  'agreement',
+  'gratitude',
+  'support',
+  'celebration',
+  'enthusiasm',
+  'humor',
+  'social_observation',
+  'de_escalation',
+  'relationship_callback',
 ];
 
 export const ENGAGEMENT_EXPIRY_CLASSES = ['viral', 'normal', 'slow_technical', 'follow_up', 'own_post_response'];
 
 const EMPIRICAL_VARIABLE = 'EMPIRICAL_VARIABLE';
-const CONTRIBUTION_MINIMUM = 60;
 const PRIORITY_WEIGHTS = {
-  conversationPotential: 0.25,
-  relationshipPotential: 0.20,
-  targetScore: 0.20,
-  freshness: 0.15,
-  replyVisibility: 0.10,
-  contributionStrength: 0.10,
-};
-const CONTRIBUTION_BASELINES = {
-  benchmark_or_result: { strength: 100 },
-  implementation_detail: { strength: 90 },
-  caveat_or_edge_case: { strength: 85 },
-  comparison: { strength: 80 },
-  correction: { strength: 80 },
-  informed_question: { strength: 75 },
-  synthesis: { strength: 70 },
+  conversationPotential: 0.28,
+  relationshipPotential: 0.22,
+  targetScore: 0.22,
+  freshness: 0.17,
+  replyVisibility: 0.11,
 };
 const EXPIRY_HOURS = {
   viral: 2,
@@ -58,11 +60,6 @@ function finite(value) {
 
 function scoreValue(value) {
   return finite(value) ? round(clamp(value)) : null;
-}
-
-function negativeAdjustment(value) {
-  if (!finite(value)) return 0;
-  return round(Math.max(-40, Math.min(0, Number(value))));
 }
 
 function sourceTimestamp(opportunity = {}) {
@@ -119,40 +116,14 @@ export function qualifyContribution(contribution = {}) {
   const summary = String(contribution.summary || '').trim();
   const rejectionReasons = [];
 
-  if (!summary) rejectionReasons.push(rejection('NO_CONTRIBUTION', 'A concrete contribution summary is required before drafting.'));
+  if (!summary) rejectionReasons.push(rejection('NO_PURPOSE', 'A concrete reason to exist is required before drafting.'));
   if (!CONTRIBUTION_ARCHETYPES.includes(archetype)) {
     rejectionReasons.push(rejection('INVALID_ARCHETYPE', `Unsupported contribution archetype: ${archetype || 'missing'}.`));
-  }
-
-  const rule = CONTRIBUTION_BASELINES[archetype];
-  const suppliedBaseline = finite(contribution.baselineStrength) ? scoreValue(contribution.baselineStrength) : null;
-  const baselineStrength = rule?.strength ?? suppliedBaseline;
-  if (baselineStrength == null && CONTRIBUTION_ARCHETYPES.includes(archetype)) {
-    rejectionReasons.push(rejection(
-      'MISSING_BASELINE',
-      `${archetype} has no plan-defined starting strength; the caller must supply baselineStrength.`,
-    ));
-  }
-  const evidenceAdjustment = negativeAdjustment(contribution.evidenceAdjustment);
-  const contextAdjustment = negativeAdjustment(contribution.contextAdjustment);
-  const strength = baselineStrength == null
-    ? null
-    : round(clamp(baselineStrength + evidenceAdjustment + contextAdjustment));
-
-  if (strength != null && strength < CONTRIBUTION_MINIMUM) {
-    rejectionReasons.push(rejection(
-      'WEAK_CONTRIBUTION',
-      `Contribution strength ${strength} is below the Engage Next minimum ${CONTRIBUTION_MINIMUM}.`,
-    ));
   }
 
   return {
     archetype,
     summary,
-    baselineStrength,
-    evidenceAdjustment,
-    contextAdjustment,
-    strength,
     verified: contribution.verified === true,
     qualified: rejectionReasons.length === 0,
     rejectionReasons,
@@ -247,6 +218,24 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
   const timestamp = sourceTimestamp(opportunity);
   const freshness = scoreEngagementFreshness(timestamp, { now });
   const contribution = qualifyContribution(opportunity.contribution || {});
+  const behavior = selectBehaviorDecision({
+    explicitBehavior: opportunity.behavior || null,
+    pipeline: 'reply',
+    contribution,
+    relationship,
+    engagementKind: itemIdentity.engagementKind,
+    parentOurTweetId: opportunity.parentOurTweetId || '',
+    sourceClass: opportunity.sourceClass || '',
+    growthObjective: opportunity.growthObjective || '',
+    directQuestion: opportunity.directQuestion === true,
+    targetReplied: opportunity.targetReplied === true,
+    hostile: opportunity.hostile === true,
+    sourceExcited: opportunity.sourceExcited === true,
+    understated: opportunity.understated === true,
+    reasonToExist: contribution.summary,
+    selectionSource: opportunity.behavior ? 'operator' : 'engagement_heuristic',
+    now,
+  });
   const replyVisibility = scoreReplyVisibility(relationship, {
     freshness,
     profileReplyVisibility: opportunity.profileReplyVisibility,
@@ -265,7 +254,6 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
     targetScore: scoreValue(opportunity.targetScore ?? relationship.targetScore),
     freshness: freshness.score,
     replyVisibility: replyVisibility.score,
-    contributionStrength: contribution.strength,
   };
   const missingComponents = Object.keys(PRIORITY_WEIGHTS).filter((name) => components[name] == null);
   const basePriority = missingComponents.length
@@ -290,6 +278,12 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
     engagementKind: itemIdentity.engagementKind,
     replyAgeBucket: freshness.bucket,
     replyArchetype: contribution.archetype,
+    primaryPurpose: behavior.primaryPurpose || '',
+    socialMode: behavior.socialMode || '',
+    affectStrategy: behavior.affectStrategy || 'neutral',
+    informationDepth: behavior.informationDepth || '',
+    conversationStage: behavior.conversationStage || 'initial',
+    personaModelVersion: behavior.personaModelVersion || '',
     healthState: opportunity.healthState || 'healthy',
     conversationSaturationBucket: opportunity.conversationSaturationBucket,
     interactionVolumeBucket: opportunity.interactionVolumeBucket,
@@ -311,6 +305,9 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
   const engagePriority = round(clamp(learnedPriority.finalValue));
 
   const rejectionReasons = [...contribution.rejectionReasons];
+  if (behavior.decision !== 'ACT') {
+    rejectionReasons.push(rejection('NO_PURPOSEFUL_BEHAVIOR', behavior.reasonToExist || 'No purposeful behavior was selected.'));
+  }
   if (!ENGAGEMENT_KINDS.includes(itemIdentity.engagementKind)) {
     rejectionReasons.push(rejection('INVALID_ENGAGEMENT_KIND', `Unsupported engagement kind: ${itemIdentity.engagementKind}.`));
   }
@@ -346,6 +343,7 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
     expiresAt: expiry.expiresAt,
     contributionSummary: contribution.summary,
     replyArchetype: contribution.archetype,
+    behavior,
   } : null;
 
   return {
@@ -359,13 +357,14 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
     modifiers,
     modifierTotal,
     contribution,
+    behavior,
     freshness,
     replyVisibility,
     expiry,
     rejectionReasons,
     queueProposal,
     explanation: {
-      model: 'phase1c-engage-priority',
+      model: 'phase1c-purpose-aware-engage-priority',
       weights: { ...PRIORITY_WEIGHTS },
       missingComponents,
       softPressure: pressure,
@@ -396,65 +395,119 @@ export function rankEngagementOpportunities(opportunities = [], { now, learnedRu
     .map(({ result }, index) => ({ ...result, rank: index + 1 }));
 }
 
-export function proposeEngagementContribution(candidate = {}, { response = false, directQuestion = false } = {}) {
+function sourceAffectHints(text = '') {
+  const value = String(text || '');
+  return {
+    excited: /(?:🚀|🔥|🎉|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(value),
+    hostile: /\b(?:idiot|stupid|dumb|fraud|liar|garbage|trash|hate|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(value),
+    humorous: /(?:😂|🤣|\blol\b|\bhaha\b|\brofl\b|\bmeme\b|\bworks on my machine\b|\byak shave\b)/i.test(value),
+    taste: /\b(?:beautiful|ugly|clean|clunky|elegant|polished|design|ui|ux|dx|interface|ergonomic)\b/i.test(value),
+  };
+}
+
+export function proposeEngagementContribution(candidate = {}, {
+  response = false,
+  directQuestion = false,
+  profile = null,
+  sourceClass = 'normal',
+  engagementKind = 'initial_reply',
+} = {}) {
   const text = String(candidate.text || '');
+  const affect = sourceAffectHints(text);
+  const relationshipStage = String(profile?.relationshipStage || 'observed');
+  const familiar = ['responsive', 'recurring', 'connected', 'mutual'].includes(relationshipStage);
+
   if (response) {
     if (directQuestion) {
       return {
-        archetype: 'implementation_detail',
-        summary: 'Answer the target\'s direct question with one concrete implementation detail or concrete fact.',
-        contextAdjustment: -15,
+        archetype: 'direct_answer',
+        summary: 'Answer the actual question directly at the depth it needs; add context only when the answer would otherwise be misleading.',
+      };
+    }
+    if (/\b(?:thank(?:s| you)?|appreciate|helped)\b/i.test(text)) {
+      return {
+        archetype: 'gratitude',
+        summary: 'Acknowledge the thanks naturally and continue only if a real next point remains.',
+      };
+    }
+    if (affect.humorous) {
+      return {
+        archetype: 'relationship_callback',
+        summary: 'Respond to the shared joke or callback in the existing exchange without restarting the technical explanation.',
       };
     }
     return {
-      archetype: 'synthesis',
-      summary: 'Acknowledge the target\'s actual point, connect it to the prior thread, and add one genuinely new technical implication or useful follow-up.',
+      archetype: 'relationship_callback',
+      summary: engagementKind === 'follow_up' || familiar
+        ? 'Continue the actual exchange using shared context; respond to the point in front of Hamza rather than adding a fresh public performance.'
+        : 'Acknowledge the response and continue the conversation only as far as the current point warrants.',
     };
   }
+
   const measurementClaim = /\b(?:benchmark|latency|throughput|performance|measured|result(?:s)?)\b/i.test(text)
     && /(?:\bbenchmark\b|\bmeasured\b|\bresults?\s*:|\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?|%|x\b|tokens?|rps|qps|ops|mb|gb)\b)/i.test(text);
   if (measurementClaim) {
     return {
       archetype: 'caveat_or_edge_case',
-      summary: 'Probe the workload, version, or environment assumptions behind the source\'s actual measured result before generalizing it.',
-      contextAdjustment: -10,
+      summary: 'Address a workload, version, environment, or interpretation condition only if it materially changes how the measured result should be used.',
     };
   }
   if (/(?:\$\s?\d|\b(?:price|pricing|cost|costs|spent|spend|spending|credits?|budget)\b)/i.test(text)) {
     return {
       archetype: 'informed_question',
-      summary: 'Ask a precise question about the cost, usage, or budgeting assumption the source is actually making instead of changing the subject to a generic integration question.',
-      contextAdjustment: -10,
+      summary: 'Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it.',
     };
   }
   if (/\b(?:compare|comparison|vs\.?|versus|trade-?off|better|worse)\b/i.test(text)) {
     return {
       archetype: 'comparison',
-      summary: 'Compare the source\'s stated trade-off on one concrete developer constraint that is actually relevant to the comparison.',
-      contextAdjustment: -10,
+      summary: 'Compare the approaches on one real developer constraint that is present in the source or in Hamza\'s established stance.',
+    };
+  }
+  if (affect.hostile) {
+    return {
+      archetype: 'independent_judgment',
+      summary: 'Take a clear position on the substance if the source supports one. Do not praise first or soothe by default; disagree directly, use dry humor, or de-escalate only when that actually improves the exchange. Attack the claim, not the person.',
+    };
+  }
+  if (affect.humorous) {
+    return {
+      archetype: 'humor',
+      summary: 'Join the joke or add one context-dependent builder observation when humor is the strongest complete contribution.',
+    };
+  }
+  if (affect.excited) {
+    return {
+      archetype: familiar ? 'support' : 'celebration',
+      summary: familiar
+        ? 'Recognize the person or project with specific warmth appropriate to the existing relationship.'
+        : 'Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.',
+    };
+  }
+  if (affect.taste) {
+    return {
+      archetype: 'social_observation',
+      summary: 'Express a grounded product, design, interface, or developer-experience judgment about the visible object.',
     };
   }
   if (/(?:github\.com|\b(?:repository|repo|resource|guide|bookmark|list of|websites?)\b)/i.test(text)) {
     return {
       archetype: 'informed_question',
-      summary: 'Ask what concrete task made the resource useful, or what important boundary the recommendation leaves out; do not merely repeat the recommendation.',
-      contextAdjustment: -10,
+      summary: 'Ask what concrete task made the resource useful or name the use case the source makes visible; do not repeat the recommendation.',
     };
   }
   const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent|model|codex|claude|cursor)\b/i.test(text);
   const workflowAction = /\b(?:use|using|used|run|running|setup|workflow|integrat\w*|ship\w*|build\w*|adopt\w*|migrat\w*|release\w*|launch\w*)\b/i.test(text);
   if (workflowTool && workflowAction) {
     return {
-      archetype: 'informed_question',
-      summary: 'Ask a precise follow-up about one workflow or integration trade-off that the source actually describes.',
-      contextAdjustment: -10,
+      archetype: 'independent_judgment',
+      summary: 'State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.',
     };
   }
   if (text.includes('?')) {
     return {
       archetype: 'informed_question',
-      summary: 'Deepen the source\'s actual question with one concrete technical constraint or answerable follow-up instead of generic agreement.',
-      contextAdjustment: -10,
+      summary: 'Answer or deepen the actual question only when Hamza has a useful angle or genuinely useful follow-up.',
     };
   }
   return null;
@@ -538,12 +591,16 @@ export async function refreshEngagementOpportunities({
   };
 
   const persistOpportunity = (candidate, profile, context = {}) => {
+    const engagementKind = context.engagementKind || 'initial_reply';
     const contribution = context.contribution || proposeEngagementContribution(candidate, {
       response: context.response === true,
       directQuestion: context.directQuestion === true,
+      profile,
+      sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
+      engagementKind,
     });
     if (!contribution) {
-      rejected.push({ candidateKey: candidate.key, reason: 'NO_CONCRETE_CONTRIBUTION' });
+      rejected.push({ candidateKey: candidate.key, reason: 'NO_PURPOSEFUL_ACTION' });
       return null;
     }
     const targetTweetId = context.targetTweetId || tweetIdFromCandidate(candidate);
@@ -551,7 +608,6 @@ export async function refreshEngagementOpportunities({
       rejected.push({ candidateKey: candidate.key, reason: 'MISSING_TARGET_TWEET_ID' });
       return null;
     }
-    const engagementKind = context.engagementKind || 'initial_reply';
     const existingEngagement = store.getActiveEngagementItem(targetTweetId, engagementKind);
     const opportunityScores = opportunity.scoreOpportunity(candidate, {
       now,
@@ -598,6 +654,9 @@ export async function refreshEngagementOpportunities({
       targetUsername,
       targetTweetId,
       engagementKind,
+      parentOurTweetId: context.parentOurTweetId || '',
+      sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
+      growthObjective: strategy.getActiveNicheProfile()?.defaultObjective || 'qualified_growth',
       relationship: profile || {},
       conversationPotential: opportunityScores.conversationPotential,
       relationshipPotential: Number(profile?.relationshipPotential ?? opportunityScores.relationshipPotential ?? 0),
@@ -620,6 +679,8 @@ export async function refreshEngagementOpportunities({
       activeRecurring: profile?.relationshipStage === 'recurring',
       ownPostSubstantiveReply: context.engagementKind === 'own_post_response' && candidate.text.length >= 24,
       authorResponding: context.response === true,
+      hostile: sourceAffectHints(candidate.text).hostile,
+      sourceExcited: sourceAffectHints(candidate.text).excited,
       replyCount: candidate.metrics?.replies,
       sameSourceExhausted: store.hasCandidateAction(candidate.key),
       newValue: context.response === true,
@@ -638,7 +699,8 @@ export async function refreshEngagementOpportunities({
       parentOurTweetId: context.parentOurTweetId || '',
       status: 'triage',
       urgency: Number(scored.components.freshness || 0),
-      routingReason: `EngagePriority ${scored.engagePriority}: ${scored.contribution.summary}`,
+      routingReason: `EngagePriority ${scored.engagePriority}: ${scored.behavior.primaryPurpose || 'purpose'} — ${scored.contribution.summary}`,
+      behavior: scored.behavior,
       engagement: {
         ...scored,
         refreshedAt: now,

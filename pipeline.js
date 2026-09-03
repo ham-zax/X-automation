@@ -1,4 +1,6 @@
+import { normalizeBehaviorDecision } from './behavior.js';
 import { createDraftScaffold, scoreDraft } from './drafting.js';
+import { selectBehaviorDecision } from './persona.js';
 import { scoreOpportunity } from './opportunity.js';
 import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
@@ -19,6 +21,7 @@ import {
   getPreferenceProfile,
   getPerformanceSnapshot,
   getQueueItemByCandidate,
+  getRelationshipProfile,
   hasCandidateAction,
   invalidateQueueApproval,
   listCandidateActions,
@@ -104,7 +107,7 @@ function editorialEvidenceForQueue(queueItem) {
 function relationshipContext(candidate) {
   const username = sourceUsername(candidate);
   if (!username) return null;
-  return getAudienceProfile(username);
+  return getRelationshipProfile(username) || getAudienceProfile(username);
 }
 
 function scoringContext(candidate, context = {}) {
@@ -129,19 +132,23 @@ export function recommendationContext(candidate, scores, context = {}) {
     ? Number(getPerformanceSnapshot(1)?.account?.followers)
     : Number(context.accountFollowers);
   const accountFollowers = Number.isFinite(storedFollowers) ? storedFollowers : null;
-  const first1000 = accountFollowers != null && accountFollowers >= 0 && accountFollowers < 1_000;
-  const bootstrapReply = first1000
-    && candidate?.source === 'x'
-    && Number(scores.breakdown?.reach?.freshness || 0) >= 8
-    && scores.conversationPotential >= 35;
+  const behavior = context.behavior || null;
+  const purposefulReply = behavior?.decision === 'ACT'
+    && ['relationship', 'support', 'celebration', 'humor', 'learning', 'correction', 'de_escalation', 'social_presence', 'technical_value']
+      .includes(String(behavior.primaryPurpose || ''));
+  const purposefulRelationship = behavior?.decision === 'ACT'
+    && ['relationship', 'support', 'celebration', 'humor', 'de_escalation', 'social_presence']
+      .includes(String(behavior.primaryPurpose || ''));
   return {
     ...context,
+    behavior,
     accountFollowers,
     opportunityScores: context.opportunityScores ?? scores,
     alreadyUsed: context.alreadyUsed ?? hasCandidateAction(candidate.key),
     canAddReplyValue: context.canAddReplyValue
-      ?? (bootstrapReply || (scores.conversationPotential >= 50 && scores.relationshipPotential > 0)),
-    relationshipValue: context.relationshipValue ?? (first1000 || scores.relationshipPotential >= 20),
+      ?? (purposefulReply || (scores.conversationPotential >= 50 && scores.relationshipPotential > 0)),
+    relationshipValue: context.relationshipValue
+      ?? (purposefulRelationship || scores.relationshipPotential >= 20),
   };
 }
 
@@ -181,8 +188,35 @@ function contentGateContext(candidateKey, pipeline) {
   const parentConversation = pipeline === 'reply' && queueItem?.parentOurTweetId
     ? listRecentOurConversationPosts({ limit: 100 }).find((item) => String(item.tweetId) === String(queueItem.parentOurTweetId))
     : null;
+  const candidate = getCandidate(candidateKey);
+  const relationship = candidate ? relationshipContext(candidate) : null;
+  const persistedBehavior = queueItem?.behavior?.decision === 'ACT'
+    ? queueItem.behavior
+    : draft?.editor?.behavior?.decision === 'ACT'
+      ? draft.editor.behavior
+      : null;
+  const behavior = persistedBehavior || selectBehaviorDecision({
+    pipeline,
+    contribution: {
+      archetype: queueItem?.replyArchetype
+        || (pipeline === 'quote' ? 'social_observation' : pipeline === 'reply' ? 'synthesis' : 'synthesis'),
+      summary: queueItem?.contributionSummary
+        || queueItem?.routingReason
+        || `Legacy ${pipeline} item requires a purpose-aware review.`,
+    },
+    relationship,
+    engagementKind: queueItem?.engagementKind || 'initial_reply',
+    parentOurTweetId: queueItem?.parentOurTweetId || '',
+    sourceClass: queueItem?.engagement?.sourceClass || '',
+    reasonToExist: queueItem?.contributionSummary
+      || queueItem?.routingReason
+      || `Legacy ${pipeline} item requires a purpose-aware review.`,
+    selectionSource: 'legacy',
+  });
   return {
     pipeline,
+    behavior,
+    relationship,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidateKey }),
     recentReplies: pipeline === 'reply'
       ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidateKey })
@@ -283,8 +317,12 @@ export function refreshQueueRecommendation(key, context = {}) {
   ensureQueueItem(key);
   const existingQueueItem = getQueueItemByCandidate(key);
   const effectiveContext = context.multipleSources == null
-    ? { ...context, multipleSources: listQueueSources(existingQueueItem.id).length > 1 }
-    : context;
+    ? {
+        ...context,
+        behavior: context.behavior || existingQueueItem?.behavior || null,
+        multipleSources: listQueueSources(existingQueueItem.id).length > 1,
+      }
+    : { ...context, behavior: context.behavior || existingQueueItem?.behavior || null };
   const scoreContext = scoringContext(candidate, effectiveContext);
   const scores = scoreOpportunity(candidate, scoreContext);
   const growthFit = assessStrategicRelevance(candidate, {
@@ -310,6 +348,7 @@ export function refreshQueueRecommendation(key, context = {}) {
     relationshipPotential: scores.relationshipPotential,
     recommendedPipeline,
     routingReason: recommendation.reason,
+    behavior: effectiveContext.behavior || existingQueueItem?.behavior || null,
     routingDecision,
   });
   return { candidate, queueItem, scores, recommendation: { ...recommendation, pipeline: recommendedPipeline } };
@@ -550,15 +589,55 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
       }
     }
     const state = routeState(pipeline);
+    const selectedBehavior = TEXT_PIPELINES.has(pipeline)
+      ? selectBehaviorDecision({
+          explicitBehavior: routeContext.behavior
+            || (previousQueueItem?.behavior?.decision === 'ACT' ? previousQueueItem.behavior : null),
+          pipeline,
+          contribution: {
+            archetype: previousQueueItem?.replyArchetype
+              || (pipeline === 'quote' ? 'social_observation' : 'synthesis'),
+            summary: routeContext.reasonToExist
+              || routeContext.behavior?.reasonToExist
+              || previousQueueItem?.contributionSummary
+              || previousQueueItem?.routingReason
+              || `Create a purposeful ${pipeline} action from the selected source.`,
+          },
+          relationship: relationshipContext(candidate),
+          engagementKind: previousQueueItem?.engagementKind || 'initial_reply',
+          parentOurTweetId: previousQueueItem?.parentOurTweetId || '',
+          sourceClass: previousQueueItem?.engagement?.sourceClass || '',
+          reasonToExist: routeContext.reasonToExist
+            || routeContext.behavior?.reasonToExist
+            || previousQueueItem?.contributionSummary
+            || previousQueueItem?.routingReason
+            || `Create a purposeful ${pipeline} action from the selected source.`,
+          selectionSource: routeContext.behavior ? 'operator' : 'persona_model',
+        })
+      : normalizeBehaviorDecision({
+          decision: pipeline === 'research' ? 'RESEARCH' : pipeline === 'ignore' ? 'SILENT' : 'UNKNOWN',
+          pipeline,
+          reasonToExist: reason || previousQueueItem?.routingReason || `Route selected: ${pipeline}.`,
+          selectionSource: actor === 'human' ? 'human' : 'operator',
+          selectedAt: Date.now(),
+        }, { pipeline });
     let draft = getDraftByCandidate(key);
     if (draft?.status === 'ready') draft = saveDraft({ ...draft, gates: {}, status: 'draft' });
     let draftId = null;
     if (TEXT_PIPELINES.has(pipeline)) {
       const draftPipeline = draft?.editor?.pipeline || (TEXT_PIPELINES.has(previousQueueItem?.pipeline) ? previousQueueItem.pipeline : '');
       if (draft && draftPipeline && draftPipeline !== pipeline) {
-        draft = saveDraft({ ...createDraftScaffold(candidate, { pipeline }), id: draft.id, candidateKey: key, editor: { pipeline } });
+        draft = saveDraft({
+          ...createDraftScaffold(candidate, { pipeline }),
+          id: draft.id,
+          candidateKey: key,
+          editor: { pipeline, behavior: selectedBehavior, personaModelVersion: selectedBehavior.personaModelVersion || '' },
+        });
       }
-      draft ||= saveDraft({ ...createDraftScaffold(candidate, { pipeline }), editor: { pipeline } });
+      draft ||= saveDraft({
+        ...createDraftScaffold(candidate, { pipeline }),
+        editor: { pipeline, behavior: selectedBehavior, personaModelVersion: selectedBehavior.personaModelVersion || '' },
+      });
       draftId = draft.id;
     }
 
@@ -577,9 +656,69 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
       humanApprovedAt: null,
       approvedText: null,
       routingReason: getQueueItemByCandidate(key)?.routingReason || reason || '',
+      behavior: selectedBehavior,
       routingDecision: ['ignore', 'watch', 'research'].includes(pipeline) ? {} : (previousQueueItem.routingDecision || {}),
       ...replyTarget,
     });
+  });
+}
+
+export function setBehaviorDecision(key, input = {}, { actor = 'human' } = {}) {
+  return runStoreTransaction(() => {
+    const candidate = requireCandidate(key);
+    if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid behavior actor: ${actor}`);
+    const queueItem = getQueueItemByCandidate(key);
+    if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+    if (!TEXT_PIPELINES.has(queueItem.pipeline)) {
+      throw new Error(`Behavior selection requires a routed text pipeline; current pipeline is ${queueItem.pipeline || 'missing'}.`);
+    }
+    if (['approved', 'publishing', 'published'].includes(queueItem.status)
+        || queueItem.humanApprovedAt
+        || queueItem.outputTweetId
+        || queueItem.publishedAt) {
+      throw new Error('Behavior cannot be changed after approval or publication.');
+    }
+
+    const behavior = selectBehaviorDecision({
+      explicitBehavior: {
+        ...(input && typeof input === 'object' && !Array.isArray(input) ? input : {}),
+        decision: 'ACT',
+        pipeline: queueItem.pipeline,
+        selectionSource: actor === 'human' ? 'human' : 'operator',
+        selectedAt: Date.now(),
+      },
+      pipeline: queueItem.pipeline,
+      relationship: relationshipContext(candidate),
+      engagementKind: queueItem.engagementKind || 'initial_reply',
+      parentOurTweetId: queueItem.parentOurTweetId || '',
+      sourceClass: queueItem.engagement?.sourceClass || '',
+      reasonToExist: input?.reasonToExist
+        || queueItem.contributionSummary
+        || queueItem.routingReason
+        || `Realize a purposeful ${queueItem.pipeline} action.`,
+      selectionSource: actor === 'human' ? 'human' : 'operator',
+    });
+
+    const savedQueueItem = saveQueueItem({
+      ...queueItem,
+      behavior,
+      humanApprovedAt: null,
+      approvedText: null,
+    });
+    const currentDraft = getDraftByCandidate(key);
+    const savedDraft = currentDraft ? saveDraft({
+      ...currentDraft,
+      editor: {
+        ...(currentDraft.editor || {}),
+        pipeline: queueItem.pipeline,
+        behavior,
+        personaModelVersion: behavior.personaModelVersion || '',
+      },
+      gates: {},
+      qualityScore: 0,
+      status: 'draft',
+    }) : null;
+    return { candidate, queueItem: savedQueueItem, draft: savedDraft, behavior };
   });
 }
 

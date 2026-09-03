@@ -1,8 +1,9 @@
 # Canonical X Writing Study — 4,976-Post Creator Corpus
 
 **Created:** 2026-09-04  
+**Status:** historical research artifact from the pre-V4 corpus; **not production authority**. V4 reassessment and current canonical operating contracts supersede its prescriptive rules.
 **Target account:** `@ham_zax`  
-**Purpose:** derive a durable writing standard from the creator corpus without copying any creator's distinctive wording or pretending that observational patterns are X ranking laws.
+**Historical purpose:** derive a writing standard from the earlier creator corpus without copying any creator's distinctive wording or pretending that observational patterns are X ranking laws.
 
 ---
 

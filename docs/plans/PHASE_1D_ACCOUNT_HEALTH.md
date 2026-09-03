@@ -245,7 +245,7 @@ Rules:
 
 ### Hard reject
 
-- no concrete contribution;
+- no legitimate technical, social, relationship, identity, learning, or growth purpose;
 - exact/near-duplicate reply;
 - exact source action already completed with no new value;
 - expired and no active conversation;

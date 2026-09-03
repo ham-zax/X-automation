@@ -1,5 +1,7 @@
 # Phase 2: Format-Aware Writing, Hard Gates, and Media Planning Implementation Plan
 
+**Status:** historical execution contract. Current Writer/gate semantics are owned by `docs/POST_GENERATION_PROMPT.md`, `docs/CONTENT_OPERATING_STANDARD.md`, `behavior.js`, and `drafting.js`; fixed morphology/additivity guidance below is retained only as implementation history.
+
 **Goal:** Turn a routed queue item into a format-aware, highly scannable draft that follows the canonical writing prompt, stores enough editorial metadata for human review, and cannot reach approval unless the remaining deterministic gates and the existing 50-point quality rubric pass.
 
 **Architecture:** Keep `drafting.js` as the text composition/scoring/gate owner. Do not embed an LLM provider in the repo; the system remains human+AI by exposing a structured writer packet through `agent_bridge.js`, accepting structured writer output back, validating it deterministically, and rendering it for human review in `dashboard.js`. Keep media as a plan/attachment contract in this phase; actual upload/publication is owned by the later distribution phase.

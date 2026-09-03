@@ -1,12 +1,13 @@
 # X Algorithm Evidence Ledger
 
-Last reviewed: **2026-08-25**.
+**Status:** evidence registry only; not content, persona, routing, or growth-strategy authority.
+**Last primary-evidence review:** **2026-08-25**.
 
-This document prevents the growth system from confusing platform code, official product statements, third-party observations, and our own experiments.
+This document prevents the system from confusing public platform code, official product statements, third-party observations, and our own experiments. It classifies evidence; it does not decide what Hamza should say, which social role he should play, whether a source deserves action, or which tactic should dominate merely because a mechanism is code-backed.
 
 The operating rule is:
 
-> **Build strategy around durable mechanisms. Treat constants, timing windows, and creator folklore as variables unless current primary evidence proves otherwise.**
+> **Use evidence classes to bound claims about X. Treat constants, timing windows, and creator folklore as variables unless current primary evidence proves otherwise. Strategy remains owned by the current Growth OS and persona/content contracts.**
 
 ---
 
@@ -542,9 +543,9 @@ Measure first-hour velocity and conversation outcomes rather than deleting/repos
 
 ### First 1,000 bootstrap distribution thresholds
 
-**Status:** `EMPIRICAL_VARIABLE` — soft-tuned 2026-09-01
+**Status:** `RETIRED` as runtime policy on 2026-09-04; historical `EMPIRICAL_VARIABLE` only.
 
-Code `strategy.js:579` / `pipeline.js:135` now use `freshness>=8` (was `10`), `conversationPotential>=35` (was `40`), `reachPotential>=45` (was `50`), `momentum>=8` (was `10`), `traction>=6` (was `8`) for bootstrap `Reply`/`Quote`/`Repost`. `FIRST_1000_GROWTH_MODE.md:165` documents the current values. Treat them as experimentable heuristics to be revised from `editorialOutcomes`/`experiment-summary` at matched window age, not `CODE_BACKED` X laws.
+The earlier source-routing path used `freshness>=8`, `conversationPotential>=35`, `reachPotential>=45`, `momentum>=8`, and `traction>=6` as a follower-count bootstrap override for `Reply`/`Quote`/`Repost`. The purpose/persona overhaul removed that account-size route authority. `FIRST_1000_GROWTH_MODE.md` now records the historical experiment only. Preserve the old values for analysis if useful; do not treat them as current code behavior or X platform laws.
 
 ---
 

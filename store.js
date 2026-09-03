@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
+import { legacyBehaviorDecision, normalizeBehaviorDecision } from './behavior.js';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -74,6 +75,8 @@ const EDITORIAL_RUN_STATUS_SET = new Set(['building', 'complete', 'failed']);
 const RESEARCH_CLAIM_TYPE_SET = new Set(['announcement', 'capability', 'implementation', 'benchmark', 'performance', 'reliability', 'security', 'pricing', 'compatibility', 'other']);
 const RESEARCH_EVIDENCE_STATUS_SET = new Set(['primary_supported', 'source_claim', 'contradicted', 'unresolved']);
 const EDITORIAL_RECOMMENDATION_STATUS_SET = new Set(['suggested', 'selected', 'dismissed', 'superseded']);
+const PERSONA_STANCE_CONFIDENCE_SET = new Set(['low', 'medium', 'high']);
+const PERSONA_STANCE_STATUS_SET = new Set(['exploring', 'provisional', 'held', 'revised', 'abandoned']);
 const QUEUE_SOURCE_ROLE_SET = new Set(['primary', 'supporting']);
 const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
 const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
@@ -275,6 +278,21 @@ db.exec(`
     metadata_json TEXT NOT NULL DEFAULT '{}'
   );
 
+  CREATE TABLE IF NOT EXISTS persona_stance_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT NOT NULL,
+    position TEXT NOT NULL,
+    confidence TEXT NOT NULL DEFAULT 'medium',
+    status TEXT NOT NULL DEFAULT 'provisional',
+    basis TEXT NOT NULL DEFAULT '',
+    source_ref TEXT NOT NULL DEFAULT '',
+    provenance_json TEXT NOT NULL DEFAULT '{}',
+    supersedes_id INTEGER,
+    observed_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(supersedes_id) REFERENCES persona_stance_events(id)
+  );
+
   CREATE TABLE IF NOT EXISTS account_health_observations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,
@@ -310,6 +328,7 @@ db.exec(`
     expires_at INTEGER,
     contribution_summary TEXT NOT NULL DEFAULT '',
     reply_archetype TEXT NOT NULL DEFAULT '',
+    behavior_json TEXT NOT NULL DEFAULT '{}',
     engagement_json TEXT NOT NULL DEFAULT '{}',
     relevance_json TEXT NOT NULL DEFAULT '{}',
     approved_text TEXT,
@@ -350,6 +369,7 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_queue_approval_events_queue ON queue_approval_events(queue_item_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_approval_events_candidate ON queue_approval_events(candidate_key, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_persona_stance_subject ON persona_stance_events(subject, observed_at DESC, id DESC);
 
   CREATE TABLE IF NOT EXISTS autonomous_reply_decisions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -593,6 +613,7 @@ db.exec(`
     why_now TEXT NOT NULL DEFAULT '',
     why_format TEXT NOT NULL DEFAULT '',
     desired_reader_outcome TEXT NOT NULL DEFAULT '',
+    behavior_json TEXT NOT NULL DEFAULT '{}',
     candidate_keys_json TEXT NOT NULL DEFAULT '[]',
     potentials_json TEXT NOT NULL DEFAULT '{}',
     authority_json TEXT NOT NULL DEFAULT '{}',
@@ -743,6 +764,7 @@ for (const [name, sql] of [
   ['expires_at', 'ALTER TABLE queue_items ADD COLUMN expires_at INTEGER'],
   ['contribution_summary', "ALTER TABLE queue_items ADD COLUMN contribution_summary TEXT NOT NULL DEFAULT ''"],
   ['reply_archetype', "ALTER TABLE queue_items ADD COLUMN reply_archetype TEXT NOT NULL DEFAULT ''"],
+  ['behavior_json', "ALTER TABLE queue_items ADD COLUMN behavior_json TEXT NOT NULL DEFAULT '{}'"],
   ['engagement_json', "ALTER TABLE queue_items ADD COLUMN engagement_json TEXT NOT NULL DEFAULT '{}'"],
   ['relevance_json', "ALTER TABLE queue_items ADD COLUMN relevance_json TEXT NOT NULL DEFAULT '{}'"],
   ['routing_decision_json', "ALTER TABLE queue_items ADD COLUMN routing_decision_json TEXT NOT NULL DEFAULT '{}'"],
@@ -766,6 +788,11 @@ for (const [name, sql] of [
 ]) {
   if (!queueColumns.has(name)) db.exec(sql);
 }
+const editorialRecommendationColumns = new Set(db.prepare('PRAGMA table_info(editorial_recommendations)').all().map((row) => row.name));
+if (!editorialRecommendationColumns.has('behavior_json')) {
+  db.exec("ALTER TABLE editorial_recommendations ADD COLUMN behavior_json TEXT NOT NULL DEFAULT '{}'");
+}
+
 const editorialSelectionColumns = new Set(db.prepare('PRAGMA table_info(editorial_selections)').all().map((row) => row.name));
 for (const [name, sql] of [
   ['selected_by', "ALTER TABLE editorial_selections ADD COLUMN selected_by TEXT NOT NULL DEFAULT 'human'"],
@@ -1068,6 +1095,15 @@ export function countSavedCandidates() {
   return Number(db.prepare('SELECT COUNT(*) AS count FROM candidates WHERE saved = 1').get().count || 0);
 }
 
+function decodeBehavior(value, pipeline = '') {
+  const raw = value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : json(value, {});
+  return raw && Object.keys(raw).length
+    ? normalizeBehaviorDecision(raw, { pipeline })
+    : legacyBehaviorDecision({ pipeline });
+}
+
 function decodeQueueItem(row) {
   if (!row) return null;
   return {
@@ -1094,6 +1130,7 @@ function decodeQueueItem(row) {
     expiresAt: row.expires_at == null ? null : Number(row.expires_at),
     contributionSummary: row.contribution_summary || '',
     replyArchetype: row.reply_archetype || '',
+    behavior: decodeBehavior(row.behavior_json, row.pipeline),
     engagement: json(row.engagement_json, {}),
     relevance: json(row.relevance_json, {}),
     approvedText: row.approved_text,
@@ -1123,8 +1160,8 @@ export function ensureQueueItem(candidateKey, defaults = {}) {
   db.prepare(`INSERT OR IGNORE INTO queue_items(
     candidate_key, lane, pipeline, status,
     reach_potential, follow_potential, conversation_potential, relationship_potential,
-    recommended_pipeline, routing_reason, draft_id, human_approved_at, created_at, updated_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    recommended_pipeline, routing_reason, behavior_json, draft_id, human_approved_at, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     candidateKey,
     defaults.lane || 'main',
     defaults.pipeline || 'triage',
@@ -1135,6 +1172,7 @@ export function ensureQueueItem(candidateKey, defaults = {}) {
     Number(defaults.relationshipPotential || 0),
     defaults.recommendedPipeline || '',
     defaults.routingReason || '',
+    JSON.stringify(defaults.behavior || {}),
     defaults.draftId ?? null,
     defaults.humanApprovedAt ?? null,
     now,
@@ -1172,7 +1210,7 @@ export function saveQueueItem(item) {
     reach_potential = ?, follow_potential = ?, conversation_potential = ?, relationship_potential = ?,
     recommended_pipeline = ?, routing_reason = ?, routing_decision_json = ?, draft_id = ?, human_approved_at = ?,
     target_username = ?, target_tweet_id = ?, engagement_kind = ?, parent_our_tweet_id = ?,
-    priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?,
+    priority = ?, urgency = ?, expires_at = ?, contribution_summary = ?, reply_archetype = ?, behavior_json = ?,
     engagement_json = ?, relevance_json = ?, approved_text = ?, output_tweet_id = ?, output_url = ?,
     schedule_urgency = ?, scheduled_at = ?, schedule_source = ?, publish_started_at = ?,
     publish_error = ?, published_at = ?, measurement_baseline_at = ?, measurement_baseline_followers = ?,
@@ -1200,6 +1238,7 @@ export function saveQueueItem(item) {
     next.expiresAt ?? null,
     next.contributionSummary || '',
     next.replyArchetype || '',
+    JSON.stringify(next.behavior || {}),
     JSON.stringify(next.engagement || {}),
     JSON.stringify(next.relevance || {}),
     next.approvedText ?? null,
@@ -1924,6 +1963,7 @@ export function listEngagementItems({ status, minPriority = 0, includeExpired = 
 
 function decodeAutonomousReplyDecision(row) {
   if (!row) return null;
+  const selection = json(row.selection_json, {});
   return {
     id: Number(row.id),
     queueItemId: row.queue_item_id == null ? null : Number(row.queue_item_id),
@@ -1935,7 +1975,8 @@ function decodeAutonomousReplyDecision(row) {
     intent: row.intent || null,
     tone: row.tone || null,
     exactReply: row.exact_reply || '',
-    selection: json(row.selection_json, {}),
+    selection,
+    behavior: decodeBehavior(selection.behavior, 'reply'),
     relationshipContext: json(row.relationship_context_json, {}),
     aiExecution: json(row.ai_execution_json, {}),
     checks: json(row.checks_json, {}),
@@ -2917,6 +2958,89 @@ export function recordRelationshipEvent(event) {
   }
 }
 
+function decodePersonaStanceEvent(row) {
+  if (!row) return null;
+  return {
+    id: Number(row.id),
+    subject: row.subject,
+    position: row.position,
+    confidence: row.confidence,
+    status: row.status,
+    basis: row.basis || '',
+    sourceRef: row.source_ref || '',
+    provenance: json(row.provenance_json, {}),
+    supersedesId: row.supersedes_id == null ? null : Number(row.supersedes_id),
+    observedAt: Number(row.observed_at || 0),
+    createdAt: Number(row.created_at || 0),
+  };
+}
+
+export function getPersonaStanceEvent(id) {
+  return decodePersonaStanceEvent(db.prepare('SELECT * FROM persona_stance_events WHERE id = ?').get(Number(id)));
+}
+
+export function listPersonaStanceEvents({ subject = null, status = null, limit = 200 } = {}) {
+  const where = [];
+  const params = [];
+  if (subject != null && String(subject).trim()) { where.push('subject = ?'); params.push(String(subject).trim()); }
+  if (status != null && String(status).trim()) { where.push('status = ?'); params.push(String(status).trim()); }
+  params.push(Math.max(1, Math.min(1000, Number(limit || 200))));
+  return db.prepare(`SELECT * FROM persona_stance_events ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY observed_at DESC, id DESC LIMIT ?`).all(...params).map(decodePersonaStanceEvent);
+}
+
+export function getCurrentPersonaStances({ limit = 500 } = {}) {
+  const rows = db.prepare(`SELECT p.* FROM persona_stance_events p
+    JOIN (
+      SELECT subject, MAX(observed_at * 1000000 + id) AS latest_key
+      FROM persona_stance_events
+      GROUP BY subject
+    ) latest
+      ON latest.subject = p.subject
+     AND latest.latest_key = p.observed_at * 1000000 + p.id
+    ORDER BY p.subject ASC
+    LIMIT ?`).all(Math.max(1, Math.min(1000, Number(limit || 500))));
+  return rows.map(decodePersonaStanceEvent);
+}
+
+export function recordPersonaStanceEvent(input = {}) {
+  const subject = String(input.subject || '').trim();
+  const position = String(input.position || '').trim();
+  const confidence = String(input.confidence || 'medium');
+  const status = String(input.status || 'provisional');
+  const basis = String(input.basis || '').trim();
+  const sourceRef = String(input.sourceRef ?? input.source_ref ?? '').trim();
+  const observedAt = Number(input.observedAt ?? input.observed_at ?? Date.now());
+  const supersedesId = input.supersedesId ?? input.supersedes_id ?? null;
+  const provenance = input.provenance && typeof input.provenance === 'object' && !Array.isArray(input.provenance)
+    ? input.provenance
+    : {};
+
+  if (!subject) throw new Error('Persona stance subject is required.');
+  if (!position) throw new Error('Persona stance position is required.');
+  if (!PERSONA_STANCE_CONFIDENCE_SET.has(confidence)) throw new Error(`Unsupported persona stance confidence: ${confidence}.`);
+  if (!PERSONA_STANCE_STATUS_SET.has(status)) throw new Error(`Unsupported persona stance status: ${status}.`);
+  if (!basis) throw new Error('Persona stance basis is required.');
+  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Persona stance observedAt must be a positive timestamp.');
+  if (supersedesId != null && !getPersonaStanceEvent(supersedesId)) throw new Error(`Superseded persona stance not found: ${supersedesId}.`);
+
+  const inserted = db.prepare(`INSERT INTO persona_stance_events(
+    subject, position, confidence, status, basis, source_ref, provenance_json, supersedes_id, observed_at, created_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    subject,
+    position,
+    confidence,
+    status,
+    basis,
+    sourceRef,
+    JSON.stringify(provenance),
+    supersedesId == null ? null : Number(supersedesId),
+    observedAt,
+    Date.now(),
+  );
+  return getPersonaStanceEvent(Number(inserted.lastInsertRowid));
+}
+
 function decodeAccountHealthObservation(row) {
   if (!row) return null;
   return {
@@ -3328,6 +3452,13 @@ function editorialLearningContext(provenance) {
     finalPublishedFormat: provenance.finalPublishedPipeline || '',
     editorialTopic: provenance.profileProof?.topic || '',
     editorialAngleClass: provenance.angleClass || '',
+    primaryPurpose: provenance.behavior?.primaryPurpose || '',
+    socialMode: provenance.behavior?.socialMode || '',
+    affectStrategy: provenance.behavior?.affectStrategy || '',
+    affectProvenance: provenance.behavior?.affectProvenance || '',
+    informationDepth: provenance.behavior?.informationDepth || '',
+    conversationStage: provenance.behavior?.conversationStage || '',
+    personaModelVersion: provenance.behavior?.personaModelVersion || '',
   };
 }
 
@@ -3370,6 +3501,9 @@ export function getPublicationEditorialProvenance(queueItemId) {
     selectedPipeline: selection.selectedPipeline,
     finalPublishedPipeline: queueItem.pipeline,
     angleClass: recommendation.learnedContext?.angleClass || '',
+    behavior: normalizeBehaviorDecision(queueItem.behavior?.decision === 'ACT' ? queueItem.behavior : recommendation.behavior, {
+      pipeline: queueItem.pipeline,
+    }),
     objectiveFit: numericOrNull(potentials.objectiveFit),
     storyPreResearchFit: numericOrNull(potentials.storyPreResearchFit),
     objectiveFitComponents: {
@@ -3732,6 +3866,12 @@ export function getEditorialOutcomeSummary({ windowMinutes = 1440, limit = 200 }
     byFinalPublishedPipeline: summarizeEditorialGroups(observations, 'finalPublishedFormat'),
     byAngleClass: summarizeEditorialGroups(observations, 'editorialAngleClass'),
     byTopic: summarizeEditorialGroups(observations, 'editorialTopic'),
+    byPrimaryPurpose: summarizeEditorialGroups(observations, 'primaryPurpose'),
+    bySocialMode: summarizeEditorialGroups(observations, 'socialMode'),
+    byAffectStrategy: summarizeEditorialGroups(observations, 'affectStrategy'),
+    byInformationDepth: summarizeEditorialGroups(observations, 'informationDepth'),
+    byConversationStage: summarizeEditorialGroups(observations, 'conversationStage'),
+    byPersonaModelVersion: summarizeEditorialGroups(observations, 'personaModelVersion'),
     causalClaimAllowed: false,
   };
 }
@@ -3741,6 +3881,8 @@ const NETWORK_EXPERIMENT_DIMENSIONS = new Set([
   'target_class', 'target_score_bucket', 'target_size_bucket', 'reply_age_bucket',
   'conversation_saturation_bucket', 'reply_archetype', 'relationship_stage',
   'interaction_volume_bucket', 'target_concentration_bucket', 'archetype_repetition_bucket',
+  'reply_primary_purpose', 'reply_social_mode', 'reply_affect_strategy',
+  'reply_information_depth', 'reply_conversation_stage', 'reply_persona_model_version',
 ]);
 
 function decodeExperiment(row) {
@@ -3886,6 +4028,20 @@ function assignmentItem(queueItem, context = {}) {
     relationshipStage: relationship?.relationshipStage || '',
     relationshipStageBefore: relationship?.relationshipStage || '',
     replyArchetype: queueItem.replyArchetype || '',
+    behavior: queueItem.behavior || legacyBehaviorDecision({ pipeline: queueItem.pipeline }),
+    primaryPurpose: queueItem.behavior?.primaryPurpose || editorialContext.primaryPurpose || '',
+    socialMode: queueItem.behavior?.socialMode || editorialContext.socialMode || '',
+    affectStrategy: queueItem.behavior?.affectStrategy || editorialContext.affectStrategy || '',
+    affectProvenance: queueItem.behavior?.affectProvenance || editorialContext.affectProvenance || '',
+    informationDepth: queueItem.behavior?.informationDepth || editorialContext.informationDepth || '',
+    conversationStage: queueItem.behavior?.conversationStage || editorialContext.conversationStage || '',
+    personaModelVersion: queueItem.behavior?.personaModelVersion || editorialContext.personaModelVersion || '',
+    replyPrimaryPurpose: queueItem.behavior?.primaryPurpose || '',
+    replySocialMode: queueItem.behavior?.socialMode || '',
+    replyAffectStrategy: queueItem.behavior?.affectStrategy || '',
+    replyInformationDepth: queueItem.behavior?.informationDepth || '',
+    replyConversationStage: queueItem.behavior?.conversationStage || '',
+    replyPersonaModelVersion: queueItem.behavior?.personaModelVersion || '',
     targetUsername: queueItem.targetUsername || '',
     candidate, draft, relationship, editorial, ...context, ...editorialContext,
   };
@@ -3913,6 +4069,19 @@ export function assignExperimentVariant(candidateKey, experimentId, variantLabel
     followsYouBefore: Boolean(profile?.followsYou),
     mutualBefore: Boolean(profile?.mutual),
     targetClass: profile?.classes || [],
+    primaryPurpose: queueItem.behavior?.primaryPurpose || '',
+    socialMode: queueItem.behavior?.socialMode || '',
+    affectStrategy: queueItem.behavior?.affectStrategy || '',
+    affectProvenance: queueItem.behavior?.affectProvenance || '',
+    informationDepth: queueItem.behavior?.informationDepth || '',
+    conversationStage: queueItem.behavior?.conversationStage || '',
+    personaModelVersion: queueItem.behavior?.personaModelVersion || '',
+    replyPrimaryPurpose: queueItem.behavior?.primaryPurpose || '',
+    replySocialMode: queueItem.behavior?.socialMode || '',
+    replyAffectStrategy: queueItem.behavior?.affectStrategy || '',
+    replyInformationDepth: queueItem.behavior?.informationDepth || '',
+    replyConversationStage: queueItem.behavior?.conversationStage || '',
+    replyPersonaModelVersion: queueItem.behavior?.personaModelVersion || '',
     ...context,
   };
   const validation = validateVariantAssignment(experimentDefinition(experiment), variantLabel, assignmentItem(queueItem, assignmentContext), {
@@ -4804,7 +4973,8 @@ function decodeEditorialRecommendation(row) {
     id: Number(row.id), editorialRunId: Number(row.editorial_run_id), storyKey: row.story_key, rank: Number(row.rank),
     decision: row.decision, pipeline: row.pipeline || null, objective: row.objective, title: row.title,
     thesis: row.thesis || '', whyNow: row.why_now || '', whyThisFormat: row.why_format || '',
-    desiredReaderOutcome: row.desired_reader_outcome || '', candidateKeys: json(row.candidate_keys_json, []),
+    desiredReaderOutcome: row.desired_reader_outcome || '', behavior: decodeBehavior(row.behavior_json, row.pipeline),
+    candidateKeys: json(row.candidate_keys_json, []),
     potentials, targetCandidateKey: potentials.targetCandidateKey || null, authority: json(row.authority_json, {}),
     profileProof: json(row.profile_proof_json, {}), evidenceIds: json(row.evidence_ids_json, []),
     algorithmEvidence: json(row.algorithm_evidence_json, []), learnedContext: json(row.learned_context_json, {}),
@@ -4825,13 +4995,13 @@ export function saveEditorialRecommendation(input = {}) {
   const potentials = { ...(input.potentials || {}), targetCandidateKey: input.targetCandidateKey || input.potentials?.targetCandidateKey || null };
   const result = db.prepare(`INSERT INTO editorial_recommendations(
     editorial_run_id, story_key, rank, decision, pipeline, objective, title, thesis, why_now, why_format,
-    desired_reader_outcome, candidate_keys_json, potentials_json, authority_json, profile_proof_json,
+    desired_reader_outcome, behavior_json, candidate_keys_json, potentials_json, authority_json, profile_proof_json,
     evidence_ids_json, algorithm_evidence_json, learned_context_json, ai_execution_json, risks_json,
     alternatives_json, research_questions_json, status, selected_at, dismissed_at, created_at
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     runId, String(input.storyKey || ''), rank, String(input.decision || ''), String(input.pipeline || ''), String(input.objective || ''),
     String(input.title || ''), String(input.thesis || ''), String(input.whyNow || ''), String(input.whyThisFormat || ''),
-    String(input.desiredReaderOutcome || ''), JSON.stringify(input.candidateKeys || []), JSON.stringify(potentials),
+    String(input.desiredReaderOutcome || ''), JSON.stringify(input.behavior || {}), JSON.stringify(input.candidateKeys || []), JSON.stringify(potentials),
     JSON.stringify(input.authority || {}), JSON.stringify(input.profileProof || {}), JSON.stringify(input.evidenceIds || []),
     JSON.stringify(input.algorithmEvidence || []), JSON.stringify(input.learnedContext || {}), JSON.stringify(input.aiExecution || {}),
     JSON.stringify(input.risks || []), JSON.stringify(input.alternatives || []), JSON.stringify(input.researchQuestions || []),

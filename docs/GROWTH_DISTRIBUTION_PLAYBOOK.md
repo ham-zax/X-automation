@@ -1,8 +1,8 @@
 # Growth & Distribution Playbook
 
-This document defines how `@ham_zax` turns research signals into distribution and how the account recruits a better software-developer/builder audience across the active Growth Focus without mechanical engagement farming.
+This document records distribution mechanics, audience diagnosis, and historical operating guidance for `@ham_zax`. Current content legitimacy and behavior selection are governed by `CONTENT_OPERATING_STANDARD.md`, `NETWORK_GROWTH_OPERATING_SYSTEM.md`, the active persona model, and the owning runtime modules.
 
-**Bootstrap precedence:** while the account is below 1,000 followers, `FIRST_1000_GROWTH_MODE.md` governs when it conflicts with conservative guidance here. In that phase, fresh niche-relevant momentum can justify immediate Repost, Quote, or Reply even when relationship history is absent or a research-grade additive thesis is not ready yet.
+`FIRST_1000_GROWTH_MODE.md` is retired as a precedence policy. Account size, freshness, momentum, and borrowed distribution remain useful context and experiment variables, but none of them can override the current purpose/persona decision or manufacture a reason to act.
 
 ## 1. Current audience diagnosis
 
@@ -21,124 +21,100 @@ Interpretation:
 
 The main growth job is therefore **audience replacement and relationship conversion**, not simply increasing follower count. New followers should increasingly be developers, AI builders, technical founders, devtool maintainers, model/tool practitioners, and relevant engineering-career accounts.
 
-## 2. Distribution decision: Direct vs Quote vs Repost vs Reply vs Ignore
+## 2. Distribution decision: Original vs Quote vs Repost vs Reply vs Ignore
 
-The system must make this decision before every outbound action.
+Format follows the selected behavior purpose and where the act naturally belongs. Do not manufacture technical commentary merely to earn a format.
 
-### DIRECT POST
+### ORIGINAL
 
-Use a standalone original when the insight is ours and can survive without the source post being visible.
+Choose an Original when the object should strengthen Hamza's owned profile without requiring the source to be visible. Valid jobs include:
 
-Choose **DIRECT** when one or more are true:
+- first-hand build/test/result or artifact;
+- standalone technical explanation;
+- independent judgment, prediction, ranking, rejection, or taste;
+- synthesis across several sources;
+- a personal/project update with grounded owner provenance;
+- humor or observation whose real home is Hamza's own profile.
 
-- we ran the experiment;
-- we have an original benchmark, result, failure, implementation, or observation;
-- the thesis combines multiple sources;
-- our interpretation is materially broader than one source;
-- the post teaches a workflow, command, architecture, or decision rule;
-- the reader should follow `@ham_zax` for the insight itself.
+There is no mandatory `Hook -> evidence -> action` prose shape. Depth should fit the job.
 
-Preferred structure:
+### QUOTE
 
-> Hook → finding → evidence → developer implication → action.
+Choose a Quote when the source itself is part of the meaning and Hamza wants the reaction on his main profile.
 
-Direct originals are the primary follower-acquisition asset.
+Valid purposes include:
 
-### QUOTE POST
+- technical interpretation or correction;
+- strong judgment or taste;
+- celebration or excitement around a real source object;
+- humor whose referent is the source;
+- discovery/profile positioning where the source context materially helps.
 
-Use a quote when the original source is itself important evidence and our commentary changes how a developer should interpret it.
-
-Choose **QUOTE** only when all are true:
-
-- the source is strong enough to deserve being visible;
-- our commentary adds a distinct thesis, test, implication, comparison, correction, or informed question;
-- the combined quote creates more value than the original alone;
-- we have not already used the source for distribution.
-
-Good quote angles:
-
-- `why this matters for coding agents`;
-- `the benchmark everyone is overlooking`;
-- `the cost/reliability tradeoff`;
-- `what this changes in an actual workflow`;
-- `one concrete limitation`;
-- a specific question to practitioners whose answer would improve our understanding.
-
-Do not quote merely with `this`, `huge`, `wow`, a paraphrase, or generic praise.
+A short reaction can be complete when the source carries the referent and the behavior has a real reason to exist. A generic high-view quote with no contextual purpose remains filler.
 
 ### REPOST
 
-Outside First 1,000 mode, plain reposts are deliberately rare. During First 1,000 mode, use `FIRST_1000_GROWTH_MODE.md:69,165` (soft-tuned 2026-09-01 to `freshness>=8`, `reach>=45`, `momentum/traction>=8/6`): timely niche-relevant amplification is a valid bootstrap action and does not need to be exceptional when those `EMPIRICAL_VARIABLE` thresholds pass.
+Choose a Repost when **amplification itself** is the purpose. Do not force commentary simply because commentary feels more sophisticated.
 
-In normal mode, choose **REPOST** only when:
-
-- the source itself is unusually useful;
-- amplification is genuinely the point;
-- we have no honest additive insight yet;
-- the source is highly niche-aligned;
-- the account has not recently reposted several other sources.
-
-If we can add a useful developer interpretation, prefer QUOTE. If the idea can stand alone, prefer DIRECT.
+A Repost is appropriate when the source deserves attention and Hamza's act is primarily `support`, `discovery`, or signal amplification. Repetition and source quality still matter; follower-count thresholds do not create legitimacy by themselves.
 
 ### REPLY
 
-Replies are a relationship and technical-conversation tool, not the main follower-distribution vehicle.
+Choose a Reply when the act belongs inside the conversation. Replies may be:
 
-Choose **REPLY** when:
+- direct answers;
+- technical additions or corrections;
+- independent judgments or disagreement;
+- real questions;
+- agreement;
+- thanks or credit;
+- support or celebration;
+- humor or teasing;
+- relationship callbacks;
+- deep explanations when the turn actually warrants one.
 
-- we can answer a real question;
-- we can add implementation detail, data, a reproduction, caveat, or comparison;
-- we can ask a specific informed question;
-- the author is in or adjacent to our target audience;
-- the reply would still be worthwhile if it generated zero impressions.
+A Reply does not need a hidden technical payload. It does need a concrete contextual purpose. Do not weaken a defensible view into fake curiosity or praise merely to look agreeable.
 
-A reply should normally contain one concrete contribution. Generic praise does not count.
+### IGNORE / SILENCE
 
-### IGNORE
+Choose Ignore when no worthwhile act survives context review, including when:
 
-Choose **IGNORE** when:
+- the source is irrelevant or exhausted;
+- the only reason to act is its view count;
+- the system is manufacturing a purpose after the fact;
+- the action would merely repeat recent behavior without a new object, relationship state, stance, or joke;
+- the context is too weak to support the intended factual act.
 
-- niche fit is weak;
-- we have no additive idea;
-- the source has already been used;
-- the post is viral but irrelevant;
-- the only available action offers no useful informational contribution;
-- the topic would pull the account back toward legacy crypto/general-tech noise.
+Ignoring weak opportunities is selection quality, not a failure to maximize activity.
 
-Ignoring weak signals is part of the strategy.
+## 3. Attention and conversation openings
 
-## 3. Attention hooks with useful information
+An opening should serve the selected purpose. It may be a technical question, direct reaction, joke, support act, disagreement, or concise judgment.
 
-We want replies and discussion, but the question must seek information.
-
-### Good discussion prompts
+Useful question forms include:
 
 - `If you've tested this in production, where does it fail first?`
 - `Which task is still better in Claude/Codex, and why?`
 - `What would you benchmark before switching?`
-- `Heavy users: is your bottleneck limits, context, latency, or tool reliability?`
-- `Is there an open-source implementation that handles this edge case better?`
 - `What changes on Windows/Linux?`
-- `I'm comparing X vs Y on repo-scale work. What task should be in the test set?`
+- a playful or rhetorical question that genuinely fits the conversation.
 
-### Never use
+Do not use:
 
 - `Like if you agree`;
 - `RT this`;
 - `comment YES`;
-- artificial `A or B?` questions with no informational purpose;
+- artificial A/B prompts with no conversational purpose;
 - withholding useful information solely to force follows or replies;
-- repetitive controversy with no useful informational contribution.
+- repetitive controversy with no new object, stance, relationship, or joke.
 
-Rule:
-
-> A useful question improves the research if somebody answers it.
+A question may improve research, invite elaboration, continue a relationship, or perform humor. It should not exist merely to append a question mark.
 
 ## 4. Keyword usage
 
 Keywords are semantic anchors, not stuffing.
 
-Each post should naturally contain **1–3 high-specificity niche anchors** when relevant.
+Use high-specificity niche anchors when they naturally identify the object or claim. Do not force a count into social-only or conversational actions.
 
 Examples:
 
@@ -155,31 +131,33 @@ Hashtags are not required for keyword relevance. Use them only when they are act
 
 ## 5. Aggressive growth means high-quality surface area
 
-The account should be aggressive about **useful presence**, not mechanical engagement volume.
+The account should be aggressive about **purposeful surface area**, not mechanical engagement volume.
 
-The targets below describe normal selective operation. They do **not** cap the First 1,000 bootstrap phase, which is event-driven and permits multiple distinct timely Reposts, Quotes, and Replies when niche-relevant momentum is available.
+Operation is event- and relationship-driven rather than quota-driven:
 
-Starting operating target:
+- publish owned work when it strengthens the profile;
+- use Quotes when visible source context belongs on the profile;
+- use Replies when the act belongs inside a conversation;
+- Repost when amplification itself is the purpose;
+- allow bursts during real events and active exchanges;
+- allow silence when no worthwhile act exists.
 
-- **2 strong original posts/day** is a useful baseline, not a quota; evergreen items are usually separated by roughly 4–6 hours;
-- **0–1 quote post/day** is a useful baseline, but a second genuinely high-value quote is allowed when the opportunity is distinct and timely;
-- **replies have no fixed daily quota**: engage with every genuinely strong human-reviewed conversation that has concrete value, while letting Account Health warn on one-sided saturation/repetition/concentration;
-- **plain reposts: exceptional**, not a daily quota;
-- continuously research viral/niche signals, but do not publish simply to hit a number.
+Do not inject uniform spacing, fake-human jitter, daily mode quotas, or scheduled mood variation. Cadence should emerge from actual opportunity state, source movement, known owner work, and conversation activity.
 
-If quality or InteractionYield drops, reduce low-value volume rather than throttling healthy active conversations.
+If purpose quality or InteractionYield drops, reduce weak activity rather than throttling healthy active conversations.
 
 ## 6. Relationship recruitment loop
 
 For the current account, the highest-value pool is the niche-aligned set already being followed but not following back.
 
-Priority order:
+Priority is contextual rather than a fixed status hierarchy:
 
-1. **Peer builders / maintainers / individual practitioners** — easiest place to build genuine recurring conversation.
-2. **Devtool/model team members** — reply when we can provide a test, use case, bug, benchmark, or specific question.
-3. **Official tool/model accounts** — quote important releases when we have an interpretation; avoid generic comments.
-4. **Large general technology personalities** — interact only when the technical overlap is unusually strong.
-5. **Legacy crypto/general accounts** — do not optimize new content around them merely because they currently follow us.
+1. **Active responses and recurring relationships** — answer the person already talking to Hamza when a next act exists.
+2. **Peer builders / maintainers / individual practitioners** — strong potential for recognition, shared work, support, humor, and technical exchange.
+3. **Devtool/model team members and topic experts** — use the purpose that fits: question, test, credit, support, correction, or conversation.
+4. **Official tool/model accounts and major launches** — use for discovery, taste, reaction, technical interpretation, or amplification when context supports it.
+5. **Large general technology personalities** — interact when the audience/subject/purpose genuinely fits, not merely for view count.
+6. **Legacy or irrelevant clusters** — do not optimize around them merely because they currently follow us.
 
 Relationship sequence:
 
@@ -187,61 +165,50 @@ Relationship sequence:
 
 Never ask for a follow as the core value proposition.
 
-## 7. Reply quality ladder
+## 7. Reply quality is purpose-relative
 
-### Weak — do not send
+A reply is weak when it has no contextual purpose, copies the source, fabricates experience, or uses a generic reaction only to gain visibility.
 
-> Nice.
+The same short wording can be weak or strong depending on context:
 
-> This is huge.
+- `Nice.` under an arbitrary viral account is usually filler.
+- `Yes. Working on it.` can be an excellent direct support answer.
+- `Huge congrats` can be a complete celebration when the relationship or milestone makes it specific.
+- a joke can be excellent when it changes the emotional field.
+- a long technical explanation can be excellent when the question requires it.
 
-> Great work!
+Do not rank every reply on one technical-information ladder. Evaluate whether it fulfills its selected purpose, fits the conversation stage, preserves provenance, and creates the intended outcome.
 
-### Good
+## 8. Profile conversion portfolio
 
-> The latency improvement matters more to me than the benchmark delta here. Have you measured tool-call round trips on a repo-scale agent loop?
+Follow-worthiness is a property of the profile portfolio, not a hard requirement that every Original teach something.
 
-### Excellent
+Across recent owned posts, a visitor should be able to see:
 
-> I hit the same failure mode with a multi-step coding task: the model solved the patch but lost state between tool calls. Persisting a compact task ledger fixed most of it. Does your eval reset tool context between steps or preserve it?
+- real work, experiments, artifacts, or decisions;
+- useful technical judgment;
+- recognizable product/engineering taste;
+- questions and changed views;
+- relationships, credit, and treatment of other people;
+- humor or ordinary humanity;
+- enough continuity to want the next post.
 
-Excellent replies expose competence and give the author something substantive to answer.
-
-## 8. Follow conversion content
-
-Every original should make at least one target developer think one of these:
-
-- `this saved me research time`;
-- `I can use this today`;
-- `this person actually tested the tool`;
-- `this changed my opinion`;
-- `I want to see the next experiment`.
-
-The strongest recurring formats are:
-
-- tool/model comparison with a clear winner by task;
-- short reproduction of a new claim;
-- failure mode + fix;
-- `I tried this on a real repo`;
-- cost/latency/reliability tradeoff;
-- useful CLI/config/prompt;
-- new release translated into one developer decision;
-- technical founder lesson tied to an actual product experiment.
+Technical resources, comparisons, failures, and workflows remain important. They should coexist with judgments, project updates, social observations, and other grounded modes rather than forcing every Original into a developer lesson.
 
 ## 9. Agent decision contract
 
 When the agent receives a post manually:
 
-1. Fetch/read the exact source and surrounding context.
-2. Ingest it into research memory.
-3. Classify niche and keywords.
-4. Check existing candidate actions. If already used, do not recycle it without a new material reason.
-5. Decide DIRECT / QUOTE / REPOST / REPLY / IGNORE using the rules above.
-6. If DIRECT or QUOTE, build a complete thesis with evidence and action.
-7. If REPLY, contribute one concrete useful point or informed question.
-8. Run the content quality gate.
-9. Only execute a consequential X action when explicitly authorized by the user/current workflow.
-10. Record successful action type, output tweet ID/URL, commentary, and timestamp in SQLite.
+1. Read the exact source and enough surrounding context.
+2. Persist it when it should enter research/workflow memory.
+3. Classify Growth Focus and inspect relationship/conversation context.
+4. Check existing actions and whether the source is exhausted.
+5. Identify plausible purposes and Hamza roles, including silence.
+6. Select and persist purpose, mode, affect, depth, conversation stage, and reason to exist.
+7. Choose Original / Quote / Repost / Reply / Ignore based on where that act belongs.
+8. Run the purpose/provenance/clarity gate.
+9. Only execute an X action through the governing approval/send/publication authority.
+10. Record the action, output identity, behavior/persona provenance, relationship event, and outcomes.
 
 Useful bridge commands:
 
@@ -311,7 +278,7 @@ Canonical design:
 
 ## 13. Network-first growth upgrade
 
-When this section conflicts with older account-size or posting-first heuristics in this document, this section governs, except that `FIRST_1000_GROWTH_MODE.md` has precedence during the explicit bootstrap phase.
+When this section conflicts with older account-size or posting-first heuristics in this document, this section governs. `FIRST_1000_GROWTH_MODE.md` is historical evidence only and has no precedence.
 
 The growth system should be understood as:
 

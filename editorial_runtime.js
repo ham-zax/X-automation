@@ -2,6 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runStructuredAI } from './ai_runtime.js';
+import {
+  ACTION_PURPOSES,
+  AFFECT_PROVENANCE,
+  AFFECT_STRATEGIES,
+  CONVERSATION_STAGES,
+  INFORMATION_DEPTHS,
+  SOCIAL_MODES,
+} from './behavior.js';
 import { ANGLE_CLASSES, SCAN_FORMAT_CANDIDATES } from './editorial.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +48,31 @@ function scanSchema(candidateKeys) {
   };
 }
 
+function behaviorSchema(decision) {
+  const act = decision === 'ACT';
+  return {
+    type: 'object',
+    additionalProperties: false,
+    required: [
+      'decision', 'primaryPurpose', 'secondaryPurposes', 'socialMode', 'affectStrategy',
+      'affectProvenance', 'informationDepth', 'conversationStage', 'reasonToExist',
+    ],
+    properties: {
+      decision: { const: decision },
+      primaryPurpose: act ? { type: 'string', enum: ACTION_PURPOSES } : { const: null },
+      secondaryPurposes: act
+        ? stringArray({ enum: ACTION_PURPOSES }, { maxItems: ACTION_PURPOSES.length, uniqueItems: true })
+        : { type: 'array', maxItems: 0 },
+      socialMode: act ? { type: 'string', enum: SOCIAL_MODES } : { const: null },
+      affectStrategy: act ? { type: 'string', enum: AFFECT_STRATEGIES } : { const: 'neutral' },
+      affectProvenance: act ? { type: 'string', enum: AFFECT_PROVENANCE } : { const: 'none' },
+      informationDepth: act ? { type: 'string', enum: INFORMATION_DEPTHS } : { const: null },
+      conversationStage: { type: 'string', enum: CONVERSATION_STAGES },
+      reasonToExist: { type: 'string', minLength: 1 },
+    },
+  };
+}
+
 function recommendationProperties({ storyKeys, evidenceIds, algorithmTags }) {
   return {
     storyKey: { type: 'string', enum: storyKeys },
@@ -67,19 +100,20 @@ function recommendationProperties({ storyKeys, evidenceIds, algorithmTags }) {
   };
 }
 
-function recommendationVariant(decision, pipelineSchema, targetCandidateSchema, properties, requiredQuestions = false) {
+function recommendationVariant(decision, behaviorDecision, pipelineSchema, targetCandidateSchema, properties, requiredQuestions = false) {
   return {
     type: 'object',
     additionalProperties: false,
     required: [
       'decision', 'pipeline', 'storyKey', 'targetCandidateKey', 'title', 'thesis', 'whyNow', 'whyThisFormat',
-      'desiredReaderOutcome', 'angleClass', 'potentialInterpretation', 'researchQuestions', 'evidenceIds',
+      'desiredReaderOutcome', 'angleClass', 'behavior', 'potentialInterpretation', 'researchQuestions', 'evidenceIds',
       'algorithmMechanisms', 'empiricalContext', 'riskFlags', 'alternatives',
     ],
     properties: {
       decision: { const: decision },
       pipeline: pipelineSchema,
       targetCandidateKey: targetCandidateSchema,
+      behavior: behaviorSchema(behaviorDecision),
       ...properties,
       ...(requiredQuestions ? { researchQuestions: stringArray({}, { minItems: 1, maxItems: 10 }) } : {}),
     },
@@ -96,10 +130,10 @@ function finalSchema(packet) {
   const algorithmTags = [...new Set((packet?.algorithmMechanisms || []).map((item) => String(item.tag || '')).filter(Boolean))];
   const properties = recommendationProperties({ storyKeys, evidenceIds, algorithmTags });
   const prepareVariants = [
-    recommendationVariant('PREPARE', { const: 'original' }, { const: null }, properties),
-    recommendationVariant('PREPARE', { const: 'thread' }, { const: null }, properties),
+    recommendationVariant('PREPARE', 'ACT', { const: 'original' }, { const: null }, properties),
+    recommendationVariant('PREPARE', 'ACT', { const: 'thread' }, { const: null }, properties),
     ...(['quote', 'reply', 'repost'].flatMap((pipeline) => xCandidateKeys.length
-      ? [recommendationVariant('PREPARE', { const: pipeline }, { type: 'string', enum: xCandidateKeys }, properties)]
+      ? [recommendationVariant('PREPARE', 'ACT', { const: pipeline }, { type: 'string', enum: xCandidateKeys }, properties)]
       : [])),
   ];
   return {
@@ -113,8 +147,8 @@ function finalSchema(packet) {
         items: {
           oneOf: [
             ...prepareVariants,
-            recommendationVariant('RESEARCH_MORE', { const: 'research' }, { const: null }, properties, true),
-            recommendationVariant('SKIP', { const: null }, { const: null }, properties),
+            recommendationVariant('RESEARCH_MORE', 'RESEARCH', { const: 'research' }, { const: null }, properties, true),
+            recommendationVariant('SKIP', 'SILENT', { const: null }, { const: null }, properties),
           ],
         },
       },

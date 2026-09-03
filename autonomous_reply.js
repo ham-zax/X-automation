@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { normalizeBehaviorDecision } from './behavior.js';
 import { applyWriterOutput, buildWriterPacket, createDraftScaffold, scoreDraft } from './drafting.js';
 import { sendAutonomousEngagementReply } from './pipeline.js';
 import { assessStrategicRelevance } from './strategy.js';
@@ -51,10 +52,22 @@ const ARCHETYPE_TO_INTENT = Object.freeze({
   caveat_or_edge_case: 'caveat_edge_case',
   comparison: 'comparison',
   correction: 'verified_correction',
+  independent_judgment: 'constructive_feedback',
   informed_question: 'useful_question',
   synthesis: 'synthesis',
   reproduction: 'technical_insight',
   personal_experience: 'technical_insight',
+  direct_answer: 'social_reaction',
+  status_response: 'social_reaction',
+  agreement: 'social_reaction',
+  gratitude: 'social_reaction',
+  support: 'social_reaction',
+  celebration: 'social_reaction',
+  enthusiasm: 'social_reaction',
+  humor: 'social_reaction',
+  social_observation: 'social_reaction',
+  de_escalation: 'social_reaction',
+  relationship_callback: 'social_reaction',
 });
 
 function boundedReason(code, reason) {
@@ -250,19 +263,28 @@ function chooseIntent(item, candidate, grant) {
   return mapped && allowed.has(mapped) ? mapped : null;
 }
 
-function chooseTone(intent, candidate, grant) {
+function chooseTone(intent, candidate, grant, behavior = {}) {
   const text = String(candidate?.text || '');
   const allowed = new Set(grant.allowedTones);
   const humorSafe = !unsafeHumorContext(text);
-  if (grant.humorAllowed && humorSafe && playfulContext(text)) {
+  const affect = String(behavior?.affectStrategy || 'neutral');
+  const mode = String(behavior?.socialMode || '');
+  const wantsHumor = ['contrast', 'de_escalate'].includes(affect) || mode === 'humorist' || playfulContext(text);
+  if (grant.humorAllowed && humorSafe && wantsHumor) {
     if (allowed.has('light_humor')) return { tone: 'light_humor', humorSafe };
     if (allowed.has('dry_wit')) return { tone: 'dry_wit', humorSafe };
   }
-  const preferred = intent === 'constructive_feedback' || intent === 'social_reaction'
-    ? ['warm', 'conversational', 'direct']
-    : intent === 'useful_question' || intent === 'synthesis'
-      ? ['conversational', 'warm', 'direct']
-      : ['direct', 'conversational', 'warm'];
+  const assertive = ['judgment', 'correction', 'taste'].includes(String(behavior?.primaryPurpose || ''))
+    || ['opinionated_peer', 'skeptic', 'taste_maker'].includes(mode);
+  const preferred = assertive
+    ? ['direct', 'conversational', 'warm']
+    : ['reward', 'energize', 'match', 'amplify'].includes(affect)
+      ? ['warm', 'conversational', 'direct']
+      : intent === 'constructive_feedback' || intent === 'social_reaction'
+        ? ['conversational', 'warm', 'direct']
+        : intent === 'useful_question' || intent === 'synthesis'
+          ? ['conversational', 'warm', 'direct']
+          : ['direct', 'conversational', 'warm'];
   const tone = preferred.find((item) => allowed.has(item)) || null;
   return { tone, humorSafe };
 }
@@ -278,7 +300,7 @@ function relationshipContext(profile) {
   };
 }
 
-function preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, tone) {
+function preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, tone, behavior) {
   if (!item.targetTweetId) return { decision: 'skipped', reason: boundedReason('MISSING_TARGET_TWEET_ID', 'A real X target tweet ID is required.') };
   if (!grant.allowedSources.includes(sourceClass)) return { decision: 'skipped', reason: boundedReason('SOURCE_CLASS_NOT_ALLOWED', `${sourceClass} sources are not enabled by the current grant.`) };
   if (!intent) return { decision: 'review', reason: boundedReason('NO_ALLOWED_REPLY_INTENT', 'The current contribution does not map to an intent allowed by the grant.') };
@@ -299,8 +321,13 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
   if (Number(item.priority || 0) < minPriority) {
     return { decision: 'skipped', reason: boundedReason('AUTONOMOUS_VALUE_TOO_LOW', `Internal autonomous value threshold is ${minPriority}; current EngagePriority is ${Math.round(Number(item.priority || 0))}.`) };
   }
-  if (intent === 'social_reaction' && sourceClass !== 'active' && !['responsive', 'recurring', 'connected', 'mutual'].includes(profile?.relationshipStage)) {
-    return { decision: 'review', reason: boundedReason('SOCIAL_REACTION_CONTEXT_WEAK', 'Lightweight social reactions require an active or established relationship context.') };
+  if (intent === 'social_reaction') {
+    const established = ['responsive', 'recurring', 'connected', 'mutual'].includes(profile?.relationshipStage);
+    const momentumPurpose = sourceClass === 'momentum'
+      && ['celebration', 'humor', 'taste', 'social_presence', 'support', 'de_escalation'].includes(String(behavior?.primaryPurpose || ''));
+    if (sourceClass !== 'active' && !established && !momentumPurpose) {
+      return { decision: 'review', reason: boundedReason('SOCIAL_ACTION_CONTEXT_WEAK', 'The social-only behavior is valid in principle but lacks enough relationship or high-momentum context for autonomous send authority.') };
+    }
   }
   if (grant.mode === 'live' && Number(grant.budgetUsed || 0) >= Number(grant.liveBudget || 0)) {
     return { decision: 'skipped', reason: boundedReason('LIVE_BUDGET_EXHAUSTED', 'The explicit operator live safety budget has no remaining capacity.') };
@@ -325,11 +352,13 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
     intent: strategy.intent,
     tone: strategy.tone,
     sourceClass: strategy.sourceClass,
+    behavior: packet.behavior,
     contribution: item.contributionSummary || item.engagement?.contribution?.summary || '',
     rules: [
-      'Intent and tone are separate; tone must not replace substantive value.',
-      'The reply must still make sense if any joke is ignored.',
-      'Do not imitate a specific real person.',
+      'The behavior decision owns purpose, mode, affect, depth, and conversation stage.',
+      'A social-only action does not need a hidden technical payload.',
+      'A technical or corrective action must preserve consequential evidence.',
+      'Do not imitate a specific real person or invent explicit/implied owner experience.',
     ],
   };
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
@@ -358,12 +387,14 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
   return { output, draft: generated, recentReplies, recentReplyArchetypes };
 }
 
-function autonomousGateResult(item, candidate, generated, recentReplies, recentReplyArchetypes) {
+function autonomousGateResult(item, candidate, generated, recentReplies, recentReplyArchetypes, relationship = null) {
   const parentConversation = item.parentOurTweetId
     ? listRecentOurConversationPosts({ limit: 100 }).find((entry) => String(entry.tweetId) === String(item.parentOurTweetId))
     : null;
   const analysis = scoreDraft(generated, candidate, {
     pipeline: 'reply',
+    behavior: item.behavior || generated?.editor?.behavior || null,
+    relationship,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
     recentReplies,
     recentReplyArchetypes,
@@ -391,9 +422,10 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
   }
   const profile = item.targetUsername ? getRelationshipProfile(item.targetUsername) : null;
   const sourceClass = sourceClassFor(item, candidate);
+  const behavior = normalizeBehaviorDecision(item.behavior || {}, { pipeline: 'reply' });
   const intent = chooseIntent(item, candidate, grant);
-  const toneChoice = chooseTone(intent, candidate, grant);
-  const pre = preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, toneChoice.tone);
+  const toneChoice = chooseTone(intent, candidate, grant, behavior);
+  const pre = preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, toneChoice.tone, behavior);
   const base = {
     sourceClass,
     intent,
@@ -401,9 +433,11 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
     exactReply: '',
     relationshipStage: profile?.relationshipStage || null,
     relationshipContext: relationshipContext(profile),
+    behavior,
     selection: {
       priority: Number(item.priority || 0),
       contribution: item.contributionSummary || item.engagement?.contribution?.summary || '',
+      behavior,
       firstObservedAt: item.engagement?.firstObservedAt || item.createdAt || null,
       whySelected: sourceClass === 'active'
         ? 'Active/direct conversation received first consideration.'
@@ -420,12 +454,17 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
 
   let generated;
   try {
-    generated = await generateExactReply(item, candidate, profile, grant, { sourceClass, intent, tone: toneChoice.tone });
+    generated = await generateExactReply(item, candidate, profile, grant, {
+      sourceClass,
+      intent,
+      tone: toneChoice.tone,
+      behavior,
+    });
   } catch (error) {
     return { ...base, decision: 'review', reasons: [boundedReason('AI_GENERATION_FAILED', error.message)] };
   }
   const exactReply = String(generated.draft.body || '').trim();
-  const gates = autonomousGateResult(item, candidate, generated.draft, generated.recentReplies, generated.recentReplyArchetypes);
+  const gates = autonomousGateResult(item, candidate, generated.draft, generated.recentReplies, generated.recentReplyArchetypes, profile);
   const checkedDraft = {
     ...generated.draft,
     gates: gates.analysis.gates,
@@ -466,7 +505,7 @@ function persistDecision(item, grant, evaluation, decision) {
     intent: evaluation.intent,
     tone: evaluation.tone,
     exactReply: evaluation.exactReply,
-    selection: evaluation.selection,
+    selection: { ...(evaluation.selection || {}), behavior: evaluation.behavior || evaluation.selection?.behavior || null },
     relationshipContext: evaluation.relationshipContext,
     aiExecution: evaluation.aiExecution || {},
     checks: evaluation.checks || {},
@@ -647,10 +686,13 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
   return { active: true, due: true, grant: getAutonomousReplyGrant(), runtime: nextRuntime, decisions: completed };
 }
 
-function groupedOutcome(decisions, key) {
+function groupedOutcome(decisions, keyOrReader) {
   const groups = new Map();
+  const readLabel = typeof keyOrReader === 'function'
+    ? keyOrReader
+    : (decision) => decision[keyOrReader];
   for (const decision of decisions) {
-    const label = decision[key] || 'unknown';
+    const label = readLabel(decision) || 'unknown';
     const current = groups.get(label) || { label, sent: 0, targetResponses: 0, continued: 0 };
     current.sent += 1;
     const events = decision.targetUsername ? listRelationshipEvents(decision.targetUsername, { limit: 500 }) : [];
@@ -686,7 +728,13 @@ export function getAutonomousReplyReadModel({ limit = 50 } = {}) {
       byTone: groupedOutcome(sent, 'tone'),
       bySourceClass: groupedOutcome(sent, 'sourceClass'),
       byRelationshipStage: groupedOutcome(sent, 'relationshipStage'),
-      note: 'Descriptive observations only; small samples do not establish causal reply-strategy rules.',
+      byPrimaryPurpose: groupedOutcome(sent, (decision) => decision.behavior?.primaryPurpose),
+      bySocialMode: groupedOutcome(sent, (decision) => decision.behavior?.socialMode),
+      byAffectStrategy: groupedOutcome(sent, (decision) => decision.behavior?.affectStrategy),
+      byInformationDepth: groupedOutcome(sent, (decision) => decision.behavior?.informationDepth),
+      byConversationStage: groupedOutcome(sent, (decision) => decision.behavior?.conversationStage),
+      byPersonaModelVersion: groupedOutcome(sent, (decision) => decision.behavior?.personaModelVersion),
+      note: 'Descriptive observations only; small samples do not establish causal reply-strategy or persona rules.',
     },
   };
 }

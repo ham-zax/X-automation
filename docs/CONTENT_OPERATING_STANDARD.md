@@ -1,380 +1,477 @@
 # X Content Operating Standard
 
-This document is the source of truth for what `@ham_zax` should publish, reply with, or quote-post.
+**Status:** canonical outbound-content contract
+**Account:** `@ham_zax`
+**Research anchor:** `docs/research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md`
 
-It is deliberately stricter than "write something engaging." The account should become recognizable as a **developer + builder in tech** who makes useful engineering ideas easy to understand. Registered Growth Focus topics are preferred lanes, not the entire allowed universe. AI-assisted development is one pillar inside that technical identity.
+This document governs what may become an Original, Quote, Thread, or Reply. It does not grant approval, send, scheduling, or publication authority.
 
-The core audience promise is:
+The account is a **developer + builder in tech**, but the account is also a social participant. Technical proof is one important source of value; it is not the only legitimate reason to speak.
 
-> **Save developers research time, give them useful judgment, and help them build better software or products.**
+The universal principle is:
 
-This standard has three levels:
+> **Every public action needs a purpose. Not every public action needs information.**
 
-- **MUST** — hard invariant. If violated, do not publish.
-- **SHOULD** — default preference. Deviate only for a clear reason.
-- **EXCELLENT** — characteristics of posts we should actively seek and reproduce.
-
----
-
-## 1. Global invariants for every outbound action
-
-These apply to original posts, replies, quote posts, and threads.
-
-### MUST
-
-1. **Be understandable on one normal read.**
-   - Most technically curious readers should be able to state the point without translating internal architecture/report vocabulary first.
-   - Humor, wit, attitude, uncommon wording, and technical vocabulary are allowed when the meaning still lands immediately.
-   - Precise product, language, API, protocol, and library names are welcome; stacked unexplained abstractions are a problem only when they make the idea hard to follow.
-
-2. **Add information, judgment, or experience.**
-   - Do not merely restate a headline or another person's post.
-   - Every outbound item must contribute at least one of: explanation, comparison, experiment, implication, opinion with reasoning, implementation detail, useful question, or synthesis.
-
-3. **Fit the technical universe; prefer active Growth Focus.**
-   - Registered content groups are runtime preferences, not a fixed admission list.
-   - The broader configurable technical audience is the exploration boundary. An unregistered but clearly technical topic may be used as an exploratory opportunity when its momentum/value is strong.
-   - The default preferred profile covers software-development topics and AI-assisted engineering, while the broader technical scope includes other engineering and emerging-tech areas.
-   - Groups may be added, removed, renamed, reweighted, or disabled without changing this standard.
-
-4. **Have a specific reader benefit.**
-   At least one must be true:
-   - saves research time;
-   - teaches something;
-   - helps choose between tools;
-   - exposes a useful implementation detail;
-   - provides evidence from a real experiment;
-   - gives a reusable workflow, command, repo, technique, or mental model;
-   - identifies an opportunity or risk a developer can act on.
-
-5. **Do not copy another creator's wording or structure too closely.**
-   - Facts and source material can be synthesized.
-   - The thesis, wording, examples, and framing should be ours.
-
-6. **Do not publish low-confidence generated filler.**
-   - If the system cannot identify the value-add, it should produce no post rather than a weak post.
-
-7. **Do not publish substantially duplicate posts.**
-   - If the same story is revisited, the second post must have a materially new angle, result, experiment, or update.
-
-8. **Avoid redundant main-feed bursts.**
-   - A new main-feed item should be worth occupying another slot in a follower's feed.
-   - This does not apply as a blanket slowdown to an active reply conversation; several substantive back-and-forth replies can be appropriate when the conversation is genuinely progressing.
-   - Do not dump several weak posts because multiple feeds produced candidates at once.
-
-9. **Use links when useful.**
-    - Link to the relevant source or destination when it helps the reader.
-    - A link can provide attribution, context, or an action path.
+A social-only action can be valid. A purposeless activity-maximizing action cannot.
 
 ---
 
-## 2. The preferred value hierarchy
+# 1. Authority and evidence boundary
 
-When multiple stories are available, prefer them in this order:
+Use this hierarchy when guidance conflicts:
 
-1. **We tested or built something and have a result.**
-2. **We found a primary-source technical detail most people missed.**
-3. **We can compare two tools/models using concrete evidence.**
-4. **We can turn fresh news into a useful developer implication.**
-5. **We found a genuinely useful new tool/repo/workflow.**
-6. **We have a clear technical or builder opinion with reasoning.**
-7. **We can ask a high-quality question that invites expert experience.**
-8. Plain news summary.
+1. verified source facts and explicit current human decisions;
+2. this operating standard;
+3. `NETWORK_GROWTH_OPERATING_SYSTEM.md` for growth/network objectives;
+4. `RELATIONSHIP_INTELLIGENCE.md` for relationship state and outcomes;
+5. `HAMZA_X_PERSONA_EXPERIMENT.md` and the active versioned persona model for experimental behavioral realization;
+6. account-specific measured outcomes and accepted learned rules within their recorded scope;
+7. creator-corpus and platform research as observational evidence.
 
-Plain news summary is the weakest acceptable category and should normally be skipped unless speed itself is the value.
+The Oracle reports, V4 reassessment, creator studies, and platform evidence registry are research. They do not directly authorize a post or become writing commandments.
 
----
-
-## 3. Original posts
-
-Original posts are the primary growth surface.
-
-### MUST
-
-- Have one main idea.
-- Make the value apparent in the opening lines.
-- State what changed, what was learned, or what the reader can do.
-- Be understandable without requiring the reader to know the full backstory.
-- If based on external news, include our interpretation rather than only the announcement.
-
-### SHOULD
-
-Use one of these structures:
-
-#### Signal -> Insight -> Evidence -> Action
-
-- **Signal:** what changed.
-- **Insight:** why it matters.
-- **Evidence:** source, number, experiment, code, screenshot, or comparison.
-- **Action:** what a developer should try, avoid, watch, or reconsider.
-
-#### Claim -> Proof -> Consequence
-
-- Make a crisp claim.
-- Show why it is credible.
-- Explain what changes for the reader.
-
-#### Discovery -> Why interesting -> How to use it
-
-Ideal for repos, tools, libraries, MCP servers, CLIs, frameworks, and model releases.
-
-#### Experiment -> Result -> Lesson
-
-Preferred whenever we can actually run something ourselves.
-
-### EXCELLENT
-
-An excellent original post:
-
-- is useful enough to bookmark or send to another developer;
-- contains a non-obvious detail or point of view;
-- has concrete evidence;
-- is easy to skim;
-- reinforces exactly what someone would follow `@ham_zax` for;
-- creates a natural reason for knowledgeable people to reply;
-- remains useful after the immediate news cycle;
-- could not be reproduced by simply asking an LLM to summarize the headline.
+`ALGORITHM_EVIDENCE_LEDGER.md` may classify platform evidence. It is not the source of Hamza's personality or content purpose.
 
 ---
 
-## 4. Replies
+# 2. Universal hard invariants
 
-Replies can support networking, learning, demonstrating competence, distribution, or any combination of those goals.
+These apply to every outbound format and purpose.
 
-### MUST
+## 2.1 Purpose integrity
 
-A reply must do at least one of the following:
+Every action must have one primary purpose and may have secondary purposes.
 
-- answer a question;
-- add a relevant technical detail;
-- provide evidence or a useful counterexample;
-- ask a specific, informed follow-up question;
-- share a directly relevant experience;
-- respectfully challenge a claim with reasoning;
-- congratulate someone while naming the specific thing that is impressive or useful.
+Supported purposes are:
 
-Do not send:
+```text
+technical_value
+profile_proof
+discovery
+relationship
+support
+celebration
+humor
+taste
+judgment
+learning
+correction
+de_escalation
+social_presence
+```
 
-- "Great work"
-- "This is huge"
-- "Interesting"
-- "100%"
-- generic compliments with no content
-- self-promotional links unrelated to the conversation
-- templated replies reused across authors
+The system must be able to state why the action should exist in this context.
 
-### SHOULD
+A label is not proof of purpose. `relationship`, `humor`, or `discovery` cannot be used as a loophole for generic engagement filler.
 
-- Prefer replying to builders/researchers whose work overlaps our niche.
-- Read the linked material when it helps understand the context.
-- Keep the reply proportional to the conversation.
-- Ask questions whose answers would actually change our understanding.
-- When disagreeing, attack the claim rather than the person.
+## 2.2 Factual and biographical provenance
 
-### EXCELLENT
+Do not invent or imply owner facts that are not grounded, including:
 
-An excellent reply makes the original author or another reader think:
+- tests, benchmarks, usage, purchases, access, or results;
+- projects, failures, achievements, employment, relationships, or private conversations;
+- personal history or events;
+- emotional history or intimate personal stakes;
+- experiential authority that would reasonably cause a reader to believe Hamza used or encountered something when he did not.
 
-> "This person actually understands the problem."
+External facts remain sourced or clearly framed as analysis. Analytical judgment may be strong without becoming first-hand experience.
 
-Best forms:
+Public affect may be known, inferred from an established preference, or strategically performed. Immediate first-person affect such as `I love this`, `I'm excited`, `I hate this UI`, or `I'm sold` may be part of that performance when it fits the active Hamza model and context. What remains grounded is the claimed biography, duration, experience, relationship, and emotional history behind the stance; the system must not invent those to make the emotion sound earned.
 
-- a small reproduction result;
-- a missing edge case;
-- a useful implementation suggestion;
-- a concise comparison with another approach;
-- a question only someone who read the work carefully would ask.
+## 2.3 Understandability
 
----
+The selected act should land on one normal read for its intended audience.
 
-## 5. Quote posts
+This does not mean every post must be short, nontechnical, or emotionally prefaced.
 
-A quote post must justify taking someone else's post and placing it in our own audience's feed.
+- Necessary technical vocabulary is allowed.
+- Long structured explanations are allowed.
+- Humor, slang, fragments, attitude, and unusual wording are allowed.
+- Stacked unexplained abstraction is a problem when it prevents the intended reader from understanding the act.
 
-### MUST
+## 2.4 Source integrity and originality
 
-- Add a distinct thesis, interpretation, test, disagreement, or developer takeaway.
-- Be understandable even if the quoted post receives only a quick glance.
-- Credit the source naturally through the quote mechanism; do not present their discovery as ours.
+- Do not near-copy a source or another creator's distinctive wording.
+- Do not present another person's discovery, result, or experience as Hamza's.
+- A Quote or Reply may rely on visible source context; it does not need to restate the source.
+- Paraphrase alone is not a technical contribution, but a legitimate social act may intentionally respond to the source rather than add new information.
 
-Do not quote-post merely to say:
+## 2.5 No purposeless filler
 
-- "this"
-- "wow"
-- "big if true"
-- "we are so back"
-- a paraphrase of the quoted text
+Do not post merely because:
 
-### SHOULD
+- the source is viral;
+- a queue needs activity;
+- a cadence slot exists;
+- a large account is available;
+- the model can manufacture a plausible caveat;
+- the model can attach generic praise.
 
-Use quote posts when:
+Silence is valid when no technical, social, relationship, identity, learning, or growth purpose survives context review.
 
-- the original itself is strong evidence;
-- our commentary changes how a developer should interpret it;
-- we have a result or implementation that directly builds on it;
-- disagreement benefits from keeping the original claim visible.
+## 2.6 Duplicate and repetition discipline
 
-### EXCELLENT
+- Do not publish exact or near-duplicate text.
+- Revisit a topic when there is a new result, object, stance, relationship context, joke, event, or purpose.
+- Repeating a useful territory can build recognizability; repeating a response function makes the account synthetic.
 
-The quote and our commentary should form a **new information object**: the reader gets more from the combination than from either alone.
+## 2.7 Outcome honesty
 
----
+Keep these outcomes separate:
 
-## 6. Threads / long-form posts
+```text
+reach
+likes
+replies
+reposts
+bookmarks
+profile visits
+follows
+recurring interactions
+```
 
-Long posts are justified when compression would remove useful reasoning.
-
-### MUST
-
-- Earn the length.
-- Put the thesis and payoff near the top.
-- Use sections or visual structure.
-- Remove repeated conclusions and filler transitions.
-- End with a practical takeaway, not a generic CTA.
-
-### SHOULD
-
-Good long-form topics include:
-
-- reading a large codebase/spec and extracting what matters;
-- benchmark or model-release analysis;
-- end-to-end experiment results;
-- architecture breakdowns;
-- "what everyone is getting wrong";
-- detailed builder retrospectives.
-
-### EXCELLENT
-
-A strong long post should function like a compact technical note someone would bookmark as a reference.
+Do not call bookmarks follows, likes relationships, or reach trust.
 
 ---
 
-## 7. News and model releases
+# 3. Purpose-specific requirements
 
-News is an input, not the product.
+## 3.1 Technical value, correction, and profile proof
 
-### MUST
+When the purpose depends on a factual technical claim:
 
-For news-based posts, answer at least one:
+- use evidence proportional to consequence;
+- distinguish observed, sourced, inferred, predicted, and unknown;
+- preserve material caveats;
+- keep decision-relevant specificity;
+- do not manufacture experience to increase authority.
 
-- What does this enable that was previously impractical?
-- What changed technically?
-- How does it compare with the current alternative?
-- What is the cost/performance/developer-experience tradeoff?
-- What should a developer test first?
-- What claim in the announcement creates the strongest developer angle?
+A correction should change a meaningful decision, risk, cost, reliability assumption, access boundary, security property, or implementation understanding. A caveat that changes nothing important is usually not worth attaching to another person's moment.
 
-### SHOULD
+## 3.2 Relationship, support, and celebration
 
-- Prefer concrete technical detail.
-- Prefer developer consequence over corporate announcement language.
-- For models, discuss capability in relation to a task, not only leaderboard position.
+A social action may be complete without a technical payload when it:
 
-### EXCELLENT
+- answers the person in front of Hamza;
+- marks a real milestone;
+- gives credit or thanks;
+- continues a known exchange;
+- makes another person's contribution feel seen;
+- strengthens a relevant relationship;
+- participates naturally in a shared moment.
 
-Run the model/tool/repo ourselves and publish the result.
+Generic praise to an arbitrary high-view account is not relationship value.
 
----
+## 3.3 Humor and de-escalation
 
-## 8. Algorithm-aware principles
+Humor may be the whole contribution when it:
 
-The public X recommendation code should inform content quality and network strategy without becoming fake raw-count arithmetic.
+- is intelligible from the source/thread context;
+- reflects a real absurdity or shared developer experience;
+- improves the emotional field;
+- does not target protected traits, private information, vulnerability, or serious harm;
+- does not imitate another creator's signature persona.
 
-`ALGORITHM_EVIDENCE_LEDGER.md` is the authority for whether a claim is CODE_BACKED, OFFICIAL_PRODUCT_OR_POLICY, EMPIRICAL_VARIABLE, or RETIRED.
+A joke does not need a hidden technical lesson. It still needs a contextual reason to exist.
 
-Current public code indicates that ranking predicts multiple actions for **each viewer** and combines those predicted probabilities using weights. The weights are **not raw engagement-count multipliers**. Therefore we do not optimize for simplistic formulas such as "one share equals N likes."
+## 3.4 Taste, judgment, and social presence
 
-Practical implications:
+Taste may express what is elegant, ugly, useful, annoying, beautiful, excessive, or well designed when grounded in an observable object.
 
-- **Audience coherence matters.** Retrieval uses viewer history and content/author representations; stay recognizable to a developer/AI-builder audience.
-- **Originals matter for discovery.** Out-of-network replies and reposts are filtered from the normal For You candidate path.
-- **Share-worthy utility is strategically strong.** Build things developers would genuinely send to another developer.
-- **Follow-worthy identity matters.** Every strong post should reinforce why this account deserves a follow.
-- **Relevant network topology matters.** Current public code includes in-/out-of-network mechanics and a bidirectional/mutual-follow reply-head boost for eligible original posts; repeated useful relationships are therefore strategically different from one-off borrowed reach.
-- **Author diversity matters.** Author-diversity logic reduces repeated-author presence in a candidate slate.
-- **Differentiate the angle.** The VMRanker diversity stage uses semantic similarity, so being the 20th near-identical summary is strategically weak.
-- **Freshness matters for For You inventory.** The current public pipeline filters posts older than 48 hours from this candidate path; evergreen ideas should be republished only as genuinely new posts with new value.
-- **Small-account exploration exists, but is not guaranteed.** Public defaults include a cold-start mechanism for low-impression authors. Treat this as an opportunity to publish strong originals, not as guaranteed distribution.
+`judgment` exists for a broader class of clear public calls: preference, ranking, prediction, rejection, agreement, disagreement, or conclusion. It does not require a benchmark merely to be legitimate. It does require a real object/context and a view the active persona can plausibly own.
 
-Primary references:
+A present-tense evaluative stance such as `I love this direction`, `I hate this UI`, `I'd take X over Y`, `I'm not buying this argument`, or `this sucks` is a public stance act, not automatically a claim of historical biography. Such stance may be strategically authored when consistent with the active persona and current evidence/context. Claims of first-hand use, longstanding attachment, emotional history, or personal stakes remain grounded.
 
-- https://github.com/xai-org/x-algorithm/blob/main/README.md
-- https://github.com/xai-org/x-algorithm/blob/main/home-mixer/params/param.rs
-- https://github.com/xai-org/x-algorithm/blob/main/home-mixer/scorers/ranking_scorer.rs
-- https://github.com/xai-org/x-algorithm/blob/main/home-mixer/scorers/author_cold_start.rs
-- https://github.com/xai-org/x-algorithm/blob/main/home-mixer/filters/oon_retweet_reply_filter.rs
-- https://github.com/xai-org/x-algorithm/blob/main/vm-ranker/dpp.rs
-- https://github.com/xai-org/x-algorithm/blob/main/phoenix/README.md
-- https://github.com/xai-org/x-algorithm/blob/main/docs/BIDIRECTIONAL_BOOST_CHANGE.md
-- `ALGORITHM_EVIDENCE_LEDGER.md` for current evidence classification and empirical variables.
+Do not require praise before disagreement, a softening preface, or a question when a clear judgment is the better act. Warmth and de-escalation are situational tactics, not universal content invariants.
 
----
+Social presence is legitimate when the moment or relationship itself supplies the purpose. It is not a standing permission to emit generic acknowledgments everywhere.
 
-## 9. Draft quality rubric
+## 3.5 Learning and questions
 
-Use this to compare candidates and drafts. It is not a simulation of X's ranking score.
+Questions may be technical, social, playful, or rhetorical.
 
-Score each dimension 0–5.
+A question should either:
 
-| Dimension | 0 | 3 | 5 |
-| --- | --- | --- | --- |
-| Niche fit | unrelated | adjacent | core active Growth Focus topic |
-| Utility | no reader benefit | useful context | immediately actionable / saves real time |
-| Novelty | duplicate summary | some framing | non-obvious finding or original result |
-| Evidence | unsupported | credible source | primary source + experiment/data |
-| Shareability | no reason to send | useful to some peers | "send this to a developer" level |
-| Follow value | does not reinforce identity | somewhat aligned | strongly establishes account promise |
-| Reply quality | bait or no discussion | reasonable question | invites informed technical discussion |
-| Clarity | confusing | understandable | crisp and easy to scan |
-| Specificity | generic | some concrete detail | numbers/code/tool/result/decision |
-| Integrity | misleading | mostly careful | precise about certainty and limitations |
+- seek information Hamza may use;
+- open a worthwhile conversation;
+- clarify an unresolved choice;
+- help another person elaborate;
+- serve a clear humorous or rhetorical function.
 
-### Hard gate
-
-A draft is rejected regardless of total score if it violates any MUST invariant.
-
-### Quality bands
-
-- **0–24:** reject
-- **25–34:** weak; normally reject
-- **35–41:** good enough only if timely and useful
-- **42–46:** strong
-- **47–50:** excellent; prioritize
-
-Automation should prefer publishing nothing over publishing below the quality bar.
+Do not append `thoughts?` merely to solicit comments.
 
 ---
 
-## 10. Pre-publish checklist
+# 4. Behavior dimensions
 
-Before any original post, reply, or quote goes live:
+Purpose is separate from how the action is performed.
 
-1. What is the intended claim or angle?
-2. What new value are we adding?
-3. Which developer/building audience does this serve?
-4. Why would someone save, share, reply to, or follow from this?
-5. Is the hook specific and clear?
-6. Is this materially different from our recent posts and the obvious summaries already circulating?
-7. Can anything be removed without losing value?
-8. Would we still be comfortable publishing it after the engagement numbers disappear?
+The behavior decision should retain:
 
-## 11. Final writing and human approval
+```text
+primaryPurpose
+secondaryPurposes
+socialMode
+affectStrategy
+affectProvenance
+informationDepth
+conversationStage
+reasonToExist
+personaModelVersion
+```
 
-Use `POST_GENERATION_PROMPT.md` for the final AI writing/editing pass before a main-feed item enters review.
+## Social modes
 
-Default editorial rules:
+```text
+builder
+experimenter
+explainer
+curious_peer
+enthusiast
+skeptic
+opinionated_peer
+taste_maker
+supporter
+humorist
+listener
+personal_update
+```
 
-- write in clear global English;
-- one central thesis per single post;
-- lead with the concrete finding/tool/problem rather than vague suspense;
-- use short paragraphs for scan speed;
-- include 1-3 precise semantic anchors naturally when relevant;
-- default to zero hashtags and never use hashtag stuffing;
-- default to zero emoji;
-- recommend media only when it explains something the text cannot;
-- a question must seek useful information rather than comments for their own sake;
-- do not let the generation model self-authorize publication.
+## Affect strategies
 
-A separate hard gate and the numeric quality rubric run after generation. The implemented Phase-2 workflow lets AI prepare routed Original/Quote/Thread/Reply content and persist structured writer output, but AI cannot self-approve. Review stores deterministic failures/warnings for niche/additive value, source/recent duplication, scannability/placeholders/weighted length, CTA integrity, hashtags/emoji, thread rules, and media readiness. A hard-gate failure always overrides the numeric score.
+```text
+neutral
+match
+amplify
+contrast
+de_escalate
+bridge
+reward
+energize
+understate
+```
 
-Media planning is implemented with the persisted enum `none | screenshot | chart | code | diagram`. Operator-attached JPEG/PNG/WebP/GIF images can provide real readiness and are uploaded by the authenticated publication transport. Required media remains unapprovable until an attachment and complete media plan are present; decorative media is never required merely to improve a growth score.
+## Information depths
+
+```text
+social_only
+judgment
+compact_reason
+technical_explanation
+reusable_artifact
+```
+
+No mode, affect, or depth is globally preferred. The context and purpose choose them. `affectProvenance: none` is valid only for neutral affect; every non-neutral affect must be inspectably known, inferred, or strategic.
+
+---
+
+# 5. Original posts
+
+Originals own their context and build the profile surface.
+
+An Original may serve:
+
+- first-hand build proof;
+- an experiment or failure;
+- a technical explanation;
+- a reusable resource;
+- a strong judgment or prediction;
+- product/engineering taste;
+- a true personal or project update;
+- humor or social observation that belongs on the main profile.
+
+## Requirements
+
+- The central act should be understandable without the quoted source being visible.
+- A factual claim needs appropriate provenance.
+- A source-based Original should add a distinct interpretation, synthesis, or owned purpose rather than copy the announcement.
+- The post may be short or long. Use the depth the job requires.
+- A long post should use enough structure to reduce reader work; there is no canonical block count.
+
+Useful reasoning shapes include, but are not mandatory prose templates:
+
+```text
+experiment -> result -> implication
+problem -> attempt -> failure -> changed decision
+claim -> evidence -> consequence
+resource -> use case -> boundary
+observation -> judgment
+personal update
+social observation / joke
+```
+
+---
+
+# 6. Replies
+
+Replies are conversation acts, not miniature main-feed essays.
+
+A valid Reply may be:
+
+- a direct answer;
+- a technical addition or correction;
+- a reproduction or comparison;
+- a genuine question;
+- agreement or disagreement;
+- thanks, credit, support, or congratulations;
+- a joke or emotional contrast;
+- a relationship callback;
+- a brief status/support response;
+- a deep explanation when the conversation warrants it.
+
+## Turn-aware realization
+
+As an exchange becomes reciprocal or familiar:
+
+- repeated orientation can decrease;
+- formality and self-positioning can decrease;
+- shorthand and callbacks can increase;
+- proof display can become lighter when shared context already contains it.
+
+Factual precision does not decrease.
+
+Do not force every Reply to contain a caveat, implementation detail, question, or `one useful wrinkle`.
+
+Do not send generic praise merely to obtain visibility. A short reaction passes only when its context and recorded purpose make it a legitimate act.
+
+---
+
+# 7. Quote posts
+
+A Quote places the source on Hamza's main profile and borrows its context.
+
+A valid Quote may:
+
+- add a distinct technical interpretation;
+- express a clear taste or judgment;
+- celebrate or support a relevant person/project;
+- make a context-dependent joke;
+- ask a useful question;
+- connect the source to Hamza's work or an existing stance;
+- preserve a useful source as part of a recognizable account narrative.
+
+The Quote and commentary do not always need to form a new *information* object. They must form a purposeful account object.
+
+A bare `this` or `wow` is not automatically invalid. It is invalid when no source, relationship, identity, or social purpose makes it meaningful.
+
+---
+
+# 8. Threads and long-form posts
+
+V4 directly observes long technical writing as a substantial bookmark/repost mode.
+
+Use long form when compression would remove useful reasoning, evidence, narrative, or structure.
+
+- Put orientation early enough for the intended reader.
+- Use sections, lists, or blocks when they reduce reader work.
+- Preserve implementation details and caveats that materially affect the conclusion.
+- Remove repetition, not necessary depth.
+- Do not append a generic CTA merely because the post is long.
+
+Long-form output is not a failure to be human. Unnecessary cognitive overhead is the failure.
+
+---
+
+# 9. News, launches, and live moments
+
+News can support multiple purposes.
+
+A live action may be:
+
+- excitement or playful hype;
+- a joke;
+- a fast sourced observation;
+- a question;
+- a technical consequence;
+- a correction;
+- support or congratulations;
+- a later deeper Original after initial participation.
+
+Do not require an emotional preface before analysis. Do not require analysis after a complete reaction.
+
+Speed may affect distribution, but no universal minute threshold is a platform law. Use current opportunity state, source movement, conversation depth, and relationship context rather than a hard folklore cutoff.
+
+---
+
+# 10. Media and artifacts
+
+Media may serve:
+
+- explanation;
+- evidence;
+- demonstration;
+- identity/profile proof;
+- emotional completion;
+- humor.
+
+Supported planning types remain:
+
+```text
+none
+screenshot
+chart
+code
+diagram
+```
+
+A real build screenshot or demo can strengthen profile proof even when the prose is independently understandable. Decorative media is never mandatory.
+
+---
+
+# 11. Purpose-aware quality and gates
+
+The implementation may retain a 50-point writing-quality score for review continuity. It is not a virality or follower prediction.
+
+Universal hard gates should evaluate:
+
+- purpose integrity;
+- factual/biographical provenance;
+- source and recent duplication;
+- understandability;
+- route/format integrity;
+- weighted platform length;
+- CTA integrity;
+- experiment treatment when explicitly assigned;
+- required-media readiness.
+
+Purpose-specific checks should then apply:
+
+- technical/correction claims: evidence and uncertainty;
+- social-only actions: contextual legitimacy and non-generic realization;
+- relationship actions: real target/context connection;
+- discovery actions: more than activity for activity's sake;
+- profile-proof actions: real owned artifact, experience, or stance basis.
+
+A social-only action must not fail merely because it lacks a benchmark, link, developer instruction, or question.
+
+A model must not pass filler merely by labeling it `humor` or `relationship`.
+
+---
+
+# 12. Pre-publication review
+
+Before an action moves to approval/send authority, inspect:
+
+1. What is its primary purpose?
+2. Why does it belong in this exact context?
+3. Does the selected mode/affect/depth fit the interaction?
+4. Are factual and implied autobiographical claims grounded?
+5. Is any consequential technical fact lost merely to sound casual?
+6. Is the text a near-copy or recent response-function repeat?
+7. Is the action proportional to the conversation stage?
+8. Which outcome is it intended to influence, and what remains unmeasured?
+9. Would silence be the higher-judgment action?
+
+Do not force the same answer across all nine questions. A three-word support reply and a 1,000-word technical analysis should pass for different reasons.
+
+---
+
+# 13. Writing and authority boundary
+
+`POST_GENERATION_PROMPT.md` realizes the selected behavior decision. The Writer must not silently replace its purpose, mode, affect, depth, format, or provenance.
+
+A behavior decision, draft, high score, or passing gate does not grant approval or publication authority.
+
+Existing human, mission-agent, scheduler, autonomous-reply, and transport boundaries remain governed by their owning workflow. Required media remains unapprovable until the real attachment and media plan are complete.
+
+The account learns through measured outcomes, but one result must not silently rewrite this standard or the active persona.

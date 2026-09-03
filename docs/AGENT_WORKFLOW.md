@@ -4,17 +4,21 @@ This document is the operating contract for any agent that researches, drafts, o
 
 ## System objective
 
-The account is a **developer + builder in tech** account. The agent should turn useful signals into original developer value:
+The account is a **developer + builder in tech** account and social participant.
 
-**signal -> why it matters -> evidence -> action**
+Universal operating principle:
 
-The agent is not a generic news summarizer and must not treat AI as the parent category. Registered Growth Focus content groups are preferences, while the broader configurable technical audience is an exploration surface. New technical categories may enter as exploratory opportunities without first becoming permanent niches; live momentum can outweigh topic familiarity. Public copy must also pass the understandability hard gate before approval or send. The gate does not require a plain or neutral voice; humor, technical language, and personality are fine when the point still lands on one read.
+> **Every public action needs a purpose. Not every public action needs information.**
 
-The architecture is also **network-first**. Publishing is one instrument inside a broader loop:
+The agent must select and persist purpose, social mode, affect strategy/provenance, information depth, conversation stage, and reason to exist before final Writer realization. Technical value, profile proof, discovery, relationship, support, celebration, humor, taste, judgment, learning, correction, de-escalation, social presence, and silence are distinct possibilities.
 
-**conversation insertion -> repeated interaction -> relationship -> profile conversion -> follow -> stronger future distribution -> owned-content conversion.**
+The agent is not a generic news summarizer and must not treat AI as the parent category. Registered Growth Focus groups are preferences while the broader technical audience remains an exploration surface. Public copy must pass purpose, provenance, understandability, duplication, format, and authority gates. Short social acts and long technical explanations can both be valid.
 
-Use `PRODUCT_ARCHITECTURE.md` for the complete current/planned product map, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for the strategic model, `RELATIONSHIP_INTELLIGENCE.md` for current relationship ownership and Engage Next behavior, and `ALGORITHM_EVIDENCE_LEDGER.md` for evidence classification. Phase 6 editorial planning and the selectable AI runtime/provider layer are current: agents may inspect/refresh/select/dismiss editorial recommendations and inspect/select AI configuration through the bridge, but those actions do not grant approval or publication authority.
+The architecture is **network-first and behavior-aware**:
+
+**purposeful participation -> repeated recognition -> relationship/profile curiosity -> follow -> stronger future distribution -> owned-content conversion.**
+
+Use `PRODUCT_ARCHITECTURE.md` for the product map, `CONTENT_OPERATING_STANDARD.md` for outbound legitimacy, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for growth strategy, `RELATIONSHIP_INTELLIGENCE.md` for relationship ownership, `behavior.js` for the shared behavior contract, and `persona.js` for the active versioned persona. `ALGORITHM_EVIDENCE_LEDGER.md` is evidence-only. Editorial and AI-runtime actions remain advisory and do not grant approval or publication authority.
 
 ## Stable interface
 
@@ -33,9 +37,13 @@ Available commands:
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
 - `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
-- `operator-status` - read the compact cross-lane cockpit: account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
+- `operator-status` - read the compact cross-lane cockpit: active persona version/status, account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
 - `operator-memory-review` - record a completed Browser/`x-content` memory checkpoint and reset the interaction window; requires `confirmReview: true` and an exact result.
 - `route` - select/override Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore for a candidate; agents cannot approve.
+- `behavior-select` - explicitly persist/replace the purpose, mode, affect, information depth, conversation stage, and reason-to-exist for one routed text item; it invalidates stale draft gates but does not approve.
+- `persona-model` - inspect the active versioned Hamza model and an optional bounded consumer slice.
+- `persona-stances` - inspect current and historical timestamped stance events.
+- `persona-stance-record` - append an explicit human-confirmed stance event; it never rewrites prior history.
 - `workflow` - inspect one candidate's queue row, draft, actions, current score breakdown, and stored recommendation.
 - `research` - query persisted research candidates.
 - `performance` - read the latest persisted account/post performance snapshot.
@@ -76,13 +84,13 @@ npm run agent -- editorial-add-source <<<'{"recommendationId":2,"url":"https://e
 
 ## Distribution decision before drafting or engaging
 
-Use `docs/GROWTH_DISTRIBUTION_PLAYBOOK.md` as the governing method. The agent must decide one of:
+Use the current behavior decision plus `CONTENT_OPERATING_STANDARD.md` and `NETWORK_GROWTH_OPERATING_SYSTEM.md` as governing authority. `GROWTH_DISTRIBUTION_PLAYBOOK.md` is a supporting distribution reference, not a competing behavior constitution. The agent must decide one of:
 
-- **DIRECT** when the insight is ours, combines multiple sources, or stands alone as an experiment/result/implementation;
-- **QUOTE** when the source itself is important evidence and our commentary adds a distinct thesis or developer implication;
-- **REPOST** only when amplification itself is the point and forcing commentary would add nothing;
-- **REPLY** when we can make a specific technical contribution or informed question that helps build a relevant relationship;
-- **IGNORE** when niche fit or additive value is weak, or the candidate has already been used.
+- **DIRECT** when the selected purpose belongs on the owned profile and can stand without the source being visible;
+- **QUOTE** when the selected judgment, interpretation, proof, taste, discovery, or other profile purpose benefits from keeping the source visible;
+- **REPOST** when amplification itself is the selected purpose and forcing commentary would add nothing;
+- **REPLY** when the selected act belongs inside the conversation: answer, judgment, disagreement, support, humor, learning, correction, relationship callback, or technical contribution;
+- **IGNORE** when no purposeful action survives the current relevance, duplication, context, and authority checks.
 
 Example decision call:
 
@@ -195,7 +203,7 @@ Phase 1C uses a separate `queue_items(lane=engagement, pipeline=reply)` workflow
 2. fresh posts from high-value relationship/authority/distribution targets;
 3. research candidates where a reply is a better action than a quote/original.
 
-Every actionable item exposes target relationship context, Conversation Potential, Relationship Potential, TargetScore, freshness/expiry, per-post ReplyVisibility, EngagePriority, the concrete proposed contribution, and `initial_reply` / `follow_up` / `own_post_response` kind. If the current source cannot support a concrete contribution, it is not queued. Saturation/repetition are bounded soft modifiers; active/direct-response evidence can neutralize them.
+Every actionable item exposes target relationship context, Conversation Potential, Relationship Potential, TargetScore, freshness/expiry, per-post ReplyVisibility, EngagePriority, the selected behavior/reason to exist, its visible archetype when useful, and `initial_reply` / `follow_up` / `own_post_response` kind. If the current source cannot support a legitimate contextual purpose, it is not queued. Saturation/repetition are bounded soft modifiers; active/direct-response evidence can neutralize them.
 
 Inspect cached state first, then refresh only when freshness can change the selected action:
 
@@ -319,7 +327,7 @@ For a viral source post, explicitly determine:
 
 The goal is not to rewrite the source tweet.
 
-For the final writing pass, use `POST_GENERATION_PROMPT.md` as the canonical style/editor contract: global English, one thesis, short scannable paragraphs, 1-3 natural semantic anchors, zero hashtags by default, and no generic engagement bait.
+For the final writing pass, use `POST_GENERATION_PROMPT.md` as the canonical behavior-realization contract. The Writer receives the persisted behavior and active persona slice; it does not recompute Hamza's role. Use the depth and structure the selected act needs, preserve factual/biographical provenance, obey explicit experiment treatments, and avoid generic engagement bait.
 
 ### 5. Create or inspect the draft
 
@@ -335,7 +343,7 @@ The generated scaffold is deliberately incomplete and normally scores below publ
 printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js writer-packet
 ```
 
-`writer-packet` returns `{ packet, generation }`. Feed only `packet` to the external Writer. `packet` contains the routed pipeline, candidate/queue opportunity context, relationship context when available, current draft, recent approved/published content, profile-proof slot, constraints, and `docs/POST_GENERATION_PROMPT.md`. It contains `writingStrategy` only when the latest persisted human selection is `apply`. `off`, `suggest`, and no selection add no strategy instruction. `generation` is transport provenance for `apply-writer-output`; it is not Writer guidance. `writer-packet` does not call an LLM.
+`writer-packet` returns `{ packet, generation }`. Feed only `packet` to the external Writer. `packet` contains the routed pipeline, normalized behavior, active persona slice/version, candidate/queue context, relationship/conversation context, current draft, recent content, profile-proof slot, constraints, and `docs/POST_GENERATION_PROMPT.md`. It contains `writingStrategy` only when the latest persisted human selection is `apply`. `off`, `suggest`, and no selection add no strategy instruction. `generation` is transport provenance for `apply-writer-output`; it is not Writer guidance. `writer-packet` does not call an LLM.
 
 After applying that prompt externally, persist the structured candidate output and echo the exact `generation` object returned by `writer-packet`:
 
@@ -393,7 +401,7 @@ Current writing-quality dimensions:
 
 These total 40 raw writing points and are proportionally normalized to the 50-point writing-quality scale. Growth fit and Growth Packaging are separate; the score is not a virality or follower-growth prediction.
 
-Final human approval requires at least **40/50** and a passing deterministic gate result. Gates cover niche/additive value; source/recent duplication; scannability/placeholders/weighted length; CTA integrity; hashtag/emoji limits; thread rules; and required-media readiness. Approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval additionally snapshots the exact reply body; only the explicit Engage send path can consume that snapshot. No bridge command can create either human approval.
+Final human approval requires at least **40/50** and a passing deterministic gate result. The 50-point score is purpose-aware: purpose, clarity, provenance, originality, and realization. Gates cover behavior validity, purpose/context integrity, factual and implied-biographical provenance, strategic relevance, source/recent duplication, understandability/placeholders/weighted length, CTA/treatment/media integrity, and format rules. Approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval snapshots the exact reply body; only the explicit send path can consume it. No bridge command creates human approval.
 
 ## Queue and automation interaction
 
@@ -479,15 +487,15 @@ Use persisted candidates whose active Growth Focus groups have role `adjacent`, 
 
 ## Strict invariants
 
-- Never turn a source tweet into a near-copy. Add analysis, testing, context, evidence, or a developer action.
+- Never turn a source tweet into a near-copy. The outbound act must realize a distinct selected purpose; that may be analysis, judgment, testing, context, evidence, humor, support, relationship action, or another legitimate behavior rather than mandatory technical additivity.
 - Never represent `needs_review` as human approval; only the explicit dashboard approval action may create compatibility `ready`.
 - Never manipulate SQLite directly from an agent when the bridge command exists.
 - Never silently enable `AUTO_POST`.
 - Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
 - Treat target saturation, repeated archetype, concentration, and InteractionYield as advisory diagnostics; accepted learned rules may tune their bounded soft effect, while exact/near-duplicate replies remain a hard stop owned by the content gate.
-- Replies and quote-posts should add a specific technical contribution, not generic praise or engagement bait.
+- Replies and quote-posts must realize a specific purpose. Technical contribution is one valid purpose; independent judgment, answer, support, humor, celebration, relationship continuation, taste, or amplification can also be complete when context supports them. Generic praise or engagement bait remains invalid.
 - Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another path has not already done so. The Engage Next approved-send path records its own successful `reply` action and `our_reply` relationship event exactly once.
-- Preserve the content and distribution standards in `CONTENT_OPERATING_STANDARD.md` and `GROWTH_DISTRIBUTION_PLAYBOOK.md`.
+- Preserve the canonical behavior/content standards in `CONTENT_OPERATING_STANDARD.md`, `NETWORK_GROWTH_OPERATING_SYSTEM.md`, `RELATIONSHIP_INTELLIGENCE.md`, and `POST_GENERATION_PROMPT.md`; use `GROWTH_DISTRIBUTION_PLAYBOOK.md` only as supporting distribution guidance where it does not conflict.
 
 ## Feedback loop
 

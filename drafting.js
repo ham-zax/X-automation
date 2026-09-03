@@ -1,3 +1,10 @@
+import {
+  behaviorDecisionRequiresFactualEvidence,
+  behaviorDecisionSupportsSocialOnly,
+  normalizeBehaviorDecision,
+  validateBehaviorDecision,
+} from './behavior.js';
+import { getPersonaSlice, selectBehaviorDecision } from './persona.js';
 import { assessStrategicRelevance } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
 
@@ -145,17 +152,46 @@ export function buildWriterPacket({
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
   const sourceStyle = extractViralStyleFeatures({ text: candidate?.text || '' });
+  const contribution = {
+    archetype: queueItem?.replyArchetype
+      || (pipeline === 'quote' ? 'social_observation' : pipeline === 'reply' ? 'synthesis' : 'synthesis'),
+    summary: queueItem?.contributionSummary
+      || editorialRecommendation?.thesis
+      || queueItem?.routingReason
+      || `Realize the selected ${pipeline} action.`,
+  };
+  const behavior = selectBehaviorDecision({
+    explicitBehavior: queueItem?.behavior?.decision === 'ACT'
+      ? queueItem.behavior
+      : draft?.editor?.behavior?.decision === 'ACT'
+        ? draft.editor.behavior
+        : editorialRecommendation?.behavior?.decision === 'ACT'
+          ? editorialRecommendation.behavior
+          : null,
+    pipeline,
+    contribution,
+    relationship: relationship ?? queueItem?.relationship ?? null,
+    engagementKind: queueItem?.engagementKind || queueItem?.engagement?.kind || '',
+    parentOurTweetId: queueItem?.parentOurTweetId || '',
+    sourceClass: queueItem?.engagement?.sourceClass || '',
+    reasonToExist: contribution.summary,
+    selectionSource: queueItem?.behavior ? 'operator' : editorialRecommendation?.behavior ? 'editorial_ai' : 'persona_model',
+  });
+  const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
+  if (!behaviorValidation.valid) throw new Error(`Writer packet requires a valid ACT behavior: ${behaviorValidation.errors.join(' ')}`);
   const hashtagExperimentCount = Number(queueItem?.experimentAssignment?.context?.hashtagCount);
   const hasHashtagExperiment = Number.isInteger(hashtagExperimentCount)
     && hashtagExperimentCount >= 0
     && hashtagExperimentCount <= 2;
   return {
     account: {
-      identity: 'developer + builder in tech',
-      promise: 'make useful technical ideas understandable and actionable, leaning toward registered Growth Focus topics without hard-blocking strong emerging tech',
+      identity: 'developer + builder in tech and social participant',
+      promise: 'real work, useful judgment, recognizable taste, learning, humor, support, and context-appropriate participation',
       language: 'English',
     },
     pipeline,
+    behavior: behaviorValidation.behavior,
+    persona: getPersonaSlice('writer'),
     candidate: {
       source: candidate?.source ?? null,
       author: candidateAuthor(candidate),
@@ -188,6 +224,7 @@ export function buildWriterPacket({
       recommendationId: editorialRecommendation.id ?? null,
       thesis: editorialRecommendation.thesis ?? '',
       desiredReaderOutcome: editorialRecommendation.desiredReaderOutcome ?? '',
+      behavior: editorialRecommendation.behavior || null,
       researchQuestions: Array.isArray(editorialRecommendation.researchQuestions) ? [...editorialRecommendation.researchQuestions] : [],
     } : null,
     recentPosts: Array.isArray(recentPosts) ? [...recentPosts] : [],
@@ -216,7 +253,6 @@ export function buildWriterPacket({
       hashtagsHardMax: 2,
       ...(hasHashtagExperiment ? { hashtagExperimentCount } : {}),
       emojiMax: 1,
-      semanticAnchorsTarget: [1, 3],
     },
     promptDocument: 'docs/POST_GENERATION_PROMPT.md',
   };
@@ -236,6 +272,8 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
   const mediaType = mediaInput.type || 'none';
   if (!MEDIA_TYPES.has(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
   const evidenceUsed = validateWriterEvidenceReferences(writerOutput, writerPacket);
+  const behaviorValidation = validateBehaviorDecision(writerPacket?.behavior, { pipeline, requireAct: true });
+  if (!behaviorValidation.valid) throw new Error(`Writer output is missing a valid selected behavior: ${behaviorValidation.errors.join(' ')}`);
 
   const editor = {
     decision,
@@ -254,6 +292,8 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
       altText: String(mediaInput.altText ?? '').trim(),
     },
     riskFlags: asStringArray(writerOutput?.riskFlags).filter(Boolean),
+    behavior: behaviorValidation.behavior,
+    personaModelVersion: behaviorValidation.behavior.personaModelVersion || writerPacket?.persona?.version || '',
     followReason: String(writerOutput?.followReason ?? writerOutput?.followValue ?? '').trim(),
     notes: String(writerOutput?.notes ?? '').trim(),
   };
@@ -291,7 +331,26 @@ function genericPraise(text) {
 }
 
 function genericQuote(text) {
-  return /^\s*(?:this is (?:huge|great|wild|massive)(?: for developers)?|huge for developers|game changer|big news)[.!]?\s*$/i.test(String(text || ''));
+  return /^\s*(?:this is (?:huge|great|wild|massive)(?: for developers)?|huge for developers|game changer|big news|we are so back)[.!]?\s*$/i.test(String(text || ''));
+}
+
+function explicitOwnerExperienceClaim(text) {
+  return /\b(?:i|we)\s+(?:built|tested|used|tried|ran|measured|deployed|migrated|spent|bought|paid|debugged|shipped|implemented|hit|saw|found)\b|\b(?:my|our)\s+(?:project|repo|repository|codebase|team|company|setup|workflow|app|product|benchmark|test|deployment)\b/i.test(String(text || ''));
+}
+
+function impliedOwnerExperienceSignal(text) {
+  return /\b(?:after using|after testing|after running|after migrating|after deploying|in my setup|on my machine|pure pain|driving me crazy|nothing beats the feeling|works on my machine)\b/i.test(String(text || ''));
+}
+
+function behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate } = {}) {
+  if (!behavior || behavior.decision !== 'ACT' || !behavior.reasonToExist) return false;
+  if (!behaviorDecisionSupportsSocialOnly(behavior)) return true;
+  if (pipeline === 'reply' || pipeline === 'quote') {
+    return Boolean(candidate?.text || candidate?.url || relationship || conversationRelevanceCandidate);
+  }
+  return ['humor', 'taste', 'social_presence'].includes(behavior.primaryPurpose)
+    || (['celebration', 'support', 'relationship'].includes(behavior.primaryPurpose)
+      && behavior.provenance?.ownerFactsAllowed === true);
 }
 
 function blocks(text) {
@@ -408,6 +467,8 @@ function mediaPlanComplete(media) {
 
 export function evaluateDraftGates(draft, candidate, {
   pipeline: requestedPipeline,
+  behavior: requestedBehavior = null,
+  relationship = null,
   recentPosts = [],
   recentReplies = [],
   recentReplyArchetypes = [],
@@ -422,11 +483,15 @@ export function evaluateDraftGates(draft, candidate, {
   const units = contentUnits(draft, pipeline);
   const primaryText = units[0] || '';
   const combinedText = pipeline === 'thread' ? units.join('\n\n') : primaryText;
+  const behavior = normalizeBehaviorDecision(requestedBehavior || draft?.editor?.behavior || {}, { pipeline });
+  const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
   const failures = [];
   const warnings = [];
   const checks = {
     growthFocus: true,
-    additiveValue: true,
+    purposeIntegrity: true,
+    factualProvenance: true,
+    behaviorAlignment: true,
     originality: true,
     scannability: true,
     understandable: true,
@@ -439,6 +504,31 @@ export function evaluateDraftGates(draft, candidate, {
     threadRules: true,
     mediaReady: true,
   };
+
+  if (!behaviorValidation.valid) {
+    checks.purposeIntegrity = false;
+    checks.behaviorAlignment = false;
+    addIssue(failures, 'BEHAVIOR_DECISION_INVALID', `Draft requires a valid ACT behavior decision: ${behaviorValidation.errors.join(' ')}`);
+  } else if (!behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate })) {
+    checks.purposeIntegrity = false;
+    addIssue(failures, 'PURPOSE_CONTEXT_WEAK', 'The selected purpose is not supported by the current source, relationship, owner provenance, or conversation context.');
+  }
+
+  if (explicitOwnerExperienceClaim(combinedText) && behavior.provenance?.ownerExperienceAllowed !== true) {
+    checks.factualProvenance = false;
+    addIssue(failures, 'OWNER_EXPERIENCE_UNGROUNDED', 'The draft makes an explicit first-person experience claim without owner-experience provenance.');
+  }
+  if (impliedOwnerExperienceSignal(combinedText) && behavior.provenance?.ownerExperienceAllowed !== true) {
+    addIssue(warnings, 'IMPLIED_OWNER_EXPERIENCE_REVIEW', 'The wording may imply personal use or lived experience that is not present in the behavior provenance.');
+  }
+
+  if (behaviorDecisionRequiresFactualEvidence(behavior)
+      && behavior.primaryPurpose === 'correction'
+      && !draft?.editor?.evidenceUsed?.length
+      && !/https?:\/\/|\b(?:docs?|source|benchmark|measured|tested|release notes|according to|says)\b/i.test(combinedText)) {
+    checks.factualProvenance = false;
+    addIssue(failures, 'CORRECTION_EVIDENCE_MISSING', 'A consequential correction requires an inspectable source, evidence reference, or explicit attribution.');
+  }
 
   let growthFit = assessStrategicRelevance(candidate, {
     objective: growthObjective,
@@ -482,29 +572,40 @@ export function evaluateDraftGates(draft, candidate, {
   const sourceExact = normalizedText(primaryText) && normalizedText(primaryText) === normalizedText(sourceText);
   if (sourceExact || sourceSimilarity >= 0.70) {
     checks.originality = false;
-    checks.additiveValue = false;
+    checks.purposeIntegrity = false;
     addIssue(failures, 'SOURCE_DUPLICATE', `Draft is an exact/near duplicate of the source (${sourceSimilarity.toFixed(2)} similarity).`);
   } else if (sourceSimilarity >= 0.50) {
     addIssue(warnings, 'SOURCE_SIMILARITY_WARNING', `Draft is close to the source (${sourceSimilarity.toFixed(2)} similarity); confirm it adds distinct value.`);
   }
 
+  const socialOnly = behavior.informationDepth === 'social_only' && behaviorDecisionSupportsSocialOnly(behavior);
+  const socialContextOkay = behaviorContextSupported(behavior, {
+    pipeline,
+    candidate,
+    relationship,
+    conversationRelevanceCandidate,
+  });
   if (pipeline === 'quote' && genericQuote(primaryText)) {
-    checks.additiveValue = false;
-    addIssue(failures, 'NON_ADDITIVE_QUOTE', 'Quote commentary is generic and does not add a thesis, consequence, test, comparison, limitation, correction, or informed question.');
+    if (!socialOnly || !socialContextOkay) {
+      checks.purposeIntegrity = false;
+      addIssue(failures, 'GENERIC_QUOTE_WITHOUT_PURPOSE', 'Short Quote commentary requires a supported social, relationship, taste, humor, or celebration purpose.');
+    }
   } else if (pipeline === 'reply' && genericPraise(primaryText)) {
-    checks.additiveValue = false;
-    addIssue(failures, 'GENERIC_REPLY', 'Reply is generic praise without a concrete technical contribution or informed question.');
+    if (!socialOnly || !socialContextOkay) {
+      checks.purposeIntegrity = false;
+      addIssue(failures, 'GENERIC_REPLY_WITHOUT_PURPOSE', 'Short praise or reaction requires a supported social or relationship purpose in this context.');
+    }
   } else if (pipeline === 'thread') {
     const hasAnalysis = units.slice(1).some((part) => /\b(?:because|result|benchmark|evidence|failure|tradeoff|implementation|latency|cost|compare|measured|tested|code|command)\b/i.test(part))
       || Boolean(draft?.editor?.evidenceUsed?.length);
-    if (units.length >= 2 && !hasAnalysis) {
-      addIssue(warnings, 'THREAD_ADDITIVE_REVIEW', 'Thread follow-up parts do not contain an obvious evidence/analysis marker; confirm they add distinct value rather than expand a list.');
+    if (behaviorDecisionRequiresFactualEvidence(behavior) && units.length >= 2 && !hasAnalysis) {
+      addIssue(warnings, 'THREAD_EVIDENCE_REVIEW', 'This evidence-dependent thread has no obvious evidence or analysis marker after the opener.');
     }
   } else if (pipeline === 'original' && genericQuote(primaryText)) {
-    checks.additiveValue = false;
-    addIssue(failures, 'NON_ADDITIVE_ORIGINAL', 'Original is generic headline reaction without a distinct thesis or developer implication.');
+    checks.purposeIntegrity = false;
+    addIssue(failures, 'CONTEXTLESS_GENERIC_ORIGINAL', 'A contextless generic reaction is not a complete Original. Name or show the object, or use a source-bearing format.');
   } else if (pipeline === 'original' && sourceSimilarity >= 0.50) {
-    addIssue(warnings, 'ORIGINAL_ADDITIVE_REVIEW', 'Original is source-adjacent; confirm the thesis goes beyond the source headline.');
+    addIssue(warnings, 'ORIGINAL_SOURCE_PROXIMITY_REVIEW', 'Original is source-adjacent; confirm its selected purpose goes beyond paraphrase.');
   }
 
   const recentMain = Array.isArray(recentPosts) ? recentPosts.slice(0, 20) : [];
@@ -528,10 +629,6 @@ export function evaluateDraftGates(draft, candidate, {
         checks.threadRules = false;
         addIssue(failures, 'THREAD_EMPTY_PART', `Thread part ${index + 1} is empty.`);
       }
-      if (blocks(units[index]).length > 4) {
-        checks.scannability = false;
-        addIssue(failures, 'THREAD_TOO_MANY_BLOCKS', `Thread part ${index + 1} has more than 4 newline-separated blocks.`);
-      }
       if (weightedPostLength(units[index]) > 280) {
         checks.length = false;
         addIssue(failures, 'THREAD_PART_TOO_LONG', `Thread part ${index + 1} is ${weightedPostLength(units[index])}/280 weighted characters.`);
@@ -552,37 +649,18 @@ export function evaluateDraftGates(draft, candidate, {
     } else if (units.length > 6) {
       addIssue(warnings, 'LONG_THREAD_APPROVED', `Thread has ${units.length} parts with explicit human length approval.`);
     }
-    if (primaryText.length < 40 || PLACEHOLDER.test(primaryText)) {
+    if (!primaryText.trim() || PLACEHOLDER.test(primaryText)) {
       checks.threadRules = false;
-      addIssue(failures, 'THREAD_OPENER_INCOMPLETE', 'Thread Post 1 must be non-placeholder text of at least 40 characters and contain the complete high-level finding.');
+      addIssue(failures, 'THREAD_OPENER_INCOMPLETE', 'Thread Post 1 must contain non-placeholder text that orients the reader to the selected act.');
     }
     if (/^\s*1\/(?:\d+)?(?:\s|$)/i.test(primaryText) && /\b(?:thread|more below|read on|keep reading|details below|here'?s why)\b/i.test(primaryText)) {
       checks.threadRules = false;
       addIssue(failures, 'THREAD_TEASER', 'Thread Post 1 uses a numbered teaser pattern that appears to withhold the useful conclusion.');
     }
-    const finalPart = units.at(-1) || '';
-    if (finalPart && !/[?]|\b(?:try|use|avoid|choose|measure|compare|check|test|benchmark|configure|prefer|treat|watch|ship)\b/i.test(finalPart)) {
-      addIssue(warnings, 'THREAD_TAKEAWAY_REVIEW', 'Final thread part has no obvious developer takeaway/action; confirm the ending is useful rather than promotional.');
-    }
   } else {
-    const textBlocks = blocks(primaryText);
-    if (textBlocks.some((block) => sentenceCount(block) > 3)) {
-      checks.scannability = false;
-      addIssue(failures, 'PARAGRAPH_TOO_DENSE', 'A paragraph contains more than 3 sentences.');
-    }
-    if (textBlocks.length > 4) {
-      checks.scannability = false;
-      addIssue(failures, 'TOO_MANY_BLOCKS', `Single post has ${textBlocks.length} newline-separated blocks; maximum is 4.`);
-    }
-    const firstBlock = textBlocks[0] || '';
-    if (firstBlock.length > 160 && !/https?:\/\/|`/.test(firstBlock)) {
-      checks.scannability = false;
-      addIssue(failures, 'FIRST_BLOCK_TOO_LONG', `First block is ${firstBlock.length} characters; maximum is 160 unless URL/code structure requires otherwise.`);
-    }
-    const firstLine = firstBlock.split('\n')[0] || '';
+    const firstLine = (blocks(primaryText)[0] || '').split('\n')[0] || '';
     if (allCapsLine(firstLine)) {
-      checks.scannability = false;
-      addIssue(failures, 'ALL_CAPS_FIRST_LINE', 'First line is all caps and longer than an acronym-sized label.');
+      addIssue(warnings, 'ALL_CAPS_FIRST_LINE_REVIEW', 'First line is all caps; keep it only when the selected affect and context justify that intensity.');
     }
     const length = weightedPostLength(primaryText);
     if (length > 280) {
@@ -653,23 +731,34 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   const firstLine = String(units[0] || '').split('\n')[0].trim();
   const editor = draft?.editor || {};
   const blockers = [];
+  const behavior = normalizeBehaviorDecision(context.behavior || editor.behavior || {}, { pipeline });
+  const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
   const strategyMode = context.strategyMode ?? null;
   const strategyLabel = strategyMode === 'apply' ? 'Use for this draft' : strategyMode === 'suggest' ? 'Advice only' : strategyMode === 'off' ? 'No influence' : 'Missing decision';
-  const stoppingClear = usefulText(firstLine, 28);
+  const socialOnly = behavior.informationDepth === 'social_only' && behaviorDecisionSupportsSocialOnly(behavior);
+  const stoppingClear = Boolean(text) && (socialOnly ? !PLACEHOLDER.test(text) : usefulText(firstLine, 12));
   const payoffSignals = [];
+  if (behaviorValidation.valid) payoffSignals.push(`purpose: ${behavior.primaryPurpose}`);
   if (/\b(?:install|try|use|run|configure|download|repo(?:sitory)?|resource|guide|docs|library|package|cli)\b/i.test(text)) payoffSignals.push('useful resource/action');
   if (/\b(?:choose|avoid|switch|compare|trade-?off|decision|rule of thumb|when to|better for|worse for)\b/i.test(text)) payoffSignals.push('decision support');
   if (/\b(?:benchmark|measured|tested|result|latency|throughput|cost)\b/i.test(text)) payoffSignals.push('proof/evidence');
   const sourceSimilarity = similarity(text, candidate?.text || '');
-  if (usefulText(text, 60)
+  if (usefulText(text, 40)
     && sourceSimilarity < 0.80
     && /(?:\b(?:means|matters|because|instead|constraint|trade-?off|bottleneck|risk|before|after|if|when|not)\b|—)/i.test(text)) {
     payoffSignals.push('specific insight');
   }
-  const hasPublicQuestion = usefulText(text, 24) && /\?/.test(text);
-  if (hasPublicQuestion) payoffSignals.push('useful question');
-  const readerPayoffClear = payoffSignals.length > 0;
-  if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_READER_PAYOFF', message: 'No clear reader payoff is inspectable in the current draft.' });
+  const hasPublicQuestion = Boolean(text) && /\?/.test(text);
+  if (hasPublicQuestion) payoffSignals.push('question/conversation opening');
+  if (socialOnly && behaviorContextSupported(behavior, {
+    pipeline,
+    candidate,
+    relationship: context.relationship,
+    conversationRelevanceCandidate: context.conversationRelevanceCandidate,
+  })) payoffSignals.push('contextual social/relationship act');
+  const readerPayoffClear = behaviorValidation.valid && payoffSignals.length > 0;
+  if (!behaviorValidation.valid) blockers.push({ code: 'BEHAVIOR_DECISION_INVALID', message: behaviorValidation.errors.join(' ') });
+  else if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_PURPOSE_PAYOFF', message: 'The current draft does not visibly fulfill its selected purpose.' });
 
   const resourcePromise = /\b(?:here(?:'s| is)|check out|try|install|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text);
   const explicitUrl = /https?:\/\/\S+/i.test(text);
@@ -695,14 +784,14 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
     ready: blockers.length === 0,
     blockers,
     items: {
-      stoppingPower: { status: stoppingClear ? 'clear' : 'review', detail: stoppingClear ? 'The opening states a concrete idea immediately.' : 'The opening is thin or generic; review whether a stranger has an immediate reason to stop.' },
-      readerPayoff: { status: readerPayoffClear ? 'clear' : 'blocked', detail: readerPayoffClear ? [...new Set(payoffSignals)].join(', ') : 'No decision, resource, proof, specific insight, or useful question is evident.' },
+      stoppingPower: { status: stoppingClear ? 'clear' : 'review', detail: stoppingClear ? 'The selected act is legible at the required depth.' : 'The opening or complete short act is too thin to realize the selected behavior.' },
+      readerPayoff: { status: readerPayoffClear ? 'clear' : 'blocked', detail: readerPayoffClear ? [...new Set(payoffSignals)].join(', ') : 'The selected purpose is not evident in the draft.' },
       distributionLeverage: { status: pipeline === 'quote' || pipeline === 'reply' ? 'borrowed_context' : 'owned_only', detail: pipeline === 'quote' ? 'Native Quote can borrow legitimate attention from the source conversation.' : pipeline === 'reply' ? 'Reply participates directly in the source conversation.' : 'Owned-only distribution; a cold-start account gets little graph help from format alone.' },
       sourceActionPath: { status: sourcePathReady ? (resourcePromise ? 'clear' : 'not_needed') : 'blocked', detail: sourcePathReady ? resourcePromise ? (nativeSourcePath ? 'The native quoted source is the action/source path.' : 'The public copy contains a usable URL/action path.') : 'This draft does not promise a resource/action path.' : 'Add a usable URL/source path or change the copy so it no longer promises a resource.' },
-      interactionOpening: { status: hasPublicQuestion ? 'present' : 'optional', detail: hasPublicQuestion ? 'The public copy contains a question; review whether the answer would be genuinely useful.' : 'No forced question. Add one only if it opens a useful conversation.' },
+      interactionOpening: { status: hasPublicQuestion ? 'present' : 'optional', detail: hasPublicQuestion ? 'The public copy contains a question; confirm it serves the selected technical, social, playful, or rhetorical purpose.' : 'No forced question; the selected act may already be complete.' },
       mediaOpportunity: { status: mediaStatus, detail: mediaStatus === 'unavailable' ? 'Media is planned, but the current X transport cannot publish attachments.' : mediaStatus === 'planned' ? 'A real attachment path is available for this media plan.' : 'No media is required for this draft.' },
       strategyState: pipeline === 'reply'
-        ? { status: 'not_required', mode: null, label: 'Engage Next reply', detail: 'Main-feed Writing Approach is not required for the human reply lane; reply contribution/tone is owned by Engage Next.' }
+        ? { status: 'not_required', mode: null, label: 'Engage Next reply', detail: 'Main-feed Writing Approach is not required for the reply lane; the persisted behavior decision owns purpose, mode, affect, and depth.' }
         : { status: strategyMode && !generationStrategyStale ? 'clear' : 'blocked', mode: strategyMode, label: strategyLabel, detail: generationStrategyStale ? 'The saved writing choice changed after this AI generation; regenerate before approval.' : strategyMode === 'apply' ? (context.strategyApproach || 'The persisted Apply selection is the active Writer hypothesis.') : strategyMode === 'suggest' ? 'Guidance is visible but does not enter Writer.' : strategyMode === 'off' ? 'Strategy influence is explicitly off.' : 'No human strategy decision is persisted.' },
     },
   };
@@ -713,51 +802,66 @@ export function scoreDraft(draft, candidate, context = {}) {
   const pipeline = gateAware ? ensurePipeline(context?.pipeline || draft?.editor?.pipeline || 'original') : 'original';
   const units = contentUnits(draft, pipeline);
   const body = units[0] ?? '';
-  const blocks = String(body || '').split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
-  const firstLine = String(blocks[0] || body || '').split('\n')[0].trim();
-  const insightText = blocks.length > 1 ? blocks.slice(1).join(' ') : String(body || '').trim();
-  const finalBlock = blocks.at(-1) || '';
-  const hook = usefulText(firstLine, 20) ? 8 : firstLine ? 3 : 0;
-  const insight = usefulText(insightText, 45) ? 10 : usefulText(body, 60) ? 6 : String(body || '').trim() ? 3 : 0;
-  const evidenceText = String(body || '');
-  const citedEvidenceIds = new Set((Array.isArray(draft?.editor?.evidenceUsed) ? draft.editor.evidenceUsed : [])
-    .map((id) => String(id || '').trim()).filter(Boolean));
-  const resolvedEvidence = (Array.isArray(context?.evidence) ? context.evidence : [])
-    .filter((item) => citedEvidenceIds.has(String(item?.id ?? '').trim()));
-  const hasResolvedEvidence = resolvedEvidence.some((item) => ['primary_supported', 'source_claim'].includes(String(item?.status || '')));
-  const hasEvidenceMarker = usefulText(evidenceText, 30)
-    && /(?:\b\d+(?:\.\d+)?(?:%|x|ms|s|gb|mb|k|m)?\b|\b(?:benchmark|latency|token|cost|install|npm|pnpm|curl|git|python|node|result|tested|measured|source|docs|release notes)\b)/i.test(evidenceText);
-  const hasSource = /https?:\/\//i.test(evidenceText) || hasResolvedEvidence;
-  const evidence = !evidenceText.trim()
-    ? 0
-    : hasResolvedEvidence
-      ? 10
-      : usefulText(evidenceText, 30) && (hasEvidenceMarker || hasSource)
-        ? 6
-        : usefulText(evidenceText, 40) ? 4 : 1;
-  const hasAction = /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|keep|check|measure|benchmark|configure|ship|test)\b)/i.test(finalBlock);
-  const action = usefulText(finalBlock, 24) && hasAction ? 7 : finalBlock ? 2 : 0;
+  const text = units.join('\n\n').trim();
   const sourceSimilarity = similarity(body, candidate?.text || '');
-  const originality = !String(body || '').trim() ? 0 : sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
-  const rawWritingScore = hook + insight + evidence + action + originality;
-  const score = Math.round((rawWritingScore / 40) * 50);
   const weightedLength = pipeline === 'thread'
     ? Math.max(0, ...units.map((part) => weightedPostLength(part)))
     : weightedPostLength(body);
-  const quality = score >= 45 ? 'high' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
   const minimumScore = pipeline === 'reply' ? 30 : 40;
-  const legacyPublishable = score >= minimumScore && !PLACEHOLDER.test(body) && weightedLength <= 280;
-  const gates = gateAware ? evaluateDraftGates(draft, candidate, context) : null;
-  const growthPackaging = gateAware ? reviewGrowthPackaging(draft, candidate, context) : null;
+
+  if (!gateAware) {
+    const textBlocks = String(body || '').split(/\n\s*\n/).map((part) => part.trim()).filter(Boolean);
+    const firstLine = String(textBlocks[0] || body || '').split('\n')[0].trim();
+    const insightText = textBlocks.length > 1 ? textBlocks.slice(1).join(' ') : String(body || '').trim();
+    const finalBlock = textBlocks.at(-1) || '';
+    const hook = usefulText(firstLine, 20) ? 8 : firstLine ? 3 : 0;
+    const insight = usefulText(insightText, 45) ? 10 : usefulText(body, 60) ? 6 : String(body || '').trim() ? 3 : 0;
+    const evidence = usefulText(body, 30) && /(?:\b\d+(?:\.\d+)?(?:%|x|ms|s|gb|mb|k|m)?\b|https?:\/\/|\b(?:benchmark|latency|cost|result|tested|measured|source|docs)\b)/i.test(body) ? 10 : body ? 4 : 0;
+    const action = usefulText(finalBlock, 24) && /(?:\?|\b(?:try|use|run|install|compare|avoid|switch|check|measure|test)\b)/i.test(finalBlock) ? 7 : finalBlock ? 2 : 0;
+    const originality = !String(body || '').trim() ? 0 : sourceSimilarity < 0.30 ? 5 : sourceSimilarity < 0.50 ? 3 : 0;
+    const score = Math.round(((hook + insight + evidence + action + originality) / 40) * 50);
+    const quality = score >= 45 ? 'high' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
+    return {
+      score,
+      minimumScore,
+      quality,
+      breakdown: { hook, insight, evidence, action, originality },
+      sourceSimilarity,
+      weightedLength,
+      publishable: score >= minimumScore && !PLACEHOLDER.test(body) && weightedLength <= 280,
+    };
+  }
+
+  const gates = evaluateDraftGates(draft, candidate, context);
+  const growthPackaging = reviewGrowthPackaging(draft, candidate, context);
+  const behavior = normalizeBehaviorDecision(context.behavior || draft?.editor?.behavior || {}, { pipeline });
+  const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
+  const purpose = behaviorValidation.valid && gates.checks?.purposeIntegrity === true ? 10 : 0;
+  const clarity = text && gates.checks?.understandable === true ? 10 : text ? 4 : 0;
+  const provenance = gates.checks?.factualProvenance === true ? 10 : 0;
+  const originality = gates.checks?.originality === true && gates.checks?.recentDuplicate === true
+    ? 10
+    : gates.checks?.originality === true ? 5 : 0;
+  const realization = text
+    && gates.checks?.length === true
+    && gates.checks?.noPlaceholders === true
+    && gates.checks?.behaviorAlignment === true
+    && growthPackaging.items?.readerPayoff?.status === 'clear'
+    ? 10
+    : text ? 4 : 0;
+  const score = purpose + clarity + provenance + originality + realization;
+  const quality = score >= 45 ? 'high' : score >= 40 ? 'strong' : score >= 30 ? 'standard' : 'incomplete';
+
   return {
     score,
     minimumScore,
     quality,
-    breakdown: { hook, insight, evidence, action, originality },
+    breakdown: { purpose, clarity, provenance, originality, realization },
+    behavior,
     sourceSimilarity,
     weightedLength,
-    publishable: gateAware ? score >= minimumScore && gates.passed && growthPackaging.ready : legacyPublishable,
-    ...(gates ? { gates } : {}),
-    ...(growthPackaging ? { growthPackaging } : {}),
+    publishable: score >= minimumScore && gates.passed && growthPackaging.ready,
+    gates,
+    growthPackaging,
   };
 }
