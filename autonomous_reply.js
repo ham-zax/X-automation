@@ -58,6 +58,7 @@ const ARCHETYPE_TO_INTENT = Object.freeze({
   reproduction: 'technical_insight',
   personal_experience: 'technical_insight',
   direct_answer: 'social_reaction',
+  direct_technical_answer: 'technical_insight',
   status_response: 'social_reaction',
   agreement: 'social_reaction',
   gratitude: 'social_reaction',

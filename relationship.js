@@ -1,3 +1,4 @@
+import { isGenericSocialPraise, socialActMatchesPurpose } from './behavior.js';
 import { classifyNiche, getActiveContentGroups } from './strategy.js';
 import { applyAcceptedLearnedRules } from './learning.js';
 
@@ -51,6 +52,32 @@ function metadata(event) {
 
 function meaningful(event) {
   return metadata(event).meaningful !== false;
+}
+
+export function isMeaningfulOutboundInteraction({
+  behavior = null,
+  text = '',
+  sourceText = '',
+  engagementKind = '',
+  relationshipStage = 'observed',
+} = {}) {
+  if (!behavior || behavior.decision !== 'ACT') return false;
+  if (isGenericSocialPraise(text)) return false;
+
+  const purpose = String(behavior.primaryPurpose || '');
+  const conversationStage = String(behavior.conversationStage || 'initial');
+  if (['technical_value', 'profile_proof', 'judgment', 'learning', 'correction', 'taste'].includes(purpose)) return true;
+
+  const relationshipContext = ['interacted', 'responsive', 'recurring', 'connected', 'mutual'].includes(String(relationshipStage || 'observed'));
+  const conversationContext = ['follow_up', 'own_post_response'].includes(String(engagementKind || ''))
+    || ['reciprocal', 'ongoing', 'familiar', 'self_extension'].includes(conversationStage);
+  return socialActMatchesPurpose({
+    purpose,
+    text,
+    sourceText,
+    relationshipContext,
+    conversationContext,
+  });
 }
 
 function eventTime(event) {

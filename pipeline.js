@@ -1,6 +1,7 @@
 import { normalizeBehaviorDecision } from './behavior.js';
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { selectBehaviorDecision } from './persona.js';
+import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { scoreOpportunity } from './opportunity.js';
 import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
@@ -1020,6 +1021,14 @@ async function sendEngagementReplyTransport({
         .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId)
       : false;
     if (publishingItem.targetUsername && !alreadyRecorded) {
+      const relationship = getRelationshipProfile(publishingItem.targetUsername);
+      const meaningfulInteraction = isMeaningfulOutboundInteraction({
+        behavior: publishingItem.behavior || publishedDraft.editor?.behavior || null,
+        text,
+        sourceText: candidate.text || '',
+        engagementKind: publishingItem.engagementKind || 'initial_reply',
+        relationshipStage: relationship?.relationshipStage || 'observed',
+      });
       recordRelationshipEvent({
         username: publishingItem.targetUsername,
         eventType: 'our_reply',
@@ -1029,7 +1038,10 @@ async function sendEngagementReplyTransport({
         topic: candidate.niche?.tags?.[0] || null,
         occurredAt: Date.now(),
         metadata: {
-          meaningful: true,
+          meaningful: meaningfulInteraction,
+          primaryPurpose: publishingItem.behavior?.primaryPurpose || publishedDraft.editor?.behavior?.primaryPurpose || null,
+          socialMode: publishingItem.behavior?.socialMode || publishedDraft.editor?.behavior?.socialMode || null,
+          conversationStage: publishingItem.behavior?.conversationStage || publishedDraft.editor?.behavior?.conversationStage || null,
           replyArchetype: publishingItem.replyArchetype || null,
           engagementKind: publishingItem.engagementKind || 'initial_reply',
           replyAuthority: authority.type,

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
+import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   getAutonomousReplyGrant,
@@ -338,6 +339,14 @@ function reconcileRecordedActionWorkflow(candidate, action, recorded) {
     const alreadyRecorded = listRelationshipEvents(reconciled.targetUsername, { limit: 1000 })
       .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId);
     if (!alreadyRecorded) {
+      const relationship = getRelationshipProfile(reconciled.targetUsername);
+      const meaningfulInteraction = isMeaningfulOutboundInteraction({
+        behavior: reconciled.behavior || draft?.editor?.behavior || null,
+        text: draft?.body || reconciled.approvedText || '',
+        sourceText: candidate.text || '',
+        engagementKind: reconciled.engagementKind || 'initial_reply',
+        relationshipStage: relationship?.relationshipStage || 'observed',
+      });
       recordRelationshipEvent({
         username: reconciled.targetUsername,
         eventType: 'our_reply',
@@ -347,7 +356,10 @@ function reconcileRecordedActionWorkflow(candidate, action, recorded) {
         topic: candidate.niche?.tags?.[0] || null,
         occurredAt: publishedAt,
         metadata: {
-          meaningful: true,
+          meaningful: meaningfulInteraction,
+          primaryPurpose: reconciled.behavior?.primaryPurpose || draft?.editor?.behavior?.primaryPurpose || null,
+          socialMode: reconciled.behavior?.socialMode || draft?.editor?.behavior?.socialMode || null,
+          conversationStage: reconciled.behavior?.conversationStage || draft?.editor?.behavior?.conversationStage || null,
           replyArchetype: reconciled.replyArchetype || null,
           engagementKind: reconciled.engagementKind || 'initial_reply',
           replyAuthority: 'manual_reconciliation',

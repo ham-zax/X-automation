@@ -985,6 +985,8 @@ export interface DraftActionPayload {
   body?: string
   threadParts?: string[]
   operatorContext?: string
+  confirmOwnerEvidence?: boolean
+  ownerEvidenceNote?: string
   mediaType?: string
   mediaRequired?: boolean
   mediaReason?: string
@@ -1949,6 +1951,14 @@ export interface WriterGenerationProvenance {
 export interface DraftEditorMetadata extends Record<string, unknown> {
   behavior?: BehaviorDecision | null
   personaModelVersion?: string
+  ownerEvidence?: {
+    factsConfirmed: boolean
+    experienceConfirmed: boolean
+    claimSummary: string
+    attestedBy: string
+    attestedAt: number
+    textHash: string
+  }
   generation?: WriterGenerationProvenance
   generationHistory?: WriterGenerationProvenance[]
 }

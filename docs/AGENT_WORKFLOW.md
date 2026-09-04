@@ -40,7 +40,7 @@ Available commands:
 - `operator-status` - read the compact cross-lane cockpit: active persona version/status, account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
 - `operator-memory-review` - record a completed Browser/`x-content` memory checkpoint and reset the interaction window; requires `confirmReview: true` and an exact result.
 - `route` - select/override Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore for a candidate; agents cannot approve.
-- `behavior-select` - explicitly persist/replace the purpose, mode, affect, information depth, conversation stage, and reason-to-exist for one routed text item; it invalidates stale draft gates but does not approve.
+- `behavior-select` - explicitly persist/replace the purpose, mode, affect, information depth, conversation stage, and reason-to-exist for one routed text item; it invalidates stale draft gates but does not approve and cannot grant factual/owner-experience authority.
 - `persona-model` - inspect the active versioned Hamza model and an optional bounded consumer slice.
 - `persona-stances` - inspect current and historical timestamped stance events.
 - `persona-stance-record` - append an explicit human-confirmed stance event; it never rewrites prior history.

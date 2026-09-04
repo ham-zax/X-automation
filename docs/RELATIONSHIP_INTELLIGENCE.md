@@ -591,6 +591,7 @@ Social/interaction archetypes:
 
 ```text
 direct_answer
+direct_technical_answer
 status_response
 agreement
 gratitude

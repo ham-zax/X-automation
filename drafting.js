@@ -1,7 +1,11 @@
+import { createHash } from 'node:crypto';
 import {
   behaviorDecisionRequiresFactualEvidence,
   behaviorDecisionSupportsSocialOnly,
+  isGenericSocialPraise,
   normalizeBehaviorDecision,
+  socialActMatchesPurpose,
+  socialPurposeContextAvailable,
   validateBehaviorDecision,
 } from './behavior.js';
 import { getPersonaSlice, selectBehaviorDecision } from './persona.js';
@@ -219,6 +223,15 @@ export function buildWriterPacket({
       routingReason: queueItem?.routingReason ?? '',
     },
     relationship: relationship ?? queueItem?.relationship ?? null,
+    ownerEvidence: ownerEvidenceValid(draft, pipeline)
+      ? {
+          factsConfirmed: draft.editor.ownerEvidence.factsConfirmed === true,
+          experienceConfirmed: draft.editor.ownerEvidence.experienceConfirmed === true,
+          claimSummary: String(draft.editor.ownerEvidence.claimSummary || ''),
+          attestedBy: draft.editor.ownerEvidence.attestedBy,
+          attestedAt: draft.editor.ownerEvidence.attestedAt,
+        }
+      : null,
     evidence: (Array.isArray(evidence) ? evidence : []).map(writerEvidenceItem).filter(Boolean),
     editorial: editorialRecommendation ? {
       recommendationId: editorialRecommendation.id ?? null,
@@ -323,34 +336,77 @@ function addIssue(target, code, message) {
   target.push({ code, message });
 }
 
-function genericPraise(text) {
-  const body = String(text || '').trim();
-  const praise = /\b(?:great point|great post|love this|well said|spot on|exactly|awesome|amazing|nice|this is great|this is huge)\b/i.test(body);
-  const contribution = /\?|https?:\/\/|\b(?:because|but|however|if|when|unless|benchmark|latency|api|sdk|code|model|agent|context|token|cost|failure|tradeoff|compare|test|measure)\b/i.test(body);
-  return praise && !contribution && body.split(/\s+/).length <= 24;
-}
-
 function genericQuote(text) {
   return /^\s*(?:this is (?:huge|great|wild|massive)(?: for developers)?|huge for developers|game changer|big news|we are so back)[.!]?\s*$/i.test(String(text || ''));
 }
 
+function normalizeOwnerClaimGrammar(text) {
+  return String(text || '')
+    .replace(/[’]/g, "'")
+    .replace(/\b(i|we)'ve\b/gi, '$1 have')
+    .replace(/\b(i|we)'d\b/gi, '$1 had')
+    .replace(/\bi'm\b/gi, 'i am')
+    .replace(/\bwe're\b/gi, 'we are');
+}
+
 function explicitOwnerExperienceClaim(text) {
-  return /\b(?:i|we)\s+(?:built|tested|used|tried|ran|measured|deployed|migrated|spent|bought|paid|debugged|shipped|implemented|hit|saw|found)\b|\b(?:my|our)\s+(?:project|repo|repository|codebase|team|company|setup|workflow|app|product|benchmark|test|deployment)\b/i.test(String(text || ''));
+  const value = normalizeOwnerClaimGrammar(text);
+  return /\b(?:i|we)\s+(?:(?:have|had|am|are|was|were)\s+)?(?:been\s+)?(?:built|building|tested|testing|used|using|tried|trying|ran|running|measured|measuring|deployed|deploying|migrated|migrating|spent|spending|bought|buying|paid|paying|debugged|debugging|shipped|shipping|implemented|implementing|hit|saw|seen|found)\b|\b(?:my|our)\s+(?:project|repo|repository|codebase|team|company|setup|workflow|app|product|benchmark|test|deployment|production|prod)\b|\b(?:saved|blocked|broke|cost|helped)\s+(?:me|us)\b|\b(?:worked|failed)\s+(?:for|on)\s+(?:me|us)\b/i.test(value);
 }
 
 function impliedOwnerExperienceSignal(text) {
   return /\b(?:after using|after testing|after running|after migrating|after deploying|in my setup|on my machine|pure pain|driving me crazy|nothing beats the feeling|works on my machine)\b/i.test(String(text || ''));
 }
 
-function behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate } = {}) {
+function draftEvidenceText(draft, pipeline) {
+  const units = contentUnits(draft, pipeline);
+  return pipeline === 'thread' ? units.join('\n\n') : (units[0] || '');
+}
+
+function ownerEvidenceValid(draft, pipeline) {
+  const evidence = draft?.editor?.ownerEvidence;
+  if (!evidence || evidence.attestedBy !== 'human_web' || evidence.experienceConfirmed !== true) return false;
+  if (!String(evidence.claimSummary || '').trim() || !Number.isFinite(Number(evidence.attestedAt))) return false;
+  const expectedHash = createHash('sha256').update(draftEvidenceText(draft, pipeline)).digest('hex');
+  return String(evidence.textHash || '') === expectedHash;
+}
+
+function socialInteractionContext(behavior, { relationship, conversationRelevanceCandidate } = {}) {
+  const stage = String(relationship?.relationshipStage || 'observed');
+  return {
+    relationshipContext: ['interacted', 'responsive', 'recurring', 'connected', 'mutual'].includes(stage)
+      || Number(relationship?.meaningfulInteractions || 0) > 0
+      || Number(relationship?.theirRepliesToUs || 0) > 0,
+    conversationContext: Boolean(conversationRelevanceCandidate)
+      || ['reciprocal', 'ongoing', 'familiar', 'self_extension'].includes(String(behavior?.conversationStage || 'initial')),
+  };
+}
+
+function behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate, draft } = {}) {
   if (!behavior || behavior.decision !== 'ACT' || !behavior.reasonToExist) return false;
   if (!behaviorDecisionSupportsSocialOnly(behavior)) return true;
+
   if (pipeline === 'reply' || pipeline === 'quote') {
-    return Boolean(candidate?.text || candidate?.url || relationship || conversationRelevanceCandidate);
+    return socialPurposeContextAvailable({
+      purpose: behavior.primaryPurpose,
+      sourceText: candidate?.text || '',
+      ...socialInteractionContext(behavior, { relationship, conversationRelevanceCandidate }),
+    });
   }
+
   return ['humor', 'taste', 'social_presence'].includes(behavior.primaryPurpose)
     || (['celebration', 'support', 'relationship'].includes(behavior.primaryPurpose)
-      && behavior.provenance?.ownerFactsAllowed === true);
+      && ownerEvidenceValid(draft, pipeline));
+}
+
+function socialActRealized(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate, draft } = {}) {
+  if (!behaviorDecisionSupportsSocialOnly(behavior) || !['reply', 'quote'].includes(pipeline)) return true;
+  return socialActMatchesPurpose({
+    purpose: behavior.primaryPurpose,
+    text: draftEvidenceText(draft, pipeline),
+    sourceText: candidate?.text || '',
+    ...socialInteractionContext(behavior, { relationship, conversationRelevanceCandidate }),
+  });
 }
 
 function blocks(text) {
@@ -509,17 +565,21 @@ export function evaluateDraftGates(draft, candidate, {
     checks.purposeIntegrity = false;
     checks.behaviorAlignment = false;
     addIssue(failures, 'BEHAVIOR_DECISION_INVALID', `Draft requires a valid ACT behavior decision: ${behaviorValidation.errors.join(' ')}`);
-  } else if (!behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate })) {
+  } else if (!behaviorContextSupported(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate, draft })) {
     checks.purposeIntegrity = false;
     addIssue(failures, 'PURPOSE_CONTEXT_WEAK', 'The selected purpose is not supported by the current source, relationship, owner provenance, or conversation context.');
+  } else if (!socialActRealized(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate, draft })) {
+    checks.purposeIntegrity = false;
+    addIssue(failures, 'SOCIAL_ACT_NOT_REALIZED', 'The source makes this social purpose available, but the draft does not actually perform the selected support, celebration, humor, de-escalation, relationship, or social-presence act.');
   }
 
-  if (explicitOwnerExperienceClaim(combinedText) && behavior.provenance?.ownerExperienceAllowed !== true) {
+  const ownerEvidenceGrounded = ownerEvidenceValid(draft, pipeline);
+  if (explicitOwnerExperienceClaim(combinedText) && !ownerEvidenceGrounded) {
     checks.factualProvenance = false;
-    addIssue(failures, 'OWNER_EXPERIENCE_UNGROUNDED', 'The draft makes an explicit first-person experience claim without owner-experience provenance.');
+    addIssue(failures, 'OWNER_EXPERIENCE_UNGROUNDED', 'The draft makes an explicit first-person factual/experience claim without a human attestation bound to this exact text.');
   }
-  if (impliedOwnerExperienceSignal(combinedText) && behavior.provenance?.ownerExperienceAllowed !== true) {
-    addIssue(warnings, 'IMPLIED_OWNER_EXPERIENCE_REVIEW', 'The wording may imply personal use or lived experience that is not present in the behavior provenance.');
+  if (impliedOwnerExperienceSignal(combinedText) && !ownerEvidenceGrounded) {
+    addIssue(warnings, 'IMPLIED_OWNER_EXPERIENCE_REVIEW', 'The wording may imply personal use or lived experience that is not backed by a human attestation bound to this exact text.');
   }
 
   if (behaviorDecisionRequiresFactualEvidence(behavior)
@@ -584,13 +644,14 @@ export function evaluateDraftGates(draft, candidate, {
     candidate,
     relationship,
     conversationRelevanceCandidate,
+    draft,
   });
   if (pipeline === 'quote' && genericQuote(primaryText)) {
     if (!socialOnly || !socialContextOkay) {
       checks.purposeIntegrity = false;
       addIssue(failures, 'GENERIC_QUOTE_WITHOUT_PURPOSE', 'Short Quote commentary requires a supported social, relationship, taste, humor, or celebration purpose.');
     }
-  } else if (pipeline === 'reply' && genericPraise(primaryText)) {
+  } else if (pipeline === 'reply' && isGenericSocialPraise(primaryText)) {
     if (!socialOnly || !socialContextOkay) {
       checks.purposeIntegrity = false;
       addIssue(failures, 'GENERIC_REPLY_WITHOUT_PURPOSE', 'Short praise or reaction requires a supported social or relationship purpose in this context.');
@@ -738,7 +799,6 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   const socialOnly = behavior.informationDepth === 'social_only' && behaviorDecisionSupportsSocialOnly(behavior);
   const stoppingClear = Boolean(text) && (socialOnly ? !PLACEHOLDER.test(text) : usefulText(firstLine, 12));
   const payoffSignals = [];
-  if (behaviorValidation.valid) payoffSignals.push(`purpose: ${behavior.primaryPurpose}`);
   if (/\b(?:install|try|use|run|configure|download|repo(?:sitory)?|resource|guide|docs|library|package|cli)\b/i.test(text)) payoffSignals.push('useful resource/action');
   if (/\b(?:choose|avoid|switch|compare|trade-?off|decision|rule of thumb|when to|better for|worse for)\b/i.test(text)) payoffSignals.push('decision support');
   if (/\b(?:benchmark|measured|tested|result|latency|throughput|cost)\b/i.test(text)) payoffSignals.push('proof/evidence');
@@ -750,12 +810,21 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   }
   const hasPublicQuestion = Boolean(text) && /\?/.test(text);
   if (hasPublicQuestion) payoffSignals.push('question/conversation opening');
-  if (socialOnly && behaviorContextSupported(behavior, {
-    pipeline,
-    candidate,
-    relationship: context.relationship,
-    conversationRelevanceCandidate: context.conversationRelevanceCandidate,
-  })) payoffSignals.push('contextual social/relationship act');
+  if (socialOnly
+    && behaviorContextSupported(behavior, {
+      pipeline,
+      candidate,
+      relationship: context.relationship,
+      conversationRelevanceCandidate: context.conversationRelevanceCandidate,
+      draft,
+    })
+    && socialActRealized(behavior, {
+      pipeline,
+      candidate,
+      relationship: context.relationship,
+      conversationRelevanceCandidate: context.conversationRelevanceCandidate,
+      draft,
+    })) payoffSignals.push('contextual social/relationship act');
   const readerPayoffClear = behaviorValidation.valid && payoffSignals.length > 0;
   if (!behaviorValidation.valid) blockers.push({ code: 'BEHAVIOR_DECISION_INVALID', message: behaviorValidation.errors.join(' ') });
   else if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_PURPOSE_PAYOFF', message: 'The current draft does not visibly fulfill its selected purpose.' });

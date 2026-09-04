@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { ACCOUNT_PERFORMANCE_CAPABILITIES, fetchAccountPerformance } from './tech_news.js';
 import {
   ACTION_PURPOSES,
@@ -2944,8 +2944,17 @@ export async function handleApi(req, res, requestUrl) {
   }
 }
 
+function draftOwnerEvidenceText(draft) {
+  if (draft?.editor?.pipeline === 'thread') {
+    const parts = Array.isArray(draft?.threadParts) ? draft.threadParts : draft?.editor?.threadParts || [];
+    return parts.map((part) => String(part ?? '').trim()).join('\n\n');
+  }
+  return String(draft?.body ?? draft?.editor?.finalText ?? '').trim();
+}
+
 function applyEditorPayload(current, payload) {
   const updated = { ...current };
+  let textChanged = false;
   if (payload.operatorContext !== undefined) {
     updated.editor = {
       ...(updated.editor || {}),
@@ -2953,11 +2962,15 @@ function applyEditorPayload(current, payload) {
     };
   }
   if (payload.body !== undefined) {
-    updated.body = String(payload.body ?? '');
+    const nextBody = String(payload.body ?? '');
+    textChanged = nextBody !== String(current.body ?? '');
+    updated.body = nextBody;
     updated.editor = { ...(updated.editor || {}), finalText: updated.body };
   }
   if (Array.isArray(payload.threadParts)) {
-    updated.threadParts = payload.threadParts.map((part) => String(part ?? ''));
+    const nextParts = payload.threadParts.map((part) => String(part ?? ''));
+    textChanged = JSON.stringify(nextParts) !== JSON.stringify(current.threadParts || []);
+    updated.threadParts = nextParts;
     updated.body = '';
     updated.editor = { ...(updated.editor || {}), threadParts: [...updated.threadParts], pipeline: 'thread' };
   }
@@ -2973,6 +2986,28 @@ function applyEditorPayload(current, payload) {
     if (payload.mediaSource !== undefined) media.source = String(payload.mediaSource || '');
     if (payload.mediaAltText !== undefined) media.altText = String(payload.mediaAltText || '');
     updated.editor = { ...(updated.editor || {}), media };
+  }
+
+  if (payload.confirmOwnerEvidence === true) {
+    const claimSummary = String(payload.ownerEvidenceNote || '').trim().slice(0, 1_000);
+    if (!claimSummary) throw new Error('Owner evidence confirmation requires a short factual/experience note.');
+    const exactText = draftOwnerEvidenceText(updated);
+    if (!exactText) throw new Error('Owner evidence confirmation requires non-empty draft text.');
+    updated.editor = {
+      ...(updated.editor || {}),
+      ownerEvidence: {
+        factsConfirmed: true,
+        experienceConfirmed: true,
+        claimSummary,
+        attestedBy: 'human_web',
+        attestedAt: Date.now(),
+        textHash: createHash('sha256').update(exactText).digest('hex'),
+      },
+    };
+  } else if (payload.confirmOwnerEvidence === false || textChanged) {
+    const editor = { ...(updated.editor || {}) };
+    delete editor.ownerEvidence;
+    updated.editor = editor;
   }
   return updated;
 }

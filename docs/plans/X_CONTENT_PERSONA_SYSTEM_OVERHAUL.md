@@ -428,9 +428,9 @@ Before the final Writer runs, the system should eventually have an inspectable r
   "reasonToExist": "The thread is technically useful but unnecessarily hostile; a light joke can enter the conversation, lower tension, and make Hamza memorable without pretending to add another correction.",
   "growthObjective": "qualified_growth",
   "provenance": {
-    "factualOwnerClaimsAllowed": false,
     "performedAffectAllowed": true,
-    "sourceClaims": []
+    "sourceClaims": [],
+    "restrictions": ["Behavior selection cannot grant factual owner experience."]
   },
   "personaModelVersion": null
 }
@@ -445,7 +445,7 @@ or:
 }
 ```
 
-The Writer should realize this decision rather than independently inventing a new role.
+The Writer should realize this decision rather than independently inventing a new role. Factual/experience ownership is intentionally outside this behavior record: when first-person owner facts are needed, a separate human attestation must be bound to the exact draft text, and any text change invalidates that attestation.
 
 ---
 

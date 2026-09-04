@@ -154,7 +154,9 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
         reasonToExist: reasonToExist.trim(),
         selectionSource: 'human',
         personaModelVersion: current?.personaModelVersion || '',
-        provenance: current?.provenance || {},
+        provenance: current?.provenance
+          ? { ...current.provenance, ownerFactsAllowed: false, ownerExperienceAllowed: false }
+          : {},
         selectedAt: Date.now(),
       },
     }, { onSuccess: () => setSaved(true) })
@@ -258,6 +260,14 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     semanticAnchors?: string[]
     evidenceUsed?: string[]
     operatorContext?: string
+    ownerEvidence?: {
+      factsConfirmed?: boolean
+      experienceConfirmed?: boolean
+      claimSummary?: string
+      attestedBy?: string
+      attestedAt?: number
+      textHash?: string
+    }
     media?: {
       required?: boolean
       type?: string
@@ -272,6 +282,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const [threadParts, setThreadParts] = useState<string[]>(draft.threadParts?.length ? draft.threadParts : ['', ''])
   const [operatorContext, setOperatorContext] = useState(editorMeta.operatorContext || '')
   const [contextDirty, setContextDirty] = useState(false)
+  const [ownerEvidenceConfirmed, setOwnerEvidenceConfirmed] = useState(Boolean(editorMeta.ownerEvidence?.experienceConfirmed))
+  const [ownerEvidenceNote, setOwnerEvidenceNote] = useState(editorMeta.ownerEvidence?.claimSummary || '')
   const [mediaRequired, setMediaRequired] = useState(Boolean(editorMeta.media?.required))
   const [mediaType, setMediaType] = useState(editorMeta.media?.type || 'none')
   const [mediaReason, setMediaReason] = useState(editorMeta.media?.reason || '')
@@ -286,6 +298,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     setBody(draft.body)
     setThreadParts(draft.threadParts?.length ? draft.threadParts : ['', ''])
     setOperatorContext(editorMeta.operatorContext || '')
+    setOwnerEvidenceConfirmed(Boolean(editorMeta.ownerEvidence?.experienceConfirmed))
+    setOwnerEvidenceNote(editorMeta.ownerEvidence?.claimSummary || '')
     setMediaRequired(Boolean(editorMeta.media?.required))
     setMediaType(editorMeta.media?.type || 'none')
     setMediaReason(editorMeta.media?.reason || '')
@@ -296,12 +310,14 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
   const previewPayload = useMemo(() => ({
     ...(isThread ? { threadParts } : { body }),
+    confirmOwnerEvidence: ownerEvidenceConfirmed,
+    ...(ownerEvidenceNote ? { ownerEvidenceNote } : {}),
     mediaRequired,
     mediaType,
     ...(mediaReason ? { mediaReason } : {}),
     ...(mediaSource ? { mediaSource } : {}),
     ...(mediaAltText ? { mediaAltText } : {}),
-  }), [isThread, body, threadParts, mediaRequired, mediaType, mediaReason, mediaSource, mediaAltText])
+  }), [isThread, body, threadParts, ownerEvidenceConfirmed, ownerEvidenceNote, mediaRequired, mediaType, mediaReason, mediaSource, mediaAltText])
 
   const debouncedPayload = useDebounced(previewPayload, 600)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
@@ -345,6 +361,10 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     : Boolean(body.trim())
 
   const markDirty = () => setDirty(true)
+  const markTextDirty = () => {
+    setDirty(true)
+    setOwnerEvidenceConfirmed(false)
+  }
 
   const handleSave = () => {
     save.mutate({ ...previewPayload, operatorContext } as never, {
@@ -379,6 +399,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           setBody(nextDraft.body)
           setThreadParts(nextDraft.threadParts?.length ? nextDraft.threadParts : ['', ''])
           setOperatorContext(nextEditor.operatorContext || '')
+          setOwnerEvidenceConfirmed(Boolean(nextEditor.ownerEvidence?.experienceConfirmed))
+          setOwnerEvidenceNote(nextEditor.ownerEvidence?.claimSummary || '')
           setMediaRequired(Boolean(nextEditor.media?.required))
           setMediaType(nextEditor.media?.type || 'none')
           setMediaReason(nextEditor.media?.reason || '')
@@ -530,7 +552,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
                   value={part}
                   readOnly={readOnly}
                   onChange={(event) => {
-                    markDirty()
+                    markTextDirty()
                     setThreadParts((parts) => parts.map((p, i) => (i === index ? event.target.value : p)))
                   }}
                   className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
@@ -540,14 +562,14 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             {!readOnly && (
               <div className="flex gap-2">
                 <button
-                  onClick={() => { markDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
+                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
                   disabled={threadParts.length >= 6}
                   className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Add part
                 </button>
                 <button
-                  onClick={() => { markDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
+                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
                   disabled={threadParts.length <= 2}
                   className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
@@ -561,12 +583,55 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             rows={7}
             value={body}
             readOnly={readOnly}
-            onChange={(event) => { markDirty(); setBody(event.target.value) }}
+            onChange={(event) => { markTextDirty(); setBody(event.target.value) }}
             placeholder="Generate a draft or edit the final text here."
             className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
           />
         )}
       </div>
+
+      <Disclosure summary={`Owner facts / experience · ${editorMeta.ownerEvidence?.experienceConfirmed && readOnly ? 'confirmed' : ownerEvidenceConfirmed ? 'confirm on save' : 'not confirmed'}`}>
+        {readOnly ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+            {editorMeta.ownerEvidence?.experienceConfirmed ? (
+              <>
+                <strong>Human-attested for this exact published text.</strong>
+                <div className="mt-1">{editorMeta.ownerEvidence.claimSummary || 'No note recorded.'}</div>
+              </>
+            ) : (
+              <span>No owner factual/experience attestation was recorded for this text.</span>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <label className="flex items-start gap-3 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={ownerEvidenceConfirmed}
+                onChange={(event) => { setOwnerEvidenceConfirmed(event.target.checked); markDirty() }}
+                className="mt-1"
+              />
+              <span>
+                <strong>I confirm that any first-person factual or experience claims in this exact draft are mine and true.</strong>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">Behavior selection cannot grant this authority. Editing the post text clears the confirmation until you attest the new exact text again.</span>
+              </span>
+            </label>
+            <label className="mt-3 block text-sm text-slate-600">
+              What owner fact or experience is being confirmed?
+              <input
+                value={ownerEvidenceNote}
+                onChange={(event) => { setOwnerEvidenceNote(event.target.value); markDirty() }}
+                maxLength={1000}
+                placeholder="Example: I have used this SDK in my project for two weeks."
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            {ownerEvidenceConfirmed && !ownerEvidenceNote.trim() && (
+              <div className="mt-2 text-xs font-medium text-amber-700">Add a short factual note before saving the attestation.</div>
+            )}
+          </div>
+        )}
+      </Disclosure>
 
       <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality / structure</div>

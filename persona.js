@@ -23,6 +23,7 @@ const ARCHETYPE_BEHAVIOR = Object.freeze({
   reproduction: { primaryPurpose: 'profile_proof', socialMode: 'experimenter', informationDepth: 'reusable_artifact' },
   personal_experience: { primaryPurpose: 'profile_proof', socialMode: 'builder', informationDepth: 'compact_reason' },
   direct_answer: { primaryPurpose: 'relationship', socialMode: 'listener', informationDepth: 'social_only' },
+  direct_technical_answer: { primaryPurpose: 'technical_value', socialMode: 'listener', informationDepth: 'technical_explanation' },
   status_response: { primaryPurpose: 'relationship', socialMode: 'listener', informationDepth: 'social_only' },
   agreement: { primaryPurpose: 'social_presence', socialMode: 'supporter', informationDepth: 'social_only' },
   gratitude: { primaryPurpose: 'support', socialMode: 'supporter', informationDepth: 'social_only' },

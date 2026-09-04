@@ -15,6 +15,7 @@ export const CONTRIBUTION_ARCHETYPES = [
   'reproduction',
   'personal_experience',
   'direct_answer',
+  'direct_technical_answer',
   'status_response',
   'agreement',
   'gratitude',
@@ -405,12 +406,49 @@ function sourceAffectHints(text = '') {
   };
 }
 
+function directQuestionContribution(text = '') {
+  const technical = /\b(?:api|sdk|cli|code|bug|error|benchmark|latency|throughput|deploy|deployment|migration|database|query|model|agent|token|context|config|configuration|architecture|implementation|security|privacy|cost|pricing)\b/i.test(String(text || ''));
+  return technical
+    ? {
+        archetype: 'direct_technical_answer',
+        summary: 'Answer the actual technical question directly with enough explanation to make the answer usable; shared context may shorten the wording, not the factual support.',
+      }
+    : {
+        archetype: 'direct_answer',
+        summary: 'Answer the actual question directly at the depth it needs; add context only when the answer would otherwise be misleading.',
+      };
+}
+
+function selectContributionCandidate(candidates = [], {
+  affect = {},
+  familiar = false,
+  sourceClass = 'normal',
+  growthObjective = 'qualified_growth',
+} = {}) {
+  const find = (archetype) => candidates.find((candidate) => candidate.archetype === archetype) || null;
+  const social = candidates.find((candidate) => candidate.kind === 'social') || null;
+  const technical = candidates.find((candidate) => candidate.kind === 'technical') || null;
+  const learning = candidates.find((candidate) => candidate.kind === 'learning') || null;
+  const momentum = ['momentum', 'viral', 'breakout'].includes(String(sourceClass || ''));
+
+  if (affect.hostile) return find('humor') || find('independent_judgment') || social || technical || learning;
+  if (affect.humorous) return find('humor') || social || technical || learning;
+  if (affect.excited && (familiar || momentum || growthObjective !== 'technical_authority')) {
+    return find('support') || find('celebration') || social || technical || learning;
+  }
+  if (growthObjective === 'relationships' && (familiar || social)) return social || learning || technical;
+  if (growthObjective === 'technical_authority') return technical || learning || social;
+  if (affect.taste) return find('social_observation') || social || technical || learning;
+  return technical || learning || social;
+}
+
 export function proposeEngagementContribution(candidate = {}, {
   response = false,
   directQuestion = false,
   profile = null,
   sourceClass = 'normal',
   engagementKind = 'initial_reply',
+  growthObjective = 'qualified_growth',
 } = {}) {
   const text = String(candidate.text || '');
   const affect = sourceAffectHints(text);
@@ -418,12 +456,7 @@ export function proposeEngagementContribution(candidate = {}, {
   const familiar = ['responsive', 'recurring', 'connected', 'mutual'].includes(relationshipStage);
 
   if (response) {
-    if (directQuestion) {
-      return {
-        archetype: 'direct_answer',
-        summary: 'Answer the actual question directly at the depth it needs; add context only when the answer would otherwise be misleading.',
-      };
-    }
+    if (directQuestion) return directQuestionContribution(text);
     if (/\b(?:thank(?:s| you)?|appreciate|helped)\b/i.test(text)) {
       return {
         archetype: 'gratitude',
@@ -444,73 +477,37 @@ export function proposeEngagementContribution(candidate = {}, {
     };
   }
 
+  const candidates = [];
+  const add = (kind, archetype, summary) => candidates.push({ kind, archetype, summary });
   const measurementClaim = /\b(?:benchmark|latency|throughput|performance|measured|result(?:s)?)\b/i.test(text)
     && /(?:\bbenchmark\b|\bmeasured\b|\bresults?\s*:|\d+(?:\.\d+)?\s*(?:ms|s|sec|seconds?|%|x\b|tokens?|rps|qps|ops|mb|gb)\b)/i.test(text);
-  if (measurementClaim) {
-    return {
-      archetype: 'caveat_or_edge_case',
-      summary: 'Address a workload, version, environment, or interpretation condition only if it materially changes how the measured result should be used.',
-    };
-  }
+
+  if (affect.hostile) add('social', 'independent_judgment', 'Take a clear position on the substance if the source supports one. Do not praise first or soothe by default; disagree directly, use dry humor, or de-escalate only when that actually improves the exchange. Attack the claim, not the person.');
+  if (affect.humorous) add('social', 'humor', 'Join the joke or add one context-dependent builder observation when humor is the strongest complete contribution.');
+  if (affect.excited) add('social', familiar ? 'support' : 'celebration', familiar
+    ? 'Recognize the person or project with specific warmth appropriate to the existing relationship.'
+    : 'Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.');
+  if (affect.taste) add('social', 'social_observation', 'Express a grounded product, design, interface, or developer-experience judgment about the visible object.');
+
+  if (measurementClaim) add('technical', 'caveat_or_edge_case', 'Address a workload, version, environment, or interpretation condition only if it materially changes how the measured result should be used.');
   if (/(?:\$\s?\d|\b(?:price|pricing|cost|costs|spent|spend|spending|credits?|budget)\b)/i.test(text)) {
-    return {
-      archetype: 'informed_question',
-      summary: 'Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it.',
-    };
+    add('learning', 'informed_question', 'Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it.');
   }
   if (/\b(?:compare|comparison|vs\.?|versus|trade-?off|better|worse)\b/i.test(text)) {
-    return {
-      archetype: 'comparison',
-      summary: 'Compare the approaches on one real developer constraint that is present in the source or in Hamza\'s established stance.',
-    };
-  }
-  if (affect.hostile) {
-    return {
-      archetype: 'independent_judgment',
-      summary: 'Take a clear position on the substance if the source supports one. Do not praise first or soothe by default; disagree directly, use dry humor, or de-escalate only when that actually improves the exchange. Attack the claim, not the person.',
-    };
-  }
-  if (affect.humorous) {
-    return {
-      archetype: 'humor',
-      summary: 'Join the joke or add one context-dependent builder observation when humor is the strongest complete contribution.',
-    };
-  }
-  if (affect.excited) {
-    return {
-      archetype: familiar ? 'support' : 'celebration',
-      summary: familiar
-        ? 'Recognize the person or project with specific warmth appropriate to the existing relationship.'
-        : 'Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.',
-    };
-  }
-  if (affect.taste) {
-    return {
-      archetype: 'social_observation',
-      summary: 'Express a grounded product, design, interface, or developer-experience judgment about the visible object.',
-    };
+    add('technical', 'comparison', 'Compare the approaches on one real developer constraint that is present in the source or in Hamza\'s established stance.');
   }
   if (/(?:github\.com|\b(?:repository|repo|resource|guide|bookmark|list of|websites?)\b)/i.test(text)) {
-    return {
-      archetype: 'informed_question',
-      summary: 'Ask what concrete task made the resource useful or name the use case the source makes visible; do not repeat the recommendation.',
-    };
+    add('learning', 'informed_question', 'Ask what concrete task made the resource useful or name the use case the source makes visible; do not repeat the recommendation.');
   }
   const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent|model|codex|claude|cursor)\b/i.test(text);
   const workflowAction = /\b(?:use|using|used|run|running|setup|workflow|integrat\w*|ship\w*|build\w*|adopt\w*|migrat\w*|release\w*|launch\w*)\b/i.test(text);
   if (workflowTool && workflowAction) {
-    return {
-      archetype: 'independent_judgment',
-      summary: 'State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.',
-    };
+    add('technical', 'independent_judgment', 'State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.');
   }
-  if (text.includes('?')) {
-    return {
-      archetype: 'informed_question',
-      summary: 'Answer or deepen the actual question only when Hamza has a useful angle or genuinely useful follow-up.',
-    };
-  }
-  return null;
+  if (text.includes('?')) add('learning', 'informed_question', 'Answer or deepen the actual question only when Hamza has a useful angle or genuinely useful follow-up.');
+
+  const selected = selectContributionCandidate(candidates, { affect, familiar, sourceClass, growthObjective });
+  return selected ? { archetype: selected.archetype, summary: selected.summary } : null;
 }
 
 function sourceUsername(candidate = {}) {
@@ -592,12 +589,14 @@ export async function refreshEngagementOpportunities({
 
   const persistOpportunity = (candidate, profile, context = {}) => {
     const engagementKind = context.engagementKind || 'initial_reply';
+    const growthObjective = strategy.getActiveNicheProfile()?.defaultObjective || 'qualified_growth';
     const contribution = context.contribution || proposeEngagementContribution(candidate, {
       response: context.response === true,
       directQuestion: context.directQuestion === true,
       profile,
       sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
       engagementKind,
+      growthObjective,
     });
     if (!contribution) {
       rejected.push({ candidateKey: candidate.key, reason: 'NO_PURPOSEFUL_ACTION' });
@@ -656,7 +655,7 @@ export async function refreshEngagementOpportunities({
       engagementKind,
       parentOurTweetId: context.parentOurTweetId || '',
       sourceClass: context.sourceClass || (context.response === true ? 'active' : 'normal'),
-      growthObjective: strategy.getActiveNicheProfile()?.defaultObjective || 'qualified_growth',
+      growthObjective,
       relationship: profile || {},
       conversationPotential: opportunityScores.conversationPotential,
       relationshipPotential: Number(profile?.relationshipPotential ?? opportunityScores.relationshipPotential ?? 0),

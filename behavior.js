@@ -121,8 +121,8 @@ function normalizeProvenance(input = {}) {
   const ownerClaims = uniqueStrings(input.ownerClaims);
   const restrictions = uniqueStrings(input.restrictions);
   return {
-    ownerFactsAllowed: input.ownerFactsAllowed === true,
-    ownerExperienceAllowed: input.ownerExperienceAllowed === true,
+    ownerFactsAllowed: false,
+    ownerExperienceAllowed: false,
     sourceClaims,
     ownerClaims,
     restrictions,
@@ -190,7 +190,13 @@ export function validateBehaviorDecision(input, {
 } = {}) {
   const behavior = normalizeBehaviorDecision(input, { pipeline });
   const errors = [];
+  const requestedProvenance = input?.provenance && typeof input.provenance === 'object' && !Array.isArray(input.provenance)
+    ? input.provenance
+    : {};
 
+  if (requestedProvenance.ownerFactsAllowed === true || requestedProvenance.ownerExperienceAllowed === true) {
+    errors.push('Behavior selection cannot grant owner factual or autobiographical authority.');
+  }
   if (!DECISION_SET.has(behavior.decision)) errors.push('Unsupported behavior decision.');
   if (requireAct && behavior.decision !== 'ACT') errors.push('An ACT behavior decision is required.');
 
@@ -229,6 +235,76 @@ export function behaviorDecisionRequiresFactualEvidence(input = {}) {
   const behavior = normalizeBehaviorDecision(input);
   if (behavior.primaryPurpose && EVIDENCE_PURPOSES.has(behavior.primaryPurpose)) return true;
   return behavior.secondaryPurposes.some((purpose) => EVIDENCE_PURPOSES.has(purpose));
+}
+
+export function isGenericSocialPraise(text) {
+  const body = String(text || '').trim();
+  if (!body || /\?|https?:\/\//i.test(body)) return false;
+  const normalized = body
+    .toLowerCase()
+    .replace(/[’]/g, "'")
+    .replace(/[.!?…]+/g, ' ')
+    .replace(/[🔥🎉🚀😂🤣💀❤❤️👏🙌]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return /^(?:great point|great post|nice|nice one|awesome|amazing|cool|solid|love this|love it|good stuff|great stuff|well said|spot on|exactly|facts|true|yep|yeah|100%|this is great|this is huge|huge|wild|insane|let'?s go|hell yes|lol|haha|lmao|rofl)(?: (?:man|dude|bro))?$/.test(normalized);
+}
+
+function socialSourceSignals(sourceText = '') {
+  const source = String(sourceText || '');
+  return {
+    celebration: /(?:🚀|🔥|🎉|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(source),
+    gratitude: /\b(?:thank(?:s| you)?|appreciate|credit|helped)\b/i.test(source),
+    humor: /(?:😂|🤣|\blol\b|\bhaha\b|\brofl\b|\bmeme\b|\bworks on my machine\b|\byak shave\b)/i.test(source),
+    hostile: /\b(?:idiot|stupid|dumb|fraud|liar|garbage|trash|hate|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(source),
+  };
+}
+
+export function socialPurposeContextAvailable({
+  purpose = '',
+  sourceText = '',
+  relationshipContext = false,
+  conversationContext = false,
+} = {}) {
+  const selectedPurpose = String(purpose || '');
+  const connected = relationshipContext === true || conversationContext === true;
+  const source = socialSourceSignals(sourceText);
+
+  if (selectedPurpose === 'relationship' || selectedPurpose === 'social_presence') return connected;
+  if (selectedPurpose === 'celebration') return source.celebration || connected;
+  if (selectedPurpose === 'support') return source.celebration || source.gratitude || connected;
+  if (selectedPurpose === 'humor') return source.humor || source.hostile || connected;
+  if (selectedPurpose === 'de_escalation') return source.hostile || conversationContext === true;
+  return true;
+}
+
+export function socialActMatchesPurpose({
+  purpose = '',
+  text = '',
+  sourceText = '',
+  relationshipContext = false,
+  conversationContext = false,
+} = {}) {
+  const selectedPurpose = String(purpose || '');
+  const body = String(text || '').trim();
+  if (!body || !socialPurposeContextAvailable({ purpose, sourceText, relationshipContext, conversationContext })) return false;
+
+  if (selectedPurpose === 'relationship' || selectedPurpose === 'social_presence') return true;
+  if (selectedPurpose === 'celebration') {
+    return /(?:🎉|🔥|🚀|\b(?:congrats?|congratulations|well[- ]deserved|let'?s go|hell yes|huge win|massive win|big win|love seeing|this is wild|this is massive|finally)\b)/i.test(body);
+  }
+  if (selectedPurpose === 'support') {
+    return /\b(?:thank(?:s| you)?|appreciate|credit|well done|nice work|great work|good work|happy for|glad to|happy to|rooting for|well[- ]deserved|congrats?|congratulations|love seeing|anytime)\b/i.test(body);
+  }
+  if (selectedPurpose === 'humor') {
+    const humorSignal = /(?:😂|🤣|💀|\b(?:lol|lmao|haha|rofl|plot twist|peak [a-z0-9_-]+|classic|of course|naturally|skill issue|love that for|what could possibly go wrong)\b|\bnothing says\b.+\blike\b)/i.test(body);
+    return humorSignal && !isGenericSocialPraise(body);
+  }
+  if (selectedPurpose === 'de_escalation') {
+    const deEscalationSignal = /\b(?:fair point|both can be true|we can disagree|no need to|not that deep|talking past each other|arguing past each other|let'?s separate|worth separating|different questions|different things|i get the point|i see the point|same underlying point|agree on the important part)\b/i.test(body);
+    return deEscalationSignal && !isGenericSocialPraise(body);
+  }
+  return true;
 }
 
 export function isSocialPurpose(purpose) {
