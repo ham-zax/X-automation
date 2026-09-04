@@ -3,7 +3,8 @@ import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
 import { refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
-import { authorizeMainFeedBrowserContent, findOwnPublishedPostBrowser, publishMainFeedBrowser } from './x_browser_publish.js';
+import { authorizeMainFeedContent, findOwnPublishedPostBrowser, publishMainFeedBrowser } from './x_browser_publish.js';
+import { getXApiMainFeedCapability, publishMainFeedApi } from './x_api_publish.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
@@ -27,7 +28,6 @@ import {
   listDueMeasurementWindows,
   listAcceptedLearnedRules,
   listApprovedMainFeedItems,
-  listAutonomousReplyDecisions,
   listQueueItems,
   listRecentMainFeedPublications,
   markQueueFailed,
@@ -39,7 +39,6 @@ import {
   saveDraft,
   saveQueueItem,
   setAppState,
-  updateAutonomousReplyDecision,
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
@@ -283,10 +282,13 @@ export async function reconcilePendingBrowserPublications({
   if (!pending.length) return { checked: 0, reconciled: [], unresolved: [] };
   if (!authToken) return { checked: 0, reconciled: [], unresolved: pending.map((item) => ({ queueItemId: item.id, reason: 'missing_auth_token' })) };
 
-  const replyDecisions = listAutonomousReplyDecisions({ limit: 500 });
   const reconciled = [];
   const unresolved = [];
   for (const queueItem of pending) {
+    if (queueItem.pipeline !== 'original') {
+      unresolved.push({ queueItemId: queueItem.id, reason: 'structured_publication_requires_parent_or_thread_verification' });
+      continue;
+    }
     const candidate = getCandidate(queueItem.candidateKey);
     const draft = getDraftByCandidate(queueItem.candidateKey);
     const text = reconciliationText(queueItem, draft);
@@ -315,22 +317,6 @@ export async function reconcilePendingBrowserPublications({
       createdAt: Number.isFinite(observedPublishedAt) ? observedPublishedAt : Date.now(),
     });
     const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
-    if (action === 'reply') {
-      const decision = replyDecisions.find((item) => item.queueItemId === queueItem.id
-        || (item.candidateKey === queueItem.candidateKey && String(item.targetTweetId || '') === String(queueItem.targetTweetId || '')));
-      if (decision && decision.decision !== 'sent') {
-        updateAutonomousReplyDecision(decision.id, {
-          decision: 'sent',
-          sentAt: decision.sentAt || Date.now(),
-          outputTweetId: identity.tweetId,
-          outputUrl: identity.url || null,
-          reasons: [
-            ...(decision.reasons || []).filter((reason) => reason?.code !== 'SEND_ERROR'),
-            { code: 'AUTO_RECONCILED_REMOTE_WRITE', reason: 'Exact outbound text was found on live X after local publication verification lag.' },
-          ],
-        });
-      }
-    }
     reconciled.push({ queueItemId: queueItem.id, candidateKey: queueItem.candidateKey, action, tweetId: identity.tweetId, url: identity.url || null, status: reconciledQueue?.status || null });
   }
   return { checked: pending.length, reconciled, unresolved };
@@ -343,9 +329,10 @@ function publicationCommentary(item) {
 export async function processMainFeedQueue({
   now = Date.now(),
   autoPost = AUTO_POST,
-  authToken = process.env.AUTH_TOKEN,
+  apiAccessToken = process.env.X_API_ACCESS_TOKEN,
   account = process.env.X_ACCOUNT || 'ham_zax',
-  transport = publishMainFeedBrowser,
+  transport = String(apiAccessToken || '').trim() ? publishMainFeedApi : null,
+  transportCapability = null,
   missionPublicationReady = null,
 } = {}) {
   const currentTime = Number(now);
@@ -359,15 +346,32 @@ export async function processMainFeedQueue({
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
     missionPublicationReady,
   });
-  const decision = decisions.find((item) => item.eligible) || null;
-  if (!decision) return { action: items.length ? 'blocked' : 'no-main-feed', decision: null, decisions };
+  const eligible = decisions.filter((item) => item.eligible);
+  if (!eligible.length) return { action: items.length ? 'blocked' : 'no-main-feed', decision: null, decisions };
+  const capabilityFor = typeof transportCapability === 'function'
+    ? transportCapability
+    : transport === publishMainFeedApi
+      ? (item) => getXApiMainFeedCapability(item, { accessToken: apiAccessToken })
+      : typeof transport === 'function'
+        ? () => ({ supported: true, code: 'custom_transport', reason: 'Caller supplied a mutation transport.' })
+        : () => ({ supported: false, code: 'compliant_transport_unavailable', reason: 'No compliant X mutation transport is configured.' });
+  const decision = eligible.find((item) => capabilityFor(item.item).supported) || eligible[0];
+  const capability = capabilityFor(decision.item);
   if (decision.recommendedAt > currentTime) {
-    return { action: 'scheduled-wait', decision, decisions };
+    return { action: 'scheduled-wait', decision, decisions, transportCapability: capability };
   }
-  if (!autoPost) return { action: 'preview', decision, decisions };
-  if (!authToken) throw new Error('AUTO_POST=true browser publication requires AUTH_TOKEN.');
+  if (!autoPost) return { action: 'preview', decision, decisions, transportCapability: capability };
+  if (transport === publishMainFeedBrowser || typeof transport !== 'function' || !capability.supported) {
+    return {
+      action: 'transport-blocked',
+      decision,
+      decisions,
+      transportCapability: capability,
+      error: capability.reason || 'No compliant X mutation transport is configured.',
+    };
+  }
 
-  const contentGate = authorizeMainFeedBrowserContent(decision.item);
+  const contentGate = authorizeMainFeedContent(decision.item);
   const claimed = claimQueueItem(decision.item.id, {
     expectedUpdatedAt: decision.item.updatedAt,
     now: currentTime,
@@ -376,15 +380,26 @@ export async function processMainFeedQueue({
 
   let output;
   try {
-    output = await transport(decision.item, { authToken }, { account, contentGate });
+    output = await transport(decision.item, { accessToken: apiAccessToken }, { account, contentGate });
   } catch (error) {
-    if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
+    if (['TRANSPORT_RESULT_NO_TWEET_ID', 'TRANSPORT_RESULT_UNKNOWN', 'TRANSPORT_PARTIAL_PUBLICATION'].includes(error?.code)) {
       const queueItem = saveQueueItem({
         ...claimed,
         status: 'publishing',
-        publishError: `Transport completed without a root tweet ID; manual reconciliation required: ${error.message}`,
+        outputTweetId: error.tweetId || claimed.outputTweetId || null,
+        outputUrl: error.url || claimed.outputUrl || null,
+        publishError: `Transport result requires reconciliation and must not be retried automatically: ${error.message}${Array.isArray(error.threadTweetIds) && error.threadTweetIds.length ? ` Known thread tweet IDs: ${error.threadTweetIds.join(',')}.` : ''}`,
       });
-      return { action: 'posted-recording-incomplete', decision, decisions, queueItem, tweetId: null, url: null, error: queueItem.publishError };
+      return {
+        action: 'posted-recording-incomplete',
+        decision,
+        decisions,
+        queueItem,
+        tweetId: error.tweetId || null,
+        url: error.url || null,
+        threadTweetIds: error.threadTweetIds || null,
+        error: queueItem.publishError,
+      };
     }
     const queueItem = markQueueFailed(claimed.id, error, { failedAt: Date.now() });
     return { action: 'failed', decision, decisions, queueItem, error: error.message };
@@ -483,7 +498,9 @@ export async function runEngagementAutonomousCycle({
       refreshErrors: [...sourceErrors, ...engagement.errors],
       refreshFailed: engagement.refreshFailed,
     });
-    if (autonomousReplies.active && autonomousReplies.due !== false) {
+    if (autonomousReplies.blocked) {
+      console.log(`[automation] Autonomous reply mutation blocked: ${autonomousReplies.runtime?.lastError || autonomousReplies.reason}.`);
+    } else if (autonomousReplies.active && autonomousReplies.due !== false) {
       const counts = autonomousReplies.runtime?.lastDecisionCounts || { sent: 0, review: 0, skipped: 0 };
       console.log(`[automation] Autonomous replies ${autonomousReplies.grant.mode}: ${counts.sent} send candidate(s), ${counts.review} review, ${counts.skipped} skipped.`);
     } else if (autonomousReplies.active) {
@@ -600,6 +617,8 @@ async function runCycleBody() {
     console.log(`[automation] Publication reached X as ${mainFeed.tweetId}, but local recording is incomplete: ${mainFeed.error}`);
   } else if (mainFeed.action === 'claim-lost') {
     console.log('[automation] Main-feed recommendation changed before claim; no transport call was made.');
+  } else if (mainFeed.action === 'transport-blocked') {
+    console.log(`[automation] Main-feed mutation blocked without claiming queue work: ${mainFeed.error}`);
   } else if (mainFeed.action === 'blocked') {
     console.log('[automation] Approved main-feed items exist, but none currently pass scheduler eligibility.');
   } else {
@@ -658,7 +677,8 @@ async function main() {
     return;
   }
 
-  console.log(`[automation] Started. Full poll=${POLL_MINUTES}m, reply poll=${REPLY_POLL_MINUTES}m, scheduler=queue-aware, auto-post=${AUTO_POST}.`);
+  const mutationTransport = String(process.env.X_API_ACCESS_TOKEN || '').trim() ? 'x_api_v2' : 'none';
+  console.log(`[automation] Started. Full poll=${POLL_MINUTES}m, reply poll=${REPLY_POLL_MINUTES}m, scheduler=queue-aware, auto-post-requested=${AUTO_POST}, mutation-transport=${mutationTransport}.`);
   let nextFullCycleAt = 0;
   while (true) {
     const now = Date.now();

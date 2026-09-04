@@ -562,7 +562,7 @@ function decisionCounts(decisions) {
   return counts;
 }
 
-export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors = [], refreshFailed = false } = {}) {
+export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors = [], refreshFailed = false, transport = null } = {}) {
   const startedGrant = getAutonomousReplyGrant();
   if (startedGrant.state !== 'running') return { active: false, reason: startedGrant.state, grant: startedGrant, decisions: [] };
   const runtime = getAutonomousReplyRuntime();
@@ -579,6 +579,24 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
       lastDecisionCounts: { sent: 0, review: 0, skipped: 0 },
     });
     return { active: true, due: true, grant: startedGrant, runtime: nextRuntime, decisions: [], refreshFailed: true };
+  }
+  if (startedGrant.mode === 'live' && typeof transport !== 'function') {
+    const nextRuntime = saveAutonomousReplyRuntimeState({
+      ...runtime,
+      lastAttemptAt: Number(now),
+      nextExpectedRefreshAt: Number(now) + startedGrant.refreshMinutes * 60_000,
+      lastError: 'No compliant X reply mutation transport is configured. AI-powered automatic replies remain disabled.',
+      lastDecisionCounts: { sent: 0, review: 0, skipped: 0 },
+    });
+    return {
+      active: true,
+      due: true,
+      blocked: true,
+      reason: 'compliant_reply_transport_unavailable',
+      grant: startedGrant,
+      runtime: nextRuntime,
+      decisions: [],
+    };
   }
   const candidates = orderedUndecidedItems(startedGrant);
   const decisions = await processAutonomousReplyBatch(candidates, async (item) => {
@@ -623,6 +641,7 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
         tone: evaluation.tone,
         sourceClass: evaluation.sourceClass,
         generatedDraft: evaluation.generatedDraft,
+        transport,
       });
       return updateAutonomousReplyDecision(recorded.id, {
         decision: 'sent',

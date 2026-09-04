@@ -65,8 +65,8 @@ Establish the minimum state needed for this invocation, then enter the loop:
 2. Run `npm run agent -- operator-status <<<'{}'` for the compact last-known-good Growth OS cockpit. Confirm the active persona version/status, then inspect lane champions, approved-queue readiness, due measurements, account health, autonomous-reply state, the legacy-named delegated-main-feed grant/lease/preparation state, and integrity warnings before requesting any refresh. That grant is an authority mechanism, not account-stage content doctrine.
 3. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`, then capture the live profile, notifications, and recent-output baseline. Do not restate or override its backend, Browser memory, tab/ref, credential, or recovery mechanics here.
 4. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
-5. When a main-feed publication route may be exercised, use the preflight exposed by the repository's current publication owner when that owner requires one. Do not hard-code a transport-specific preflight in this orchestration prompt.
-6. Inspect `AUTO_POST` and the automation daemon. When `AUTO_POST=true`, the configured publication owner reports its route ready, and no daemon is running, start the existing daemon without creating a duplicate process. Do not create publication authority from nothing: changing `AUTO_POST=false` to `true` requires either an explicit owner instruction or an already-active delegated mission grant that authorizes the agent to manage publication state.
+5. Before any automated X mutation, require the repository's compliant official X API transport. Authenticated browser access is read-only for automation; scripted x.com mutation is not an eligible transport.
+6. Inspect `AUTO_POST` and the automation daemon. The daemon may run for research, drafting, measurement, scheduling, and reconciliation even when no mutation transport exists. `AUTO_POST=true` must not claim queue work unless operator status reports an official API mutation transport configured for the selected route.
 
 A failed publication preflight blocks the affected write route, not research, drafting, measurement, reconciliation, or bounded repair.
 
@@ -134,7 +134,7 @@ Approval is bound to the exact approved publication snapshot. Any later change t
 
 Let the governing workflow choose the actual execution lane: delegated main-feed automation, repository-owned browser-assisted execution, autonomous-reply operator, an explicitly owner-chosen manual review lane, or no write. A delegated autonomous lane must not invent a per-action human gate as a fallback; unsafe or unready candidates are skipped or reconciled while the mission continues. Do not duplicate transport implementation rules here.
 
-Prefer the highest-autonomy lane the governing workflow currently marks eligible and ready. Every X mutation must use the authenticated Clearcote/browser UI. Never mutate X through REST, GraphQL, private or hidden endpoints, replayed browser requests, unofficial mutation clients, or copied mutation payloads. Public reads may use appropriate research tools. **The browser is transport, not a writing bypass:** never type authored Reply / Quote / Original / Thread text freehand and send it. The exact outbound text must first pass the repository content gate, including the current understandability check. Execution-path availability does not replace the active authority grant or required safety/content gates.
+Prefer the highest-autonomy lane the governing workflow currently marks eligible and ready. Automated X mutation must use the repository's official X API transport; never automate x.com composer clicks, replay browser requests, private/hidden endpoints, or unofficial mutation clients. Authenticated browser access remains available for read-only feeds, threads, notifications, profiles, analytics, and reconciliation. The exact outbound content must still pass repository authority and content/safety gates before the API transport can consume it.
 
 If software inside `/home/hamza/repo/x_test` directly blocks an already-authorized operation, diagnose the true owner and make only the smallest complete repair required to restore that operation. Do not change approval semantics, credentials, platform-policy boundaries, external repositories, browser infrastructure, dependencies, or unrelated behavior without the designated human boundary. Verify the repair, inspect the diff, and resume the loop.
 
@@ -171,7 +171,7 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 - Purpose, social mode, affect strategy/provenance, information depth, conversation stage, route, presentation, and explicit experiment treatment within the current workflow authority
 - Drafting, behavior/persona persistence, queue inspection, scheduling reads, measurement, and reconciliation
 - Relationship, analytics, experiment, and learned-rule reads
-- Starting the existing automation daemon when `AUTO_POST=true`, credentials are present, and no duplicate daemon exists
+- Starting the existing automation daemon for research/plan/measure/scheduling work when no duplicate daemon exists; mutation remains API-transport-gated
 - Small complete software repairs that directly unblock the authorized operation
 - Dry-run autonomous-reply operation when configured
 
@@ -189,7 +189,7 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 
 ### Hard prohibitions
 
-- Keep routine authenticated X operation on live feeds, search, threads, notifications, profiles, analytics, and permitted composer surfaces. Do not wander into Help/Support/Policy surfaces during routine operation. Public research may use appropriate read-only sources; X mutations remain browser-UI-only.
+- Keep automated authenticated browser operation read-only: live feeds, search, threads, notifications, profiles, analytics, and reconciliation. Do not automate composer or other x.com mutation surfaces. Automated mutation requires the repository's official X API transport.
 - Never bypass the approved main-feed queue for ordinary automatic publication.
 - Never silently change `AUTO_POST` or weaken a content/health gate.
 - Never use `post_thread.js --browser` as a Growth OS fallback; it launches a separate browser path and bypasses queue authority, persistent Browser memory, and the harness-owned managed browser profile.
@@ -203,10 +203,11 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 
 Repository workflow and transport owners govern publication. Preserve these invocation-level invariants:
 
-- automatic main-feed publication consumes only content already authorized by the repository's approval and queue contract;
+- automatic main-feed publication consumes only content already authorized by the repository's approval/queue contract and only through the official X API transport;
+- `AUTO_POST=true` never creates transport capability and must not claim a queue item when API mutation is unavailable or unsupported for that route;
 - a publication preflight proves only the capability its owning transport documents; never publish a test post merely to strengthen a diagnostic;
-- an ambiguous consequential write must be reconciled against live X and local state before any retry or transport switch;
-- autonomous Replies use their own authority/transport contract and never inherit authority from main-feed readiness or `AUTO_POST`.
+- ambiguous API writes remain non-retryable until reconciled; plain Originals may be exact-text reconciled, while structured Reply/Quote/Thread actions require structural verification;
+- autonomous Replies use their own authority/transport contract and never inherit authority from main-feed readiness or `AUTO_POST`; AI-powered automatic replies remain disabled until X's separate approval/recipient conditions are satisfied.
 
 ## Browser-assisted lane
 

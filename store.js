@@ -2929,6 +2929,45 @@ export function refreshRelationshipFromAudience(audienceProfile) {
   }));
 }
 
+export function invalidateRelationshipReply({ candidateKey, ourTweetId, reason, actualParentTweetId = null, actualParentUsername = null, observedAt = Date.now() } = {}) {
+  const key = String(candidateKey || '').trim();
+  const tweetId = String(ourTweetId || '').trim();
+  const explanation = String(reason || '').trim();
+  const timestamp = Number(observedAt);
+  if (!key || !tweetId || !explanation || !Number.isFinite(timestamp)) {
+    throw new Error('Relationship reply invalidation requires candidateKey, ourTweetId, reason, and numeric observedAt.');
+  }
+  const rows = db.prepare(`SELECT * FROM relationship_events
+    WHERE event_type = 'our_reply' AND candidate_key = ? AND our_tweet_id = ?
+    ORDER BY id ASC`).all(key, tweetId);
+  if (!rows.length) return [];
+
+  db.exec('BEGIN');
+  try {
+    const usernames = new Set();
+    for (const row of rows) {
+      const currentMetadata = json(row.metadata_json, {});
+      const nextMetadata = {
+        ...currentMetadata,
+        meaningful: false,
+        invalidated: true,
+        invalidatedAt: timestamp,
+        invalidationReason: explanation,
+        actualParentTweetId: actualParentTweetId == null ? null : String(actualParentTweetId),
+        actualParentUsername: actualParentUsername == null ? null : normalizeRelationshipUsername(actualParentUsername),
+      };
+      db.prepare('UPDATE relationship_events SET metadata_json = ? WHERE id = ?').run(JSON.stringify(nextMetadata), Number(row.id));
+      usernames.add(row.username);
+    }
+    for (const username of usernames) applyRelationshipEvent(username);
+    db.exec('COMMIT');
+    return rows.map((row) => decodeRelationshipEvent(db.prepare('SELECT * FROM relationship_events WHERE id = ?').get(Number(row.id))));
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
 export function recordRelationshipEvent(event) {
   const username = normalizeRelationshipUsername(event?.username);
   const type = String(event?.eventType || event?.event_type || '');
@@ -3131,7 +3170,10 @@ export function listRecentPublishedReplies({ targetUsername = null, topic = null
       q.target_username, q.reply_archetype,
       (SELECT r.topic FROM relationship_events r
         WHERE r.candidate_key = a.candidate_key AND r.event_type = 'our_reply'
-        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1) AS topic
+        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1) AS topic,
+      (SELECT r.metadata_json FROM relationship_events r
+        WHERE r.candidate_key = a.candidate_key AND r.event_type = 'our_reply' AND r.our_tweet_id = a.output_tweet_id
+        ORDER BY r.occurred_at DESC, r.id DESC LIMIT 1) AS relationship_metadata_json
     FROM candidate_actions a LEFT JOIN queue_items q ON q.candidate_key = a.candidate_key
     WHERE a.action = 'reply' AND a.created_at >= ? AND TRIM(COALESCE(a.commentary, '')) <> ''
     ORDER BY a.created_at DESC LIMIT ?`).all(sinceTimestamp, Math.max(bounded, 100));
@@ -3144,7 +3186,9 @@ export function listRecentPublishedReplies({ targetUsername = null, topic = null
       archetype: row.reply_archetype || '',
       topic: String(row.topic || '').trim().toLowerCase(),
       createdAt: Number(row.created_at || 0),
+      invalidated: (json(row.relationship_metadata_json, {}) || {}).invalidated === true,
     }))
+    .filter((reply) => !reply.invalidated)
     .filter((reply) => (!usernameFilter || reply.targetUsername === usernameFilter) && (!topicFilter || reply.topic === topicFilter))
     .slice(0, bounded);
 }
@@ -3156,7 +3200,7 @@ function recentRelationshipEvents(since, limit = 5000) {
 }
 
 function meaningfulHealthEvent(event) {
-  return event?.metadata?.meaningful !== false;
+  return event?.metadata?.invalidated !== true && event?.metadata?.meaningful !== false;
 }
 
 function currentUnderTheHoodEvidence(observations) {
@@ -4145,7 +4189,8 @@ function networkObservationForAssignment(queueItem, variantLabel) {
   const afterStage = String(profile?.relationshipStage || beforeStage);
   const beforeIndex = RELATIONSHIP_STAGES.indexOf(beforeStage);
   const afterIndex = RELATIONSHIP_STAGES.indexOf(afterStage);
-  const completed = queueItem.status === 'published';
+  const targetVerified = queueItem.engagement?.send?.targetVerified !== false;
+  const completed = queueItem.status === 'published' && targetVerified;
   return {
     variantLabel, completed, item: assignmentItem(queueItem, context), context,
     health: assignment.health || null, networkContext: assignment.networkContext || {}, confounders: context,

@@ -995,7 +995,10 @@ async function sendEngagementReplyTransport({
   account,
   transport,
 }) {
-  if (!authToken) throw new Error('Sending a reply through the browser requires AUTH_TOKEN.');
+  if (transport === postTweetBrowser) {
+    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+  }
+  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
   const contentGate = authorizeReplyBrowserContent({
     candidateKey: candidate.key,
     text,
@@ -1143,6 +1146,10 @@ export async function sendApprovedEngagementReply(key, {
   account = process.env.X_ACCOUNT || 'ham_zax',
   transport = postTweetBrowser,
 } = {}) {
+  if (transport === postTweetBrowser) {
+    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+  }
+  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
@@ -1190,6 +1197,10 @@ export async function sendAutonomousEngagementReply(key, {
   account = process.env.X_ACCOUNT || 'ham_zax',
   transport = postTweetBrowser,
 } = {}) {
+  if (transport === postTweetBrowser) {
+    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+  }
+  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {

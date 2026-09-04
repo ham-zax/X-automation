@@ -1,11 +1,12 @@
 # X Network Growth & Publishing System
 
-Local Node.js human+AI operating system for `@ham_zax`. The current runtime discovers software-development signals across the active Growth Focus, selects and persists a purpose/mode/affect/depth behavior before writing, loads a versioned experimental Hamza model, stores research and evolving stance history in SQLite, maintains strategic relationship profiles/events, derives provenance-backed Account Health diagnostics, surfaces freshness-aware Engage Next opportunities, realizes behavior-aware drafts, measures fixed-window content/network/behavior outcomes, compares declared observational experiments, proposes bounded learned strategy rules, and publishes approved queued drafts through the authenticated Clearcote browser UI.
+Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers software-development signals across the active Growth Focus, selects and persists purpose/mode/affect/depth before writing, loads a versioned experimental Hamza model, stores research and evolving stance history in SQLite, maintains relationship/health intelligence, realizes behavior-aware drafts, measures fixed-window outcomes, and proposes bounded learned strategy rules. Automated X mutation is transport-gated: scripted x.com writes are disabled, while approved main-feed work can use the official X API v2 when a user-context write token is configured.
 
 ## Components
 
-- `x_browser_publish.js` — owns authenticated Clearcote browser-UI writes for Original/Quote/Thread and both manual/delegated replies, with rendered tweet-ID verification plus read-only live-search identity recovery before local publication reconciliation.
-- `post_thread.js` — browser-session preflight, dry-run validation, and browser-only thread publishing.
+- `x_browser_publish.js` — owns authenticated Clearcote read/session checks, publication content-gate receipts, and read-only live-search identity recovery. Scripted x.com mutation exports fail closed.
+- `x_api_publish.js` — official X API v2 main-feed transport. Text Originals and Threads are supported with an OAuth user access token; Quote requires explicit Enterprise capability; local media upload remains fail-closed.
+- `post_thread.js` — browser-session preflight and dry-run validation only; direct browser thread mutation is disabled.
 - `behavior.js` — shared neutral contract for action purpose, social mode, affect strategy/provenance, information depth, conversation stage, and ACT/RESEARCH/SILENT decisions.
 - `persona.js` + `persona/hamza-v1.json` — versioned experimental Hamza model owner, bounded consumer slices, relationship-aware behavior selection, and current stance-memory exposure.
 - `strategy.js` — executable niche taxonomy, keyword lanes, classification, saved-preference ranking boost, and purpose-aware Direct/Quote/Repost/Reply/Ignore decision method.
@@ -20,7 +21,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The current runtime disc
 - `learning.js` — pure learned-strategy qualification, bounded adjustment, matching/application, lifecycle transition, and stale/reversal/mechanism-review logic.
 - `agent_bridge.js` — stable JSON-in/JSON-out interface for editorial planning, AI configuration, workflow/health/relationship/measurement/experiment/learning reads and explicit writes; recommendation selection is not approval, learning acceptance/retirement require explicit confirmation, and the bridge cannot approve or publish main-feed content.
 - `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; Today includes the AI Editorial Plan, Advanced includes AI Settings, and Results exposes observational editorial outcomes alongside Account Health, Engage Next, scheduling, Relationships, Audience, Experiments, and human-controlled Learned Strategy.
-- `automation.js` — captures due publication measurement windows, refreshes the canonical source snapshots and Engage Next, optionally recomputes an advisory editorial plan when explicitly enabled, then performs scheduler-ranked approved main-feed publication with an atomic queue claim; it never selects recommendations or sends Engage Next replies.
+- `automation.js` — captures due publication measurements, refreshes canonical sources and Engage Next, optionally recomputes an advisory editorial plan, and scheduler-ranks approved main-feed work. It claims a due item only when the selected route is supported by the configured official API transport.
 
 ## Operating standards
 
@@ -51,11 +52,11 @@ Phase 1A is implemented: sources entering the workflow get a persistent Triage q
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
-Phase 1C Engage Next is implemented: bounded target reads and observed responses feed an engagement lane; active conversations rank ahead of comparable cold opportunities; opportunities carry an explicit behavior decision and reason to exist; reply drafting uses purpose-aware gates; successful replies record action, behavior provenance, and relationship history. A separate off-by-default delegated grant can refresh, evaluate, and send eligible replies in Dry run or Live mode under its configured budget. In Live mode, candidates that do not clear the autonomous gates are skipped rather than converted into a required human-review dependency.
+Phase 1C Engage Next is implemented for discovery, evaluation, drafting, and measurement. Dry-run autonomous reply evaluation remains available. Live AI-powered automatic replies are currently stopped: scripted x.com mutation is disabled, and the system does not enable an API reply bot until the separate X approval/recipient-policy prerequisites are explicitly satisfied.
 
-Phase 2 Content Quality is implemented across both manual and delegated authority paths: routed formats persist behavior/persona provenance, text/thread parts, and editor/gate metadata; agents retrieve `writer-packet` and persist allow-listed structured output; approval recomputes purpose/provenance/clarity gates regardless of whether authority comes from the owner or an active mission-agent grant. Required media is blocked until a real operator attachment and complete media plan exist; the current authenticated transport supports those attachments.
+Phase 2 Content Quality is implemented across manual and delegated authority paths: routed formats persist behavior/persona provenance, text/thread parts, and editor/gate metadata; agents retrieve `writer-packet` and persist allow-listed structured output; approval recomputes purpose/provenance/clarity gates regardless of authority source. Local media publication remains blocked in the official API transport until a compliant media-upload owner is implemented.
 
-Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; approval may come from the ordinary owner lane or the active delegated mission-agent lane. The pure scheduler explains urgency/expiry/coverage/semantic timing; optional owner schedule overrides are stored separately from approval; enabled automation atomically claims one Original/Quote/Thread row before transport; success/failure remains inspectable in queue state. Reposts remain outside this delegated main-feed grant and engagement replies remain outside this scheduler.
+Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; approval may come from the ordinary owner lane or delegated mission-agent lane. The scheduler explains urgency/expiry/coverage/semantic timing. `AUTO_POST=true` requests publication, but automation claims a row only when official X API user-context mutation is configured and the specific route is supported. Text Originals and Threads are supported; Quote requires Enterprise capability; Repost and AI auto-replies remain outside this path.
 
 Phase 1D Account Health is implemented: append-only observed health/visibility evidence retains provenance; `health.js` derives HEALTHY/WATCH/CONSTRAINED plus SaturationPressure, reply repetition, Network Quality, and InteractionYield; the dashboard/bridge expose the structured diagnostics; Under the Hood is recorded only when observable; WATCH changes warnings/priority only, while supported hard evidence blocks explicit engagement send.
 
@@ -75,7 +76,7 @@ Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed a source-con
 
 ## Setup
 
-Copy the non-secret settings you want from `.env.example` into `.env`. Browser publication requires `AUTH_TOKEN`; `CT0` is not a publication prerequisite.
+Copy the non-secret settings you want from `.env.example` into `.env`. `AUTH_TOKEN` may support authenticated browser reads/session checks. Automated main-feed mutation requires an OAuth user access token in `X_API_ACCESS_TOKEN` with `tweet.read`, `tweet.write`, and `users.read`; add `offline.access` to your OAuth flow if you need refresh tokens.
 
 ```bash
 npm run browser:check
@@ -101,17 +102,14 @@ Research candidates are persisted in `.x-research.sqlite`, but live source snaps
 ## Publishing
 
 ```bash
-# Validate only; no X write
+# Validate content only; no X write
 node post_thread.js --dry-run "preview only"
 
-# Clearcote browser UI only
-node post_thread.js "first post" "reply in the thread"
-
-# Optional visible browser window
-node post_thread.js --headless=false "visible browser-mode post"
+# Verify the authenticated browser read/session profile; no X write
+npm run browser:check
 ```
 
-HTTP mode fails closed if the session or live operation discovery cannot be validated. It does not silently switch to browser automation.
+Scripted x.com mutation is disabled. Main-feed automation uses `POST https://api.x.com/2/tweets` only when `X_API_ACCESS_TOKEN` is configured. Transport errors with an unknown remote result stay non-retryable until reconciled; the system never falls back to browser mutation.
 
 ## Automation
 
@@ -129,9 +127,11 @@ Key settings:
 POLL_MINUTES=30
 AUTO_POST=false
 AUTO_EDITORIAL_PLAN_REFRESH=false
+X_API_ACCESS_TOKEN=
+X_API_ENTERPRISE_QUOTE=false
 ```
 
-Before research/publication work, automation checks for missing due 15m/1h/6h/24h measurements and, only when needed, batches one existing account/post performance read. It records the first available snapshot after each due window idempotently. After a successful publication it also attempts one read-only follower-baseline snapshot; baseline/measurement read failures never change the persisted publication result or authorize another send. It then refreshes canonical X Latest/X Momentum/GitHub Trending/HN Top Stories snapshots and Engage Next opportunities. `AUTO_EDITORIAL_PLAN_REFRESH=true` may recompute a `qualified_growth` advisory plan from those already-refreshed snapshots; failure is isolated and no recommendation is selected. Main-feed publication still ranks **human-approved main-lane queue items** through `scheduler.js`. `AUTO_POST=false` stops before publication claim/transport and only previews the scheduler recommendation; Phase-4 measurement reads and editorial planning do not change that authority. `AUTO_POST=true` may publish at most one due Original/Quote/Thread item after the existing atomic claim. Repost remains manual and required media remains blocked until real attachment readiness exists.
+Automation checks due measurements, refreshes canonical X/GitHub/HN sources and Engage Next, and may recompute the advisory editorial plan. `AUTO_POST=false` previews only. `AUTO_POST=true` still does not create transport capability: without `X_API_ACCESS_TOKEN`, due work remains approved and unclaimed. With the token present, automation chooses the highest-ranked scheduler-eligible item that the X API transport can actually publish, authorizes the exact approved snapshot, atomically claims it, and then calls the official API. Quote is skipped unless Enterprise capability is explicitly enabled, and local media remains unsupported rather than silently switching transport.
 
 ## Web preview
 

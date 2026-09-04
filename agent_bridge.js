@@ -15,6 +15,7 @@ import {
   renewOperatorLease,
 } from './operator_lease.js';
 import { getAutonomousMainFeedMissionStatus } from './autonomous_main_feed.js';
+import { getXApiMainFeedCapability } from './x_api_publish.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
@@ -719,8 +720,18 @@ function operatorStatus(payload = {}) {
   const remainingReplyBudget = replyGrant.liveBudget == null
     ? null
     : Math.max(0, Number(replyGrant.liveBudget) - Number(replyGrant.budgetUsed || 0));
-  const credentialedMainFeed = Boolean(process.env.AUTH_TOKEN);
+  const browserReadCredentialsPresent = Boolean(process.env.AUTH_TOKEN);
+  const xApiAccessToken = String(process.env.X_API_ACCESS_TOKEN || '').trim();
+  const xApiAccessTokenPresent = Boolean(xApiAccessToken);
   const autoPostEnabled = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
+  const firstEligibleScheduleDecision = scheduleDecisions.find((decision) => decision.eligible) || null;
+  const nextScheduleDecision = xApiAccessTokenPresent
+    ? scheduleDecisions.find((decision) => decision.eligible
+      && getXApiMainFeedCapability(decision.item, { accessToken: xApiAccessToken }).supported) || firstEligibleScheduleDecision
+    : firstEligibleScheduleDecision;
+  const nextTransportCapability = nextScheduleDecision
+    ? getXApiMainFeedCapability(nextScheduleDecision.item, { accessToken: xApiAccessToken })
+    : null;
   const accountHealth = getAccountHealthSummary({ now });
   const integrityWarnings = scheduleDecisions
     .filter((decision) => decision.item.status === 'approved' && decision.blockers.some((blocker) => blocker.code === 'HARD_GATES_NOT_PASSED'))
@@ -739,7 +750,7 @@ function operatorStatus(payload = {}) {
       activeConversationKey: activeConversations[0]?.candidateKey || null,
       newReplyKey: newReplies[0]?.candidateKey || null,
       discoveryKey: growth.items[0]?.key || null,
-      approvedMainFeedQueueItemId: (scheduleDecisions.find((decision) => decision.eligible) || scheduleDecisions[0])?.item.id || null,
+      approvedMainFeedQueueItemId: (nextScheduleDecision || scheduleDecisions[0])?.item.id || null,
     },
     scoreBoundary: 'Priorities are comparable only within their lane; arbitrate lane champions by relevance, contribution, urgency, relationship continuity, claim confidence, and execution readiness.',
     discovery: { snapshots: growth.snapshots, top: growth.items.map(compactGrowthItem) },
@@ -752,10 +763,18 @@ function operatorStatus(payload = {}) {
     execution: {
       mainFeed: {
         autoPostEnabled,
-        credentialsPresent: credentialedMainFeed,
-        configured: autoPostEnabled && credentialedMainFeed,
-        preflight: 'Run npm run browser:check; this read model does not persist or infer preflight success.',
-        next: compactScheduleDecision(scheduleDecisions.find((decision) => decision.eligible)),
+        credentialsPresent: xApiAccessTokenPresent,
+        browserReadCredentialsPresent,
+        configured: autoPostEnabled && xApiAccessTokenPresent,
+        mutationTransport: xApiAccessTokenPresent ? 'x_api_v2' : 'none',
+        blockingReason: xApiAccessTokenPresent
+          ? (nextTransportCapability?.supported === false ? nextTransportCapability.code : null)
+          : 'compliant_transport_unavailable',
+        preflight: xApiAccessTokenPresent
+          ? 'X API v2 user access token is configured. Publication still remains queue/gate/capability checked; no test post is emitted for preflight.'
+          : 'No X API v2 user access token is configured. Authenticated browser access is read-only for automation.',
+        next: compactScheduleDecision(nextScheduleDecision),
+        nextTransportCapability,
         blocked: scheduleDecisions.filter((decision) => !decision.eligible).slice(0, 5).map(compactScheduleDecision),
       },
       autonomousReply: {

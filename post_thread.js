@@ -5,9 +5,9 @@ import os from 'os';
 import { checkBrowserSession } from './x_browser_publish.js';
 
 const DEFAULT_THREAD = [
-  '1/3 🚀 Automating X/Twitter with XActions & Node.js!',
-  '2/3 🤖 No API keys needed. You can automate reads, replies, likes, and full threads directly.',
-  '3/3 🧵 Thread posting test completed successfully! Built with @nirholas XActions toolkit.',
+  '1/3 Validate the first thread part.',
+  '2/3 Validate the second thread part.',
+  '3/3 Dry-run validation only; scripted x.com mutation is disabled.',
 ];
 
 async function getAuthCredentials() {
@@ -67,11 +67,11 @@ async function main() {
 
   validateThread(thread);
   if (isDryRun) {
-    console.log(`Browser-only dry run: ${thread.length} thread part(s) validated. Nothing was posted.`);
+    console.log(`Dry run: ${thread.length} thread part(s) validated. Nothing was posted.`);
     return;
   }
 
-  throw new Error('Direct thread publication is disabled. Route the exact thread through Growth OS so the current content gates and approval snapshot are bound before browser transport.');
+  throw new Error('Direct browser thread publication is disabled. Route the exact thread through Growth OS and the official X API transport so the current content gates and approval snapshot remain bound.');
 }
 
 main().catch((error) => {

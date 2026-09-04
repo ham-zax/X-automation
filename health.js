@@ -66,7 +66,8 @@ function eventMetadata(event) {
 }
 
 function eventMeaningful(event) {
-  return eventMetadata(event).meaningful !== false;
+  const metadata = eventMetadata(event);
+  return metadata.invalidated !== true && metadata.meaningful !== false;
 }
 
 function eventTopic(event) {

@@ -16,6 +16,12 @@ const CONTENT_GATE_RECEIPTS = new WeakMap();
 const TWEET_ARTICLE = 'article[data-testid="tweet"]';
 const TWEET_TEXT = '[data-testid="tweetText"]';
 
+function rejectScriptedXMutation() {
+  const error = new Error('Scripted x.com mutation is disabled. Configure a compliant official X API transport instead.');
+  error.code = 'SCRIPTED_X_MUTATION_DISABLED';
+  throw error;
+}
+
 function requireBrowserCredentials(credentials = {}) {
   const authToken = String(credentials.authToken || '').trim();
   if (!authToken) throw new Error('Browser publication requires AUTH_TOKEN.');
@@ -41,10 +47,10 @@ function issueContentGate(metadata) {
 
 function consumeContentGate(receipt, expected) {
   const metadata = receipt && typeof receipt === 'object' ? CONTENT_GATE_RECEIPTS.get(receipt) : null;
-  if (!metadata || metadata.consumed) throw new Error('Browser publication requires a current repository-issued content gate receipt.');
-  if (Date.now() - Number(metadata.issuedAt || 0) > CONTENT_GATE_TTL_MS) throw new Error('Browser publication content gate receipt expired; re-run the current repository gate.');
+  if (!metadata || metadata.consumed) throw new Error('X publication requires a current repository-issued content gate receipt.');
+  if (Date.now() - Number(metadata.issuedAt || 0) > CONTENT_GATE_TTL_MS) throw new Error('X publication content gate receipt expired; re-run the current repository gate.');
   for (const [key, value] of Object.entries(expected || {})) {
-    if (String(metadata[key] ?? '') !== String(value ?? '')) throw new Error(`Browser publication content gate mismatch: ${key}.`);
+    if (String(metadata[key] ?? '') !== String(value ?? '')) throw new Error(`X publication content gate mismatch: ${key}.`);
   }
   metadata.consumed = true;
   return metadata;
@@ -97,9 +103,9 @@ export function authorizeReplyBrowserContent({ candidateKey, text, targetTweetId
   return issueContentGate({ kind: 'reply', candidateKey: key, exactText: body, targetTweetId: target, authorityType: type });
 }
 
-export function authorizeMainFeedBrowserContent(item) {
+export function authorizeMainFeedContent(item) {
   const key = String(item?.candidateKey || '').trim();
-  if (!key) throw new Error('Main-feed browser authorization requires candidateKey.');
+  if (!key) throw new Error('Main-feed publication authorization requires candidateKey.');
   const current = getMainFeedScheduleItem(key);
   if (!current
     || current.status !== 'approved'
@@ -108,19 +114,35 @@ export function authorizeMainFeedBrowserContent(item) {
     || current.draft?.gates?.checks?.understandable !== true
     || current.approvalSnapshotMismatch === true
     || !current.approvalAuthority) {
-    throw new Error('Main-feed browser authorization failed: current approved content/gate state is missing or stale.');
+    throw new Error('Main-feed publication authorization failed: current approved content/gate state is missing or stale.');
   }
   const pipeline = String(current.pipeline || '');
   const exactText = pipeline === 'thread'
     ? String(current.threadParts?.[0] || '').trim()
     : String(current.body || current.text || '').trim();
-  if (!exactText) throw new Error('Main-feed browser authorization failed: current approved text is empty.');
+  if (!exactText) throw new Error('Main-feed publication authorization failed: current approved text is empty.');
   return issueContentGate({
     kind: 'main_feed',
     candidateKey: key,
     pipeline,
     exactText,
     approvalContentHash: String(current.approvalSnapshot?.contentHash || ''),
+  });
+}
+
+export const authorizeMainFeedBrowserContent = authorizeMainFeedContent;
+
+export function consumeMainFeedContentGate(receipt, item) {
+  const pipeline = String(item?.pipeline || '');
+  const exactText = pipeline === 'thread'
+    ? String(item?.threadParts?.[0] || '').trim()
+    : String(item?.body || item?.text || '').trim();
+  return consumeContentGate(receipt, {
+    kind: 'main_feed',
+    candidateKey: String(item?.candidateKey || '').trim(),
+    pipeline,
+    exactText,
+    approvalContentHash: String(item?.approvalSnapshot?.contentHash || ''),
   });
 }
 
@@ -405,6 +427,7 @@ export async function postTweetBrowser(text, credentials, {
   contentGate = null,
   headless = true,
 } = {}) {
+  rejectScriptedXMutation();
   const body = String(text || '').trim();
   if (!body) throw new Error('Browser publication requires non-empty text.');
   consumeContentGate(contentGate, {
@@ -439,6 +462,7 @@ export async function publishMainFeedBrowser(item, credentials, {
   contentGate = null,
   headless = true,
 } = {}) {
+  rejectScriptedXMutation();
   const pipeline = String(item?.pipeline || '');
   const attachment = item?.media?.attachment || null;
   if (item?.media?.required === true && !attachment?.localPath) {

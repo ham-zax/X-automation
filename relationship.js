@@ -51,7 +51,8 @@ function metadata(event) {
 }
 
 function meaningful(event) {
-  return metadata(event).meaningful !== false;
+  const meta = metadata(event);
+  return meta.invalidated !== true && meta.meaningful !== false;
 }
 
 export function isMeaningfulOutboundInteraction({
@@ -171,20 +172,21 @@ function customerDensity(profile, topicFitValue, context = {}) {
 }
 
 export function summarizeRelationshipEvents(events = []) {
-  const outbound = events.filter((event) => OUTBOUND_EVENTS.has(eventType(event)));
+  const validEvents = events.filter((event) => metadata(event).invalidated !== true);
+  const outbound = validEvents.filter((event) => OUTBOUND_EVENTS.has(eventType(event)));
   const meaningfulOutbound = outbound.filter(meaningful);
-  const allResponses = events.filter((event) => RESPONSE_EVENTS.has(eventType(event)));
+  const allResponses = validEvents.filter((event) => RESPONSE_EVENTS.has(eventType(event)));
   const responses = allResponses.filter(meaningful);
-  const allContinued = events.filter((event) => eventType(event) === 'conversation_continued');
+  const allContinued = validEvents.filter((event) => eventType(event) === 'conversation_continued');
   const continued = allContinued.filter(meaningful);
   const times = (items) => items.map(eventTime).filter(Boolean);
   return {
     meaningfulInteractions: meaningfulOutbound.length,
-    theirRepliesToUs: events.filter((event) => eventType(event) === 'target_reply').length,
-    ourRepliesToThem: events.filter((event) => eventType(event) === 'our_reply').length,
-    ourQuotesOfThem: events.filter((event) => eventType(event) === 'our_quote').length,
-    theirQuotesOfUs: events.filter((event) => eventType(event) === 'target_quote').length,
-    theirRepostsOfUs: events.filter((event) => eventType(event) === 'target_repost').length,
+    theirRepliesToUs: validEvents.filter((event) => eventType(event) === 'target_reply').length,
+    ourRepliesToThem: validEvents.filter((event) => eventType(event) === 'our_reply').length,
+    ourQuotesOfThem: validEvents.filter((event) => eventType(event) === 'our_quote').length,
+    theirQuotesOfUs: validEvents.filter((event) => eventType(event) === 'target_quote').length,
+    theirRepostsOfUs: validEvents.filter((event) => eventType(event) === 'target_repost').length,
     targetResponses: responses.length,
     continuedConversations: continued.length,
     lastInteractionAt: Math.max(0, ...times(outbound)) || null,
