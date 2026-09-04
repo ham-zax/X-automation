@@ -62,7 +62,7 @@ function behaviorSchema(decision) {
       primaryPurpose: act ? { type: 'string', enum: ACTION_PURPOSES } : { const: null },
       secondaryPurposes: act
         ? stringArray({ enum: ACTION_PURPOSES }, { maxItems: ACTION_PURPOSES.length, uniqueItems: true })
-        : { type: 'array', maxItems: 0 },
+        : stringArray({}, { maxItems: 0 }),
       socialMode: act ? { type: 'string', enum: SOCIAL_MODES } : { const: null },
       affectStrategy: act ? { type: 'string', enum: AFFECT_STRATEGIES } : { const: 'neutral' },
       affectProvenance: act ? { type: 'string', enum: AFFECT_PROVENANCE } : { const: 'none' },

@@ -479,6 +479,73 @@ export function inspectWorkflow(key) {
   };
 }
 
+export function reconcileRecordedActionWorkflow(candidate, action, recorded) {
+  const workflow = inspectWorkflow(candidate.key);
+  const queueItem = workflow.queueItem;
+  if (!queueItem) return null;
+  const compatible = (action === 'reply' && queueItem.pipeline === 'reply')
+    || (action === 'quote' && queueItem.pipeline === 'quote')
+    || (action === 'direct' && ['original', 'thread'].includes(queueItem.pipeline))
+    || (action === 'repost' && queueItem.pipeline === 'repost');
+  if (!compatible) return null;
+  const tweetId = recorded.output_tweet_id ? String(recorded.output_tweet_id) : null;
+  const outputUrl = recorded.output_url || null;
+  if (queueItem.outputTweetId && tweetId && String(queueItem.outputTweetId) !== tweetId) {
+    throw new Error(`Queue item ${queueItem.id} already has a different output tweet ID.`);
+  }
+  const publishedAt = Number(recorded.created_at || Date.now());
+  let draft = workflow.draft;
+  if (draft && tweetId && (draft.status !== 'published' || String(draft.publishedTweetId || '') !== tweetId)) {
+    draft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
+  }
+  const reconciled = queueItem.status === 'published'
+    && (!tweetId || String(queueItem.outputTweetId || '') === tweetId)
+    ? queueItem
+    : saveQueueItem({
+      ...queueItem,
+      status: 'published',
+      draftId: draft?.id ?? queueItem.draftId,
+      outputTweetId: tweetId || queueItem.outputTweetId || null,
+      outputUrl: outputUrl || queueItem.outputUrl || null,
+      publishedAt: queueItem.publishedAt || publishedAt,
+      publishStartedAt: null,
+      publishError: null,
+    });
+  if (action === 'reply' && tweetId && reconciled.targetUsername) {
+    const alreadyRecorded = listRelationshipEvents(reconciled.targetUsername, { limit: 1000 })
+      .some((event) => event.eventType === 'our_reply' && String(event.ourTweetId || '') === tweetId);
+    if (!alreadyRecorded) {
+      const relationship = getRelationshipProfile(reconciled.targetUsername);
+      const meaningfulInteraction = isMeaningfulOutboundInteraction({
+        behavior: reconciled.behavior || draft?.editor?.behavior || null,
+        text: draft?.body || reconciled.approvedText || '',
+        sourceText: candidate.text || '',
+        engagementKind: reconciled.engagementKind || 'initial_reply',
+        relationshipStage: relationship?.relationshipStage || 'observed',
+      });
+      recordRelationshipEvent({
+        username: reconciled.targetUsername,
+        eventType: 'our_reply',
+        candidateKey: candidate.key,
+        sourceTweetId: reconciled.targetTweetId,
+        ourTweetId: tweetId,
+        topic: candidate.niche?.tags?.[0] || null,
+        occurredAt: publishedAt,
+        metadata: {
+          meaningful: meaningfulInteraction,
+          primaryPurpose: reconciled.behavior?.primaryPurpose || draft?.editor?.behavior?.primaryPurpose || null,
+          socialMode: reconciled.behavior?.socialMode || draft?.editor?.behavior?.socialMode || null,
+          conversationStage: reconciled.behavior?.conversationStage || draft?.editor?.behavior?.conversationStage || null,
+          replyArchetype: reconciled.replyArchetype || null,
+          engagementKind: reconciled.engagementKind || 'initial_reply',
+          replyAuthority: 'publication_reconciliation',
+        },
+      });
+    }
+  }
+  return reconciled;
+}
+
 export function saveCandidateToWorkflow(key, saved = true) {
   requireCandidate(key);
   markCandidateSaved(key, saved);

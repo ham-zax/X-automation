@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { fetchAccountPerformance } from './tech_news.js';
 import { refreshAllSourceSnapshots, refreshSourceSnapshot } from './source_refresh.js';
 import { refreshEditorialPlan } from './editorial.js';
-import { authorizeMainFeedBrowserContent, publishMainFeedBrowser } from './x_browser_publish.js';
+import { authorizeMainFeedBrowserContent, findOwnPublishedPostBrowser, publishMainFeedBrowser } from './x_browser_publish.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
@@ -15,15 +15,20 @@ import {
   prepareAutonomousMainFeed,
   refreshFirst1000MissionFollowerState,
 } from './autonomous_main_feed.js';
+import { reconcileRecordedActionWorkflow } from './pipeline.js';
 import { classifyPublishedContent } from './writing_strategy.js';
 import {
   claimQueueItem,
   getAccountHealthSummary,
   getAppState,
+  getCandidate,
+  getDraftByCandidate,
   getPublicationFollowerBaseline,
   listDueMeasurementWindows,
   listAcceptedLearnedRules,
   listApprovedMainFeedItems,
+  listAutonomousReplyDecisions,
+  listQueueItems,
   listRecentMainFeedPublications,
   markQueueFailed,
   markQueuePublished,
@@ -34,6 +39,7 @@ import {
   saveDraft,
   saveQueueItem,
   setAppState,
+  updateAutonomousReplyDecision,
 } from './store.js';
 
 const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
@@ -251,7 +257,83 @@ export async function refreshBackgroundEditorialPlan({
 }
 
 function publicationAction(pipeline) {
-  return pipeline === 'quote' ? 'quote' : 'direct';
+  return pipeline === 'reply' ? 'reply' : pipeline === 'quote' ? 'quote' : 'direct';
+}
+
+function reconciliationText(queueItem, draft) {
+  if (queueItem.pipeline === 'thread') {
+    return String(draft?.threadParts?.[0] || queueItem.threadParts?.[0] || '').trim();
+  }
+  return String(draft?.body || queueItem.approvedText || '').trim();
+}
+
+function reconciliationStartedAt(queueItem) {
+  const send = queueItem.engagement?.send || {};
+  const value = queueItem.publishStartedAt || send.postedAt || send.startedAt || queueItem.updatedAt || 0;
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+export async function reconcilePendingBrowserPublications({
+  authToken = process.env.AUTH_TOKEN,
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  finder = findOwnPublishedPostBrowser,
+} = {}) {
+  const pending = listQueueItems({ status: 'publishing', limit: 100 })
+    .filter((item) => ['original', 'quote', 'thread', 'reply'].includes(item.pipeline));
+  if (!pending.length) return { checked: 0, reconciled: [], unresolved: [] };
+  if (!authToken) return { checked: 0, reconciled: [], unresolved: pending.map((item) => ({ queueItemId: item.id, reason: 'missing_auth_token' })) };
+
+  const replyDecisions = listAutonomousReplyDecisions({ limit: 500 });
+  const reconciled = [];
+  const unresolved = [];
+  for (const queueItem of pending) {
+    const candidate = getCandidate(queueItem.candidateKey);
+    const draft = getDraftByCandidate(queueItem.candidateKey);
+    const text = reconciliationText(queueItem, draft);
+    const action = publicationAction(queueItem.pipeline);
+    if (!candidate || !text) {
+      unresolved.push({ queueItemId: queueItem.id, reason: candidate ? 'missing_exact_text' : 'missing_candidate' });
+      continue;
+    }
+
+    const identity = await finder(text, { authToken }, {
+      account,
+      publishedAfter: Math.max(0, reconciliationStartedAt(queueItem) - 5_000),
+    });
+    if (!identity?.tweetId) {
+      unresolved.push({ queueItemId: queueItem.id, reason: 'not_found_on_live_x' });
+      continue;
+    }
+
+    const observedPublishedAt = identity.publishedAt ? Date.parse(identity.publishedAt) : NaN;
+    const recorded = recordCandidateAction({
+      candidateKey: candidate.key,
+      action,
+      outputTweetId: identity.tweetId,
+      outputUrl: identity.url || null,
+      commentary: text,
+      createdAt: Number.isFinite(observedPublishedAt) ? observedPublishedAt : Date.now(),
+    });
+    const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
+    if (action === 'reply') {
+      const decision = replyDecisions.find((item) => item.queueItemId === queueItem.id
+        || (item.candidateKey === queueItem.candidateKey && String(item.targetTweetId || '') === String(queueItem.targetTweetId || '')));
+      if (decision && decision.decision !== 'sent') {
+        updateAutonomousReplyDecision(decision.id, {
+          decision: 'sent',
+          sentAt: decision.sentAt || Date.now(),
+          outputTweetId: identity.tweetId,
+          outputUrl: identity.url || null,
+          reasons: [
+            ...(decision.reasons || []).filter((reason) => reason?.code !== 'SEND_ERROR'),
+            { code: 'AUTO_RECONCILED_REMOTE_WRITE', reason: 'Exact outbound text was found on live X after local publication verification lag.' },
+          ],
+        });
+      }
+    }
+    reconciled.push({ queueItemId: queueItem.id, candidateKey: queueItem.candidateKey, action, tweetId: identity.tweetId, url: identity.url || null, status: reconciledQueue?.status || null });
+  }
+  return { checked: pending.length, reconciled, unresolved };
 }
 
 function publicationCommentary(item) {
@@ -365,6 +447,17 @@ export async function runEngagementAutonomousCycle({
   refreshTargetTimelines = true,
   researchErrors = [],
 } = {}) {
+  let publicationReconciliation = { checked: 0, reconciled: [], unresolved: [] };
+  try {
+    publicationReconciliation = await reconcilePendingBrowserPublications();
+    if (publicationReconciliation.reconciled.length) {
+      console.log(`[automation] Reconciled ${publicationReconciliation.reconciled.length} ambiguous browser publication(s) from live X.`);
+    }
+  } catch (error) {
+    publicationReconciliation = { checked: 0, reconciled: [], unresolved: [], error: error.message };
+    console.log(`[automation] Browser publication reconciliation failed without enabling retry: ${error.message}`);
+  }
+
   const sourceErrors = [...researchErrors];
   if (refreshSources) sourceErrors.push(...await refreshReplySources());
 
@@ -401,7 +494,7 @@ export async function runEngagementAutonomousCycle({
     console.log(`[automation] Autonomous reply cycle failed without stopping the daemon: ${error.message}`);
   }
 
-  return { engagement, autonomousReplies, sourceErrors };
+  return { engagement, autonomousReplies, sourceErrors, publicationReconciliation };
 }
 
 async function runCycleBody() {
@@ -455,7 +548,7 @@ async function runCycleBody() {
   }
   if (research.errors.length) console.log(`[automation] Partial research errors: ${research.errors.join(' | ')}`);
 
-  const { engagement, autonomousReplies } = await runEngagementAutonomousCycle({
+  const { engagement, autonomousReplies, publicationReconciliation } = await runEngagementAutonomousCycle({
     refreshSources: false,
     refreshTargetTimelines: true,
     researchErrors: research.errors,
@@ -469,10 +562,8 @@ async function runCycleBody() {
     });
     if (autonomousMainFeedPreparation.action === 'approved') {
       console.log(`[automation] Delegated First-1,000 preparation approved queue item ${autonomousMainFeedPreparation.queueItemId}.`);
-    } else if (!['noop', 'review_required'].includes(autonomousMainFeedPreparation.action)) {
+    } else if (autonomousMainFeedPreparation.action !== 'noop') {
       console.log(`[automation] Delegated First-1,000 preparation: ${autonomousMainFeedPreparation.reason}.`);
-    } else if (autonomousMainFeedPreparation.action === 'review_required') {
-      console.log(`[automation] Delegated First-1,000 item ${autonomousMainFeedPreparation.queueItemId} remains non-publication: ${autonomousMainFeedPreparation.error || autonomousMainFeedPreparation.reason}.`);
     }
   } catch (error) {
     autonomousMainFeedPreparation = { action: 'error', reason: 'mission_preparation_failed', error: error.message };
@@ -519,6 +610,7 @@ async function runCycleBody() {
     top,
     engagement,
     autonomousReplies,
+    publicationReconciliation,
     measurements,
     styleClassification,
     publicationBaseline,

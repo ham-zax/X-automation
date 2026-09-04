@@ -23,8 +23,6 @@ import {
   recordAutonomousReplyDecision,
   saveAutonomousReplyGrantState,
   saveAutonomousReplyRuntimeState,
-  saveDraft,
-  saveQueueItem,
   updateAutonomousReplyDecision,
 } from './store.js';
 
@@ -517,39 +515,6 @@ function persistDecision(item, grant, evaluation, decision) {
   });
 }
 
-function persistHumanReview(item, evaluation, decisionId) {
-  if (!evaluation.generatedDraft || !evaluation.exactReply) return null;
-  const existing = getDraftByCandidate(item.candidateKey);
-  if (String(existing?.body || '').trim()) return existing;
-  const savedDraft = saveDraft({
-    ...evaluation.generatedDraft,
-    candidateKey: item.candidateKey,
-    editor: {
-      ...(evaluation.generatedDraft.editor || {}),
-      autonomousReply: {
-        ...(evaluation.generatedDraft.editor?.autonomousReply || {}),
-        decisionId,
-        downgradedToHumanReview: true,
-      },
-    },
-    gates: evaluation.checks?.deterministicFailures?.length ? { passed: false, failures: evaluation.checks.deterministicFailures } : {},
-    qualityScore: Number(evaluation.checks?.writingScore || 0),
-    status: 'draft',
-  });
-  saveQueueItem({
-    ...item,
-    status: 'needs_review',
-    draftId: savedDraft.id,
-    humanApprovedAt: null,
-    approvedText: null,
-    engagement: {
-      ...(item.engagement || {}),
-      autonomousReview: { decisionId, at: Date.now() },
-    },
-  });
-  return savedDraft;
-}
-
 function currentLiveAuthority(item, decision, expectedRevision) {
   const grant = getAutonomousReplyGrant();
   if (grant.state !== 'running' || grant.mode !== 'live' || grant.revision !== expectedRevision) {
@@ -623,26 +588,29 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
     const dryRunDecision = evaluation.decision === 'send' ? 'dry_run_send' : evaluation.decision === 'review' ? 'dry_run_review' : 'dry_run_skip';
     if (grant.mode === 'dry_run') return persistDecision(item, grant, evaluation, dryRunDecision);
     if (evaluation.decision !== 'send') {
-      const recorded = persistDecision(item, grant, evaluation, evaluation.decision === 'review' ? 'review' : 'skipped');
-      if (recorded.created && evaluation.decision === 'review') persistHumanReview(item, evaluation, recorded.id);
-      return recorded;
+      const delegatedEvaluation = evaluation.decision === 'review'
+        ? {
+            ...evaluation,
+            reasons: [
+              ...(evaluation.reasons || []),
+              boundedReason('DELEGATED_REVIEW_SKIPPED', 'Delegated live mode does not wait for human review; this candidate was skipped and the mission continues.'),
+            ],
+          }
+        : evaluation;
+      return persistDecision(item, grant, delegatedEvaluation, 'skipped');
     }
 
     let recorded = persistDecision(item, grant, evaluation, 'eligible_live');
     if (!recorded.created) return recorded;
     const authority = currentLiveAuthority(item, recorded, grant.revision);
     if (!authority.allowed) {
-      recorded = updateAutonomousReplyDecision(recorded.id, { decision: 'review', reasons: [...recorded.reasons, authority.reason] });
-      persistHumanReview(item, evaluation, recorded.id);
-      return recorded;
+      return updateAutonomousReplyDecision(recorded.id, { decision: 'skipped', reasons: [...recorded.reasons, authority.reason] });
     }
     let claimed;
     try {
       claimed = claimAutonomousReplyDecision(recorded.id, { grantRevision: grant.revision, now: Date.now() });
     } catch (error) {
-      recorded = updateAutonomousReplyDecision(recorded.id, { decision: 'review', reasons: [...recorded.reasons, boundedReason('CLAIM_REJECTED', error.message)] });
-      persistHumanReview(item, evaluation, recorded.id);
-      return recorded;
+      return updateAutonomousReplyDecision(recorded.id, { decision: 'skipped', reasons: [...recorded.reasons, boundedReason('CLAIM_REJECTED', error.message)] });
     }
     if (!claimed) return getAutonomousReplyDecisionForTarget(item.targetTweetId);
 

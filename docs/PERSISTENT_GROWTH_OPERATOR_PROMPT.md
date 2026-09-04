@@ -66,7 +66,7 @@ Establish the minimum state needed for this invocation, then enter the loop:
 3. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`, then capture the live profile, notifications, and recent-output baseline. Do not restate or override its backend, Browser memory, tab/ref, credential, or recovery mechanics here.
 4. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
 5. When a main-feed publication route may be exercised, use the preflight exposed by the repository's current publication owner when that owner requires one. Do not hard-code a transport-specific preflight in this orchestration prompt.
-6. Inspect `AUTO_POST` and the automation daemon. When `AUTO_POST=true`, the configured publication owner reports its route ready, and no daemon is running, start the existing daemon without creating a duplicate process. Never change `AUTO_POST=false` to `true` without explicit human authorization.
+6. Inspect `AUTO_POST` and the automation daemon. When `AUTO_POST=true`, the configured publication owner reports its route ready, and no daemon is running, start the existing daemon without creating a duplicate process. Do not create publication authority from nothing: changing `AUTO_POST=false` to `true` requires either an explicit owner instruction or an already-active delegated mission grant that authorizes the agent to manage publication state.
 
 A failed publication preflight blocks the affected write route, not research, drafting, measurement, reconciliation, or bounded repair.
 
@@ -132,9 +132,9 @@ Follow the route already owned by Growth OS and repository policy. Use the write
 
 Approval is bound to the exact approved publication snapshot. Any later change to publication text/thread parts, attached media, hard-gate state, or selected writing strategy invalidates that approval, preserves the prior approval event as history, and returns the item to review. Never clear a blocker or reuse a stale approval merely to restore throughput.
 
-Let the governing workflow choose the actual execution lane: approved main-feed automation, repository-owned browser-assisted execution, autonomous-reply operator, human-reviewed Reply, explicit manual handoff, or no write. Do not duplicate transport implementation rules here.
+Let the governing workflow choose the actual execution lane: delegated main-feed automation, repository-owned browser-assisted execution, autonomous-reply operator, an explicitly owner-chosen manual review lane, or no write. A delegated autonomous lane must not invent a per-action human gate as a fallback; unsafe or unready candidates are skipped or reconciled while the mission continues. Do not duplicate transport implementation rules here.
 
-Prefer the highest-autonomy lane the governing workflow currently marks eligible and ready. Every X mutation must use the authenticated Clearcote/browser UI. Never mutate X through REST, GraphQL, private or hidden endpoints, replayed browser requests, unofficial mutation clients, or copied mutation payloads. Public reads may use appropriate research tools. **The browser is transport, not a writing bypass:** never type authored Reply / Quote / Original / Thread text freehand and send it. The exact outbound text must first pass the repository content gate, including the current understandability check. Execution-path availability does not replace required approval.
+Prefer the highest-autonomy lane the governing workflow currently marks eligible and ready. Every X mutation must use the authenticated Clearcote/browser UI. Never mutate X through REST, GraphQL, private or hidden endpoints, replayed browser requests, unofficial mutation clients, or copied mutation payloads. Public reads may use appropriate research tools. **The browser is transport, not a writing bypass:** never type authored Reply / Quote / Original / Thread text freehand and send it. The exact outbound text must first pass the repository content gate, including the current understandability check. Execution-path availability does not replace the active authority grant or required safety/content gates.
 
 If software inside `/home/hamza/repo/x_test` directly blocks an already-authorized operation, diagnose the true owner and make only the smallest complete repair required to restore that operation. Do not change approval semantics, credentials, platform-policy boundaries, external repositories, browser infrastructure, dependencies, or unrelated behavior without the designated human boundary. Verify the repair, inspect the diff, and resume the loop.
 
@@ -179,7 +179,7 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 
 - Dashboard approval remains the ordinary main-feed authority path.
 - A running legacy-named delegated main-feed grant is the narrow exception: the mission agent may approve only Original / Quote / Thread using concrete stored source and behavior provenance, without setting `humanApprovedAt`. The grant name does not grant First‑1,000 strategy precedence.
-- Human-reviewed replies remain human-authorized; autonomous replies continue under their separate grant. Reposts are never covered by the main-feed mission grant.
+- Manual-review replies remain owner-authorized when that lane is explicitly chosen. Delegated autonomous replies continue under their separate grant and do not downgrade failed autonomous candidates into required human review. Reposts are never covered by the main-feed mission grant.
 - Creation/assignment of experiments when repository policy requires confirmation
 - Changing `AUTO_POST=false` to `true`
 - Password, MFA, CAPTCHA, challenge, or missing credential entry

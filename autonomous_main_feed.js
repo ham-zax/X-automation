@@ -428,11 +428,15 @@ export async function prepareAutonomousMainFeed({
   requirePreparationAuthority(grantRevision);
   const provenance = missionVerificationProvenance(queueItem, draft);
   if (!provenance.sourceReferences.length) {
+    const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
+      actor: 'agent',
+      reason: 'Delegated main-feed preparation could not establish source verification provenance; skip instead of waiting for human review.',
+    });
     return {
-      action: 'review_required',
+      action: 'skipped',
       reason: 'missing_source_verification_provenance',
-      queueItemId: queueItem.id,
-      candidateKey: queueItem.candidateKey,
+      queueItemId: ignored.id,
+      candidateKey: ignored.candidateKey,
       editorialRecommendationId: work.recommendation.id,
       strategySelectionId: strategySelection.id,
       editorialRefreshed,
@@ -455,12 +459,16 @@ export async function prepareAutonomousMainFeed({
       editorialRefreshed,
     };
   } catch (error) {
+    const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
+      actor: 'agent',
+      reason: `Delegated main-feed approval rejected: ${error.message}`,
+    });
     return {
-      action: 'review_required',
+      action: 'skipped',
       reason: 'mission_approval_rejected',
       error: error.message,
-      queueItemId: queueItem.id,
-      candidateKey: queueItem.candidateKey,
+      queueItemId: ignored.id,
+      candidateKey: ignored.candidateKey,
       editorialRecommendationId: work.recommendation.id,
       strategySelectionId: strategySelection.id,
       editorialRefreshed,

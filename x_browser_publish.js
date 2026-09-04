@@ -175,13 +175,76 @@ async function recentPosts(page, account, { includeReplies = false } = {}) {
   }, { accountName: account, articleSelector: TWEET_ARTICLE, textSelector: TWEET_TEXT });
 }
 
-async function verifyNewPost(page, account, expectedText, beforeIds, { includeReplies = false } = {}) {
+async function recentSearchPosts(page, account) {
+  await page.goto(`https://x.com/search?q=${encodeURIComponent(`from:${account}`)}&src=typed_query&f=live`, { waitUntil: 'networkidle2' });
+  await page.waitForSelector(TWEET_ARTICLE, { timeout: 15_000 }).catch(() => {});
+  return page.evaluate(({ accountName, articleSelector, textSelector }) => {
+    const accountPrefix = `/${accountName}/status/`;
+    return [...document.querySelectorAll(articleSelector)].map((article) => {
+      const text = article.querySelector(textSelector)?.innerText || '';
+      const href = [...article.querySelectorAll('a[href*="/status/"]')]
+        .map((link) => link.getAttribute('href') || '')
+        .find((value) => value.startsWith(accountPrefix) && /^\/[^/]+\/status\/\d+$/.test(value)) || '';
+      const match = href.match(/\/status\/(\d+)/);
+      if (!match) return null;
+      return {
+        tweetId: match[1],
+        url: `https://x.com${href}`,
+        text,
+        publishedAt: article.querySelector('time')?.getAttribute('datetime') || null,
+      };
+    }).filter(Boolean);
+  }, { accountName: account, articleSelector: TWEET_ARTICLE, textSelector: TWEET_TEXT });
+}
+
+export async function findOwnPublishedPostBrowser(text, credentials, {
+  account = process.env.X_ACCOUNT || 'ham_zax',
+  publishedAfter = Date.now() - 10 * 60_000,
+  headless = true,
+} = {}) {
+  const expected = normalizeText(text);
+  if (!expected) return null;
+  const minimumPublishedAt = Number.isFinite(Number(publishedAfter)) ? Number(publishedAfter) : Date.now() - 10 * 60_000;
+  const { browser, page } = await openAuthenticatedBrowser(credentials, { headless });
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await page.waitForTimeout(1_000);
+      const rows = await recentSearchPosts(page, account);
+      const matches = rows.filter((row) => {
+        if (normalizeText(row.text) !== expected) return false;
+        const publishedAt = row.publishedAt ? Date.parse(row.publishedAt) : NaN;
+        return !Number.isFinite(publishedAt) || publishedAt >= minimumPublishedAt;
+      });
+      if (matches.length === 1) return matches[0];
+      if (matches.length > 1) return null;
+    }
+    return null;
+  } finally {
+    await browser.close().catch(() => {});
+  }
+}
+
+async function verifyNewPost(page, account, expectedText, beforeIds, { includeReplies = false, publishedAfter = null } = {}) {
   const expected = normalizeText(expectedText);
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt) await page.waitForTimeout(1_000);
     const rows = await recentPosts(page, account, { includeReplies });
-    const match = rows.find((row) => !beforeIds.has(row.tweetId) && normalizeText(row.text) === expected);
-    if (match) return match;
+    const matches = rows.filter((row) => !beforeIds.has(row.tweetId) && normalizeText(row.text) === expected);
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) return null;
+  }
+
+  const minimumPublishedAt = Number.isFinite(Number(publishedAfter)) ? Number(publishedAfter) : Date.now() - 120_000;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await page.waitForTimeout(1_000);
+    const rows = await recentSearchPosts(page, account);
+    const matches = rows.filter((row) => {
+      if (beforeIds.has(row.tweetId) || normalizeText(row.text) !== expected) return false;
+      const publishedAt = row.publishedAt ? Date.parse(row.publishedAt) : NaN;
+      return !Number.isFinite(publishedAt) || publishedAt >= minimumPublishedAt;
+    });
+    if (matches.length === 1) return matches[0];
+    if (matches.length > 1) return null;
   }
   return null;
 }
@@ -353,6 +416,7 @@ export async function postTweetBrowser(text, credentials, {
   try {
     const includeReplies = Boolean(replyTo);
     const beforeIds = new Set((await recentPosts(page, account, { includeReplies })).map((row) => row.tweetId));
+    const publishStartedAt = Date.now();
     try {
       await postComposer.postTweet(page, body, {
         replyTo: replyTo ? targetUrl(replyTo) : null,
@@ -362,7 +426,7 @@ export async function postTweetBrowser(text, credentials, {
     } catch (error) {
       throw ambiguousBrowserResult(`Browser publication result is ambiguous: ${error.message}`, error);
     }
-    const identity = await verifyNewPost(page, account, body, beforeIds, { includeReplies });
+    const identity = await verifyNewPost(page, account, body, beforeIds, { includeReplies, publishedAfter: publishStartedAt - 5_000 });
     if (!identity) throw ambiguousBrowserResult('Browser publication completed without a verifiable new tweet ID.');
     return { rest_id: identity.tweetId, permanentUrl: identity.url };
   } finally {
@@ -411,6 +475,7 @@ export async function publishMainFeedBrowser(item, credentials, {
   let verificationBrowser = null;
   try {
     const beforeIds = new Set((await recentPosts(page, account)).map((row) => row.tweetId));
+    const publishStartedAt = Date.now();
     try {
       if (pipeline === 'original') {
         await postComposer.postTweet(page, expectedText, {
@@ -427,7 +492,7 @@ export async function publishMainFeedBrowser(item, credentials, {
     }
 
     const verifyPublication = async (verificationPage) => {
-      const identity = await verifyNewPost(verificationPage, account, expectedText, beforeIds);
+      const identity = await verifyNewPost(verificationPage, account, expectedText, beforeIds, { publishedAfter: publishStartedAt - 5_000 });
       if (!identity) throw ambiguousBrowserResult(`Browser ${pipeline} publication completed without a verifiable new root tweet ID.`);
 
       let structure = {};
