@@ -16,7 +16,7 @@ import {
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
-  getFirst1000MainFeedMissionGrant,
+  getGrowthOperatorDelegation,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
@@ -298,17 +298,17 @@ function requireMissionEvidenceProvenance(queueItem, draft, provenance) {
   }
 }
 
-function requireLiveFirst1000MainFeedMissionGrant(grantRevision) {
+function requireLiveGrowthOperatorDelegation(grantRevision) {
   const revision = Number(grantRevision);
   if (!Number.isInteger(revision) || revision < 1) {
     throw new Error('Mission-agent approval requires a positive integer grantRevision.');
   }
-  const grant = getFirst1000MainFeedMissionGrant();
+  const grant = getGrowthOperatorDelegation();
   if (grant.state !== 'running' || grant.mode !== 'live') {
-    throw new Error('First-1,000 main-feed mission must be running in live mode for mission-agent approval.');
+    throw new Error('Growth Operator delegation must be running in live mode for mission-agent approval.');
   }
   if (Number(grant.revision) !== revision) {
-    throw new Error('First-1,000 main-feed mission revision is stale or has been revoked.');
+    throw new Error('Growth Operator delegation revision is stale or has been revoked.');
   }
   return grant;
 }
@@ -872,7 +872,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   }
   if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before mission-agent approval.');
 
-  requireLiveFirst1000MainFeedMissionGrant(grantRevision);
+  requireLiveGrowthOperatorDelegation(grantRevision);
   requireMissionHookExperimentAssignment(queueItem);
   const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
   let draft = getDraftByCandidate(key);
@@ -889,7 +889,7 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   draft = saveDraft({ ...draft, status: 'ready' });
 
   const result = runStoreTransaction(() => {
-    const grant = requireLiveFirst1000MainFeedMissionGrant(grantRevision);
+    const grant = requireLiveGrowthOperatorDelegation(grantRevision);
     saveQueueItem({
       candidateKey: key,
       status: 'approved',
@@ -900,12 +900,11 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
     });
     const captured = captureQueueApproval(key, {
       actor: 'agent',
-      reason: 'approved by delegated First-1,000 main-feed mission agent',
+      reason: 'approved by delegated Growth Operator',
       authority: {
         type: 'mission_agent',
-        mission: 'first_1000_main_feed',
+        mission: 'growth_operator',
         grantRevision: grant.revision,
-        targetFollowers: grant.targetFollowers,
       },
       verificationProvenance: provenance,
     });

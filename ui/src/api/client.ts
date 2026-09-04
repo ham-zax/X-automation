@@ -610,13 +610,13 @@ export function useDiscoverTriage() {
 }
 
 // ---------------------------------------------------------------------------
-// First-1,000 mission
+// Growth Operator delegation
 // ---------------------------------------------------------------------------
 
-export interface First1000MissionGrant {
+export interface GrowthOperatorGrant {
   state: 'stopped' | 'running' | 'paused' | 'completed'
   mode: 'dry_run' | 'live'
-  targetFollowers: number
+  milestones: number[]
   revision: number
   updatedAt: number | null
   startedAt: number | null
@@ -627,25 +627,25 @@ export interface First1000MissionGrant {
   completedBy: string | null
 }
 
-export interface First1000MissionData {
-  grant: First1000MissionGrant
+export interface GrowthOperatorData {
+  grant: GrowthOperatorGrant
   autoPost: boolean
 }
 
-export function useFirst1000Mission() {
+export function useGrowthOperator() {
   return useQuery({
-    queryKey: ['first-1000-mission'],
-    queryFn: () => fetchApi<First1000MissionData>('/first-1000-mission'),
+    queryKey: ['growth-operator'],
+    queryFn: () => fetchApi<GrowthOperatorData>('/growth-operator'),
     staleTime: 10_000,
   })
 }
 
-export function useFirst1000MissionAction(action: 'configure' | 'start' | 'pause' | 'stop') {
+export function useGrowthOperatorAction(action: 'configure' | 'start' | 'pause' | 'stop') {
   const queryClient = useQueryClient()
-  return useMutation<First1000MissionData, Error, Record<string, unknown>>({
-    mutationFn: (payload) => postApi(`/first-1000-mission/${action}`, payload),
+  return useMutation<GrowthOperatorData, Error, Record<string, unknown>>({
+    mutationFn: (payload) => postApi(`/growth-operator/${action}`, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['first-1000-mission'] })
+      void queryClient.invalidateQueries({ queryKey: ['growth-operator'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
     },
   })

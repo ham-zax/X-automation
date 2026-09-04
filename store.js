@@ -82,9 +82,11 @@ const DISCOVER_SNAPSHOT_PREFIX = 'discover_snapshot:';
 const DISCOVER_REFRESH_STATUS_PREFIX = 'discover_refresh_status:';
 const AUTONOMOUS_REPLY_GRANT_STATE_KEY = 'autonomous_reply_grant';
 const AUTONOMOUS_REPLY_RUNTIME_STATE_KEY = 'autonomous_reply_runtime';
-const FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY = 'first_1000_main_feed_mission_grant';
-const FIRST_1000_MAIN_FEED_MISSION_STATES = new Set(['running', 'paused', 'stopped', 'completed']);
-const FIRST_1000_MAIN_FEED_MISSION_MODES = new Set(['dry_run', 'live']);
+const GROWTH_OPERATOR_DELEGATION_STATE_KEY = 'growth_operator_delegation';
+const GROWTH_OPERATOR_DELEGATION_MIGRATION_KEY = 'growth_operator_delegation_migrated_v2';
+const LEGACY_FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY = 'first_1000_main_feed_mission_grant';
+const GROWTH_OPERATOR_DELEGATION_STATES = new Set(['running', 'paused', 'stopped', 'completed']);
+const GROWTH_OPERATOR_DELEGATION_MODES = new Set(['dry_run', 'live']);
 const GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY = 'growth_operator_memory_review';
 const GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS = new Set(['browser_updated', 'x_content_candidate_added', 'both_updated', 'no_update_needed']);
 const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
@@ -1347,7 +1349,7 @@ export function getQueueApprovalAuthority(queueItem) {
     return { type: 'human', humanApprovedAt: Number(queueItem.humanApprovedAt) };
   }
   const authority = queueItem.approvalSnapshot?.authority;
-  if (authority?.type !== 'mission_agent' || authority?.mission !== 'first_1000_main_feed') return null;
+  if (authority?.type !== 'mission_agent' || authority?.mission !== 'growth_operator') return null;
   const grantRevision = Number(authority.grantRevision);
   if (!Number.isInteger(grantRevision) || grantRevision < 1) return null;
   return { ...authority, grantRevision };
@@ -1505,9 +1507,8 @@ function buildMainFeedScheduleItem(queueItem) {
     approvalMismatchReason,
     currentFingerprint,
     approvalAuthority,
-    missionGrant: approvalAuthority?.type === 'mission_agent' ? getFirst1000MainFeedMissionGrant() : null,
+    missionGrant: approvalAuthority?.type === 'mission_agent' ? getGrowthOperatorDelegation() : null,
     missionAccountHealth: approvalAuthority?.type === 'mission_agent' ? getAccountHealthSummary().health : null,
-    missionFollowers: approvalAuthority?.type === 'mission_agent' ? (getPerformanceSnapshot(1)?.account?.followers ?? null) : null,
   };
 }
 
@@ -1766,12 +1767,12 @@ export function recordWritingStrategySelection(input = {}) {
   if (selectedBy === 'mission_agent') {
     const authority = input.guidance?.selectionAuthority || {};
     const revision = Number(authority.grantRevision);
-    const grant = getFirst1000MainFeedMissionGrant();
-    if (authority.type !== 'mission_agent' || authority.mission !== 'first_1000_main_feed' || !Number.isInteger(revision) || revision < 1) {
-      throw new Error('Mission-agent writing strategy selection requires inspectable First-1,000 grant provenance.');
+    const grant = getGrowthOperatorDelegation();
+    if (authority.type !== 'mission_agent' || authority.mission !== 'growth_operator' || !Number.isInteger(revision) || revision < 1) {
+      throw new Error('Mission-agent writing strategy selection requires inspectable Growth Operator delegation provenance.');
     }
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-      throw new Error('Mission-agent writing strategy selection requires the exact current live First-1,000 grant revision.');
+      throw new Error('Mission-agent writing strategy selection requires the exact current live Growth Operator delegation revision.');
     }
   }
   if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new Error('Writing strategy selectedAt must be a positive timestamp.');
@@ -1806,7 +1807,7 @@ export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human
   if (!current || !['main', 'main_feed'].includes(current.lane) || !MAIN_FEED_PIPELINES.has(current.pipeline)) {
     throw new Error(`Main-feed queue item not found: ${candidateKey}`);
   }
-  if (current.status !== 'approved') throw new Error('Main-feed scheduling controls are available only after human approval.');
+  if (current.status !== 'approved') throw new Error('Main-feed scheduling controls are available only after the item has valid approval authority.');
   const urgency = changes.scheduleUrgency == null ? current.scheduleUrgency : String(changes.scheduleUrgency);
   if (!SCHEDULE_URGENCIES.has(urgency)) throw new Error(`Invalid schedule urgency: ${urgency}`);
   const scheduledAt = changes.scheduledAt === undefined || changes.scheduledAt === current.scheduledAt
@@ -1852,13 +1853,11 @@ export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() 
       if (verification.authorityType !== 'mission_agent' || sourceReferences.length === 0 || !Array.isArray(verification.evidenceReferences)) {
         return null;
       }
-      const grant = getFirst1000MainFeedMissionGrant();
+      const grant = getGrowthOperatorDelegation();
       if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(authority.grantRevision)) {
         return null;
       }
       if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') return null;
-      const storedFollowers = Number(getPerformanceSnapshot(1)?.account?.followers);
-      if (Number.isFinite(storedFollowers) && storedFollowers >= Number(grant.targetFollowers)) return null;
     }
 
     const params = [timestamp, timestamp, Number(id), timestamp];
@@ -2135,11 +2134,13 @@ export function saveAutonomousReplyGrantState(grant) {
   return getAutonomousReplyGrantState();
 }
 
-function defaultFirst1000MainFeedMissionGrant() {
+const DEFAULT_GROWTH_OPERATOR_MILESTONES = Object.freeze([1000, 10_000, 100_000]);
+
+function defaultGrowthOperatorDelegation() {
   return {
     state: 'stopped',
     mode: 'dry_run',
-    targetFollowers: 1000,
+    milestones: [...DEFAULT_GROWTH_OPERATOR_MILESTONES],
     revision: 0,
     updatedAt: null,
     startedAt: null,
@@ -2151,62 +2152,104 @@ function defaultFirst1000MainFeedMissionGrant() {
   };
 }
 
-function saveFirst1000MainFeedMissionGrant(grant) {
-  setAppState(FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY, JSON.stringify(grant));
-  return getFirst1000MainFeedMissionGrant();
+function normalizeGrowthOperatorMilestones(values) {
+  const supplied = Array.isArray(values) ? values : [];
+  const normalized = [...new Set(supplied.map(Number).filter((value) => Number.isInteger(value) && value > 0))].sort((left, right) => left - right);
+  return normalized.length ? normalized : [...DEFAULT_GROWTH_OPERATOR_MILESTONES];
 }
 
-export function getFirst1000MainFeedMissionGrant() {
-  const stored = json(getAppState(FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY, null), {});
-  const grant = { ...defaultFirst1000MainFeedMissionGrant(), ...(stored || {}) };
+function migrateLegacyGrowthOperatorDelegation() {
+  if (getAppState(GROWTH_OPERATOR_DELEGATION_MIGRATION_KEY, null) === '1') return;
+  runStoreTransaction(() => {
+    if (getAppState(GROWTH_OPERATOR_DELEGATION_STATE_KEY, null) == null) {
+      const raw = getAppState(LEGACY_FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY, null);
+      if (raw != null) {
+        const legacy = json(raw, {});
+        const migrated = {
+          ...defaultGrowthOperatorDelegation(),
+          ...(legacy || {}),
+          milestones: normalizeGrowthOperatorMilestones([
+            ...(Array.isArray(legacy?.milestones) ? legacy.milestones : []),
+            legacy?.targetFollowers,
+            ...DEFAULT_GROWTH_OPERATOR_MILESTONES,
+          ]),
+        };
+        delete migrated.targetFollowers;
+        setAppState(GROWTH_OPERATOR_DELEGATION_STATE_KEY, JSON.stringify(migrated));
+      }
+    }
+    const legacyMission = '"mission":"first_1000_main_feed"';
+    const currentMission = '"mission":"growth_operator"';
+    db.prepare('UPDATE queue_items SET approval_snapshot_json = replace(approval_snapshot_json, ?, ?) WHERE approval_snapshot_json LIKE ?')
+      .run(legacyMission, currentMission, `%${legacyMission}%`);
+    db.prepare("UPDATE queue_items SET approval_snapshot_json = json_remove(approval_snapshot_json, '$.authority.targetFollowers') WHERE json_type(approval_snapshot_json, '$.authority.targetFollowers') IS NOT NULL").run();
+    db.prepare('UPDATE queue_approval_events SET snapshot_json = replace(snapshot_json, ?, ?) WHERE snapshot_json LIKE ?')
+      .run(legacyMission, currentMission, `%${legacyMission}%`);
+    db.prepare("UPDATE queue_approval_events SET snapshot_json = json_remove(snapshot_json, '$.authority.targetFollowers') WHERE json_type(snapshot_json, '$.authority.targetFollowers') IS NOT NULL").run();
+    db.prepare('UPDATE writing_strategy_selections SET guidance_json = replace(guidance_json, ?, ?) WHERE guidance_json LIKE ?')
+      .run(legacyMission, currentMission, `%${legacyMission}%`);
+    db.prepare('DELETE FROM app_state WHERE key = ?').run(LEGACY_FIRST_1000_MAIN_FEED_MISSION_GRANT_STATE_KEY);
+    setAppState(GROWTH_OPERATOR_DELEGATION_MIGRATION_KEY, '1');
+  });
+}
+
+function saveGrowthOperatorDelegation(grant) {
+  setAppState(GROWTH_OPERATOR_DELEGATION_STATE_KEY, JSON.stringify(grant));
+  return getGrowthOperatorDelegation();
+}
+
+export function getGrowthOperatorDelegation() {
+  migrateLegacyGrowthOperatorDelegation();
+  const stored = json(getAppState(GROWTH_OPERATOR_DELEGATION_STATE_KEY, null), {});
+  const grant = { ...defaultGrowthOperatorDelegation(), ...(stored || {}) };
   grant.revision = Number.isInteger(Number(grant.revision)) ? Number(grant.revision) : 0;
-  grant.targetFollowers = Number.isInteger(Number(grant.targetFollowers)) && Number(grant.targetFollowers) > 0
-    ? Number(grant.targetFollowers)
-    : 1000;
+  grant.milestones = normalizeGrowthOperatorMilestones(grant.milestones);
   return grant;
 }
 
-export function configureFirst1000MainFeedMissionGrant(input = {}, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('First-1,000 main-feed mission configuration requires an explicit human action.');
-  const current = getFirst1000MainFeedMissionGrant();
+export function requireGrowthOperatorDelegation({ actor = 'agent', requireLive = true } = {}) {
+  if (actor === 'human') return { actor, delegated: false, grant: getGrowthOperatorDelegation() };
+  if (actor !== 'agent') throw new Error(`Unsupported Growth Operator actor: ${actor || 'missing'}.`);
+  const grant = getGrowthOperatorDelegation();
+  if (grant.state !== 'running') throw new Error(`Growth Operator delegation is ${grant.state}; agent mutation authority is unavailable.`);
+  if (requireLive && grant.mode !== 'live') throw new Error(`Growth Operator delegation is ${grant.mode}; live agent mutation authority is unavailable.`);
+  return { actor, delegated: true, grant };
+}
+
+export function configureGrowthOperatorDelegation(input = {}, { actor = 'human' } = {}) {
+  if (actor !== 'human') throw new Error('Growth Operator delegation configuration belongs to the owner.');
+  const current = getGrowthOperatorDelegation();
   const mode = input.mode === undefined ? current.mode : String(input.mode);
-  const targetFollowers = input.targetFollowers === undefined ? current.targetFollowers : Number(input.targetFollowers);
-  if (!FIRST_1000_MAIN_FEED_MISSION_MODES.has(mode)) throw new Error(`Unsupported First-1,000 mission mode: ${mode}.`);
-  if (!Number.isInteger(targetFollowers) || targetFollowers <= 0) throw new Error('First-1,000 mission targetFollowers must be a positive whole number.');
-  if (mode === current.mode && targetFollowers === current.targetFollowers) return current;
-  return saveFirst1000MainFeedMissionGrant({
+  const milestones = input.milestones === undefined ? current.milestones : normalizeGrowthOperatorMilestones(input.milestones);
+  if (!GROWTH_OPERATOR_DELEGATION_MODES.has(mode)) throw new Error(`Unsupported Growth Operator delegation mode: ${mode}.`);
+  if (mode === current.mode && JSON.stringify(milestones) === JSON.stringify(current.milestones)) return current;
+  return saveGrowthOperatorDelegation({
     ...current,
     mode,
-    targetFollowers,
+    milestones,
     revision: current.revision + 1,
     updatedAt: Date.now(),
   });
 }
 
-function transitionFirst1000MainFeedMission(action, { actor = 'human' } = {}) {
-  if (action === 'start' && actor !== 'human') {
-    throw new Error('First-1,000 main-feed mission Start requires an explicit human action.');
+function transitionGrowthOperatorDelegation(action, { actor = 'human' } = {}) {
+  if (['start', 'pause', 'stop', 'complete'].includes(action) && actor !== 'human') {
+    throw new Error(`Growth Operator delegation ${action} belongs to the owner; the agent cannot grant, revoke, restore, or terminate its own authority.`);
   }
-  if (['pause', 'stop'].includes(action) && actor !== 'human') {
-    throw new Error(`First-1,000 main-feed mission ${action} requires an explicit human action.`);
-  }
-  if (action === 'complete' && !['human', 'agent'].includes(actor)) {
-    throw new Error('First-1,000 main-feed mission completion requires actor=human or actor=agent.');
-  }
-  const current = getFirst1000MainFeedMissionGrant();
+  const current = getGrowthOperatorDelegation();
   const nextState = action === 'start' ? 'running' : action === 'pause' ? 'paused' : action === 'stop' ? 'stopped' : action === 'complete' ? 'completed' : '';
-  if (!FIRST_1000_MAIN_FEED_MISSION_STATES.has(nextState)) throw new Error(`Unsupported First-1,000 mission transition: ${action}.`);
+  if (!GROWTH_OPERATOR_DELEGATION_STATES.has(nextState)) throw new Error(`Unsupported Growth Operator delegation transition: ${action}.`);
   if (current.state === nextState) return current;
-  if (action === 'pause' && current.state !== 'running') throw new Error('Only a running First-1,000 main-feed mission can be paused.');
+  if (action === 'pause' && current.state !== 'running') throw new Error('Only a running Growth Operator delegation can be paused.');
   const now = Date.now();
-  return saveFirst1000MainFeedMissionGrant({
+  return saveGrowthOperatorDelegation({
     ...current,
     state: nextState,
     revision: current.revision + 1,
     updatedAt: now,
     ...(action === 'start' ? {
       startedAt: ['stopped', 'completed'].includes(current.state) || current.startedAt == null ? now : current.startedAt,
-      startedBy: ['stopped', 'completed'].includes(current.state) || current.startedBy == null ? 'human' : current.startedBy,
+      startedBy: ['stopped', 'completed'].includes(current.state) || current.startedBy == null ? actor : current.startedBy,
       pausedAt: null,
       stoppedAt: null,
       completedAt: null,
@@ -2218,20 +2261,20 @@ function transitionFirst1000MainFeedMission(action, { actor = 'human' } = {}) {
   });
 }
 
-export function startFirst1000MainFeedMission(options = {}) {
-  return transitionFirst1000MainFeedMission('start', options);
+export function startGrowthOperatorDelegation(options = {}) {
+  return transitionGrowthOperatorDelegation('start', options);
 }
 
-export function pauseFirst1000MainFeedMission(options = {}) {
-  return transitionFirst1000MainFeedMission('pause', options);
+export function pauseGrowthOperatorDelegation(options = {}) {
+  return transitionGrowthOperatorDelegation('pause', options);
 }
 
-export function stopFirst1000MainFeedMission(options = {}) {
-  return transitionFirst1000MainFeedMission('stop', options);
+export function stopGrowthOperatorDelegation(options = {}) {
+  return transitionGrowthOperatorDelegation('stop', options);
 }
 
-export function completeFirst1000MainFeedMission(options = {}) {
-  return transitionFirst1000MainFeedMission('complete', options);
+export function completeGrowthOperatorDelegation(options = {}) {
+  return transitionGrowthOperatorDelegation('complete', options);
 }
 
 export function getAutonomousReplyRuntimeState() {
@@ -5152,9 +5195,9 @@ export function recordEditorialSelection({
     throw new Error('Mission-agent editorial selection requires a positive grant revision.');
   }
   if (actor === 'mission_agent') {
-    const grant = getFirst1000MainFeedMissionGrant();
+    const grant = getGrowthOperatorDelegation();
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-      throw new Error('Mission-agent editorial selection requires the exact current live First-1,000 grant revision.');
+      throw new Error('Mission-agent editorial selection requires the exact current live Growth Operator delegation revision.');
     }
   }
   if (actor === 'human' && revision != null) throw new Error('Human editorial selection cannot carry a mission grant revision.');

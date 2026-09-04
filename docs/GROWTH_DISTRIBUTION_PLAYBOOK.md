@@ -260,7 +260,7 @@ Current route choices already include:
 - Watch;
 - Ignore.
 
-Phase 6 recommends `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. The AI explains its recommendation, but code owns source truth and numeric ordering, and the human selects/overrides the route. AI may prepare work through research, drafting, and scoring; main-feed approval remains human-controlled. Engage Next keeps its human exact-approval/send path, while the separate autonomous-reply operator can act only after an explicit persisted Start grant and deterministic autonomous eligibility. Dry run and Live mode can continuously evaluate active, momentum, and normal relevant opportunities; Live sending additionally requires remaining operator budget and an atomic claim.
+Phase 6 recommends `PREPARE`, `RESEARCH_MORE`, `SKIP`, or no strong current action over those real workflow routes. Code owns source truth and numeric ordering. The owner may select/override manually, while a running Growth Operator delegation may select, prepare, and approve eligible bounded main-feed work through mission-agent authority. Engage Next retains its manual exact-approval/send path; delegated autonomous evaluation may continue in dry-run, while live AI reply mutation additionally requires its own compliant transport and X policy prerequisites.
 
 Bookmarking is independent reference state. A source may enter Triage/Drafting/Research without being bookmarked, and a bookmarked source may already be handled.
 

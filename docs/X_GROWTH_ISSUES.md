@@ -2,9 +2,9 @@
 
 **Date:** 2026-08-29
 
-**Status:** active issue inventory for the First-1,000 mission.
+**Status:** historical issue inventory from the earlier bootstrap phase. Revalidate every still-open item against the current Growth Operator/persona/runtime before treating it as active.
 
-This document records the current X growth problems before more growth-system changes are made. It separates observed defects from strategic hypotheses so later implementation does not turn a plausible idea into a production rule without evidence.
+This document records the X growth problems observed at that 2026-08-29 checkpoint. It separates observed defects from strategic hypotheses so later implementation does not turn a plausible idea into a production rule without evidence.
 
 This is not an implementation plan. Each issue should be fixed only after its owner and acceptance condition are confirmed against current runtime state.
 

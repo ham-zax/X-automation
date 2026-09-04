@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import {
-  useFirst1000Mission,
-  useFirst1000MissionAction,
-  type First1000MissionData,
+  useGrowthOperator,
+  useGrowthOperatorAction,
+  type GrowthOperatorData,
 } from '../../api/client'
 import { Badge, Error, Loading, formatDateTime } from '../../components/primitives'
 
@@ -10,16 +10,16 @@ function timestamp(value: number | null) {
   return value ? formatDateTime(value) : 'Not recorded'
 }
 
-function ConfigForm({ data }: { data: First1000MissionData }) {
-  const configure = useFirst1000MissionAction('configure')
+function ConfigForm({ data }: { data: GrowthOperatorData }) {
+  const configure = useGrowthOperatorAction('configure')
   const [mode, setMode] = useState(data.grant.mode)
-  const [targetFollowers, setTargetFollowers] = useState(String(data.grant.targetFollowers))
+  const [milestones, setMilestones] = useState(data.grant.milestones.join(', '))
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <div className="text-sm font-semibold text-slate-900">Mission grant configuration</div>
+      <div className="text-sm font-semibold text-slate-900">Delegation configuration</div>
       <p className="mt-1 max-w-3xl text-sm text-slate-600">
-        Configure the delegated mission grant itself. Saving a material change increments the grant revision, so older mission-agent approvals cannot be claimed under the new authority revision.
+        Configure the owner delegation itself. Saving a material change increments the delegation revision, so older mission-agent approvals cannot be claimed under a new authority revision.
       </p>
 
       <div className="mt-5 grid gap-5 md:grid-cols-2">
@@ -38,47 +38,49 @@ function ConfigForm({ data }: { data: First1000MissionData }) {
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Dry run does not authorize mission-agent approvals. Live can authorize eligible approvals only while the mission is Running.
+            Dry run preserves planning/measurement without mission-agent approval authority. Live enables bounded agent execution only while the delegation is Running.
           </p>
         </div>
 
         <label className="text-sm text-slate-700">
-          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Target followers</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Growth milestones</span>
           <input
-            type="number"
-            min={1}
-            step={1}
-            value={targetFollowers}
-            onChange={(event) => setTargetFollowers(event.target.value)}
+            type="text"
+            value={milestones}
+            onChange={(event) => setMilestones(event.target.value)}
             className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2"
+            placeholder="1000, 10000, 100000"
           />
-          <span className="mt-1 block text-xs text-slate-500">Default First-1,000 target is 1,000. The grant owner validates positive whole numbers.</span>
+          <span className="mt-1 block text-xs text-slate-500">Milestones are observational goals for progress/strategy shifts. Reaching one does not revoke delegation or stop the agent.</span>
         </label>
       </div>
 
       <button
         type="button"
         disabled={configure.isPending}
-        onClick={() => configure.mutate({ mode, targetFollowers: Number(targetFollowers) })}
+        onClick={() => configure.mutate({
+          mode,
+          milestones: milestones.split(',').map((value) => Number(value.trim())).filter((value) => Number.isInteger(value) && value > 0),
+        })}
         className="mt-5 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
       >
-        {configure.isPending ? 'Saving…' : 'Save mission grant'}
+        {configure.isPending ? 'Saving…' : 'Save delegation'}
       </button>
       {configure.isError && <div className="mt-2 text-sm text-red-700">{configure.error.message}</div>}
-      {configure.isSuccess && <div className="mt-2 text-sm text-emerald-700">Mission grant saved. Revision {configure.data.grant.revision}.</div>}
+      {configure.isSuccess && <div className="mt-2 text-sm text-emerald-700">Delegation saved. Revision {configure.data.grant.revision}.</div>}
     </section>
   )
 }
 
-export function First1000MissionSettings() {
-  const query = useFirst1000Mission()
-  const start = useFirst1000MissionAction('start')
-  const pause = useFirst1000MissionAction('pause')
-  const stop = useFirst1000MissionAction('stop')
+export function GrowthOperatorSettings() {
+  const query = useGrowthOperator()
+  const start = useGrowthOperatorAction('start')
+  const pause = useGrowthOperatorAction('pause')
+  const stop = useGrowthOperatorAction('stop')
 
-  if (query.isLoading) return <Loading message="Loading First-1,000 mission…" />
+  if (query.isLoading) return <Loading message="Loading Growth Operator delegation…" />
   if (query.error) return <Error message={query.error.message} onRetry={() => query.refetch()} />
-  if (!query.data) return <Error message="First-1,000 mission settings are unavailable." />
+  if (!query.data) return <Error message="Growth Operator settings are unavailable." />
 
   const data = query.data
   const grant = data.grant
@@ -91,9 +93,9 @@ export function First1000MissionSettings() {
     <div className="space-y-6">
       <div>
         <a href="#/settings" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Settings</a>
-        <h2 className="mt-2 text-2xl font-semibold text-slate-900">First-1,000 mission</h2>
+        <h2 className="mt-2 text-2xl font-semibold text-slate-900">Growth Operator</h2>
         <p className="mt-1 max-w-3xl text-sm text-slate-600">
-          Human control of the revisioned First-1,000 main-feed mission grant. This screen controls delegated approval authority; publication transport remains a separate setting.
+          Owner control of the revisioned delegation. Start once, then the agent may execute bounded growth work without per-action approval ceremonies. Publication transport and external platform policy remain separate gates.
         </p>
       </div>
 
@@ -101,11 +103,11 @@ export function First1000MissionSettings() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <strong className="text-slate-900">Mission state</strong>
+              <strong className="text-slate-900">Delegation state</strong>
               <Badge tone={stateTone}>{grant.state.replaceAll('_', ' ')}</Badge>
               <Badge tone={grant.mode === 'live' ? 'info' : 'neutral'}>{grant.mode === 'live' ? 'Live' : 'Dry run'}</Badge>
             </div>
-            <div className="mt-2 text-sm text-slate-600">Target {grant.targetFollowers.toLocaleString()} followers · grant revision {grant.revision}</div>
+            <div className="mt-2 text-sm text-slate-600">Milestones {grant.milestones.map((value) => value.toLocaleString()).join(' → ')} · delegation revision {grant.revision}</div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -136,7 +138,7 @@ export function First1000MissionSettings() {
         </div>
 
         {actionError && <div className="mt-3 text-sm text-red-700">{actionError}</div>}
-        {actionSucceeded && <div className="mt-3 text-sm text-emerald-700">Mission state updated. Current revision {grant.revision}.</div>}
+        {actionSucceeded && <div className="mt-3 text-sm text-emerald-700">Delegation state updated. Current revision {grant.revision}.</div>}
 
         <div className="mt-5 grid gap-3 text-sm text-slate-600 md:grid-cols-2 lg:grid-cols-5">
           <div><strong className="text-slate-800">Started</strong><br />{timestamp(grant.startedAt)}</div>
@@ -150,13 +152,13 @@ export function First1000MissionSettings() {
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-sky-200 bg-sky-50 p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <strong className="text-sky-950">Delegated approval authority</strong>
+            <strong className="text-sky-950">Delegated operator authority</strong>
             <Badge tone={liveAuthorityActive ? 'success' : 'neutral'}>{liveAuthorityActive ? 'Active' : 'Not active'}</Badge>
           </div>
           <p className="mt-2 text-sm text-sky-900">
-            Live + Running lets the mission agent approve eligible automated main-feed Originals, Quotes, and Threads under this exact grant revision. Starting or resuming the mission does not approve any draft.
+            Live + Running lets the Growth Operator select, prepare, and approve eligible bounded work under this exact delegation revision. Individual content still must pass its own evidence, provenance, and deterministic gates.
           </p>
-          <p className="mt-2 text-xs text-sky-800">Replies and Repost are outside this grant. Existing human approval remains a separate unchanged path.</p>
+          <p className="mt-2 text-xs text-sky-800">The agent cannot start or restore delegation after the owner pauses/stops it. X mutation remains transport/policy-gated independently.</p>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
@@ -165,9 +167,9 @@ export function First1000MissionSettings() {
             <Badge tone={data.autoPost ? 'success' : 'neutral'}>{data.autoPost ? 'On' : 'Off'}</Badge>
           </div>
           <p className="mt-2 text-sm text-slate-700">
-            AUTO_POST is separate from this mission grant. It controls whether the existing main-feed publication automation may publish already-approved work. Mission Start, Resume, Pause, and Stop never change AUTO_POST.
+            AUTO_POST is separate from delegation. It requests publication of already-approved work only when a compliant mutation transport exists. Delegation Start, Resume, Pause, and Stop never change AUTO_POST.
           </p>
-          <p className="mt-2 text-xs text-slate-500">Live delegated authority does not publish by itself, even when the mission is Running.</p>
+          <p className="mt-2 text-xs text-slate-500">Live delegation never bypasses content gates, queue identity, account-health constraints, or external platform requirements.</p>
         </section>
       </div>
 

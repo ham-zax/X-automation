@@ -60,7 +60,7 @@ import {
   createExperiment,
   createAiProfile,
   clearAiDefaultProfile,
-  configureFirst1000MainFeedMissionGrant,
+  configureGrowthOperatorDelegation,
   clearAiRoleBinding,
   countAiProfilesUsingSecretRef,
   deleteAiProfile,
@@ -75,7 +75,7 @@ import {
   getEditorialSelectionByRecommendation,
   getExperiment,
   getExperimentSummary,
-  getFirst1000MainFeedMissionGrant,
+  getGrowthOperatorDelegation,
   getLearningOverview,
   getMainFeedScheduleItem,
   getLatestEditorialSelectionForQueueItem,
@@ -120,9 +120,9 @@ import {
   saveDraft,
   saveGrowthFocusObjective,
   saveNicheProfile,
-  startFirst1000MainFeedMission,
-  pauseFirst1000MainFeedMission,
-  stopFirst1000MainFeedMission,
+  startGrowthOperatorDelegation,
+  pauseGrowthOperatorDelegation,
+  stopGrowthOperatorDelegation,
   setAiDefaultProfile,
   setAiProfileEnabled,
   setAiRoleBinding,
@@ -1605,9 +1605,9 @@ async function persistDraftMedia(draft, req) {
   }
 }
 
-function first1000MissionView() {
+function growthOperatorView() {
   return {
-    grant: getFirst1000MainFeedMissionGrant(),
+    grant: getGrowthOperatorDelegation(),
     autoPost: AUTO_POST,
   };
 }
@@ -2247,19 +2247,19 @@ export async function handleApi(req, res, requestUrl) {
       throw new Error(`Unknown triage action: ${action || '(missing)'}`);
     }
 
-    if (method === 'GET' && segments.length === 1 && segments[0] === 'first-1000-mission') {
-      return sendSuccess(first1000MissionView());
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'growth-operator') {
+      return sendSuccess(growthOperatorView());
     }
 
-    if (method === 'POST' && segments.length === 2 && segments[0] === 'first-1000-mission') {
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'growth-operator') {
       const action = segments[1];
       const payload = await readBody();
-      if (action === 'configure') configureFirst1000MainFeedMissionGrant(payload, { actor: 'human' });
-      else if (action === 'start') startFirst1000MainFeedMission({ actor: 'human' });
-      else if (action === 'pause') pauseFirst1000MainFeedMission({ actor: 'human' });
-      else if (action === 'stop') stopFirst1000MainFeedMission({ actor: 'human' });
-      else throw new Error(`Unknown First-1,000 mission action: ${action}.`);
-      return sendSuccess(first1000MissionView());
+      if (action === 'configure') configureGrowthOperatorDelegation(payload, { actor: 'human' });
+      else if (action === 'start') startGrowthOperatorDelegation({ actor: 'human' });
+      else if (action === 'pause') pauseGrowthOperatorDelegation({ actor: 'human' });
+      else if (action === 'stop') stopGrowthOperatorDelegation({ actor: 'human' });
+      else throw new Error(`Unknown Growth Operator action: ${action}.`);
+      return sendSuccess(growthOperatorView());
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'autonomous-replies') {

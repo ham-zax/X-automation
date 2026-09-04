@@ -14,7 +14,7 @@ import {
   getDraft,
   getEditorialRecommendation,
   getExperimentSummary,
-  getFirst1000MainFeedMissionGrant,
+  getGrowthOperatorDelegation,
   getLatestEditorialSelectionForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPublishedMainFeedContent,
@@ -675,7 +675,7 @@ export async function recommendWritingStrategy(queueItemId, { profile = null } =
 function missionSelectionAuthority(grantRevision) {
   return {
     type: 'mission_agent',
-    mission: 'first_1000_main_feed',
+    mission: 'growth_operator',
     grantRevision: Number(grantRevision),
   };
 }
@@ -685,9 +685,9 @@ function requireLiveMissionGrant(grantRevision) {
   if (!Number.isInteger(revision) || revision < 1) {
     throw new Error('Mission-agent writing strategy selection requires a positive grant revision.');
   }
-  const grant = getFirst1000MainFeedMissionGrant();
+  const grant = getGrowthOperatorDelegation();
   if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-    throw new Error('First-1,000 main-feed mission authority changed before writing-strategy selection.');
+    throw new Error('Growth Operator delegation changed before writing-strategy selection.');
   }
   return grant;
 }

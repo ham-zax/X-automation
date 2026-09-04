@@ -15,7 +15,7 @@ import {
   getEditorialOutcomeSummary,
   getEditorialRecommendation,
   getEditorialSelectionByRecommendation,
-  getFirst1000MainFeedMissionGrant,
+  getGrowthOperatorDelegation,
   getPreferenceProfile,
   getQueueItem,
   getQueueItemByCandidate,
@@ -757,7 +757,7 @@ function selectEditorialRecommendationWithAuthority(id, {
   let queueItem = routeCandidate(selected.candidate.key, selectedPipeline, {
     actor: selectedBy === 'mission_agent' ? 'agent' : 'human',
     reason: selectedBy === 'mission_agent'
-      ? `Delegated First-1,000 mission agent selected editorial recommendation ${recommendation.id}.`
+      ? `Delegated Growth Operator selected editorial recommendation ${recommendation.id}.`
       : `Human selected editorial recommendation ${recommendation.id}.`,
     routeContext: {
       multipleSources: sources.length > 1,
@@ -807,9 +807,9 @@ export function selectEditorialRecommendationAsMissionAgent(id, { grantRevision 
     throw new Error('Mission-agent editorial selection requires a positive grant revision.');
   }
   return runStoreTransaction(() => {
-    const grant = getFirst1000MainFeedMissionGrant();
+    const grant = getGrowthOperatorDelegation();
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-      throw new Error('First-1,000 main-feed mission authority changed before editorial selection.');
+      throw new Error('Growth Operator delegation changed before editorial selection.');
     }
     const recommendation = getEditorialRecommendation(Number(id));
     if (!recommendation || recommendation.status !== 'suggested' || recommendation.decision !== 'PREPARE') {

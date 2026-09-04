@@ -221,8 +221,8 @@ export function evaluateScheduleEligibility(item, context = {}) {
         : [];
       const grantRevision = Number(authority.grantRevision);
       const grant = item?.missionGrant || null;
-      if (!AUTOMATED_MAIN_FEED_PIPELINES.has(pipeline) || authority.mission !== 'first_1000_main_feed') {
-        addIssue(blockers, 'MISSION_APPROVAL_SCOPE_INVALID', 'Delegated First-1,000 authority is limited to automated Original, Quote, and Thread main-feed items.');
+      if (!AUTOMATED_MAIN_FEED_PIPELINES.has(pipeline) || authority.mission !== 'growth_operator') {
+        addIssue(blockers, 'MISSION_APPROVAL_SCOPE_INVALID', 'Delegated Growth Operator authority is limited to automated Original, Quote, and Thread main-feed items.');
       }
       if (!Number.isInteger(grantRevision) || grantRevision < 1) {
         addIssue(blockers, 'MISSION_APPROVAL_REVISION_INVALID', 'Mission-agent approval must carry a positive grant revision.');
@@ -231,17 +231,10 @@ export function evaluateScheduleEligibility(item, context = {}) {
         addIssue(blockers, 'MISSION_VERIFICATION_PROVENANCE_MISSING', 'Mission-agent approval requires inspectable source/evidence verification provenance.');
       }
       if (!grant || grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== grantRevision) {
-        addIssue(blockers, 'MISSION_AUTHORITY_STALE', 'The First-1,000 mission grant is missing, paused, stopped, completed, non-live, or at a different revision.');
+        addIssue(blockers, 'MISSION_AUTHORITY_STALE', 'The Growth Operator delegation is missing, paused, stopped, completed, non-live, or at a different revision.');
       } else {
         if (item?.missionAccountHealth?.state === 'constrained') {
-          addIssue(blockers, 'MISSION_ACCOUNT_HEALTH_CONSTRAINED', 'Delegated First-1,000 publication is blocked while Account Health is constrained.');
-        }
-        const missionFollowers = finiteNumber(item?.missionFollowers);
-        if (missionFollowers != null && missionFollowers >= Number(grant.targetFollowers)) {
-          addIssue(blockers, 'MISSION_TARGET_REACHED', 'Delegated First-1,000 publication is blocked because the stored follower target has been reached.');
-        }
-        if (context.missionPublicationReady === false) {
-          addIssue(blockers, 'MISSION_FRESH_FOLLOWER_REQUIRED', 'Delegated First-1,000 publication requires a fresh follower observation in the current automation cycle.');
+          addIssue(blockers, 'MISSION_ACCOUNT_HEALTH_CONSTRAINED', 'Delegated Growth Operator publication is blocked while Account Health is constrained.');
         }
       }
     }

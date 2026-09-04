@@ -14,7 +14,7 @@ import {
   releaseOperatorLease,
   renewOperatorLease,
 } from './operator_lease.js';
-import { getAutonomousMainFeedMissionStatus } from './autonomous_main_feed.js';
+import { getGrowthOperatorMainFeedStatus } from './autonomous_main_feed.js';
 import { getXApiMainFeedCapability } from './x_api_publish.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
@@ -81,6 +81,7 @@ import {
   getQueueItem,
   getQueueItemByCandidate,
   getRelationshipProfile,
+  requireGrowthOperatorDelegation,
   getSourceMomentum,
   hasCandidateAction,
   listAudienceProfiles,
@@ -153,6 +154,16 @@ function requireDraft(id) {
   const draft = getDraft(Number(id));
   if (!draft) throw new Error(`Draft not found: ${id}`);
   return draft;
+}
+
+function requireConfirmedOrDelegated(confirmed, label, { requireLive = false } = {}) {
+  if (confirmed === true) return { type: 'explicit_confirmation', grantRevision: null };
+  try {
+    const authority = requireGrowthOperatorDelegation({ actor: 'agent', requireLive });
+    return { type: 'growth_operator', grantRevision: authority.grant.revision };
+  } catch (error) {
+    throw new Error(`${label} requires an explicit confirmation or a running Growth Operator delegation: ${error.message}`);
+  }
 }
 
 const ACCOUNT_ANALYTICS_CONTENT_TYPES = new Set(['posts', 'replies', 'all']);
@@ -759,7 +770,7 @@ function operatorStatus(payload = {}) {
       automation: automationRuntimeStatus(now),
       operatorLease: getOperatorLeaseStatus({ now }),
     },
-    first1000Mission: getAutonomousMainFeedMissionStatus({ now }),
+    growthOperator: getGrowthOperatorMainFeedStatus({ now }),
     execution: {
       mainFeed: {
         autoPostEnabled,
@@ -991,7 +1002,7 @@ async function main() {
   }
 
   if (command === 'writing-strategy-recommend') {
-    if (payload.confirmRecommend !== true) throw new Error('writing-strategy-recommend requires confirmRecommend=true because it may spend AI tokens.');
+    requireConfirmedOrDelegated(payload.confirmRecommend, 'writing-strategy-recommend');
     const queueItemId = Number(payload.queueItemId);
     if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy-recommend requires queueItemId.');
     result(await recommendWritingStrategy(queueItemId, { profile: payload.profileId ?? null }));
@@ -1012,7 +1023,7 @@ async function main() {
   }
 
   if (command === 'learn-classify-published') {
-    if (payload.confirmClassify !== true) throw new Error('learn-classify-published requires confirmClassify=true because it may spend AI tokens.');
+    requireConfirmedOrDelegated(payload.confirmClassify, 'learn-classify-published');
     result(await classifyPublishedContent({
       queueItemIds: payload.queueItemIds || [],
       limit: payload.limit,
@@ -1430,7 +1441,7 @@ async function main() {
   }
 
   if (command === 'experiment-create') {
-    if (payload.confirmCreate !== true) throw new Error('experiment-create requires confirmCreate=true for the explicit write action.');
+    requireConfirmedOrDelegated(payload.confirmCreate, 'experiment-create');
     const definition = payload.experiment || payload.definition;
     if (!definition || typeof definition !== 'object' || Array.isArray(definition)) throw new Error('experiment-create requires an experiment definition object.');
     result({ experiment: createExperiment(definition), assignmentPolicy: 'caller_selected', randomized: false });
@@ -1438,7 +1449,7 @@ async function main() {
   }
 
   if (command === 'experiment-assign') {
-    if (payload.confirmAssign !== true) throw new Error('experiment-assign requires confirmAssign=true for the explicit write action.');
+    requireConfirmedOrDelegated(payload.confirmAssign, 'experiment-assign');
     if (!payload.key) throw new Error('experiment-assign requires key.');
     const context = payload.context == null ? {} : payload.context;
     if (!context || typeof context !== 'object' || Array.isArray(context)) throw new Error('experiment-assign context must be an object.');
@@ -1454,7 +1465,7 @@ async function main() {
   }
 
   if (command === 'experiment-update') {
-    if (payload.confirmUpdate !== true) throw new Error('experiment-update requires confirmUpdate=true for the explicit experiment configuration write.');
+    requireConfirmedOrDelegated(payload.confirmUpdate, 'experiment-update');
     if (payload.id == null) throw new Error('experiment-update requires id.');
     if (payload.minimumCompletedPerVariant == null && payload.secondaryMetrics == null) {
       throw new Error('experiment-update requires minimumCompletedPerVariant and/or secondaryMetrics.');
@@ -1514,16 +1525,33 @@ async function main() {
   }
 
   if (command === 'learning-accept') {
-    if (payload.confirmAccept !== true) throw new Error('learning-accept requires confirmAccept=true for the explicit production-strategy change.');
     if (payload.id == null) throw new Error('learning-accept requires id.');
-    result({ rule: acceptLearnedRule(Number(payload.id)), overview: getLearningOverview() });
+    const authority = requireConfirmedOrDelegated(payload.confirmAccept, 'learning-accept', { requireLive: true });
+    if (authority.type === 'growth_operator') {
+      const overview = getLearningOverview();
+      const candidateRule = overview.rules.find((rule) => Number(rule.id) === Number(payload.id));
+      if (!candidateRule) throw new Error(`Learned rule not found: ${payload.id}`);
+      if (candidateRule.status !== 'suggested') throw new Error('Delegated learning acceptance requires a currently suggested rule.');
+      if (candidateRule.evidence?.state !== 'repeated' || candidateRule.acceptance?.eligible !== true || candidateRule.review?.suspendEffect === true) {
+        throw new Error('Delegated learning acceptance requires repeated qualified evidence with no active review suspension.');
+      }
+    }
+    result({ rule: acceptLearnedRule(Number(payload.id)), overview: getLearningOverview(), authority });
     return;
   }
 
   if (command === 'learning-retire') {
-    if (payload.confirmRetire !== true) throw new Error('learning-retire requires confirmRetire=true for the explicit production-strategy change.');
     if (payload.id == null) throw new Error('learning-retire requires id.');
-    result({ rule: retireLearnedRule(Number(payload.id), { reason: payload.reason || '' }), overview: getLearningOverview() });
+    const authority = requireConfirmedOrDelegated(payload.confirmRetire, 'learning-retire', { requireLive: true });
+    if (authority.type === 'growth_operator') {
+      const overview = getLearningOverview();
+      const currentRule = overview.rules.find((rule) => Number(rule.id) === Number(payload.id));
+      if (!currentRule) throw new Error(`Learned rule not found: ${payload.id}`);
+      if (currentRule.status !== 'accepted' || currentRule.review?.retirementRecommended !== true) {
+        throw new Error('Delegated learning retirement requires an accepted rule with evidence-backed retirement recommendation.');
+      }
+    }
+    result({ rule: retireLearnedRule(Number(payload.id), { reason: payload.reason || '' }), overview: getLearningOverview(), authority });
     return;
   }
 

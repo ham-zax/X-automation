@@ -325,7 +325,7 @@ export function createLearnedRuleCandidate(input = {}) {
     mechanismTags,
     guardrails: {
       bypassHardGates: false,
-      bypassHumanApproval: false,
+      bypassApprovalAuthority: false,
       bypassExpiry: false,
       bypassManualRouteOrSchedule: false,
       canCreateConstrained: false,

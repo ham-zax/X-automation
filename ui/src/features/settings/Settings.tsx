@@ -1,7 +1,7 @@
 const SETTINGS_ITEMS = [
   ['#/settings/growth-focus', 'Growth focus', 'Default growth objective, topic roles, classification terms, and target-audience signals.'],
   ['#/settings/persona', 'Persona & stances', 'Inspect the active Hamza model, its known unknowns, and append grounded belief or tool-stance changes.'],
-  ['#/settings/first-1000-mission', 'Delegated main-feed', 'Inspect, configure, start, resume, pause, or stop the legacy-named delegated approval authority.'],
+  ['#/settings/growth-operator', 'Growth Operator', 'Start, pause, stop, or configure the owner delegation that lets the agent execute bounded growth work without per-action approval ceremonies.'],
   ['#/settings/ai', 'AI', 'Runtime, provider, model, role assignments, connection checks, and recent AI usage.'],
   ['#/settings/autonomous-replies', 'Autonomous replies', 'Start, pause, stop, dry-run/live authority, source/intent/tone policy, safety budget, cadence, and decision history.'],
   ['#/settings/advanced', 'Advanced / diagnostics', 'Relationship detail, account-health evidence, and system-level diagnostic views.'],

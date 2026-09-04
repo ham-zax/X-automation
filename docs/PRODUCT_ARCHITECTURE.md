@@ -6,7 +6,7 @@ Implementation details live in `docs/plans/`. Current operational contracts live
 
 ## Product objective
 
-Build a local, human-controlled operating system for growing a qualified software-developer/builder audience on X across the active Growth Focus.
+Build a local, owner-directed operating system for growing a qualified software-developer/builder audience on X across the active Growth Focus, with durable agent delegation for bounded execution rather than per-action approval ceremonies.
 
 The system should help `@ham_zax` answer six questions:
 
@@ -117,7 +117,7 @@ Phase-6 editorial planning is current runtime behavior and remains advisory: hum
 | --- | --- | --- | --- |
 | 1A | Implemented | Workflow foundation and behavior-aware triage | `queue_items`, behavior/route selection, approval boundary, Reach/Follow/Conversation/Relationship potentials |
 | 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages, social and technical interaction outcomes |
-| 1C | Implemented | Engage Next + autonomous reply operator | purpose-aware reply/follow-up opportunities, exact human send, and off-by-default persistent autonomous dry-run/live authority |
+| 1C | Implemented | Engage Next + autonomous reply operator | purpose-aware reply/follow-up opportunities, ordinary exact owner send, delegated dry-run evaluation, and separately transport/policy-gated live reply authority |
 | 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus observed diagnostics |
 | 2 | Implemented | Behavior realization, content quality, and profile proof | behavior/persona-aware writer packet, drafts, purpose/provenance gates, quality score, human editorial review |
 | 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
@@ -140,7 +140,7 @@ It owns:
 - Conversation Potential;
 - Relationship Potential;
 - AI/rule recommendation separate from the human-selected route;
-- explicit human approval before a main-feed item becomes publishable.
+- explicit approval authority before a main-feed item becomes publishable: ordinary owner approval or the active revisioned Growth Operator mission-agent path.
 
 The four opportunity scores are internal editorial heuristics. They are not X ranking scores.
 
@@ -253,7 +253,7 @@ It owns:
 
 - suggested learned rules;
 - evidence qualification;
-- explicit human acceptance;
+- authorized acceptance: manual on qualified directional/repeated evidence, or delegated autonomous acceptance only on repeated qualified evidence with no active review suspension;
 - bounded production adjustments;
 - retirement/review when evidence reverses or underlying algorithm evidence changes.
 
@@ -716,7 +716,7 @@ Results shows content/network outcomes, attribution context, source/recommendati
 
 ### Improve
 
-Improve shows experiments and human-controlled learned strategy.
+Improve shows experiments and bounded evidence-controlled learned strategy, including whether a transition was manual or delegated.
 
 ### Advanced / AI Settings
 

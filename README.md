@@ -19,8 +19,8 @@ Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers so
 - `scheduler.js` — pure main-feed eligibility, priority, urgency/expiry, coverage spacing, semantic conflict, explicit human override, and deterministic ranking; timing assumptions stay labeled `EMPIRICAL_VARIABLE`.
 - `experiments.js` — pure experiment definition/population validation, attribution-confidence semantics, normalized content/network cohorts, InteractionYield context, and cautious evidence states.
 - `learning.js` — pure learned-strategy qualification, bounded adjustment, matching/application, lifecycle transition, and stale/reversal/mechanism-review logic.
-- `agent_bridge.js` — stable JSON-in/JSON-out interface for editorial planning, AI configuration, workflow/health/relationship/measurement/experiment/learning reads and explicit writes; recommendation selection is not approval, learning acceptance/retirement require explicit confirmation, and the bridge cannot approve or publish main-feed content.
-- `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; Today includes the AI Editorial Plan, Advanced includes AI Settings, and Results exposes observational editorial outcomes alongside Account Health, Engage Next, scheduling, Relationships, Audience, Experiments, and human-controlled Learned Strategy.
+- `agent_bridge.js` — stable JSON-in/JSON-out interface for editorial planning, AI configuration, workflow/health/relationship/measurement/experiment/learning reads and bounded writes. Explicit one-shot confirmations remain available, while a running Growth Operator delegation can authorize selected local strategy/experiment operations without repeated confirmation; the bridge itself still does not publish main-feed content.
+- `dashboard.js` — web server/static owner for the migrated React workspace plus legacy Bootstrap diagnostic surfaces; Today includes the AI Editorial Plan, Advanced includes AI Settings, and Results exposes observational editorial outcomes alongside Account Health, Engage Next, scheduling, Relationships, Audience, Experiments, and bounded Learned Strategy.
 - `automation.js` — captures due publication measurements, refreshes canonical sources and Engage Next, optionally recomputes an advisory editorial plan, and scheduler-ranks approved main-feed work. It claims a due item only when the selected route is supported by the configured official API transport.
 
 ## Operating standards
@@ -48,7 +48,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers so
 
 ### Current implemented architecture
 
-Phase 1A is implemented: sources entering the workflow get a persistent Triage queue item, receive separate Reach/Follow/Conversation/Relationship scores, and keep the rule/AI recommendation separate from the selected route. The ordinary manual lane can move through Drafting -> Needs Review -> explicit owner approval. A separately delegated live main-feed mission may instead create an approved Original/Quote/Thread through mission-agent authority without populating `humanApprovedAt`. The associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
+Phase 1A is implemented: sources entering the workflow get a persistent Triage queue item, receive separate Reach/Follow/Conversation/Relationship scores, and keep the rule/AI recommendation separate from the selected route. The ordinary manual lane can move through Drafting -> Needs Review -> owner approval. A running Live Growth Operator delegation may instead create an approved Original/Quote/Thread through mission-agent authority without populating `humanApprovedAt`. The associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
@@ -62,7 +62,7 @@ Phase 1D Account Health is implemented: append-only observed health/visibility e
 
 Phase 4 Measurement & Experiments is implemented: published items accumulate fixed-window observations with actual capture time; follower deltas remain associated rather than causal; audience first-seen state supports new-follower quality; declared content/timing/network/behavior experiments use explicit non-random assignments and normalized cohort summaries with purpose, mode, affect, depth, conversation stage, persona version, confounders, and `insufficient -> preliminary -> directional -> repeated` evidence states.
 
-Phase 5 Learned Strategy is implemented: Phase-4 experiment summaries can produce `suggested` evidence-backed rules; suggestions remain zero-effect until explicit human acceptance; accepted target/engagement/health/content/format/topic/timing adjustments are bounded and shown separately from base scoring; retirement preserves history; linked retired algorithm-evidence tags and newer/reversing evidence surface review signals. Hard gates, expiry, required human approval, explicit manual routing/timing, and provenance-backed Account Health constraints remain authoritative over learning.
+Phase 5 Learned Strategy is implemented: Phase-4 experiment summaries can produce `suggested` evidence-backed rules; suggestions remain zero-effect until accepted through an authorized transition. Manual acceptance may use qualified directional/repeated evidence; delegated autonomous acceptance is stricter and requires repeated qualified evidence with no active review suspension. Adjustments remain bounded and separately inspectable; retirement preserves history. Hard content/provenance gates, expiry, owner-only scope/timing overrides, delegation revocation, and provenance-backed Account Health constraints remain authoritative over learning.
 
 Phases 1A–6 plus the shared AI runtime/provider layer are current runtime behavior. Remaining planned work outside that implemented boundary is:
 
@@ -70,7 +70,7 @@ Phases 1A–6 plus the shared AI runtime/provider layer are current runtime beha
 - **continuous-scan background consumer** — the `continuous_scan` role is configurable but intentionally shown as **Not active** until a concrete background semantic consumer is implemented;
 - **OpenCode structured execution** — the installed OpenCode runtime uses its documented SDK/server JSON-schema path; OpenCode 2 remains separately capability-gated and no undocumented TUI parsing is used.
 
-Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed a source-context-aware two-pass AI Editorial Plan; code owns story/recommendation scoring and final order; the human selects or overrides a recommendation; selected work enters the existing writer/gates/approval workflow; publication measurements preserve recommendation vs selected vs final route provenance. AI runtime/provider/model choice never changes approval or publication authority.
+Phase 6 is implemented: canonical X/GitHub/HN source snapshots feed a source-context-aware two-pass AI Editorial Plan; code owns story/recommendation scoring and final order. The owner may select/override a recommendation manually, while an active Growth Operator delegation may select eligible PREPARE work through bounded mission-agent authority. Selected work enters the same writer/gates/approval workflow, and publication measurements preserve recommendation vs selected vs final route provenance.
 
 `docs/PRODUCT_ARCHITECTURE.md` owns the end-to-end product map. `docs/NETWORK_GROWTH_OPERATING_SYSTEM.md` owns the strategic network model. `docs/HUMAN_AI_PUBLISHING_SYSTEM_PLAN.md` owns the cross-system implementation/history map. `docs/plans/` owns implementation order and exact file/interface changes.
 
@@ -171,8 +171,11 @@ npm run agent -- experiments <<<'{}'
 npm run agent -- experiment-summary <<<'{"id":1,"windowMinutes":60}'
 npm run agent -- learning <<<'{}'
 npm run agent -- learning-refresh <<<'{"experimentId":1,"baselineLabel":"original","comparisonLabel":"thread","windowMinutes":60}'
+# One-shot/manual transition:
 npm run agent -- learning-accept <<<'{"id":1,"confirmAccept":true}'
 npm run agent -- learning-retire <<<'{"id":1,"reason":"newer evidence reversed direction","confirmRetire":true}'
+# During a running Growth Operator delegation the agent may omit those confirmation flags;
+# autonomous acceptance is stricter and requires repeated qualified evidence.
 npm run agent -- audience <<<'{"minScore":12,"limit":30}'
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
@@ -197,4 +200,4 @@ When you manually give the agent an X post, it should inspect the exact source, 
 
 ## Important limitation
 
-This project uses X's internal web GraphQL interface, not the official X API. Query IDs and private endpoints can change without notice, and automated use may carry platform-account risk. The live query-ID discovery removes one common breakage mode, but cannot make an unofficial interface contractually stable.
+Authenticated browser/private-web access remains a read-side dependency for some X discovery, analytics, profile, and reconciliation workflows, so those observations can break when X changes its web application. Automated X mutation does **not** use those private/browser write paths: scripted x.com mutation is disabled, and supported main-feed writes use the official X API v2 only when a user-context access token and route capability are present. Live AI-powered reply mutation remains disabled until its separate compliant transport and X policy prerequisites are satisfied.

@@ -12,12 +12,11 @@ import {
 import { rankMainFeedItems } from './scheduler.js';
 import {
   assignExperimentVariant,
-  completeFirst1000MainFeedMission,
   getAccountHealthSummary,
   getCandidate,
   getDraftByCandidate,
   getEditorialSelectionByRecommendation,
-  getFirst1000MainFeedMissionGrant,
+  getGrowthOperatorDelegation,
   getLatestEditorialPlan,
   getLatestWritingStrategySelectionForQueueItem,
   getMainFeedScheduleItem,
@@ -46,7 +45,7 @@ function compactGrant(grant) {
     state: grant.state,
     mode: grant.mode,
     revision: Number(grant.revision),
-    targetFollowers: Number(grant.targetFollowers),
+    milestones: Array.isArray(grant.milestones) ? [...grant.milestones] : [],
   };
 }
 
@@ -55,10 +54,12 @@ function storedFollowerState(grant) {
   const count = account == null ? null : Number(account.followers);
   const capturedAt = account == null ? null : Number(account.captured_at);
   const validCount = Number.isFinite(count) ? count : null;
+  const milestones = Array.isArray(grant?.milestones) ? grant.milestones.map(Number).filter(Number.isFinite) : [];
   return {
     count: validCount,
     capturedAt: Number.isFinite(capturedAt) ? capturedAt : null,
-    targetReached: validCount == null ? null : validCount >= Number(grant.targetFollowers),
+    reachedMilestones: validCount == null ? [] : milestones.filter((value) => value <= validCount),
+    nextMilestone: validCount == null ? (milestones[0] ?? null) : (milestones.find((value) => value > validCount) ?? null),
   };
 }
 
@@ -83,10 +84,10 @@ function unresolvedPublishingItem() {
     .find((item) => ['main', 'main_feed'].includes(item.lane) && MAIN_FEED_PIPELINES.has(item.pipeline)) || null;
 }
 
-export function getAutonomousMainFeedMissionStatus({ now = Date.now() } = {}) {
+export function getGrowthOperatorMainFeedStatus({ now = Date.now() } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Autonomous main-feed status requires numeric now.');
-  const grant = getFirst1000MainFeedMissionGrant();
+  if (!Number.isFinite(timestamp)) throw new Error('Growth Operator main-feed status requires numeric now.');
+  const grant = getGrowthOperatorDelegation();
   const followers = storedFollowerState(grant);
   const health = getAccountHealthSummary({ now: timestamp }).health;
   const lease = getOperatorLeaseStatus({ now: timestamp });
@@ -96,8 +97,6 @@ export function getAutonomousMainFeedMissionStatus({ now = Date.now() } = {}) {
   let blockingReason = null;
   if (grant.state !== 'running') blockingReason = `grant_${grant.state}`;
   else if (grant.mode !== 'live') blockingReason = `grant_mode_${grant.mode}`;
-  else if (followers.count == null) blockingReason = 'followers_unavailable';
-  else if (followers.targetReached) blockingReason = 'target_reached';
   else if (health.state === 'constrained') blockingReason = 'account_health_constrained';
   else if (lease.active) blockingReason = 'operator_lease_active';
   else if (publishing) blockingReason = 'publishing_reconciliation_required';
@@ -121,21 +120,20 @@ export function getAutonomousMainFeedMissionStatus({ now = Date.now() } = {}) {
   };
 }
 
-export async function refreshFirst1000MissionFollowerState({
+export async function refreshGrowthOperatorFollowerState({
   now = Date.now(),
   account = process.env.X_ACCOUNT || 'ham_zax',
   performanceSource = fetchAccountPerformance,
 } = {}) {
   const startedAt = Number(now);
-  if (!Number.isFinite(startedAt)) throw new Error('Mission follower refresh requires numeric now.');
-  const startingGrant = getFirst1000MainFeedMissionGrant();
+  if (!Number.isFinite(startedAt)) throw new Error('Growth Operator follower refresh requires numeric now.');
+  const startingGrant = getGrowthOperatorDelegation();
   if (startingGrant.state !== 'running') {
     return {
       required: false,
       fresh: false,
       grantRevision: startingGrant.revision,
       followers: storedFollowerState(startingGrant),
-      completed: false,
       error: null,
     };
   }
@@ -147,7 +145,6 @@ export async function refreshFirst1000MissionFollowerState({
       fresh: false,
       grantRevision: startingGrant.revision,
       followers: storedFollowerState(startingGrant),
-      completed: false,
       error: String(performance.error),
     };
   }
@@ -159,44 +156,18 @@ export async function refreshFirst1000MissionFollowerState({
       fresh: false,
       grantRevision: startingGrant.revision,
       followers: storedFollowerState(startingGrant),
-      completed: false,
       error: 'Follower count unavailable from fresh account-performance read.',
     };
   }
 
   recordPerformanceSnapshot({ profile: performance.profile, posts: performance.posts || [], capturedAt });
-  const currentGrant = getFirst1000MainFeedMissionGrant();
-  if (currentGrant.state !== 'running' || Number(currentGrant.revision) !== Number(startingGrant.revision)) {
-    return {
-      required: true,
-      fresh: false,
-      grantRevision: startingGrant.revision,
-      followers: { count: followers, capturedAt, targetReached: followers >= Number(currentGrant.targetFollowers) },
-      completed: false,
-      authorityChanged: true,
-      error: 'First-1,000 mission authority changed during follower refresh.',
-    };
-  }
-
-  if (followers >= Number(currentGrant.targetFollowers)) {
-    const completedGrant = completeFirst1000MainFeedMission({ actor: 'agent' });
-    return {
-      required: true,
-      fresh: true,
-      grantRevision: startingGrant.revision,
-      followers: { count: followers, capturedAt, targetReached: true },
-      completed: true,
-      completedGrant: compactGrant(completedGrant),
-      error: null,
-    };
-  }
-
+  const currentGrant = getGrowthOperatorDelegation();
   return {
     required: true,
     fresh: true,
     grantRevision: startingGrant.revision,
-    followers: { count: followers, capturedAt, targetReached: false },
-    completed: false,
+    followers: storedFollowerState(currentGrant),
+    authorityChanged: currentGrant.state !== 'running' || Number(currentGrant.revision) !== Number(startingGrant.revision),
     error: null,
   };
 }
@@ -295,9 +266,9 @@ function resumableMissionSelection(grantRevision) {
 }
 
 function requirePreparationAuthority(grantRevision, now = Date.now()) {
-  const status = getAutonomousMainFeedMissionStatus({ now });
+  const status = getGrowthOperatorMainFeedStatus({ now });
   if (Number(status.grant.revision) !== Number(grantRevision)) {
-    throw new Error('First-1,000 mission revision changed during autonomous preparation.');
+    throw new Error('Growth Operator delegation revision changed during autonomous preparation.');
   }
   if (!status.preparation.allowed) {
     throw new Error(`Autonomous main-feed preparation blocked: ${status.preparation.blockingReason}.`);
@@ -311,7 +282,7 @@ function currentMissionStrategy(queueItem, grantRevision) {
   if (selection.selectedBy === 'human') return selection;
   const authority = selection.guidance?.selectionAuthority || null;
   return selection.selectedBy === 'mission_agent'
-    && authority?.mission === 'first_1000_main_feed'
+    && authority?.mission === 'growth_operator'
     && Number(authority.grantRevision) === Number(grantRevision)
     ? selection
     : null;
@@ -341,17 +312,13 @@ function missionVerificationProvenance(queueItem, draft) {
 
 export async function prepareAutonomousMainFeed({
   now = Date.now(),
-  freshFollowerState = null,
   editorialAlreadyRefreshed = false,
 } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('Autonomous main-feed preparation requires numeric now.');
-  const initialStatus = getAutonomousMainFeedMissionStatus({ now: timestamp });
+  const initialStatus = getGrowthOperatorMainFeedStatus({ now: timestamp });
   if (!initialStatus.preparation.allowed) {
     return { action: 'noop', reason: initialStatus.preparation.blockingReason, status: initialStatus };
-  }
-  if (!freshFollowerState?.fresh || Number(freshFollowerState.grantRevision) !== Number(initialStatus.grant.revision)) {
-    return { action: 'noop', reason: 'fresh_follower_observation_required', status: initialStatus };
   }
 
   const grantRevision = Number(initialStatus.grant.revision);
@@ -402,7 +369,7 @@ export async function prepareAutonomousMainFeed({
   if (draft?.editor?.decision === 'DO_NOT_POST') {
     const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
       actor: 'agent',
-      reason: 'Writer returned DO_NOT_POST during delegated First-1,000 preparation.',
+      reason: 'Writer returned DO_NOT_POST during delegated Growth Operator preparation.',
     });
     return {
       action: 'do_not_post',

@@ -446,11 +446,14 @@ Inspect and manage learned strategy without editing SQLite directly:
 ```bash
 printf '%s' '{}' | node agent_bridge.js learning
 printf '%s' '{"experimentId":1,"baselineLabel":"original","comparisonLabel":"thread","windowMinutes":60}' | node agent_bridge.js learning-refresh
+# Explicit one-shot/manual transitions:
 printf '%s' '{"id":1,"confirmAccept":true}' | node agent_bridge.js learning-accept
 printf '%s' '{"id":1,"reason":"newer evidence reversed direction","confirmRetire":true}' | node agent_bridge.js learning-retire
+# A running Growth Operator delegation may omit those confirmation flags; delegated acceptance
+# requires repeated qualified evidence, and delegated retirement requires a retirement recommendation.
 ```
 
-`learning-refresh` only creates/updates `suggested` evidence. Suggested and retired rules have zero production effect. Accepted rules remain bounded additions after base TargetScore/opportunity/EngagePriority/health/scheduler logic; explicit human routing/timing, hard gates, expiry, approval requirements, and supported hard Account Health evidence override learning.
+`learning-refresh` only creates/updates `suggested` evidence. Suggested and retired rules have zero production effect. Accepted rules remain bounded additions after base TargetScore/opportunity/EngagePriority/health/scheduler logic; owner-only route/timing overrides, hard content/provenance gates, expiry, current approval/delegation authority, and supported hard Account Health evidence override learning.
 
 ## Agent behavior by user request
 

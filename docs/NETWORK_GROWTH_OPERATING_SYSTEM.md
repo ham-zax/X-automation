@@ -201,13 +201,13 @@ BETTER TARGETS + BETTER CONTENT + BETTER TIMING
 
 ### Current implementation boundary
 
-Phase 1A currently owns persistent workflow entry -> Triage -> Route -> Draft -> Needs Review -> explicit human approval. Bookmark/reference state is separate from workflow entry: starting work does not implicitly bookmark a source, and removing a bookmark does not erase workflow/action history. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
+Phase 1A currently owns persistent workflow entry -> Triage -> Route -> Draft -> Needs Review -> authorized approval. The dashboard remains the ordinary owner lane; a running Live Growth Operator delegation is the bounded mission-agent lane for eligible Original / Quote / Thread work. Bookmark/reference state is separate from workflow entry: starting work does not implicitly bookmark a source, and removing a bookmark does not erase workflow/action history. Phase 1B Relationship Intelligence is also current: `audience_profiles` remains raw observation, while strategic `relationship_profiles` plus append-only `relationship_events` own target classes, explainable TargetScore state, relationship stages, and durable interaction history. Relationship Intelligence is inspectable through the read-only Relationships dashboard and `relationship-targets` / `relationship-inspect` / `relationship-events` bridge commands.
 
 Phase 1C Engage Next is current: bounded target timelines, Discover X observations, and observed replies/quotes feed `queue_items(lane=engagement, pipeline=reply)`; active conversations are prioritized before cold opportunities; every actionable item carries a concrete proposed contribution plus transparent EngagePriority/expiry state; and Phase-2 reply gates own draft quality. The human-reviewed path still uses exact human approval/send. Separately, autonomous replies are off by default and run only under an explicit persisted operator grant. The existing daemon continuously refreshes real X inputs and may process zero, one, or several independently eligible replies serially in Dry run or Live mode. Live auto-send additionally requires remaining operator budget, Account Health/Growth Focus eligibility, and an atomic autonomous claim. Autonomous decisions never set `humanApprovedAt`. Successful replies share candidate-action and relationship-event recording, while engagement items remain excluded from main-feed scheduling.
 
-Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase 5 Learned Strategy is current: accepted rules make bounded transparent adjustments while suggestions remain inert until human acceptance.
+Phase 1D Account Health and Phase 3 main-feed scheduling/publication are current. Phase 4 is also current: published main-feed rows accumulate first-available 15m/1h/6h/24h measurements, audience observations preserve first-seen state, and declared content/timing/network experiments compare normalized observational cohorts with explicit assignment, attribution confidence, sample/confounder visibility, and health/network context. Phase 5 Learned Strategy is current: accepted rules make bounded transparent adjustments while suggestions remain inert until an authorized transition; delegated autonomous acceptance is stricter than manual acceptance and requires repeated qualified evidence.
 
-Phase 6 is current runtime behavior. The AI Editorial Director sits above individual source routing: canonical X/GitHub/HN/conversation snapshots -> story clustering -> optional source context -> objective-aware Prepare/Research More/Skip recommendation -> explicit human selection -> existing writer/gates/approval/scheduler. Publication measurements preserve AI-recommended, human-selected, and final-published route separately so later cohort analysis remains observational rather than rewriting history. The shared AI runtime/provider layer lets the operator choose Direct API/OpenRouter/OpenAI-compatible/local, Codex, or supported installed AGY profiles without changing network, source context, approval, or learning authority; absent OpenCode variants remain unavailable. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
+Phase 6 is current runtime behavior. The AI Editorial Director sits above individual source routing: canonical X/GitHub/HN/conversation snapshots -> story clustering -> optional source context -> objective-aware Prepare/Research More/Skip recommendation -> authorized selection by the owner or active Growth Operator mission-agent -> existing writer/gates/approval/scheduler. Publication measurements preserve AI-recommended, selected-with-authority-provenance, and final-published route separately so later cohort analysis remains observational rather than rewriting history. The shared AI runtime/provider layer lets the operator choose Direct API/OpenRouter/OpenAI-compatible/local, Codex, or supported installed AGY profiles without changing network, source context, approval, or learning authority; absent OpenCode variants remain unavailable. See `PRODUCT_ARCHITECTURE.md`, `plans/AI_RUNTIME_PROVIDER_LAYER.md`, and `plans/PHASE_6_AI_EDITORIAL_DIRECTOR.md`.
 
 ---
 
@@ -788,7 +788,7 @@ suggested -> accepted -> retired
 ```
 
 - `suggested` rules are evidence records with **zero** production effect;
-- human acceptance requires qualified `directional` or `repeated` evidence;
+- manual acceptance requires qualified `directional` or `repeated` evidence; delegated autonomous acceptance requires `repeated` qualified evidence and no active review suspension;
 - accepted adjustments are bounded and applied after transparent base scoring;
 - retired rules remain visible/history-preserving and have zero effect;
 - suggestion refresh never overwrites an accepted or retired rule;
@@ -796,7 +796,7 @@ suggested -> accepted -> retired
 
 Accepted learning can tune TargetScore components, Reach/Follow/Conversation potential, EngagePriority, soft SaturationPressure/WATCH pressure, and scheduler content/format/topic/timing preference. The UI exposes base vs learned contribution where the rule affects a current recommendation.
 
-Learning cannot override hard content gates, expiry, required human approval, an explicit manual route/schedule, or supported observed Account Health constraints. It cannot infer `CONSTRAINED` from low reach, create a fixed reply quota, or introduce fake-human timing/jitter.
+Learning cannot override hard content/provenance gates, expiry, owner-only route/schedule overrides, delegation revocation, or supported observed Account Health constraints. It cannot infer `CONSTRAINED` from low reach, create a fixed reply quota, or introduce fake-human timing/jitter.
 
 ---
 
@@ -853,6 +853,6 @@ It is the accumulation of:
 
 The long-term system is therefore:
 
-> **research engine + relationship CRM + conversation opportunity engine + technical publishing pipeline + measurement lab + human-controlled learned strategy**
+> **research engine + relationship CRM + conversation opportunity engine + technical publishing pipeline + measurement lab + bounded evidence-controlled learned strategy**
 
 That is the intended architecture for `x_action`.
