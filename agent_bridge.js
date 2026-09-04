@@ -782,8 +782,8 @@ function operatorStatus(payload = {}) {
           ? (nextTransportCapability?.supported === false ? nextTransportCapability.code : null)
           : 'compliant_transport_unavailable',
         preflight: xApiAccessTokenPresent
-          ? 'X API v2 user access token is configured. Publication still remains queue/gate/capability checked; no test post is emitted for preflight.'
-          : 'No X API v2 user access token is configured. Authenticated browser access is read-only for automation.',
+          ? 'X API v2 user access token is configured for the background daemon. Publication still remains queue/gate/capability checked; no test post is emitted for preflight.'
+          : 'No X API v2 user access token is configured for the background daemon. A persistent Growth Operator may still have a separately authorized browser-agent lane; verify that capability in its owning browser runtime before mutation.',
         next: compactScheduleDecision(nextScheduleDecision),
         nextTransportCapability,
         blocked: scheduleDecisions.filter((decision) => !decision.eligible).slice(0, 5).map(compactScheduleDecision),
@@ -795,7 +795,15 @@ function operatorStatus(payload = {}) {
         nextExpectedRefreshAt: replyRuntime.nextExpectedRefreshAt || null,
         lastError: replyRuntime.lastError || null,
       },
-      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast memory/humanize state and the enabled x-content extension in their owning runtime.',
+      browserAgentTransport: {
+        owner: 'operator_runtime',
+        preferred: 'browser-fast',
+        diagnostics: 'browser-devtools',
+        fallback: 'agent-browser_cli',
+        rawFallback: 'repository_browser_adapter',
+        availability: 'not_observed_by_growth_os',
+      },
+      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast session/memory state, agent-browser CLI availability when needed, and the enabled x-content extension in their owning runtime.',
     },
     measurements: {
       dueCount: dueMeasurements.length,

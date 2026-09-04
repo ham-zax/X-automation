@@ -155,7 +155,7 @@ This is an internal attention-allocation heuristic, not a claim about X's rankin
 
 Before a live action:
 
-1. open the exact source post through authenticated Linux `browser-fast` on the persistent humanized Clearcote profile;
+1. open the exact source post through the installed `agent-browser` routing contract: prefer harness-owned MCP `browser-fast` on its current persistent authenticated profile; if Local/MCP is unavailable, use a named `agent-browser` CLI session; use a raw repository browser adapter only as the last fallback;
 2. read the full post and relevant thread context;
 3. confirm the visible metrics and timestamp are still materially current;
 4. confirm we have not already acted on the source;

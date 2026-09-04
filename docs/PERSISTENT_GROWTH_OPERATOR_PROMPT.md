@@ -65,8 +65,8 @@ Establish the minimum state needed for this invocation, then enter the loop:
 2. Run `npm run agent -- operator-status <<<'{}'` for the compact last-known-good Growth OS cockpit. Confirm the active persona version/status, then inspect lane champions, approved-queue readiness, due measurements, account health, autonomous-reply state, the Growth Operator delegation/lease/preparation state, and integrity warnings before requesting any refresh.
 3. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`, then capture the live profile, notifications, and recent-output baseline. Do not restate or override its backend, Browser memory, tab/ref, credential, or recovery mechanics here.
 4. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
-5. Before any automated X mutation, require the repository's compliant official X API transport. Authenticated browser access is read-only for automation; scripted x.com mutation is not an eligible transport.
-6. Inspect `AUTO_POST` and the automation daemon. The daemon may run for research, drafting, measurement, scheduling, and reconciliation even when no mutation transport exists. `AUTO_POST=true` must not claim queue work unless operator status reports an official API mutation transport configured for the selected route.
+5. Before any X mutation, identify the execution plane. The background Node daemon publishes only through its compliant official X API transport. A persistent Growth Operator may instead execute already-authorized work through its browser-agent lane. Route browser capability in this order: (a) Local/MCP logical `browser-fast` for routine interaction; (b) `browser-devtools` only when diagnostics are needed; (c) a named `agent-browser` CLI session when Local/MCP is unavailable; (d) a repository-owned raw browser/Puppeteer/Clearcote adapter only as an explicit last fallback. Do not spawn `/home/hamza/repo/webharness/providers/browser-fast/server.mjs` or `/home/hamza/repo/webharness/providers/browser/server.mjs` directly when the harness already exposes their logical servers.
+6. Inspect `AUTO_POST` and the automation daemon. The daemon may run for research, drafting, measurement, scheduling, and reconciliation even when no API mutation transport exists. `AUTO_POST=true` must not claim queue work unless operator status reports an official API mutation transport configured for the selected route; browser-agent execution is a separate operator-runtime lane and does not make `AUTO_POST` a browser publisher.
 
 A failed publication preflight blocks the affected write route, not research, drafting, measurement, reconciliation, or bounded repair.
 
@@ -200,19 +200,23 @@ Persistence means continuity of mission state, not an ad-hoc infinite shell loop
 
 Repository workflow and transport owners govern publication. Preserve these invocation-level invariants:
 
-- automatic main-feed publication consumes only content already authorized by the repository's approval/queue contract and only through the official X API transport;
+- the background Node daemon consumes only content already authorized by the repository's approval/queue contract and publishes only through the official X API transport;
 - `AUTO_POST=true` never creates transport capability and must not claim a queue item when API mutation is unavailable or unsupported for that route;
+- a persistent Growth Operator may execute already-authorized Reply/Quote/Original/Thread work through its browser-agent lane; browser transport never creates approval and never weakens queue, grant, content, provenance, health, or target checks;
+- prefer MCP `browser-fast` because it owns the harness-managed persistent Chrome/session semantics; use `browser-devtools` for diagnostics rather than routine mutation. If Local/MCP is unavailable, use the version-matched `agent-browser` CLI workflow with a named session. Raw repository browser/Puppeteer/Clearcote execution is only the final fallback when the higher-level browser routes are unavailable and the adapter is explicitly available;
 - a publication preflight proves only the capability its owning transport documents; never publish a test post merely to strengthen a diagnostic;
-- ambiguous API writes remain non-retryable until reconciled; plain Originals may be exact-text reconciled, while structured Reply/Quote/Thread actions require structural verification;
-- autonomous Replies use their own authority/transport contract and never inherit authority from main-feed readiness or `AUTO_POST`; AI-powered automatic replies remain disabled until X's separate approval/recipient conditions are satisfied.
+- ambiguous writes remain non-retryable until reconciled. Plain Originals may be exact-text reconciled; Reply/Quote/Thread actions require target/parent/thread structural verification;
+- autonomous Replies use their own persisted grant and never inherit authority from main-feed readiness or `AUTO_POST`.
 
 ## Browser-assisted lane
 
 Use the installed `agent-browser` Skill for live context, notifications, analytics, thread-seam inspection, output verification, repository-owned browser-assisted execution, and explicit manual handoff. Its current routing, backend defaults, Browser memory precedence, tab/ref semantics, failure handling, credential rules, and lifecycle policy are authoritative.
 
-For browser-assisted work, preserve the exact authority supplied by the governing repository workflow. Automated browser mutation is prohibited; if the owner explicitly chooses a manual browser action, stage the exact approved content for that manual handoff. Otherwise do not add a manual checkpoint. After any resulting public action, verify the live result and reconcile its exact ID/URL through Growth OS.
+For browser-assisted work, preserve the exact authority supplied by the governing repository workflow. The operator may perform the browser action itself when that authority already permits the exact outbound action. Use the current `agent-browser` Skill as the browser procedure: under WebHarness/Local, call logical `browser-fast` rather than launching provider files; when Local/MCP is absent, load `agent-browser skills get core`, use a named CLI session, and follow its snapshot/ref/session contract. Only fall back to a repository-owned raw browser/Puppeteer/Clearcote adapter when neither higher-level route is available. Never launch a second process against the harness-owned persistent profile.
 
-Do not add a second browser procedure here.
+Immediately before a consequential send, re-observe the intended tab/source and confirm the exact approved text/target. Execute once. If the result is failed or unknown, do not blind-retry. Verify the public output and its parent/quote/thread structure as applicable, then reconcile the exact ID/URL through Growth OS.
+
+Do not add another competing browser procedure here.
 
 ## Memory checkpoint
 
