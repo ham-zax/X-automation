@@ -16,6 +16,7 @@ import {
 import { Badge, Disclosure, Loading, Error, Empty, Notice, Pending, formatDateTime } from '../../components/primitives'
 import { MetricCard, PageHeader } from '../../components/workspace'
 import { navigate } from '../../router'
+import { OperatorOverview } from './OperatorOverview'
 
 const OBJECTIVES: { value: EditorialObjective; label: string }[] = [
   { value: 'qualified_growth', label: 'Grow relevant followers' },
@@ -54,12 +55,30 @@ function executionSummary(execution: Record<string, unknown>) {
 }
 
 function SourceFreshness({ source }: { source: EditorialSourceFreshness }) {
+  // Terminal formatting belongs in logs, not the rendered source status.
+  const error = source.error?.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '').trim()
+  const errorSummary = error?.includes('ERR_INSUFFICIENT_RESOURCES')
+    ? 'The browser reported insufficient resources.'
+    : error?.includes('Page crashed')
+      ? 'The source browser tab crashed.'
+      : error?.split(/Call log:|\r?\n/, 1)[0].replace(/https?:\/\/\S+/g, '(request URL in diagnostics)').trim()
+  const label = SOURCE_LABELS[source.kind] || source.kind
+
   return (
-    <div className={`border-l-2 px-3 py-1.5 text-xs ${source.error ? 'border-amber-400 text-amber-900' : 'border-slate-300 text-slate-600'}`}>
-      <div className="font-semibold">{SOURCE_LABELS[source.kind] || source.kind}</div>
+    <section aria-label={`${label} source status`} className={`source-freshness border-l-2 px-3 py-1.5 text-xs ${error ? 'border-amber-400 text-amber-900' : 'border-slate-300 text-slate-600'}`}>
+      <div className="font-semibold">{label}</div>
       <div className="mt-1">{source.fetchedAt ? `Snapshot ${formatDateTime(source.fetchedAt)}` : 'No snapshot yet'} · {source.candidateCount} items</div>
-      {source.error && <div className="mt-1">Last refresh error: {source.error}</div>}
-    </div>
+      {error && (
+        <div className="mt-3">
+          <p className="font-semibold">Refresh failed: {errorSummary || 'Source unavailable'}</p>
+          <p className="mt-1">{source.fetchedAt ? 'The previous snapshot is retained; it has not been refreshed.' : 'No successful snapshot is available yet.'}</p>
+          <details className="mt-2">
+            <summary>Refresh diagnostics</summary>
+            <pre className="source-refresh-log">{error}</pre>
+          </details>
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -140,7 +159,7 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
             {recommendation.status === 'dismissed' && <Badge>Dismissed</Badge>}
           </div>
           <h4 className="mt-2 text-base font-semibold text-slate-900 sm:text-lg">{recommendation.title}</h4>
-          <p className="mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-slate-600">{recommendation.thesis}</p>
+          <p className="mt-2 max-w-[78ch] text-base leading-7 text-slate-600">{recommendation.thesis}</p>
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Fit</div>
@@ -166,14 +185,22 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
         {!active && recommendation.selection && !recommendation.selection.draftId && recommendation.pipeline !== 'reply' && <a href="#/create" className="text-sm font-semibold text-indigo-700 hover:underline">Open workflow →</a>}
       </div>
 
-      <Disclosure summary="Why & evidence" className="compact-disclosure">
+      <div className="recommendation-context text-sm">
+        <div>
+          {recommendation.whyNow && <div><strong>Why this is worth doing</strong><p>{recommendation.whyNow}</p></div>}
+          {recommendation.whyThisFormat && <div className="mt-3"><strong>Why this format</strong><p>{recommendation.whyThisFormat}</p></div>}
+        </div>
+        <div>
+          <strong>Intended reader outcome</strong>
+          <p>{recommendation.desiredReaderOutcome || 'Not specified for this recommendation.'}</p>
+          <div className="mt-3 font-semibold text-slate-800">Supporting sources</div>
+          <div className="mt-1 space-y-2">{recommendation.sources.length ? recommendation.sources.map((source) => (
+            <div key={source.key}>{source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-indigo-700 hover:underline">{source.title || source.key} ↗</a> : source.title || source.key}</div>
+          )) : <span className="text-slate-500">No source rows available.</span>}</div>
+        </div>
+      </div>
+      <Disclosure summary="Evidence, scoring & provenance">
         <div className="space-y-4 text-sm text-slate-700">
-          {(recommendation.whyNow || recommendation.whyThisFormat) && (
-            <div className="grid gap-2 md:grid-cols-2">
-              {recommendation.whyNow && <div><strong>Why now</strong><p className="mt-1 text-slate-600">{recommendation.whyNow}</p></div>}
-              {recommendation.whyThisFormat && <div><strong>Why this format</strong><p className="mt-1 text-slate-600">{recommendation.whyThisFormat}</p></div>}
-            </div>
-          )}
 
           <div className="grid grid-cols-3 gap-x-5 gap-y-2 border-y border-slate-100 py-3 text-xs sm:grid-cols-6">
             <div><span className="text-slate-500">Reach</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.reachPotential || 0))}</div></div>
@@ -184,12 +211,9 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
             <div><span className="text-slate-500">Objective fit</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.objectiveFit || 0))}</div></div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1.35fr_1fr]">
-            <div><strong>Reader outcome</strong><p className="mt-1 text-slate-600">{recommendation.desiredReaderOutcome || 'Not specified'}</p></div>
-            <div className="text-xs leading-5 text-slate-500">
-              <strong>Profile proof:</strong> {recommendation.profileProof.coverage || 'none'}
-              {' · '}<strong>Evidence:</strong> {evidenceStatuses || 'none supplied'}
-            </div>
+          <div className="text-sm text-slate-500">
+            <strong>Profile proof:</strong> {recommendation.profileProof.coverage || 'none'}
+            {' · '}<strong>Evidence:</strong> {evidenceStatuses || 'none supplied'}
           </div>
 
           {recommendation.decision === 'RESEARCH_MORE' && recommendation.researchQuestions.length > 0 && (
@@ -199,12 +223,6 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
             </div>
           )}
 
-          <div>
-            <strong>Sources</strong>
-            <div className="mt-1 space-y-1">{recommendation.sources.length ? recommendation.sources.map((source) => (
-              <div key={source.key}>{source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-indigo-700 hover:underline">{source.title || source.key} ↗</a> : source.title || source.key}</div>
-            )) : <span className="text-slate-500">No source rows available.</span>}</div>
-          </div>
           <div>
             <strong>Evidence</strong>
             <div className="mt-1 space-y-2">{recommendation.evidence.length ? recommendation.evidence.map((item) => (
@@ -283,11 +301,9 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
 
       {data && (
         <>
-          <Disclosure summary={`Source snapshots · ${data.sourceFreshness.length}`} className="compact-disclosure">
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              {data.sourceFreshness.map((source) => <SourceFreshness key={source.kind} source={source} />)}
-            </div>
-          </Disclosure>
+          <div className="mt-5 grid gap-3 border-y border-slate-200 py-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Source freshness">
+            {data.sourceFreshness.map((source) => <SourceFreshness key={source.kind} source={source} />)}
+          </div>
           {!data.hasPlan ? (
             <div className="mt-4"><Notice tone="neutral" title="No completed plan yet">Use the explicit refresh action when you want to run the editorial pass.</Notice></div>
           ) : data.noStrongAction ? (
@@ -307,14 +323,14 @@ function ActionCard({ action }: { action: TodayAction }) {
   return (
     <a
       href={action.href}
-      className="operator-surface block p-4 transition-transform hover:-translate-y-px sm:p-5"
+      className="operator-surface block p-5 hover:border-[var(--ui-primary-border)] sm:p-6"
       data-tone={tone}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{action.eyebrow}</p>
           <h3 className="mt-2 text-lg font-semibold text-slate-900">{action.title}</h3>
-          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{action.body}</p>
+          <p className="mt-2 text-sm leading-7 text-slate-600">{action.body}</p>
         </div>
         <span className="shrink-0 text-sm font-semibold text-indigo-700">
           {action.action}
@@ -348,8 +364,8 @@ export function Today() {
   return (
     <div className="space-y-8">
       <PageHeader
-        eyebrow="Operator desk"
-        title="Today"
+        eyebrow="Agent-led growth · Human oversight"
+        title="Growth workspace"
         note={data.taskCount === 0
           ? 'You are caught up. Nothing requires a decision right now.'
           : data.taskCount === 1
@@ -365,11 +381,13 @@ export function Today() {
         )}
       />
 
+      <OperatorOverview />
+
       <section aria-labelledby="today-attention">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Now</div>
-            <h3 id="today-attention" className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Needs your attention</h3>
+            <h3 id="today-attention" className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Next decisions</h3>
           </div>
           <span className="text-sm tabular-nums text-slate-500">{data.actions.length}</span>
         </div>
@@ -389,7 +407,7 @@ export function Today() {
           <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Current state</div>
           <h3 id="today-pulse" className="mt-1 text-lg font-semibold text-slate-900">Growth pulse</h3>
         </div>
-        <div className="grid grid-cols-2 gap-x-5 gap-y-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <MetricCard label="Active conversations" value={data.stats.activeConversations} tone="primary" />
           <MetricCard label="Posts awaiting review" value={data.stats.waitingForReview} tone="warning" />
           <MetricCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} tone="info" />

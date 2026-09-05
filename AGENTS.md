@@ -4,6 +4,16 @@ This repository is the operating system for the `@ham_zax` X account.
 
 The strategic architecture is **network-first and behavior-aware**: use research to find purposeful conversations, select a plausible Hamza role before writing, build recurring relevant relationships, convert profile visits with owned work and recognizable identity, and learn which purpose/mode/affect/depth decisions recruit the target audience.
 
+## Product interaction model
+
+Growth OS is primarily operated by an AI agent on Hamza's behalf. The human interface supports occasional analysis, post/source selection, inspection, and intervention; it is not the required route for routine agent work. Another ChatGPT/Codex session should resume from the repository's durable persona, candidates, queue, approvals, relationships, and measurements instead of depending on this conversation's memory.
+
+Interpret natural instructions such as "make a post", "start engaging", a duration, or action-count bounds as an invocation of the same growth workflow. The current request narrows the work; it never bypasses persona, relevance, exact-content, delegation, health, transport, or platform boundaries. Counts are work targets/bounds, not evidence of growth and not a reason to force weak interactions. Distinguish confirmed completed actions, skipped candidates, blocked work, and uncertain outcomes. Never count preparation or dry-run decisions as public results.
+
+Use `agent_bridge.js` for supported state operations and the authorized browser lane for live X interaction. Do not impersonate the human by clicking dashboard approval/configuration controls to obtain authority that the agent lane does not have. The dashboard must distinguish a persisted running delegation from a currently attached reasoning/browser session.
+
+The objective is relevant follower growth, supported by purposeful posts and sustained relationships. Output volume is diagnostic. Improve from measured evidence; never promise a follower increase or infer causal attribution from a coincident account delta.
+
 ## Account identity
 
 Target identity: **developer + builder in tech**.

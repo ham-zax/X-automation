@@ -1,5 +1,7 @@
 # X Growth Operator Console UI Design
 
+**Status: superseded.** The user rejected this visual/minimalism direction. The replacement is `../plans/2026-09-05-agent-first-workspace.md`: agent-primary operation, human oversight, readable context, and a graphite-sidebar creator workspace. The historical minimalism refinement below is not current product guidance.
+
 ## Goal
 
 Turn the existing X Growth React workspace into a deliberate operator console: fast to scan, semantically colored, information-dense without feeling cramped, and equally coherent in light and dark mode.

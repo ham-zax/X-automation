@@ -1,4 +1,7 @@
 import { launch as launchClearcote } from 'clearcote';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 const CLEARCOTE_CHROME_EXECUTABLE = '/usr/bin/google-chrome';
 const CLEARCOTE_FINGERPRINT = 'x-test-growth-os';
@@ -66,16 +69,35 @@ function wrapPage(page) {
 }
 
 export async function createBrowser(options = {}) {
-  return launchClearcote({
-    ...options,
-    executablePath: CLEARCOTE_CHROME_EXECUTABLE,
-    headless: options.headless !== false,
-    humanize: true,
-    fingerprint: CLEARCOTE_FINGERPRINT,
-    platform: 'linux',
-    brand: 'Chrome',
-    ephemeralProfile: options.ephemeralProfile ?? false,
-  });
+  // /tmp may be a small, shared tmpfs. Keep this reader's profile and Chrome
+  // temporary files on disk without changing process-wide environment state.
+  const root = join(homedir(), '.cache', 'x-growth', 'browser');
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  const runDirectory = await mkdtemp(join(root, 'run-'));
+  let browser;
+  try {
+    browser = await launchClearcote({
+      ...options,
+      executablePath: CLEARCOTE_CHROME_EXECUTABLE,
+      headless: options.headless !== false,
+      humanize: true,
+      fingerprint: CLEARCOTE_FINGERPRINT,
+      platform: 'linux',
+      brand: 'Chrome',
+      userDataDir: options.userDataDir ?? join(runDirectory, 'profile'),
+      env: { ...process.env, ...options.env, TMPDIR: runDirectory },
+    });
+  } catch (error) {
+    await rm(runDirectory, { recursive: true, force: true }).catch(() => {});
+    throw error;
+  }
+  const close = browser.close.bind(browser);
+  browser.close = async (...args) => {
+    // Do not remove a live profile when close fails; preserve the original error.
+    await close(...args);
+    await rm(runDirectory, { recursive: true, force: true });
+  };
+  return browser;
 }
 
 export async function createPage(browser) {

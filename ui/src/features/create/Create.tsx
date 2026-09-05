@@ -132,7 +132,7 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
       {scheduleAction.isError && (
         <div className="mt-2 text-xs text-red-600">{scheduleAction.error.message}</div>
       )}
-      <Disclosure summary="Why this time?">
+      <Disclosure summary="Publishing time & constraints" defaultOpen>
         <div className="text-sm text-slate-700">{schedule.reason}</div>
       </Disclosure>
     </div>
@@ -179,7 +179,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
               <h4 className="truncate text-sm font-semibold text-slate-900">{item.title}</h4>
               <Badge tone={item.status === 'published' ? 'success' : 'neutral'}>{item.pipelineLabel}</Badge>
             </div>
-            <p className="mt-1 line-clamp-1 text-sm text-slate-500">{item.text}</p>
+            <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-7 text-slate-500">{item.text}</p>
             <div className="mt-1 text-xs text-slate-400">
               {item.statusLabel}{item.publishedAt ? ` · ${formatDateTime(item.publishedAt)}` : ''}
               {item.draft ? ` · quality ${item.draft.qualityScore}/50` : ''}
@@ -228,7 +228,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
         )}
       </div>
 
-      <p className="mt-2 line-clamp-2 break-words text-sm leading-6 text-slate-600">{item.text}</p>
+      <p className="mt-4 whitespace-pre-wrap break-words text-base leading-7 text-slate-600">{item.text}</p>
 
       {choosingType && item.recommendedPipeline && (
         <div className="mt-2 text-xs text-slate-500"><strong className="text-slate-700">Suggested:</strong> {item.recommendedPipelineLabel}</div>
@@ -286,7 +286,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
         <div className="mt-3"><Notice tone="warning" title="Not ready for approval">
           {item.draft
             ? approvalBlockers.length
-              ? approvalBlockers.slice(0, 2).join(' ')
+              ? approvalBlockers.join(' ')
               : 'Open the draft to fix the checks or complete the required confirmations.'
             : 'Create a draft first.'}
         </Notice></div>
@@ -301,7 +301,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
         </Notice></div>
       ) : null}
 
-      <Disclosure summary="Details & evidence" className="compact-disclosure">
+      <Disclosure summary="Review context & evidence" defaultOpen>
         <div className="space-y-3">
           <GrowthFitPanel
             growthFit={item.growthFit}
@@ -389,8 +389,10 @@ export function Create() {
         eyebrow="Publishing lifecycle"
         title="Posts"
         note="Draft → review → approve → publish."
-        right={<Badge tone={data.automation ? 'success' : 'neutral'}>Auto-publishing {data.automation ? 'on' : 'off'}</Badge>}
+        right={<Badge tone={data.automation ? 'info' : 'neutral'}>Background auto-post {data.automation ? 'requested' : 'off'}</Badge>}
       />
+
+      <p className="text-sm text-slate-500">Background publication needs both an approved item and a supported transport. A running agent can use its separately authorized browser lane.</p>
 
       <div className="lifecycle-tabs">
       <SegmentedTabs

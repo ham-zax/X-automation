@@ -11,6 +11,7 @@ import { PageHeader, SegmentedTabs } from '../../components/workspace'
 import { resolveDiscoverPrimaryAction, resolveDiscoverSelection } from './discoverView'
 import { navigate } from '../../router'
 import { GrowthFitPanel } from '../create/GrowthFitPanel'
+import { SourceRefreshError } from '../../components/SourceRefreshError'
 
 const FEEDS = [
   { id: 'for-you', label: 'To review' },
@@ -119,16 +120,16 @@ function CandidateRow({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className="selection-row w-full border-b border-slate-200 bg-white px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50"
+      className="selection-row w-full border-b border-slate-200 text-left transition-colors last:border-b-0 hover:bg-slate-50"
       data-selected={selected ? 'true' : 'false'}
     >
       <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
         <span>#{sourceRank} · {source}</span>
         {state && <span className="max-w-[45%] truncate text-slate-600 normal-case tracking-normal">{state}</span>}
       </div>
-      <div className="mt-1.5 truncate text-sm font-semibold text-slate-900">{candidate.title}</div>
-      {candidate.displayText && <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{candidate.displayText}</div>}
-      <div className="mt-2 truncate text-[11px] text-slate-500">{candidateMetricLine(candidate)}</div>
+      <div className="mt-2 break-words text-base font-semibold text-slate-900">{candidate.title}</div>
+      {candidate.displayText && <div className="mt-2 line-clamp-4 text-sm leading-6 text-slate-600">{candidate.displayText}</div>}
+      <div className="mt-3 text-xs leading-5 text-slate-500">{candidateMetricLine(candidate)}</div>
     </button>
   )
 }
@@ -194,7 +195,7 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {candidate.viral && <Badge tone="danger">Momentum</Badge>}
+          {candidate.viral && <Badge tone="info">Momentum</Badge>}
           {candidate.saved && <Badge tone="success">Saved</Badge>}
           {completion
             ? <Badge tone="success">{completion.label}</Badge>
@@ -204,11 +205,8 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
         </div>
       </div>
 
-      <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />
-
-
       {candidate.viral && (
-        <Disclosure summary="X momentum details">
+        <Disclosure summary="Momentum observations" defaultOpen>
           <div className="flex flex-wrap gap-2">
             <Badge>{candidate.viral.ageHours.toFixed(1)}h old</Badge>
             <Badge>{formatNumber(candidate.viral.viewsPerHour)} views/h</Badge>
@@ -218,8 +216,9 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
         </Disclosure>
       )}
 
-      {candidate.displayText && <p className="mt-3 line-clamp-4 break-words text-sm leading-6 text-slate-700">{candidate.displayText}</p>}
-      <div className="mt-2 text-xs text-slate-500">{candidateMetricLine(candidate)}</div>
+      {candidate.displayText && <div className="source-text">{candidate.displayText}</div>}
+      <div className="mt-2 text-sm text-slate-500">{candidateMetricLine(candidate)}</div>
+      <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />
       {movement && <div className="mt-1 text-xs font-medium text-slate-600">Source movement: {movement}</div>}
 
       {!completion && !candidate.editorialPlan && queue?.recommendedPipeline && (
@@ -332,7 +331,8 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
             {candidate.url && <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-indigo-700 hover:underline">{openSourceLabel}</a>}
           </div>
 
-          <Disclosure summary="More actions" className="compact-disclosure">
+          <div className="source-actions">
+            <div className="source-actions-label">Choose a different action</div>
             <div className="flex flex-wrap items-center gap-2">
               {primaryAction !== 'original' && <button onClick={() => runTriage('original')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as original' : 'Original draft'}</button>}
               {isX && primaryAction !== 'quote' && <button onClick={() => runTriage('quote')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as quote' : 'Quote draft'}</button>}
@@ -350,7 +350,7 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
                 <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="action-button" data-variant="ghost">HN discussion ↗</a>
               )}
             </div>
-          </Disclosure>
+          </div>
         </div>
       )}
 
@@ -420,8 +420,8 @@ export function Discover() {
         )}
       </div>
 
-      {refresh.isError && <Notice tone="warning" title="Refresh failed">{refresh.error.message}</Notice>}
-      {data?.sourceError && <Notice tone="warning" title="Partial source refresh">{data.sourceError}</Notice>}
+      {refresh.isError && <Notice tone="warning" title="Refresh failed"><SourceRefreshError message={refresh.error.message} hasSnapshot={Boolean(data?.snapshotAt)} /></Notice>}
+      {data?.sourceError && <Notice tone="warning" title="Partial source refresh"><SourceRefreshError message={data.sourceError} hasSnapshot={Boolean(data.snapshotAt)} /></Notice>}
 
       {isLoading ? (
         <Loading message="Loading discoveries..." />
@@ -433,7 +433,7 @@ export function Discover() {
           message={data?.refreshable ? 'This source refreshes automatically the first time it is empty, or use Refresh source.' : 'Check back later or try another view.'}
         />
       ) : (
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1.55fr)]">
+        <div className="discovery-workspace">
           <section className="operator-surface overflow-hidden" aria-label="Discovery candidates">
             <div className="border-b border-slate-200 px-3 py-3">
               <div className="flex items-center justify-between gap-3">
@@ -444,7 +444,7 @@ export function Discover() {
               {data.lastRefreshAttemptAt && data.lastRefreshAttemptAt !== data.snapshotAt && <div className="mt-1 text-[11px] text-slate-500">Last refresh attempt {formatDateTime(data.lastRefreshAttemptAt)}</div>}
               {data.legacyFallback && <div className="mt-1 text-[11px] text-amber-700">Preserved legacy snapshot until the next canonical refresh.</div>}
             </div>
-            <div className="xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto">
+            <div className="source-list">
               {data.candidates.map((candidate, index) => {
                 const selected = candidate.key === resolvedSelectedKey
                 return (
@@ -456,7 +456,7 @@ export function Discover() {
                       onSelect={() => setSelectedKey(candidate.key)}
                     />
                     {selected && (
-                      <div className="border-b border-slate-200 bg-[var(--ui-surface-subtle)] p-2 xl:hidden">
+                      <div className="discovery-inline-detail">
                         <CandidateDetail candidate={candidate} index={index} />
                       </div>
                     )}
@@ -466,7 +466,7 @@ export function Discover() {
             </div>
           </section>
 
-          <section className="hidden xl:block" aria-label="Selected discovery detail">
+          <section className="discovery-detail" aria-label="Selected discovery detail">
             <div className="sticky-detail">
               {selectedCandidate ? (
                 <CandidateDetail candidate={selectedCandidate} index={selectedIndex} />

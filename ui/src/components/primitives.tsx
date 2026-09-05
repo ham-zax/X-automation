@@ -94,12 +94,13 @@ interface DisclosureProps {
   summary: string
   children: ReactNode
   className?: string
+  defaultOpen?: boolean
 }
 
-export function Disclosure({ summary, children, className = '' }: DisclosureProps) {
+export function Disclosure({ summary, children, className = '', defaultOpen = false }: DisclosureProps) {
   return (
-    <details className={`mt-3 ${className}`}>
-      <summary className="cursor-pointer text-sm text-slate-500 hover:text-slate-700">{summary}</summary>
+    <details open={defaultOpen} className={`mt-3 ${className}`}>
+      <summary className="cursor-pointer font-medium text-slate-500 hover:text-slate-700">{summary}</summary>
       <div className="mt-2">{children}</div>
     </details>
   )

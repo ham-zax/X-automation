@@ -12,6 +12,7 @@ import {
 import { navigate } from '../../router'
 import { DraftEditor } from '../create/DraftEditor'
 import { GrowthFitPanel } from '../create/GrowthFitPanel'
+import { autonomousLabel, autonomousTone } from './autonomousView'
 
 export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   const { data, isLoading, error, refetch } = useConversationDetail(candidateKey)
@@ -52,6 +53,8 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         <a href="#/conversations" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to conversations</a>
       </div>
 
+      <div className="conversation-workspace">
+      <div className="space-y-5">
       <article className="operator-surface p-5 sm:p-6" data-tone="primary">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -84,7 +87,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         {data.candidate && (
           <div className="operator-surface mt-4 p-4" data-tone="info">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exact source</div>
-            <div className="mt-1 break-words text-sm text-slate-800">{data.candidate.text}</div>
+            <div className="source-text">{data.candidate.text}</div>
             {data.candidate.url && (
               <a href={data.candidate.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-sm font-medium text-sky-700 hover:underline">
                 Open source ↗
@@ -95,13 +98,11 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
 
         {data.rejectionReasons.length > 0 && (
           <Notice tone="danger" title="This opportunity is currently unavailable">
-            <Disclosure summary="Why?">
-              {data.rejectionReasons.map((reason, index) => <div key={index}>{reason}</div>)}
-            </Disclosure>
+            <div className="space-y-2">{data.rejectionReasons.map((reason, index) => <div key={index}>{reason}</div>)}</div>
           </Notice>
         )}
 
-        <Disclosure summary="Why this recommendation?">
+        <Disclosure summary="Recommendation & evidence" defaultOpen>
           <div className="text-sm text-slate-700">
             <strong>Reply priority:</strong> {data.priorityLabel} (internal priority {Math.round(data.priority)})
           </div>
@@ -129,7 +130,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         <section className="operator-surface p-4" data-tone="ai">
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-sky-950">Autonomous decision</strong>
-            <Badge tone={data.autonomousDecision.decision.includes('review') ? 'warning' : data.autonomousDecision.decision.includes('send') || data.autonomousDecision.decision === 'sent' ? 'success' : 'neutral'}>{data.autonomousDecision.decision.replaceAll('_', ' ')}</Badge>
+            <Badge tone={autonomousTone(data.autonomousDecision.decision)}>{autonomousLabel(data.autonomousDecision.decision)}</Badge>
             <Badge>{data.autonomousDecision.sourceClass.replaceAll('_', ' ')}</Badge>
             {data.autonomousDecision.intent && <Badge>{data.autonomousDecision.intent.replaceAll('_', ' ')}</Badge>}
             {data.autonomousDecision.tone && <Badge>{data.autonomousDecision.tone.replaceAll('_', ' ')}</Badge>}
@@ -148,6 +149,8 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         <Notice tone="danger" title="Sending is temporarily unavailable">Supported account evidence is currently limiting reply approval/sending. <a href="/legacy?source=health" className="underline">Review account status</a>.</Notice>
       )}
 
+      </div>
+      <div className="space-y-5">
       {editor ? (
         <section className="operator-surface p-5 sm:p-6" data-tone="ai">
           <GrowthFitPanel
@@ -214,7 +217,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
       )}
 
       {editor && data.status !== 'published' && (
-        <Disclosure summary="More actions">
+        <Disclosure summary="Alternative actions" defaultOpen>
           <div className="flex flex-wrap items-end gap-2">
             {data.engagementKind === 'initial_reply' && (
               <button
@@ -249,6 +252,8 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
       {actionError && (
         <Notice tone="danger" title="Action failed">{actionError}</Notice>
       )}
+      </div>
+      </div>
     </div>
   )
 }

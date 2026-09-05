@@ -318,7 +318,7 @@ export function WritingApproachPanel({
       {!readOnly && generationBlockedByChoice && (
         <div className="mt-2 text-xs text-amber-700">Save the writing choice before generating.</div>
       )}
-      <Disclosure summary="Change approach & evidence" className="compact-disclosure">
+      <Disclosure summary="Writing guidance & evidence" defaultOpen>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm text-slate-600">Optional guidance for the next Writer generation. It never approves or publishes.</div>

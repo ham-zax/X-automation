@@ -20,6 +20,18 @@ The architecture is **network-first and behavior-aware**:
 
 Use `PRODUCT_ARCHITECTURE.md` for the product map, `CONTENT_OPERATING_STANDARD.md` for outbound legitimacy, `NETWORK_GROWTH_OPERATING_SYSTEM.md` for growth strategy, `RELATIONSHIP_INTELLIGENCE.md` for relationship ownership, `behavior.js` for the shared behavior contract, and `persona.js` for the active versioned persona. `ALGORITHM_EVIDENCE_LEDGER.md` is evidence-only. Editorial and AI-runtime actions remain advisory and do not grant approval or publication authority.
 
+## Default interaction model: agent-operated, human-supervised
+
+The AI agent is the normal operator of Growth OS. Hamza usually gives intent in conversation; he does not manually work through every dashboard screen. The web app is primarily for oversight, analysis, selecting sources or posts, and explicit intervention. Preserve the same authoritative state and gates for both users of the product; do not create a dashboard-only workflow that an agent must imitate through clicks.
+
+A natural-language request may ask for one post, ongoing engagement, a bounded duration, or action-count targets such as likes and replies. Interpret those as the scope of that particular mission, not as a standing quota, a change to delegation, or an instruction to manufacture weak interactions. Examples mentioned while discussing product design are not active publication orders. Use `docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md` to start or resume an actual run.
+
+Before acting, read `operator-status` and the active versioned persona, then recover current queue, relationships, exact-action history, and authority. Select purposeful opportunities and sustain worthwhile exchanges according to the persona and actual conversation context. The agent should not ask Hamza to manually choose every target or approve every act when the existing delegation already authorizes the exact route. Equally, a request for more activity never widens a grant, bypasses a gate, authorizes an unsupported action, or restores paused/stopped owner authority.
+
+Carry the requested objective, duration/count bounds, confirmed progress, unresolved actions, and next useful step into the operator handoff. Count only independently verified and reconciled public actions as completed; prepared drafts, approval, claims, consumed reply budget, and dry-run decisions are not interchangeable with confirmed sends. Distinguish completed, skipped, blocked, and uncertain work. Do not silently substitute another action type to fill a count, and report a shortfall rather than force unsuitable actions. Reaching the stated mission bound ends that run without pretending the overall growth objective is complete.
+
+Relevant follower growth, recurring relationships, and useful conversation continuation are the outcomes to improve. Likes, reply volume, and time spent are activity diagnostics, not guarantees of growth. Use measured outcomes to refine future selections and writing through the existing evidence/learning owners; do not silently rewrite the persona or invent causal follower attribution from a small sample. A running delegation is permission, not proof that a ChatGPT/Codex reasoning session is currently alive. The UI and daemon must not imply that they can create a future model turn.
+
 ## Stable interface
 
 Agents should interact with the system through `agent_bridge.js`, not by editing `.x-research.sqlite`, `.automation-state.json`, or dashboard HTML directly.
@@ -444,6 +456,10 @@ Route an item without approving it:
 ```bash
 printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
 ```
+
+When a source has no selected purpose yet, `route` also accepts an object `routeContext` containing a truthful explicit `behavior` decision and the existing routing context, such as `originalStandalone` and `sourceIsEvidence`. The bridge forwards this to the canonical routing owner. This establishes the proposed act; it is not a human Ignore override, relevance override, approval, or publication permission. An ignored recommendation that remains after purpose evaluation still requires its existing owner decision.
+
+`apply-writer-output` reconstructs the current authoritative Writer packet from the saved candidate, queue behavior/persona, draft, relationship context, and validated writing-strategy generation. Evidence IDs and behavior are checked against that packet; caller-supplied claims cannot substitute for the stored context.
 
 The automation daemon refreshes real X source snapshots and Engage Next after research, with observed responses checked before cold opportunities. Dry-run autonomous reply evaluation can continue without mutation. The daemon itself remains API-only for X writes. A persistent Growth Operator may separately execute an already-authorized Reply/Quote/Original/Thread/Repost through the browser-agent lane and then reconcile the verified public result through Growth OS.
 

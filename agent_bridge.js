@@ -1313,7 +1313,17 @@ async function main() {
       writerAiExecution: payload.writerAiExecution || null,
       writerExecutionSource: 'agent_bridge_external',
     });
-    const next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance });
+    const username = sourceUsername(candidate);
+    const writerPacket = buildWriterPacket({
+      candidate,
+      queueItem: workflow.queueItem,
+      draft: writerBase,
+      relationship: username ? getRelationshipProfile(username) : null,
+      recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
+      recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
+      writingStrategy: strategyGeneration.writingStrategy,
+    });
+    const next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance, writerPacket });
     const analysis = scoreDraft(next, candidate, {
       pipeline,
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
@@ -1507,7 +1517,10 @@ async function main() {
 
   if (command === 'route') {
     requireCandidate(payload.key);
-    const queueItem = routeCandidate(payload.key, payload.pipeline, { actor: 'agent', reason: payload.reason || '' });
+    if (payload.routeContext != null && (typeof payload.routeContext !== 'object' || Array.isArray(payload.routeContext))) {
+      throw new Error('routeContext must be an object when supplied.');
+    }
+    const queueItem = routeCandidate(payload.key, payload.pipeline, { actor: 'agent', reason: payload.reason || '', routeContext: payload.routeContext || {} });
     result({ queueItem, approvalRequired: queueItem.status === 'needs_review' });
     return;
   }

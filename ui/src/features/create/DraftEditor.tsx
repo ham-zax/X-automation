@@ -165,7 +165,7 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
 
   if (readOnly) {
     return (
-      <Disclosure summary={`Behavior & persona · ${humanizeBehaviorValue(current?.primaryPurpose)} · ${humanizeBehaviorValue(current?.socialMode)} · ${humanizeBehaviorValue(current?.informationDepth)}`}>
+      <Disclosure defaultOpen summary={`Behavior & persona · ${humanizeBehaviorValue(current?.primaryPurpose)} · ${humanizeBehaviorValue(current?.socialMode)} · ${humanizeBehaviorValue(current?.informationDepth)}`}>
         <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Purpose</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.primaryPurpose)}</dd></div>
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Mode</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.socialMode)}</dd></div>
@@ -180,7 +180,7 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
   }
 
   return (
-    <Disclosure summary={`Behavior & persona · ${humanizeBehaviorValue(primaryPurpose)} · ${humanizeBehaviorValue(socialMode)} · ${humanizeBehaviorValue(informationDepth)}`}>
+    <Disclosure defaultOpen summary={`Behavior & persona · ${humanizeBehaviorValue(primaryPurpose)} · ${humanizeBehaviorValue(socialMode)} · ${humanizeBehaviorValue(informationDepth)}`}>
       <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
         <div className="text-sm font-semibold text-slate-900">Choose the act before editing the prose</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">Every action needs a purpose. A social-only reply may be complete; a technical correction still needs evidence. Saving a change invalidates stale review gates but does not approve or publish.</p>
@@ -459,6 +459,58 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
       )}
 
+      <div>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-base font-semibold text-slate-800">{flags.engagementReply ? 'Reply text' : isThread ? 'Thread parts' : 'Post text'}</div>
+          {preview?.weightedLength != null && <span className="text-sm text-slate-500">{preview.weightedLength}/280</span>}
+        </div>
+        {isThread ? (
+          <div className="space-y-4">
+            {threadParts.map((part, index) => (
+              <div key={index}>
+                <label className="mb-2 block text-sm font-medium text-slate-600" htmlFor={`thread-part-${index}`}>Thread part {index + 1}</label>
+                <textarea
+                  id={`thread-part-${index}`}
+                  rows={4}
+                  value={part}
+                  readOnly={readOnly}
+                  onChange={(event) => {
+                    markTextDirty()
+                    setThreadParts((parts) => parts.map((p, i) => (i === index ? event.target.value : p)))
+                  }}
+                  className="w-full rounded-xl border border-slate-300 p-4 text-base text-slate-900"
+                />
+              </div>
+            ))}
+            {!readOnly && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
+                  disabled={threadParts.length >= 6}
+                  className="action-button"
+                >Add part</button>
+                <button
+                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
+                  disabled={threadParts.length <= 2}
+                  className="action-button"
+                >Remove last</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <textarea
+            aria-label={flags.engagementReply ? 'Reply text' : 'Post text'}
+            rows={7}
+            value={body}
+            readOnly={readOnly}
+            onChange={(event) => { markTextDirty(); setBody(event.target.value) }}
+            placeholder="Generate a draft or edit the final text here."
+            className="w-full rounded-xl border border-slate-300 p-4 text-base text-slate-900"
+          />
+        )}
+      </div>
+      {!readOnly && <div><div className="mb-2 text-sm font-semibold text-slate-700">Approval readiness</div><GatePanel gates={gatesView} /></div>}
+
       <BehaviorPanel data={data} readOnly={readOnly} />
 
       <Disclosure
@@ -523,69 +575,8 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             </div>
           ) : null)}
 
-          <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Approval readiness</div>
-            <GatePanel gates={gatesView} />
-          </div>
         </>
       )}
-
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <label className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-            {flags.engagementReply ? 'Reply text' : isThread ? 'Thread parts' : 'Post text'}
-          </label>
-          {preview?.weightedLength != null && (
-            <span className="text-xs font-medium text-slate-400">{preview.weightedLength}/280</span>
-          )}
-        </div>
-        {isThread ? (
-          <div className="space-y-4">
-            {threadParts.map((part, index) => (
-              <div key={index}>
-                <label className="mb-1 block text-xs font-medium text-slate-500">Thread part {index + 1}</label>
-                <textarea
-                  rows={4}
-                  value={part}
-                  readOnly={readOnly}
-                  onChange={(event) => {
-                    markTextDirty()
-                    setThreadParts((parts) => parts.map((p, i) => (i === index ? event.target.value : p)))
-                  }}
-                  className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
-                />
-              </div>
-            ))}
-            {!readOnly && (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length < 6 ? [...parts, ''] : parts) }}
-                  disabled={threadParts.length >= 6}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Add part
-                </button>
-                <button
-                  onClick={() => { markTextDirty(); setThreadParts((parts) => parts.length > 2 ? parts.slice(0, -1) : parts) }}
-                  disabled={threadParts.length <= 2}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                >
-                  Remove last
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <textarea
-            rows={7}
-            value={body}
-            readOnly={readOnly}
-            onChange={(event) => { markTextDirty(); setBody(event.target.value) }}
-            placeholder="Generate a draft or edit the final text here."
-            className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
-          />
-        )}
-      </div>
 
       <Disclosure summary={`Owner facts / experience · ${editorMeta.ownerEvidence?.experienceConfirmed && readOnly ? 'confirmed' : ownerEvidenceConfirmed ? 'confirm on save' : 'not confirmed'}`}>
         {readOnly ? (

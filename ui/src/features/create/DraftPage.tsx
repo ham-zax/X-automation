@@ -33,7 +33,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
   const actionError = (review.isError && review.error.message) || (approve.isError && approve.error.message) || null
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-[1040px] space-y-6">
       <div>
         <a href={isReply ? (queueItem ? `#/conversations/${encodeURIComponent(queueItem.candidateKey)}` : '#/conversations') : '#/create'} className="text-sm font-medium text-slate-500 hover:text-slate-700">
           ← {isReply ? 'Back to conversations' : 'Back to Posts'}
@@ -123,7 +123,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
         </div>
 
         {schedule && flags.approvedMainFeed && (
-          <Disclosure summary="Publishing plan details">
+          <Disclosure summary="Publishing plan details" defaultOpen>
             <div className="text-sm text-slate-700">
               Recommended: {schedule.recommendedAt == null ? 'not ready yet' : formatDateTime(schedule.recommendedAt)}
               {schedule.manualOnly ? ' · repost via browser-agent or manual action' : ''}

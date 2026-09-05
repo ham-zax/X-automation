@@ -80,6 +80,8 @@ function Shell() {
       ? 'learn'
       : routeRoot
   const settingsActive = routeRoot === 'settings' || routeRoot === 'advanced'
+  const sectionLabel = ({ today: 'Overview', discover: 'Discover', conversations: 'Conversations', create: 'Posts', results: 'Results', learn: 'Learn' } as Record<string, string>)[active] || 'Settings'
+  const settingsSection = route.segments[1] || ''
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -88,40 +90,41 @@ function Shell() {
   }, [theme])
 
   return (
-    <div className="app-shell min-h-screen text-slate-900">
-      <header className="app-header sticky top-0 z-40 border-b border-slate-200">
-        <div className="mx-auto max-w-[1480px] px-4 sm:px-6 lg:px-8">
-          <div className="app-topbar">
-            <a href="#/today" className="app-brand" aria-label="X Growth OS home">
-              <span className="app-brand-mark" aria-hidden="true">X</span>
-              <span className="app-brand-copy">
-                <span className="hidden sm:inline">Network </span>Growth OS
-              </span>
-            </a>
-            <div className="app-utilities">
-              <button
-                type="button"
-                className="app-utility-link"
-                onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
-                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              >
-                <span className="theme-dot" aria-hidden="true" />
-                <span className="hidden sm:inline">{theme === 'dark' ? 'Light' : 'Dark'}</span>
-              </button>
-              <a
-                href="#/settings"
-                aria-current={settingsActive ? 'page' : undefined}
-                className="app-utility-link"
-              >
-                Settings
-              </a>
-            </div>
-          </div>
-          <WorkspaceNav active={active} />
+    <div className="app-shell">
+      <a className="skip-link" href="#workspace-main" onClick={(event) => {
+        event.preventDefault()
+        document.getElementById('workspace-main')?.focus()
+      }}>Skip to workspace</a>
+      <aside className="app-sidebar" aria-label="Workspace navigation">
+        <a href="#/today" className="app-brand" aria-label="X Growth OS home">
+          <span className="app-brand-mark" aria-hidden="true">X</span>
+          <span className="app-brand-copy">Growth OS<span className="app-brand-subtitle">Your network, with purpose.</span></span>
+        </a>
+        <p className="sidebar-label">Workspace</p>
+        <WorkspaceNav active={active} />
+        <nav className="sidebar-secondary" aria-label="Operator and settings">
+          <a href="#/settings/growth-operator" className="app-nav-link" aria-current={settingsActive && settingsSection === 'growth-operator' ? 'page' : undefined}>Agent delegation</a>
+          <a href="#/settings/persona" className="app-nav-link" aria-current={settingsActive && settingsSection === 'persona' ? 'page' : undefined}>Persona & voice</a>
+          <a href="#/settings" className="app-nav-link" aria-current={settingsActive && !['growth-operator', 'persona'].includes(settingsSection) ? 'page' : undefined}>Settings</a>
+        </nav>
+        <div className="sidebar-footer"><strong>Agent-operated. Human-directed.</strong>Build relationships. Publish with purpose. Learn from outcomes.</div>
+      </aside>
+      <header className="workspace-topbar">
+        <div className="workspace-location"><span>Workspace</span><span aria-hidden="true">/</span><strong>{sectionLabel}</strong></div>
+        <div className="workspace-utilities">
+          <div className="workspace-account"><strong>Hamza</strong> · @ham_zax</div>
+          <button
+            type="button"
+            className="app-utility-link"
+            onClick={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')}
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+          >
+            <span className="theme-dot" aria-hidden="true" />
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          </button>
         </div>
       </header>
-      <main className="app-main mx-auto max-w-[1480px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+      <main id="workspace-main" tabIndex={-1} className="app-main">
         <RouteContent />
       </main>
     </div>

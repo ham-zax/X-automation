@@ -131,7 +131,7 @@ export function Results() {
       <PageHeader
         eyebrow="Measured outcomes"
         title="Results"
-        note="Recent outcomes with uncertainty kept explicit."
+        note="Are we gaining relevant followers and building conversations that last? Compare observed outcomes, not just how much the agent posted."
         right={(
           <button
             onClick={() => refresh.mutate()}
@@ -149,7 +149,7 @@ export function Results() {
         <span className="max-w-4xl text-sm leading-6">{growthBrief.body}</span>
       </Notice>
 
-      <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Audience"
           value={data.account ? formatNumber(data.account.followers) : 'No snapshot'}
@@ -181,7 +181,7 @@ export function Results() {
       {health.state !== 'healthy' ? (
         <Notice tone={health.state === 'constrained' ? 'danger' : 'warning'} title={health.label}>
           <span>{health.state === 'constrained' ? 'Some actions are currently constrained.' : 'Advisory diagnostics need attention.'} <a href="/legacy?source=health" className="font-semibold underline">Review status →</a></span>
-          <Disclosure summary="Why?" className="compact-disclosure"><span className="text-xs text-slate-600">{health.explanation}</span></Disclosure>
+          <p className="mt-2 text-sm leading-7 text-slate-600">{health.explanation}</p>
         </Notice>
       ) : (
         <Notice tone="success" title="Account healthy">No intervention is currently indicated.</Notice>
@@ -233,7 +233,7 @@ export function Results() {
         )}
       </section>
 
-      <Disclosure summary={`Writing approach outcomes · ${data.writingStrategyOutcomes.observationCount} observations`} className="operator-surface compact-disclosure p-4">
+      <Disclosure summary={`Writing approach outcomes · ${data.writingStrategyOutcomes.observationCount} observations`} defaultOpen className="operator-surface p-5">
         <div className="mb-4">
           <p className="text-sm text-slate-600">
             Observed {data.writingStrategyOutcomes.windowMinutes / 60}h outcomes for published work. These are associations, not proof that a writing approach caused performance.
@@ -293,7 +293,7 @@ export function Results() {
       <div className="text-sm text-slate-500">Compare external patterns, account evidence, and explicit tests in <a href="#/learn" className="font-semibold text-indigo-700 hover:underline">Learn →</a></div>
 
       {data.editorialOutcomes && (
-        <Disclosure summary={`Editorial outcome observations · ${data.editorialOutcomes.observationCount}`} className="operator-surface compact-disclosure p-4">
+        <Disclosure summary={`Editorial outcome observations · ${data.editorialOutcomes.observationCount}`} defaultOpen className="operator-surface p-5">
           <div className="mb-4">
             <p className="text-sm text-slate-600">
               {data.editorialOutcomes.observationCount} real {data.editorialOutcomes.windowMinutes / 60}h publication observations. These cohorts are descriptive associations, not causal proof that a recommendation or format caused the outcome.

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useRelevanceDecision, type StrategicRelevance } from '../../api/client'
-import { Badge, Disclosure, Notice } from '../../components/primitives'
+import { Badge, Notice } from '../../components/primitives'
 
 const STATE_LABELS: Record<StrategicRelevance['state'], string> = {
   core: 'Preferred niche',
@@ -41,19 +41,17 @@ export function GrowthFitPanel({
     <section className="growth-fit-compact">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Growth fit</span>
+          <span className="text-sm font-semibold text-slate-700">Growth fit</span>
           <Badge tone={tone}>{STATE_LABELS[growthFit.state]}</Badge>
           {growthFit.topicScore != null && <span className="text-xs tabular-nums text-slate-500">evidence {growthFit.topicScore}/50</span>}
         </div>
-        <Disclosure summary="Why?" className="compact-disclosure">
-          <div className="max-w-3xl space-y-2 text-sm text-slate-600">
-            <p>{growthFit.explanation}</p>
-            <div className="text-xs text-slate-500">Goal: {OBJECTIVE_LABELS[growthFit.objective] || growthFit.objective}</div>
-            {growthFit.state === 'unknown' && <p className="text-xs text-amber-800">Refresh candidate classification from Growth Focus before approval.</p>}
-            {growthFit.state === 'exploratory' && <p className="text-xs text-cyan-800">Allowed inside the broader configured technical universe without permanently adding a niche.</p>}
-            <a href="#/settings/growth-focus" className="inline-block text-xs font-semibold text-indigo-700 hover:underline">Review Growth Focus →</a>
-          </div>
-        </Disclosure>
+        <a href="#/settings/growth-focus" className="text-sm font-semibold text-indigo-700 hover:underline">Growth Focus →</a>
+      </div>
+      <div className="growth-fit-context space-y-2">
+        <p>{growthFit.explanation}</p>
+        <div>Goal: {OBJECTIVE_LABELS[growthFit.objective] || growthFit.objective}</div>
+        {growthFit.state === 'unknown' && <p className="text-amber-800">Refresh candidate classification from Growth Focus before approval.</p>}
+        {growthFit.state === 'exploratory' && <p>Eligible within the broader technical audience; a permanent niche is not required.</p>}
       </div>
 
       {growthFit.humanOverride && (
