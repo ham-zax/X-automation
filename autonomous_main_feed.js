@@ -34,9 +34,7 @@ import {
   recordPerformanceSnapshot,
 } from './store.js';
 import { selectWritingStrategyAsMissionAgent } from './writing_strategy.js';
-import { getXApiMainFeedCapability, getXApiPipelineCapability } from './x_api_publish.js';
-
-const MISSION_PIPELINES = new Set(['original', 'quote', 'thread']);
+const MISSION_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MISSION_REPAIRABLE_GATE_CODES = new Set(['THREAD_PART_TOO_LONG']);
 
@@ -73,10 +71,7 @@ function approvedSchedulerWork(now) {
     lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   });
-  const accessToken = String(process.env.X_API_ACCESS_TOKEN || '').trim();
-  if (!accessToken) return decisions.find((decision) => decision.eligible) || null;
-  return decisions.find((decision) => decision.eligible
-    && getXApiMainFeedCapability(decision.item, { accessToken }).supported) || null;
+  return decisions.find((decision) => decision.eligible) || null;
 }
 
 function unresolvedPublishingItem() {
@@ -223,11 +218,9 @@ function assignContentExperimentIfEligible(queueItem) {
 }
 
 function selectUsableRecommendation(recommendations = [], grantRevision) {
-  const accessToken = String(process.env.X_API_ACCESS_TOKEN || '').trim();
   const candidates = [...recommendations]
     .filter((item) => item.status === 'suggested' && item.decision === 'PREPARE' && MISSION_PIPELINES.has(item.pipeline))
     .filter((item) => item.potentials?.distributionRoutable !== false)
-    .filter((item) => !accessToken || getXApiPipelineCapability(item.pipeline, { accessToken }).supported)
     .sort((left, right) => Number(left.rank || 0) - Number(right.rank || 0) || Number(left.id) - Number(right.id));
 
   for (const recommendation of candidates) {
@@ -257,11 +250,11 @@ function resumableMissionSelection(grantRevision) {
       && selection.selectedBy === 'mission_agent'
       && Number(selection.grantRevision) === Number(grantRevision)
       && recommendation.decision === 'PREPARE'
-      && MISSION_PIPELINES.has(recommendation.pipeline)
-      && (!String(process.env.X_API_ACCESS_TOKEN || '').trim()
-        || getXApiPipelineCapability(recommendation.pipeline, { accessToken: process.env.X_API_ACCESS_TOKEN }).supported))
+      && MISSION_PIPELINES.has(recommendation.pipeline))
     .map((entry) => ({ ...entry, queueItem: getQueueItem(entry.selection.queueItemId) }))
-    .filter(({ queueItem }) => queueItem?.status === 'drafting')
+    .filter(({ recommendation, queueItem }) => recommendation.pipeline === 'repost'
+      ? queueItem?.status === 'needs_review'
+      : ['drafting', 'needs_review'].includes(queueItem?.status))
     .sort((left, right) => Number(left.selection.selectedAt) - Number(right.selection.selectedAt))[0] || null;
 }
 
@@ -342,60 +335,41 @@ export async function prepareAutonomousMainFeed({
   }
 
   let queueItem = getQueueItem(work.queueItem.id);
-  let draft = getDraftByCandidate(queueItem.candidateKey);
-  if (!draft) throw new Error(`Mission-owned queue item ${queueItem.id} has no draft.`);
+  let draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey);
+  let strategySelection = null;
 
-  requirePreparationAuthority(grantRevision);
-  queueItem = assignContentExperimentIfEligible(queueItem);
+  if (queueItem.pipeline !== 'repost') {
+    if (!draft) throw new Error(`Mission-owned queue item ${queueItem.id} has no draft.`);
 
-  requirePreparationAuthority(grantRevision);
-  let strategySelection = currentMissionStrategy(queueItem, grantRevision);
-  if (!strategySelection) {
-    strategySelection = await selectWritingStrategyAsMissionAgent(queueItem.id, {
-      grantRevision,
-      draftId: draft.id,
-    });
-  }
+    requirePreparationAuthority(grantRevision);
+    queueItem = assignContentExperimentIfEligible(queueItem);
 
-  requirePreparationAuthority(grantRevision);
-  if (!generationMatchesSelection(draft, strategySelection)) {
-    const { generateDraftCandidate } = await import('./web_api.js');
-    const generated = await generateDraftCandidate(draft);
-    draft = generated.saved;
-    queueItem = generated.queueItem;
-  }
+    requirePreparationAuthority(grantRevision);
+    strategySelection = currentMissionStrategy(queueItem, grantRevision);
+    if (!strategySelection) {
+      strategySelection = await selectWritingStrategyAsMissionAgent(queueItem.id, {
+        grantRevision,
+        draftId: draft.id,
+      });
+    }
 
-  requirePreparationAuthority(grantRevision);
-  if (draft?.editor?.decision === 'DO_NOT_POST') {
-    const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
-      actor: 'agent',
-      reason: 'Writer returned DO_NOT_POST during delegated Growth Operator preparation.',
-    });
-    return {
-      action: 'do_not_post',
-      reason: 'writer_do_not_post',
-      queueItemId: ignored.id,
-      candidateKey: ignored.candidateKey,
-      editorialRecommendationId: work.recommendation.id,
-      strategySelectionId: strategySelection.id,
-      editorialRefreshed,
-    };
-  }
+    requirePreparationAuthority(grantRevision);
+    if (!generationMatchesSelection(draft, strategySelection)) {
+      const { generateDraftCandidate } = await import('./web_api.js');
+      const generated = await generateDraftCandidate(draft);
+      draft = generated.saved;
+      queueItem = generated.queueItem;
+    }
 
-  requirePreparationAuthority(grantRevision);
-  const apiAccessToken = String(process.env.X_API_ACCESS_TOKEN || '').trim();
-  if (apiAccessToken) {
-    const publicationItem = getMainFeedScheduleItem(queueItem.candidateKey);
-    const capability = getXApiMainFeedCapability(publicationItem, { accessToken: apiAccessToken });
-    if (!capability.supported) {
+    requirePreparationAuthority(grantRevision);
+    if (draft?.editor?.decision === 'DO_NOT_POST') {
       const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
         actor: 'agent',
-        reason: `Delegated main-feed preparation skipped an API-unsupported draft: ${capability.code} — ${capability.reason}`,
+        reason: 'Writer returned DO_NOT_POST during delegated Growth Operator preparation.',
       });
       return {
-        action: 'skipped',
-        reason: 'api_transport_unsupported',
-        transportCapability: capability,
+        action: 'do_not_post',
+        reason: 'writer_do_not_post',
         queueItemId: ignored.id,
         candidateKey: ignored.candidateKey,
         editorialRecommendationId: work.recommendation.id,
@@ -405,13 +379,19 @@ export async function prepareAutonomousMainFeed({
     }
   }
 
+  requirePreparationAuthority(grantRevision);
   if (queueItem.status !== 'needs_review') {
     const reviewed = requestQueueReview(queueItem.candidateKey);
-    queueItem = reviewed.queueItem;
-    draft = reviewed.draft;
+    if (queueItem.pipeline === 'repost') {
+      queueItem = reviewed.queueItem || reviewed;
+      draft = null;
+    } else {
+      queueItem = reviewed.queueItem;
+      draft = reviewed.draft;
+    }
   }
 
-  if (missionRepairableDraft(draft)) {
+  if (draft && missionRepairableDraft(draft)) {
     requirePreparationAuthority(grantRevision);
     const { generateDraftCandidate } = await import('./web_api.js');
     const repaired = await generateDraftCandidate(draft);
@@ -436,7 +416,7 @@ export async function prepareAutonomousMainFeed({
       queueItemId: ignored.id,
       candidateKey: ignored.candidateKey,
       editorialRecommendationId: work.recommendation.id,
-      strategySelectionId: strategySelection.id,
+      strategySelectionId: strategySelection?.id ?? null,
       editorialRefreshed,
     };
   }
@@ -452,7 +432,7 @@ export async function prepareAutonomousMainFeed({
       queueItemId: approved.queueItem.id,
       candidateKey: approved.queueItem.candidateKey,
       editorialRecommendationId: work.recommendation.id,
-      strategySelectionId: strategySelection.id,
+      strategySelectionId: strategySelection?.id ?? null,
       humanApprovedAt: approved.queueItem.humanApprovedAt,
       editorialRefreshed,
     };
@@ -468,7 +448,7 @@ export async function prepareAutonomousMainFeed({
       queueItemId: ignored.id,
       candidateKey: ignored.candidateKey,
       editorialRecommendationId: work.recommendation.id,
-      strategySelectionId: strategySelection.id,
+      strategySelectionId: strategySelection?.id ?? null,
       editorialRefreshed,
     };
   }

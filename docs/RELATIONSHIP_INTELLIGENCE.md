@@ -661,9 +661,10 @@ Phase 1C exposes these current engagement commands:
 engage-next
 engage-draft
 engage-resolve
+browser-reply-claim
 ```
 
-`engage-next` can refresh bounded target/response reads or return persisted actionable items, grouped into Active Conversations and New Opportunities. `engage-draft` creates/updates the existing Phase-2 reply draft and may request review but cannot approve or send. `engage-resolve` supports Ignore/Expire and one explicit Send action only for an already human-approved exact reply.
+`engage-next` can refresh bounded target/response reads or return persisted actionable items, grouped into Active Conversations and New Opportunities. `engage-draft` creates/updates the existing Phase-2 reply draft and may request review but cannot approve or send. `engage-resolve` supports Ignore/Expire and the ordinary one-shot Send action for an already human-approved exact reply. Separately, when the autonomous-reply grant is Live and the daemon has no reply transport, a deterministic eligible decision remains `eligible_live` and unclaimed; after live thread inspection the persistent Growth Operator uses `browser-reply-claim` to atomically consume that exact decision/budget immediately before the browser action.
 
 Example:
 
@@ -676,7 +677,7 @@ Example:
 }
 ```
 
-Each result packet includes the queue item/EngagePriority breakdown, target relationship profile, exact source candidate, draft when present, contribution/expiry state, and prior stage. Human approval remains a dashboard-only transition; editing/rerouting invalidates approval before any later send.
+Each result packet includes the queue item/EngagePriority breakdown, target relationship profile, exact source candidate, draft when present, contribution/expiry state, and prior stage. Human approval remains a dashboard-only transition for the ordinary send lane; editing/rerouting invalidates that approval before any later send. Autonomous reply authority is separate and never manufactures `humanApprovedAt`.
 
 ---
 
@@ -708,9 +709,9 @@ The **Engage Next** view separates **Active Conversations** from **New Opportuni
 - drafted reply and Phase-2 hard-gate state when available;
 - expiry and active-conversation override state;
 - soft saturation/repetition warning context;
-- one-item actions: Draft/Edit reply, Quote instead for initial opportunities, Ignore, Expire, and explicit Approve & Send / Send approved reply.
+- one-item actions: Draft/Edit reply, Quote instead for initial opportunities, Ignore, Expire, and explicit exact-reply approval. The web UI stages approved text; browser execution belongs to the persistent Growth Operator.
 
-There is no batch-send control in the human workflow. Human approval recomputes the latest Phase-2 reply gates and snapshots the exact body; the human send path refuses edited/unapproved text. The separate autonomous operator is controlled from Settings, not from a batch-send action in this view. Its dry-run/live decisions are shown in Conversations, and live sends require the persisted grant plus autonomous eligibility/claim provenance rather than human approval.
+There is no batch-send control in the human workflow. Human approval recomputes the latest Phase-2 reply gates and snapshots the exact body; it does not itself mutate X. The separate autonomous operator is controlled from Settings, not from a batch-send action in this view. Its dry-run/live decisions are shown in Conversations. Immediately before any browser-agent Reply, `browser-reply-claim` must atomically claim either the exact approved human reply or the exact `eligible_live` autonomous decision, the current target thread must be re-observed, and `record-action` requires verified parentTweetId plus outputText before reconciliation can complete.
 
 ---
 
@@ -739,4 +740,4 @@ Phase 1B Relationship Intelligence is implemented when the system can:
 6. refresh strategic relationship state from raw audience observations without erasing omitted profiles or prior history;
 7. inspect relationship profiles/events through the dashboard and bridge without an engagement-send or approval bypass.
 
-Phase 1C is also implemented: the system surfaces bounded recent target posts, current Discover X observations, and observed responses; distinguishes active follow-up from cold insertion; ranks Engage Next opportunities; and requires a legitimate contextual purpose rather than mandatory technical additivity. The human path still drafts/reviews through Phase-2 gates and sends only exact human-approved text. A separate persisted autonomous grant is off by default; when started in Dry run or Live mode, the existing daemon continuously refreshes and serially evaluates newly observed opportunities, preserving durable target decisions across restart. Dry-run records exact proposed replies without transport. Live autonomous send requires deterministic autonomous eligibility, remaining operator budget, exact persisted text/provenance, an atomic claim, and the configured publication transport; autonomous decisions never set `humanApprovedAt`. Successful human/autonomous sends share candidate-action and relationship-event recording with distinct authority metadata. Later phases still own Account Health, richer visibility/saturation diagnostics, measurement/experiments, and learned strategy.
+Phase 1C is also implemented: the system surfaces bounded recent target posts, current Discover X observations, and observed responses; distinguishes active follow-up from cold insertion; ranks Engage Next opportunities; and requires a legitimate contextual purpose rather than mandatory technical additivity. The human path still drafts/reviews through Phase-2 gates and sends only exact human-approved text. A separate persisted autonomous grant can run in Dry run or Live mode; the daemon continuously refreshes and serially evaluates newly observed opportunities, preserving durable target decisions across restart. Dry-run records exact proposed replies without mutation. In Live mode, a daemon-owned transport may claim/send directly when one exists; otherwise the exact decision stays unclaimed `eligible_live` for the persistent Growth Operator. Browser execution uses `browser-reply-claim`, exact target/text provenance, current Account Health, one-shot send semantics, parent-structure verification, and `record-action` reconciliation; autonomous decisions never set `humanApprovedAt`. Successful human/autonomous sends share candidate-action and relationship-event recording with distinct authority metadata. Later phases still own Account Health, richer visibility/saturation diagnostics, measurement/experiments, and learned strategy.

@@ -13,6 +13,7 @@ import {
   Badge,
   Disclosure,
   GatePanel,
+  Notice,
   Pending,
   QualityBreakdown,
   TechnicalDetails,
@@ -54,35 +55,35 @@ function GrowthPackagingPanel({ review }: { review: GrowthPackagingReview | null
     ['Strategy state', review.items.strategyState],
   ] as const
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Growth Packaging</div>
-          <div className="mt-1 text-sm text-slate-700">Inspect reader payoff and distribution packaging separately from writing correctness.</div>
-          <div className="mt-1 text-xs text-slate-500">This is not a prediction of engagement, virality, or follower growth.</div>
-        </div>
-        <Badge tone={review.ready ? 'success' : 'warning'}>{review.ready ? 'Ready for approval review' : 'Needs packaging work'}</Badge>
+    <Disclosure
+      summary={`Growth packaging · ${review.ready ? 'ready' : `${review.blockers.length} blocker${review.blockers.length === 1 ? '' : 's'}`}`}
+      className="operator-surface compact-disclosure p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-slate-600">Reader payoff and distribution packaging, separate from writing correctness.</div>
+        <Badge tone={review.ready ? 'success' : 'warning'}>{review.ready ? 'Ready' : 'Needs work'}</Badge>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
         {rows.map(([label, item]) => (
-          <div key={label} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+          <div key={label} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
-              <strong className="text-sm text-slate-800">{label}</strong>
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.status.replaceAll('_', ' ')}</span>
+              <strong className="text-xs text-slate-800">{label}</strong>
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{item.status.replaceAll('_', ' ')}</span>
             </div>
             <div className="mt-1 text-xs leading-5 text-slate-600">{item.detail}</div>
           </div>
         ))}
       </div>
       {review.blockers.length > 0 && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          <strong>Approval blockers:</strong>
-          <ul className="mt-1 list-disc space-y-1 pl-5">
-            {review.blockers.map((blocker) => <li key={blocker.code}>{blocker.message}</li>)}
-          </ul>
+        <div className="mt-3">
+          <Notice tone="danger" title="Approval blockers">
+            <ul className="list-disc space-y-1 pl-5">
+              {review.blockers.map((blocker) => <li key={blocker.code}>{blocker.message}</li>)}
+            </ul>
+          </Notice>
         </div>
       )}
-    </div>
+    </Disclosure>
   )
 }
 
@@ -460,14 +461,12 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
 
       <BehaviorPanel data={data} readOnly={readOnly} />
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Additional context for AI</div>
-            <p className="mt-1 max-w-3xl text-sm text-slate-600">
-              Paste thread details, documentation excerpts, corrections, or facts you already know. The Writer uses this as human-supplied context; it does not browse or independently verify it.
-            </p>
-          </div>
+      <Disclosure
+        summary={`AI context · ${operatorContext.trim() ? 'added' : 'optional'}`}
+        className="operator-surface compact-disclosure p-4"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-3xl text-sm text-slate-600">Optional thread details, documentation, corrections, or facts for Writer. Human-supplied; not independently verified.</p>
           <span className="text-xs text-slate-400">{operatorContext.length}/12,000</span>
         </div>
         <textarea
@@ -479,13 +478,11 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
             setOperatorContext(event.target.value)
             setContextDirty(true)
           }}
-          placeholder="Optional: add missing context from the thread, docs, release notes, your own knowledge, or a correction before generating."
-          className={`mt-3 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
+          placeholder="Add missing context before generating…"
+          className={`mt-3 w-full px-3 py-2 text-sm ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
         />
-        {!readOnly && contextDirty && (
-          <div className="mt-2 text-xs text-amber-700">This context will be saved before the next Generate/Regenerate action.</div>
-        )}
-      </section>
+        {!readOnly && contextDirty && <div className="mt-2 text-xs text-amber-700">Saved automatically before the next Generate/Regenerate action.</div>}
+      </Disclosure>
 
       <WritingApproachPanel
         data={data}
@@ -633,25 +630,19 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         )}
       </Disclosure>
 
-      <div>
-        <div className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Writing quality / structure</div>
+      <Disclosure
+        summary={`Writing quality · ${score}/50`}
+        className="operator-surface compact-disclosure p-4"
+      >
         {readOnly ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Recorded writing quality at completion: <strong>{draft.qualityScore}/50</strong>. Component scores are not shown as historical facts because they are recalculated by the current scorer; this score was never a growth or virality prediction.
+          <div className="text-sm text-slate-600">
+            Recorded at completion: <strong>{draft.qualityScore}/50</strong>. This was never a growth or virality prediction.
           </div>
         ) : hasDraftContent
           ? <QualityBreakdown breakdown={breakdown} />
-          : (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Quality feedback will appear after AI writes a draft or you start typing.
-            </div>
-          )}
-        {!readOnly && (
-          <div className="mt-2 text-xs text-slate-500">
-            The five writing dimensions total 40 raw points and are proportionally normalized to the 50-point writing-quality scale. This is not predicted engagement, virality, or follower growth; Growth Packaging and Growth fit are evaluated separately.
-          </div>
-        )}
-      </div>
+          : <div className="text-sm text-slate-600">Quality feedback appears after AI writes a draft or you start typing.</div>}
+        {!readOnly && <div className="mt-2 text-xs text-slate-500">Writing dimensions are normalized to 50. Growth Packaging and Growth fit are separate checks.</div>}
+      </Disclosure>
 
       {!readOnly && <GrowthPackagingPanel review={growthPackaging} />}
 
@@ -683,7 +674,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           </div>
           <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
             <div className="text-sm font-semibold text-slate-800">Attached image</div>
-            <div className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP, or GIF up to 5 MB. The same authenticated X transport uploads it at publication time and applies the accessibility description above as alt text.</div>
+            <div className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP, or GIF up to 5 MB. The attachment stays local and previewable here. When browser publication is atomically claimed, Growth OS temporarily registers only this file in browser-fast’s approved-artifact allowlist; verified reconciliation removes that entry. The background X API path still rejects local media.</div>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"

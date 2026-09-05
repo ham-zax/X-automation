@@ -13,7 +13,8 @@ import {
   type EditorialSourceFreshness,
   type TodayAction,
 } from '../../api/client'
-import { Badge, Disclosure, Loading, Error, Empty, Pending, StatCard, formatDateTime } from '../../components/primitives'
+import { Badge, Disclosure, Loading, Error, Empty, Notice, Pending, formatDateTime } from '../../components/primitives'
+import { MetricCard, PageHeader } from '../../components/workspace'
 import { navigate } from '../../router'
 
 const OBJECTIVES: { value: EditorialObjective; label: string }[] = [
@@ -54,7 +55,7 @@ function executionSummary(execution: Record<string, unknown>) {
 
 function SourceFreshness({ source }: { source: EditorialSourceFreshness }) {
   return (
-    <div className={`rounded-md border px-3 py-2 text-xs ${source.error ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>
+    <div className={`border-l-2 px-3 py-1.5 text-xs ${source.error ? 'border-amber-400 text-amber-900' : 'border-slate-300 text-slate-600'}`}>
       <div className="font-semibold">{SOURCE_LABELS[source.kind] || source.kind}</div>
       <div className="mt-1">{source.fetchedAt ? `Snapshot ${formatDateTime(source.fetchedAt)}` : 'No snapshot yet'} · {source.candidateCount} items</div>
       {source.error && <div className="mt-1">Last refresh error: {source.error}</div>}
@@ -120,57 +121,88 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
     },
   })
 
+  const decisionTone = recommendation.decision === 'PREPARE'
+    ? 'success'
+    : recommendation.decision === 'RESEARCH_MORE'
+      ? 'warning'
+      : 'neutral'
+
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-5">
+    <article className="editorial-recommendation" data-recommendation={recommendation.decision.toLowerCase()}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={recommendation.decision === 'PREPARE' ? 'success' : recommendation.decision === 'RESEARCH_MORE' ? 'warning' : 'neutral'}>
+            <Badge tone={decisionTone}>
               {recommendation.decision === 'PREPARE' ? (PIPELINE_LABELS[recommendation.pipeline || ''] || recommendation.pipeline) : recommendation.decision.replace('_', ' ')}
             </Badge>
-            <span className="text-xs text-slate-500">#{recommendation.rank}</span>
-            {recommendation.selection && <Badge tone="info">Selected · {PIPELINE_LABELS[recommendation.selection.selectedPipeline] || recommendation.selection.selectedPipeline}</Badge>}
+            <span className="text-xs tabular-nums text-slate-400">#{recommendation.rank}</span>
+            {recommendation.selection && <Badge tone="info">Selected</Badge>}
             {recommendation.status === 'dismissed' && <Badge>Dismissed</Badge>}
           </div>
-          <h4 className="mt-2 text-lg font-semibold text-slate-900">{recommendation.title}</h4>
-          <p className="mt-1 text-sm font-medium text-slate-800">{recommendation.thesis}</p>
-          {recommendation.whyNow && <p className="mt-2 text-sm text-slate-600"><strong>Why now:</strong> {recommendation.whyNow}</p>}
-          {recommendation.whyThisFormat && <p className="mt-1 text-sm text-slate-600"><strong>Why this format:</strong> {recommendation.whyThisFormat}</p>}
+          <h4 className="mt-2 text-base font-semibold text-slate-900 sm:text-lg">{recommendation.title}</h4>
+          <p className="mt-1 line-clamp-2 max-w-5xl text-sm leading-6 text-slate-600">{recommendation.thesis}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Fit</div>
+          <div className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{Math.round(Number(potentials.objectiveFit || 0))}</div>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
-        <div><span className="text-slate-500">Reach</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.reachPotential || 0))}</div></div>
-        <div><span className="text-slate-500">Follow</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.followPotential || 0))}</div></div>
-        <div><span className="text-slate-500">Conversation</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.conversationPotential || 0))}</div></div>
-        <div><span className="text-slate-500">Relationship</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.relationshipPotential || 0))}</div></div>
-        <div><span className="text-slate-500">Authority</span><div className="font-semibold text-slate-900">{Math.round(Number(recommendation.authority.value || 0))}</div></div>
-        <div><span className="text-slate-500">Objective fit</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.objectiveFit || 0))}</div></div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {active && cta && (
+          <button onClick={choose} disabled={select.isPending} className="action-button" data-variant="primary">
+            {select.isPending ? 'Selecting…' : cta}
+          </button>
+        )}
+        {active && (
+          <button onClick={() => dismiss.mutate(recommendation.id)} disabled={dismiss.isPending} className="action-button" data-variant="ghost">
+            {dismiss.isPending ? 'Dismissing…' : 'Dismiss'}
+          </button>
+        )}
+        {!active && recommendation.selection && recommendation.pipeline === 'reply' && recommendation.selection.candidateKey && (
+          <a href={`#/conversations/${encodeURIComponent(recommendation.selection.candidateKey)}`} className="text-sm font-semibold text-indigo-700 hover:underline">Open conversation →</a>
+        )}
+        {!active && recommendation.selection?.draftId && recommendation.pipeline !== 'reply' && <a href={`#/draft/${recommendation.selection.draftId}`} className="text-sm font-semibold text-indigo-700 hover:underline">Continue draft →</a>}
+        {!active && recommendation.selection && !recommendation.selection.draftId && recommendation.pipeline !== 'reply' && <a href="#/create" className="text-sm font-semibold text-indigo-700 hover:underline">Open workflow →</a>}
       </div>
 
-      <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
-        <div className="rounded-md bg-slate-50 px-3 py-2"><strong>Desired reader outcome:</strong> {recommendation.desiredReaderOutcome || 'Not specified'}</div>
-        <div className="rounded-md bg-slate-50 px-3 py-2">
-          <strong>Profile proof:</strong> {recommendation.profileProof.coverage || 'none'}
-          {' · '}<strong>Evidence:</strong> {evidenceStatuses || 'none supplied'}
-        </div>
-      </div>
-
-      {recommendation.decision === 'RESEARCH_MORE' && (
-        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          <strong>Manual/external research suggested.</strong>
-          {recommendation.researchQuestions.length > 0 && (
-            <ul className="mt-2 list-disc pl-5">{recommendation.researchQuestions.map((question) => <li key={question}>{question}</li>)}</ul>
+      <Disclosure summary="Why & evidence" className="compact-disclosure">
+        <div className="space-y-4 text-sm text-slate-700">
+          {(recommendation.whyNow || recommendation.whyThisFormat) && (
+            <div className="grid gap-2 md:grid-cols-2">
+              {recommendation.whyNow && <div><strong>Why now</strong><p className="mt-1 text-slate-600">{recommendation.whyNow}</p></div>}
+              {recommendation.whyThisFormat && <div><strong>Why this format</strong><p className="mt-1 text-slate-600">{recommendation.whyThisFormat}</p></div>}
+            </div>
           )}
-        </div>
-      )}
 
-      <Disclosure summary="Why this recommendation?">
-        <div className="space-y-3 text-sm text-slate-700">
+          <div className="grid grid-cols-3 gap-x-5 gap-y-2 border-y border-slate-100 py-3 text-xs sm:grid-cols-6">
+            <div><span className="text-slate-500">Reach</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.reachPotential || 0))}</div></div>
+            <div><span className="text-slate-500">Follow</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.followPotential || 0))}</div></div>
+            <div><span className="text-slate-500">Conversation</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.conversationPotential || 0))}</div></div>
+            <div><span className="text-slate-500">Relationship</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.relationshipPotential || 0))}</div></div>
+            <div><span className="text-slate-500">Authority</span><div className="font-semibold text-slate-900">{Math.round(Number(recommendation.authority.value || 0))}</div></div>
+            <div><span className="text-slate-500">Objective fit</span><div className="font-semibold text-slate-900">{Math.round(Number(potentials.objectiveFit || 0))}</div></div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-[1.35fr_1fr]">
+            <div><strong>Reader outcome</strong><p className="mt-1 text-slate-600">{recommendation.desiredReaderOutcome || 'Not specified'}</p></div>
+            <div className="text-xs leading-5 text-slate-500">
+              <strong>Profile proof:</strong> {recommendation.profileProof.coverage || 'none'}
+              {' · '}<strong>Evidence:</strong> {evidenceStatuses || 'none supplied'}
+            </div>
+          </div>
+
+          {recommendation.decision === 'RESEARCH_MORE' && recommendation.researchQuestions.length > 0 && (
+            <div>
+              <strong>Research questions</strong>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-600">{recommendation.researchQuestions.map((question) => <li key={question}>{question}</li>)}</ul>
+            </div>
+          )}
+
           <div>
             <strong>Sources</strong>
             <div className="mt-1 space-y-1">{recommendation.sources.length ? recommendation.sources.map((source) => (
-              <div key={source.key}>{source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">{source.title || source.key} ↗</a> : source.title || source.key}</div>
+              <div key={source.key}>{source.url ? <a href={source.url} target="_blank" rel="noopener noreferrer" className="text-indigo-700 hover:underline">{source.title || source.key} ↗</a> : source.title || source.key}</div>
             )) : <span className="text-slate-500">No source rows available.</span>}</div>
           </div>
           <div>
@@ -181,7 +213,7 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
                 <div>{item.claim || item.summary}</div>
                 <div className="text-xs text-slate-500">{item.sourceFamily}{item.resolvedUrl ? <> · <a href={item.resolvedUrl} target="_blank" rel="noopener noreferrer" className="underline">source ↗</a></> : null}</div>
               </div>
-            )) : <span className="text-slate-500">No research evidence supplied to this recommendation.</span>}</div>
+            )) : <span className="text-slate-500">No research evidence supplied.</span>}</div>
           </div>
           {recommendation.algorithmEvidence.length > 0 && <div><strong>Algorithm mechanisms:</strong> {recommendation.algorithmEvidence.map(readable).join(' · ')}</div>}
           {Object.keys(recommendation.learnedContext).length > 0 && <div><strong>Measured/learned context:</strong> {readable(recommendation.learnedContext)}</div>}
@@ -191,25 +223,12 @@ function RecommendationCard({ recommendation }: { recommendation: EditorialRecom
         </div>
       </Disclosure>
 
-      {recommendation.decision === 'RESEARCH_MORE' && <ResearchSourceForm recommendationId={recommendation.id} />}
+      {recommendation.decision === 'RESEARCH_MORE' && (
+        <Disclosure summary="Add evidence" className="compact-disclosure">
+          <ResearchSourceForm recommendationId={recommendation.id} />
+        </Disclosure>
+      )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        {active && cta && (
-          <button onClick={choose} disabled={select.isPending} className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50">
-            {select.isPending ? 'Selecting…' : cta}
-          </button>
-        )}
-        {active && (
-          <button onClick={() => dismiss.mutate(recommendation.id)} disabled={dismiss.isPending} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-            {dismiss.isPending ? 'Dismissing…' : 'Dismiss'}
-          </button>
-        )}
-        {!active && recommendation.selection && recommendation.pipeline === 'reply' && recommendation.selection.candidateKey && (
-          <a href={`#/conversations/${encodeURIComponent(recommendation.selection.candidateKey)}`} className="text-sm font-medium text-sky-700 hover:underline">Open selected conversation →</a>
-        )}
-        {!active && recommendation.selection?.draftId && recommendation.pipeline !== 'reply' && <a href={`#/draft/${recommendation.selection.draftId}`} className="text-sm font-medium text-sky-700 hover:underline">Continue selected draft →</a>}
-        {!active && recommendation.selection && !recommendation.selection.draftId && recommendation.pipeline !== 'reply' && <a href="#/create" className="text-sm font-medium text-sky-700 hover:underline">Open selected workflow →</a>}
-      </div>
       {(select.isError || dismiss.isError) && (
         <div className="mt-2 text-sm text-red-700">
           {select.error?.message || dismiss.error?.message}
@@ -227,12 +246,12 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
   const data = plan.data
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-slate-50 p-4 sm:p-5">
+    <section className="operator-surface p-4 sm:p-5" data-tone="ai">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">AI Editorial Plan</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-violet-700">AI Editorial Plan</div>
           <h3 className="mt-1 text-lg font-semibold text-slate-900">What is worth doing now?</h3>
-          <p className="mt-1 text-sm text-slate-600">Advisory recommendations from current source snapshots, research evidence, account context, and measured history. Selection is not approval or publication.</p>
+          <p className="mt-1 text-sm text-slate-600">Advisory only. Selection never approves or publishes.</p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs font-medium text-slate-600">
@@ -249,7 +268,7 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
               {OBJECTIVES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </label>
-          <button onClick={() => refresh.mutate({ objective, refreshSources: true })} disabled={refresh.isPending} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          <button onClick={() => refresh.mutate({ objective, refreshSources: true })} disabled={refresh.isPending} className="action-button" data-variant="secondary">
             {refresh.isPending ? 'Refreshing…' : 'Refresh sources & recommendations'}
           </button>
         </div>
@@ -257,24 +276,24 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
 
       {refresh.isPending && <div className="mt-3"><Pending label="Refreshing source snapshots and editorial recommendations…" /></div>}
       {saveObjective.isPending && <div className="mt-2 text-xs text-slate-500">Saving this as your default Growth Focus goal…</div>}
-      {refresh.isError && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{refresh.error.message}</div>}
-      {saveObjective.isError && <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{saveObjective.error.message}</div>}
+      {refresh.isError && <div className="mt-3"><Notice tone="danger" title="Refresh failed">{refresh.error.message}</Notice></div>}
+      {saveObjective.isError && <div className="mt-3"><Notice tone="danger" title="Could not save goal">{saveObjective.error.message}</Notice></div>}
       {plan.isError && <div className="mt-3"><Error message={plan.error.message} onRetry={() => void plan.refetch()} /></div>}
       {plan.isLoading && <div className="mt-3"><Loading message="Loading the latest editorial plan…" /></div>}
 
       {data && (
         <>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {data.sourceFreshness.map((source) => <SourceFreshness key={source.kind} source={source} />)}
-          </div>
-          {!data.hasPlan ? (
-            <div className="mt-4 rounded-md border border-slate-200 bg-white p-4 text-sm text-slate-700">No completed plan exists for this goal yet. Use the explicit refresh action when you want to run the editorial pass.</div>
-          ) : data.noStrongAction ? (
-            <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <strong>No strong main-feed post right now.</strong>{data.noStrongActionReason ? ` ${data.noStrongActionReason}` : ' The current evidence does not support forcing a post.'}
+          <Disclosure summary={`Source snapshots · ${data.sourceFreshness.length}`} className="compact-disclosure">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {data.sourceFreshness.map((source) => <SourceFreshness key={source.kind} source={source} />)}
             </div>
+          </Disclosure>
+          {!data.hasPlan ? (
+            <div className="mt-4"><Notice tone="neutral" title="No completed plan yet">Use the explicit refresh action when you want to run the editorial pass.</Notice></div>
+          ) : data.noStrongAction ? (
+            <div className="mt-4"><Notice tone="success" title="No strong main-feed post right now">{data.noStrongActionReason || 'The current evidence does not support forcing a post.'}</Notice></div>
           ) : (
-            <div className="mt-4 space-y-4">{data.recommendations.map((recommendation) => <RecommendationCard key={recommendation.id} recommendation={recommendation} />)}</div>
+            <div className="mt-4 divide-y divide-slate-200">{data.recommendations.map((recommendation) => <RecommendationCard key={recommendation.id} recommendation={recommendation} />)}</div>
           )}
         </>
       )}
@@ -283,26 +302,21 @@ function EditorialPlan({ objective, onObjectiveChange }: { objective: EditorialO
 }
 
 function ActionCard({ action }: { action: TodayAction }) {
-  const toneClasses = {
-    primary: 'bg-white border-slate-200 hover:border-slate-400',
-    success: 'bg-emerald-50 border-emerald-200 hover:border-emerald-400',
-    warning: 'bg-amber-50 border-amber-200 hover:border-amber-400',
-    danger: 'bg-red-50 border-red-200 hover:border-red-400',
-  }
+  const tone = action.tone === 'primary' ? 'primary' : action.tone
 
   return (
     <a
       href={action.href}
-      className={`block rounded-lg border p-6 transition-all ${toneClasses[action.tone] || toneClasses.primary}`}
+      className="operator-surface block p-4 transition-transform hover:-translate-y-px sm:p-5"
+      data-tone={tone}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{action.eyebrow}</p>
           <h3 className="mt-2 text-lg font-semibold text-slate-900">{action.title}</h3>
-          <p className="mt-2 text-sm text-slate-700">{action.body}</p>
-          {action.note && <p className="mt-3 text-xs text-slate-500">{action.note}</p>}
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-600">{action.body}</p>
         </div>
-        <span className="shrink-0 rounded-md bg-white px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm border border-slate-200">
+        <span className="shrink-0 text-sm font-semibold text-indigo-700">
           {action.action}
         </span>
       </div>
@@ -332,75 +346,78 @@ export function Today() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Today</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            {data.taskCount === 0
-              ? 'You are caught up. Nothing requires a decision right now.'
-              : data.taskCount === 1
-                ? '1 thing worth looking at'
-                : `${data.taskCount} things worth looking at`}
-          </p>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Operator desk"
+        title="Today"
+        note={data.taskCount === 0
+          ? 'You are caught up. Nothing requires a decision right now.'
+          : data.taskCount === 1
+            ? '1 decision is worth your attention.'
+            : `${data.taskCount} decisions are worth your attention.`}
+        right={(
+          <a
+            href="#/discover"
+            className="action-button" data-variant="secondary"
+          >
+            Find new signals
+          </a>
+        )}
+      />
+
+      <section aria-labelledby="today-attention">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Now</div>
+            <h3 id="today-attention" className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Needs your attention</h3>
+          </div>
+          <span className="text-sm tabular-nums text-slate-500">{data.actions.length}</span>
         </div>
-        <a
-          href="#/discover"
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Find new signals
-        </a>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Active conversations" value={data.stats.activeConversations} />
-        <StatCard label="Posts awaiting review" value={data.stats.waitingForReview} />
-        <StatCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} />
-        <StatCard
-          label="New relevant followers · 24h"
-          value={data.stats.newRelevantFollowers24h}
-          note={`of ${data.stats.newlyObservedFollowers24h} newly observed`}
-        />
-      </div>
-
-      <EditorialPlan objective={objective} onObjectiveChange={setObjective} />
-
-      <div>
-        <h3 className="mb-3 text-lg font-semibold text-slate-900">Needs your attention</h3>
         {data.actions.length > 0 ? (
-          <div className="space-y-4">
+          <div className="grid gap-3 lg:grid-cols-2">
             {data.actions.map((action, index) => (
               <ActionCard key={index} action={action} />
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-            No immediate decisions are waiting. Discover a new signal or check recent results when you are ready.
-          </div>
+          <Notice tone="success" title="Caught up">No immediate decisions are waiting. Discover a new signal or check recent results when you are ready.</Notice>
         )}
-      </div>
+      </section>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Account status</div>
-            <div className="font-semibold text-slate-900">{data.accountHealth.label}</div>
-          </div>
-          <a href="#/results" className="text-sm font-medium text-sky-700 hover:underline">View performance</a>
+      <section aria-labelledby="today-pulse">
+        <div className="mb-3">
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Current state</div>
+          <h3 id="today-pulse" className="mt-1 text-lg font-semibold text-slate-900">Growth pulse</h3>
         </div>
-        {data.nextScheduled && (
-          <div className="mt-4 border-t border-slate-100 pt-4">
-            <p className="text-sm text-slate-600">
-              <span className="font-medium">Next post:</span> {formatDateTime(data.nextScheduled.recommendedAt)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {data.automation
-                ? 'Main-feed automation is enabled.'
-                : 'Main-feed automation is off. Nothing is auto-published.'}
-            </p>
+        <div className="grid grid-cols-2 gap-x-5 gap-y-4 lg:grid-cols-4">
+          <MetricCard label="Active conversations" value={data.stats.activeConversations} tone="primary" />
+          <MetricCard label="Posts awaiting review" value={data.stats.waitingForReview} tone="warning" />
+          <MetricCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} tone="info" />
+          <MetricCard
+            label="Relevant followers · 24h"
+            value={data.stats.newRelevantFollowers24h}
+            note={`of ${data.stats.newlyObservedFollowers24h} newly observed`}
+            tone="success"
+          />
+        </div>
+      </section>
+
+      <EditorialPlan objective={objective} onObjectiveChange={setObjective} />
+
+      <section className="border-t border-slate-200 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Account status</div>
+            <div className="mt-1 text-base font-semibold text-slate-900">{data.accountHealth.label}</div>
+            {data.nextScheduled && (
+              <div className="mt-1 text-sm text-slate-600">
+                Next post {formatDateTime(data.nextScheduled.recommendedAt)} · {data.automation ? 'automation enabled' : 'manual publishing'}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+          <a href="#/results" className="text-sm font-semibold text-indigo-700 hover:underline">View performance →</a>
+        </div>
+      </section>
     </div>
   )
 }

@@ -17,6 +17,7 @@ import { GrowthOperatorSettings } from './features/settings/GrowthOperatorSettin
 import { NicheSettings } from './features/settings/NicheSettings'
 import { PersonaSettings } from './features/settings/PersonaSettings'
 import { Settings } from './features/settings/Settings'
+import { WorkspaceNav } from './components/workspace'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -26,15 +27,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-const NAV_ITEMS = [
-  { id: 'today', label: 'Today', href: '#/today' },
-  { id: 'discover', label: 'Discover', href: '#/discover' },
-  { id: 'conversations', label: 'Conversations', href: '#/conversations' },
-  { id: 'create', label: 'Posts', href: '#/create' },
-  { id: 'results', label: 'Results', href: '#/results' },
-  { id: 'learn', label: 'Learn', href: '#/learn' },
-]
 
 type Theme = 'light' | 'dark'
 
@@ -98,13 +90,15 @@ function Shell() {
   return (
     <div className="app-shell min-h-screen text-slate-900">
       <header className="app-header sticky top-0 z-40 border-b border-slate-200">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex min-h-16 items-center justify-between gap-3 py-3">
-            <a href="#/today" className="app-brand text-lg font-semibold tracking-tight sm:text-xl">
+        <div className="mx-auto max-w-[1480px] px-4 sm:px-6 lg:px-8">
+          <div className="app-topbar">
+            <a href="#/today" className="app-brand" aria-label="X Growth OS home">
               <span className="app-brand-mark" aria-hidden="true">X</span>
-              <span><span className="hidden sm:inline">Network </span>Growth OS</span>
+              <span className="app-brand-copy">
+                <span className="hidden sm:inline">Network </span>Growth OS
+              </span>
             </a>
-            <div className="flex items-center gap-2">
+            <div className="app-utilities">
               <button
                 type="button"
                 className="app-utility-link"
@@ -112,7 +106,7 @@ function Shell() {
                 aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
                 title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
               >
-                <span aria-hidden="true">{theme === 'dark' ? '☀' : '◐'}</span>
+                <span className="theme-dot" aria-hidden="true" />
                 <span className="hidden sm:inline">{theme === 'dark' ? 'Light' : 'Dark'}</span>
               </button>
               <a
@@ -124,21 +118,10 @@ function Shell() {
               </a>
             </div>
           </div>
-          <nav className="app-primary-nav flex gap-1.5 overflow-x-auto pb-3" aria-label="Primary">
-            {NAV_ITEMS.map((item) => (
-              <a
-                key={item.id}
-                href={item.href}
-                aria-current={active === item.id ? 'page' : undefined}
-                className="app-nav-link whitespace-nowrap px-3.5 py-2 text-sm font-medium"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
+          <WorkspaceNav active={active} />
         </div>
       </header>
-      <main className="app-main relative z-10 mx-auto max-w-7xl px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
+      <main className="app-main mx-auto max-w-[1480px] px-4 py-7 sm:px-6 sm:py-9 lg:px-8">
         <RouteContent />
       </main>
     </div>

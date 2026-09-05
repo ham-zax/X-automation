@@ -71,7 +71,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Direct browser thread publication is disabled. Route the exact thread through Growth OS and the official X API transport so the current content gates and approval snapshot remain bound.');
+  throw new Error('This standalone command never publishes. Route the exact thread through Growth OS; after current gates/approval and scheduler eligibility, the background daemon may use its supported API transport or the persistent Growth Operator may atomically claim it with browser-publish-claim and execute it through the browser-agent lane.');
 }
 
 main().catch((error) => {

@@ -8,7 +8,7 @@ export function Loading({ message = 'Loading...' }: LoadingProps) {
   return (
     <div className="flex items-center justify-center py-12">
       <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-slate-900 border-r-transparent"></div>
+        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-[var(--ui-primary)] border-r-transparent"></div>
         <p className="mt-4 text-sm text-slate-600">{message}</p>
       </div>
     </div>
@@ -22,13 +22,13 @@ interface ErrorProps {
 
 export function Error({ message, onRetry }: ErrorProps) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-6">
-      <h3 className="text-sm font-medium text-red-900">Something went wrong</h3>
-      <p className="mt-2 text-sm text-red-700">{message}</p>
+    <div className="notice p-5" data-tone="danger">
+      <h3 className="notice-title text-sm">Something went wrong</h3>
+      <p className="notice-body mt-1 text-sm">{message}</p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+          className="action-button mt-3" data-variant="danger"
         >
           Try again
         </button>
@@ -44,29 +44,49 @@ interface EmptyProps {
 
 export function Empty({ title, message }: EmptyProps) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-6 py-12 text-center">
+    <div className="operator-surface px-6 py-12 text-center">
       <h3 className="text-sm font-medium text-slate-900">{title}</h3>
       {message && <p className="mt-2 text-sm text-slate-600">{message}</p>}
     </div>
   )
 }
 
-type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger' | 'ai'
+export type SemanticTone = 'neutral' | 'primary' | 'info' | 'success' | 'warning' | 'danger' | 'ai'
 
-const BADGE_TONES: Record<BadgeTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700',
-  info: 'bg-sky-100 text-sky-700',
-  success: 'bg-emerald-100 text-emerald-700',
-  warning: 'bg-amber-100 text-amber-700',
-  danger: 'bg-red-100 text-red-700',
-  ai: 'bg-violet-100 text-violet-700',
-}
-
-export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: BadgeTone }) {
+export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: SemanticTone }) {
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${BADGE_TONES[tone]}`}>
+    <span className="status-badge" data-tone={tone}>
       {children}
     </span>
+  )
+}
+
+export type ActionVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'danger'
+
+export function ActionButton({
+  children,
+  variant = 'secondary',
+  className = '',
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ActionVariant }) {
+  return (
+    <button {...props} data-variant={variant} className={`action-button ${className}`.trim()}>
+      {children}
+    </button>
+  )
+}
+
+export function Notice({
+  tone = 'info',
+  title,
+  children,
+  className = '',
+}: { tone?: SemanticTone; title?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={`notice ${className}`.trim()} data-tone={tone}>
+      {title && <div className="notice-title">{title}</div>}
+      <div className="notice-body">{children}</div>
+    </div>
   )
 }
 
@@ -87,7 +107,7 @@ export function Disclosure({ summary, children, className = '' }: DisclosureProp
 
 export function TechnicalDetails({ children }: { children: ReactNode }) {
   return (
-    <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+    <details className="operator-surface mt-3 p-3">
       <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">Technical details</summary>
       <div className="mt-2 text-xs text-slate-600">{children}</div>
     </details>
@@ -119,7 +139,7 @@ export function StatCard({ label, value, note }: { label: string; value: ReactNo
 export function Pending({ label = 'Working…' }: { label?: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-sm text-slate-500">
-      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-slate-400 border-r-transparent"></span>
+      <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-solid border-[var(--ui-primary)] border-r-transparent"></span>
       {label}
     </span>
   )
@@ -127,32 +147,25 @@ export function Pending({ label = 'Working…' }: { label?: string }) {
 
 export function GatePanel({ gates }: { gates: { passed: boolean; approvalFailures: { message: string }[]; warnings: { message: string }[] } | null | undefined }) {
   if (!gates || (!gates.approvalFailures.length && !gates.warnings.length && !gates.passed)) {
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div className="font-semibold">Checks update as you edit.</div>
-        <div className="mt-1">Generate or change the draft to see the current approval blockers.</div>
-      </div>
-    )
+    return <Notice tone="warning" title="Checks update as you edit">Generate or change the draft to see the current approval blockers.</Notice>
   }
   const ready = gates.passed === true
-  const heading = ready ? 'Approval checks passed' : 'Fix before approval'
   return (
-    <div className={`rounded-xl p-4 text-sm ${ready ? 'border border-emerald-200 bg-emerald-50 text-emerald-900' : 'border border-amber-200 bg-amber-50 text-amber-950'}`}>
-      <strong>{heading}</strong>
+    <Notice tone={ready ? 'success' : 'warning'} title={ready ? 'Approval checks passed' : 'Fix before approval'}>
       {gates.approvalFailures.length > 0 && (
-        <ul className="mt-2 mb-0 list-disc space-y-1 pl-5">
+        <ul className="mb-0 mt-2 list-disc space-y-1 pl-5">
           {gates.approvalFailures.map((failure, index) => <li key={index}>{failure.message}</li>)}
         </ul>
       )}
       {gates.warnings.length > 0 && (
         <>
-          <div className="mt-2">Worth checking</div>
+          <div className="mt-2 font-semibold">Worth checking</div>
           <ul className="mb-0 list-disc space-y-1 pl-5">
             {gates.warnings.map((warning, index) => <li key={index}>{warning.message}</li>)}
           </ul>
         </>
       )}
-    </div>
+    </Notice>
   )
 }
 
@@ -179,7 +192,7 @@ export function QualityBreakdown({ breakdown }: { breakdown: Record<string, numb
   return (
     <dl className="grid gap-3 sm:grid-cols-2">
       {signals.map((signal) => (
-        <div key={signal.key} className="rounded-xl border border-slate-200 bg-white p-3">
+        <div key={signal.key} className="operator-surface p-3">
           <dt className="text-sm font-medium text-slate-800">{signal.label}</dt>
           <dd className="mt-1 text-lg font-semibold text-slate-900">
             {breakdown[signal.key] ?? 0}

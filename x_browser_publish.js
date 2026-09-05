@@ -17,7 +17,7 @@ const TWEET_ARTICLE = 'article[data-testid="tweet"]';
 const TWEET_TEXT = '[data-testid="tweetText"]';
 
 function rejectScriptedXMutation() {
-  const error = new Error('Scripted x.com mutation is disabled. Configure a compliant official X API transport instead.');
+  const error = new Error('The legacy repository browser writer is disabled because its target integrity failed verification. Use Growth OS claim/reconciliation with the persistent browser-agent lane, or the background daemon\'s supported API transport.');
   error.code = 'SCRIPTED_X_MUTATION_DISABLED';
   throw error;
 }

@@ -296,7 +296,7 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
   const learnedPriority = applyAcceptedLearnedRules(preLearnedPriority, learnedRules, {
     ...ruleContext,
     expired: expiry.effectiveExpired,
-    humanApprovalRequired: false,
+    approvalRequired: false,
   }, {
     adjustmentTarget: 'engage_priority',
     finalMin: 0,

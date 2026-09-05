@@ -294,12 +294,34 @@ export function WritingApproachPanel({
   const generationBlockedByChoice = select.isPending || localTouched || (preview?.availability.selectable === true && !currentSelection)
 
   return (
-    <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+    <div className="operator-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-600">Writing approach</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <Badge tone={currentSelection?.mode === 'apply' ? 'ai' : currentSelection?.mode === 'suggest' ? 'info' : 'neutral'}>{behaviorLabel(currentSelection?.mode ?? null)}</Badge>
+            {currentSelection?.mode && currentSelection.mode !== 'off' && <span className="text-xs text-slate-500">{approachLabel(currentSelection)}</span>}
+          </div>
+        </div>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={generating || generationBlockedByChoice || strategy.isLoading}
+            className="action-button"
+            data-variant="primary"
+          >
+            {generating ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
+          </button>
+        )}
+      </div>
+      {!readOnly && generationBlockedByChoice && (
+        <div className="mt-2 text-xs text-amber-700">Save the writing choice before generating.</div>
+      )}
+      <Disclosure summary="Change approach & evidence" className="compact-disclosure">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-500">Writing approach</div>
-          <div className="mt-1 text-sm text-slate-700">Choose whether evidence-backed or manual presentation guidance should influence the next Writer generation.</div>
-          <div className="mt-1 text-xs text-slate-500">The labels below are provisional. Saving a writing choice does not approve or publish anything.</div>
+          <div className="text-sm text-slate-600">Optional guidance for the next Writer generation. It never approves or publishes.</div>
         </div>
         {!readOnly && preview?.availability.selectable && options.length > 0 && (
           <button
@@ -521,29 +543,16 @@ export function WritingApproachPanel({
         </>
       )}
 
-      {!readOnly && (
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 pt-4">
-          <div className="text-xs text-slate-500">
-            {generationBlockedByChoice
-              ? 'Save an explicit writing choice before generating so the server has one unambiguous persisted strategy state.'
-              : currentSelection?.mode === 'apply'
-                ? `Next generation will read the persisted Apply choice: ${approachLabel(currentSelection)}.`
-                : currentSelection?.mode === 'suggest'
-                  ? 'Next generation will see no writing-strategy instruction; Advice only remains UI guidance.'
-                  : currentSelection?.mode === 'off'
-                    ? 'Next generation will see no writing-strategy instruction; influence is explicitly off.'
-                    : 'No human writing-strategy selection is in force; existing Writer behavior is preserved.'}
-          </div>
-          <button
-            type="button"
-            onClick={onGenerate}
-            disabled={generating || generationBlockedByChoice}
-            className="rounded-md border border-violet-300 bg-violet-100 px-3 py-1.5 text-sm font-semibold text-violet-900 hover:bg-violet-200 disabled:opacity-50"
-          >
-            {generating ? 'Generating…' : hasDraftContent ? 'Regenerate with AI' : 'Generate with AI'}
-          </button>
-        </div>
-      )}
+      <div className="mt-3 text-xs text-slate-500">
+        {currentSelection?.mode === 'apply'
+          ? `Next generation uses: ${approachLabel(currentSelection)}.`
+          : currentSelection?.mode === 'suggest'
+            ? 'Advice remains visible but does not enter Writer.'
+            : currentSelection?.mode === 'off'
+              ? 'Writing-strategy influence is off.'
+              : 'No writing-strategy selection is in force.'}
+      </div>
+      </Disclosure>
     </div>
   )
 }

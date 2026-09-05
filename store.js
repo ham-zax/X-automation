@@ -1289,6 +1289,7 @@ function canonicalPublicationMaterial(queueItem, draft, candidate = null) {
       fileName: String(attachment.fileName || ''),
       mimeType: String(attachment.mimeType || ''),
       size: Number(attachment.size || 0),
+      sha256: String(attachment.sha256 || ''),
       altText: String(media.altText || ''),
     } : null,
   };
@@ -1424,7 +1425,7 @@ export function captureQueueApproval(candidateKey, {
   return runStoreTransaction(() => {
     const queueItem = getQueueItemByCandidate(String(candidateKey));
     if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
-    const draft = getDraftByCandidate(candidateKey);
+    const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(candidateKey);
     const candidate = getCandidate(candidateKey);
     const snapshot = buildApprovalSnapshot(queueItem, draft, candidate, { authority, verificationProvenance });
     const saved = saveQueueItem({
@@ -1439,19 +1440,19 @@ export function captureQueueApproval(candidateKey, {
 }
 
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
-const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const SCHEDULE_URGENCIES = new Set(['evergreen', 'timely', 'viral']);
 
 function buildMainFeedScheduleItem(queueItem) {
   if (!queueItem) return null;
   const candidate = getCandidate(queueItem.candidateKey);
-  const draft = queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey);
-  const media = draft?.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
   const isRepost = queueItem.pipeline === 'repost';
+  const draft = isRepost ? null : (queueItem.draftId ? getDraft(queueItem.draftId) : getDraftByCandidate(queueItem.candidateKey));
+  const media = draft?.editor?.media || { required: false, type: 'none', reason: '', source: '', altText: '' };
   const mediaReady = media.required !== true || Boolean(media?.attachment?.localPath);
   const approvalAuthority = getQueueApprovalAuthority(queueItem);
   const gatesPassed = isRepost
-    ? approvalAuthority?.type === 'human'
+    ? Boolean(approvalAuthority)
     : Boolean(draft
       && draft.status === 'ready'
       && draft.gates?.passed === true
@@ -1830,6 +1831,30 @@ export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human
   });
 }
 
+export function claimApprovedEngagementReply(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('claimApprovedEngagementReply requires a numeric now timestamp.');
+  return runStoreTransaction(() => {
+    const preItem = getQueueItem(Number(id));
+    if (!preItem || preItem.lane !== 'engagement' || preItem.pipeline !== 'reply' || preItem.status !== 'approved') return null;
+    if (!preItem.humanApprovedAt || !String(preItem.approvedText || '').trim() || !String(preItem.targetTweetId || '').trim()) return null;
+    if (preItem.publishedAt || preItem.outputTweetId) return null;
+
+    const params = [timestamp, timestamp, Number(id)];
+    let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
+      WHERE id = ? AND lane = 'engagement' AND pipeline = 'reply' AND status = 'approved'
+        AND human_approved_at IS NOT NULL AND NULLIF(approved_text, '') IS NOT NULL
+        AND NULLIF(target_tweet_id, '') IS NOT NULL
+        AND published_at IS NULL AND output_tweet_id IS NULL`;
+    if (expectedUpdatedAt != null) {
+      sql += ' AND updated_at = ?';
+      params.push(Number(expectedUpdatedAt));
+    }
+    const result = db.prepare(sql).run(...params);
+    return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+  });
+}
+
 export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('claimQueueItem requires a numeric now timestamp.');
@@ -1863,7 +1888,7 @@ export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() 
     const params = [timestamp, timestamp, Number(id), timestamp];
     let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
       WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
-        AND pipeline IN ('original', 'quote', 'thread')
+        AND pipeline IN ('original', 'quote', 'thread', 'repost')
         AND (expires_at IS NULL OR expires_at > ?)
         AND published_at IS NULL AND output_tweet_id IS NULL`;
     sql += authority.type === 'human' ? ' AND human_approved_at IS NOT NULL' : ' AND human_approved_at IS NULL';
@@ -2421,6 +2446,7 @@ function candidateActionSourceContext(key, action, sourceContext, actionAt) {
       numberCount: style.numberCount,
       hashtagCount: style.hashtagCount,
     },
+    publicationVerification: supplied?.publicationVerification || null,
   };
 }
 

@@ -48,7 +48,7 @@ const ADJUSTMENT_SCOPES = Object.freeze({
 const PROTECTED_BOUNDARY_FIELDS = Object.freeze([
   ['hard_gate_failed', (context) => context.hardGatePassed === false || context.hardGateFailed === true],
   ['expired', (context) => context.expired === true],
-  ['human_approval_missing', (context) => context.humanApprovalRequired === true && context.humanApproved !== true],
+  ['approval_missing', (context) => context.approvalRequired === true && context.approved !== true],
   ['manual_route_or_schedule', (context) => context.manualOverride === true || context.manualRoute === true || context.manualScheduleOverride === true],
 ]);
 

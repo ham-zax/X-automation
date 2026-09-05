@@ -1,19 +1,19 @@
 # Human + AI Network Growth & Publishing System Implementation Plan
 
-**Goal:** Turn the existing X research dashboard into a human-supervised network-growth operating system where sources selected for action enter explicit workflow triage, bookmarks remain independent reference state, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing.
+**Goal:** Operate a local owner-directed network-growth system where sources selected for action enter explicit workflow triage, bookmarks remain independent reference state, relevant accounts accumulate relationship intelligence, current conversations are ranked for Engage Next, content opportunities are scored for Reach/Follow/Conversation/Relationship potential, owned content passes research/writing/media/quality gates, and follower/relationship outcomes feed back into future targeting, content, and timing. The owner may work one action at a time or delegate bounded execution to the persistent Growth Operator without repeating per-action approval ceremonies.
 
-**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, one learned-strategy owner, one Phase-6 editorial owner above per-source routing, and one shared AI runtime/provider boundary. AI may classify, cluster, research through controlled retrieval, recommend, draft, score, surface target/conversation opportunities, and propose timing, but human approval controls consequential main-feed publication and outbound replies.
+**Architecture:** Keep SQLite as the system of record. Preserve the existing candidate, draft, action-history, audience, and performance owners; use one workflow owner for queue state, one relationship-intelligence owner, one opportunity-scoring owner, one engagement-opportunity owner, one account-health/visibility owner, one scheduler owner for main-feed timing, one experiment owner, one learned-strategy owner, one Phase-6 editorial owner above per-source routing, and one shared AI runtime/provider boundary. Consequential authority is explicit but not necessarily per-action human approval: an ordinary owner action or a running revisioned Growth Operator/autonomous-reply delegation may authorize bounded execution, while evidence, provenance, health, exact target/text, atomic claim, and revocation rules remain independent of the AI model.
 
-**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, Clearcote/XActions browser UI transport, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, `agent_bridge.js`, and `x_browser_publish.js`; structured AI execution is provider-independent through the implemented `runStructuredAI()` layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
+**Tech Stack:** Node.js 24, built-in `node:sqlite`, React/TypeScript/Tailwind workspace plus legacy Bootstrap diagnostic surfaces, persistent Growth Operator browser-agent execution (`browser-fast` first, WebHarness-bundled Agent Browser CLI fallback), an official-API-only background daemon, existing `strategy.js`, `store.js`, `drafting.js`, `automation.js`, and `agent_bridge.js`; `x_browser_publish.js` now supplies read/recovery/content-gate compatibility while its legacy Clearcote/xactions mutation exports remain fail-closed. Structured AI execution is provider-independent through the implemented `runStructuredAI()` layer in `plans/AI_RUNTIME_PROVIDER_LAYER.md`.
 
 ## Global Constraints
 
 - Preserve the account identity: **developer + builder in tech**; registered Growth Focus topics are preferences, while unregistered technical topics remain eligible through open-world exploration. AI-assisted development remains one pillar rather than the parent category.
 - The account promise is: **turn fast-moving AI/software signals into developer decisions: what changed, what actually works, what breaks, why it matters, and how to use it.**
 - Bookmarking a research signal means keep it for reference/taste memory. Choosing a workflow action such as Draft/Research/Watch must ensure a human-visible queue item independently of bookmark state.
-- AI may recommend a distribution format, but the human can override it.
+- AI may recommend a distribution format. The owner can override it; a running delegated workflow may select within its bounded scope while preserving recommendation-versus-selection provenance.
 - Every original post, quote post, and thread opener must pass the same originality, niche, scannability, and quality gates before scheduling.
-- Human approval is required before a queued main-feed item can become publishable. An explicit user command to publish a specific final item counts as human approval for that item.
+- Publication authority is required before a queued main-feed item can become publishable. It may be an exact owner approval or a current mission-agent approval from the running revisioned Growth Operator; transport never creates approval.
 - Replies remain relationship-building interactions.
 - Do not add fake-human timing, random delays, or other anti-detection/evasion logic. Scheduling optimizes freshness, audience coverage, semantic diversity, and self-cannibalization risk.
 - Viral items may pre-empt normal queue order, but main-feed writes remain serialized; the system must not dump several queued items at once.
@@ -31,7 +31,7 @@
 - Engagement opportunities may be discovered, drafted, and sent through an explicitly started autonomous grant or the human-reviewed path.
 - Per-post follower conversion is an attribution estimate unless X exposes direct post-level follow attribution. When multiple posts overlap a measurement window, store attribution confidence rather than claiming causality.
 - No new database service is required; use the existing built-in SQLite store.
-- No new front-end framework is required; Bootstrap is already installed and sufficient.
+- Do not add another front-end framework. The current guided product surface is React/TypeScript/Tailwind; Bootstrap remains only for legacy diagnostic views that have not yet been retired.
 - This plan does not authorize tests. Implementation should use direct behavior checks and the repository's normal non-test static checks only when execution is requested.
 
 ## Existing System vs Planned System
@@ -46,34 +46,34 @@
 - audience follower/following snapshot and relevance scoring;
 - Direct / Quote / Repost / Reply / Ignore recommendation logic;
 - format-aware structured drafts, deterministic hard gates, and separate 50-point scoring;
-- human-approved main-feed queue state plus compatibility `ready` draft integrity marker;
+- owner- or mission-agent-approved main-feed queue state plus compatibility `ready` draft integrity marker;
 - coverage-aware main-feed scheduler with explicit empirical timing assumptions;
-- atomic publication claim plus Original/Quote/Thread HTTP transport and inspectable outcomes;
+- atomic publication claims plus two explicit execution planes: official API for the background daemon and browser-agent execution for the persistent Growth Operator, with inspectable outcomes/reconciliation;
 - performance snapshots;
 - agent JSON bridge;
-- Bootstrap dashboard;
+- React/TypeScript/Tailwind guided workspace plus retained legacy Bootstrap diagnostic views;
 - Phase 1A persistent `queue_items` with workflow-entry -> Triage ownership; bookmark/reference state is independent;
 - separate Reach / Follow / Conversation / Relationship opportunity scores;
-- stored AI recommendation separate from human-selected pipeline;
+- stored AI recommendation separate from the selected pipeline, including owner/delegated selection provenance;
 - explicit Original / Quote / Thread / Reply / Repost / Research / Watch / Ignore routing;
 - Queue dashboard plus `route` / `workflow` bridge commands;
-- `needs_review` workflow state and explicit dashboard human approval boundary;
-- temporary compatibility bridge where human approval alone sets an associated text draft to `ready`;
+- `needs_review` workflow state plus separate ordinary owner and bounded mission-agent approval authorities;
+- compatibility `ready` draft marker bound to current approved-content integrity rather than being publication selection authority;
 - Phase 1B Relationship Intelligence with strategic profiles, append-only events, TargetScore, and relationship stages;
-- Phase 1C Engage Next with active-conversation/follow-up priority and explicit one-by-one human reply send, plus the later A9 off-by-default persistent autonomous-reply operator with separate grant/decision/claim provenance;
+- Phase 1C Engage Next with active-conversation/follow-up priority, an explicit one-by-one human reply lane, and the separate persisted autonomous-reply operator with grant/decision/claim provenance and browser-agent handoff;
 - Phase 1D Account Health with provenance-backed HEALTHY/WATCH/CONSTRAINED evidence and soft saturation/repetition/network diagnostics;
 - Phase 4 fixed 15m/1h/6h/24h publication measurement, follower-quality/attribution context, and content/network experiments;
 - Phase 5 suggested/accepted/retired learned strategy with bounded accepted adjustments;
 - current Discover source-truth split: X Latest, X Momentum, actual GitHub Trending, and current HN Top Stories snapshots are separate from the persistent To review/Bookmarks/Handled/history workflow views;
 - shared AI runtime/provider execution with Direct API/OpenRouter/OpenAI-compatible, Codex, installed AGY, safe secret references, global/per-role profiles, AI Settings, and per-run provenance;
-- Phase 6 canonical source snapshots/observations, source-context-aware editorial planning, explicit human recommendation selection, writer context IDs/metadata, Today/Discover product surfaces, and recommendation provenance into Phase-4 outcomes/Phase-5 context.
+- Phase 6 canonical source snapshots/observations, source-context-aware editorial planning, owner/delegated recommendation-selection provenance, writer context IDs/metadata, Today/Discover product surfaces, and recommendation provenance into Phase-4 outcomes/Phase-5 context.
 
 ### Remaining planned work
 
 Phases 1A-1D and 2-6 plus the shared AI runtime/provider layer are implemented. Remaining cross-system work is:
 
-- actual media upload/attachment-ID readiness while preserving the existing media-plan hard block;
 - a concrete `continuous_scan` background consumer; the role/profile is configurable but intentionally **Not active** today;
+- if truly unattended browser mutation is desired across periods with no active model/agent session, a durable CLI-agent consumer for `PERSISTENT_GROWTH_OPERATOR_PROMPT.md`; the Node automation daemon itself intentionally cannot become or wake a browser-capable model agent;
 - optional OpenCode/OpenCode 2 execution support only when those runtimes are installed and expose a supported structured contract.
 
 `PRODUCT_ARCHITECTURE.md` is the canonical product-level description of the intended final system. The phase plans remain authoritative for execution details.
@@ -95,7 +95,7 @@ AI EDITORIAL DIRECTOR
 story + objective + format + thesis + evidence + why now
         |
         v
-HUMAN SELECT / OVERRIDE / RESEARCH MORE / DISMISS / DO NOTHING
+OWNER / DELEGATED SELECT / OVERRIDE / RESEARCH MORE / DISMISS / DO NOTHING
         |
         +-----------------------------------+
         |                                   |
@@ -106,7 +106,7 @@ MAIN-FEED WORK                         ENGAGEMENT WORK
 WRITER                              REPLY CONTRIBUTION
         |                                   |
         v                                   v
-HUMAN EDIT + REVIEW                 HUMAN REVIEW + SEND/IGNORE
+REVIEW + APPROVAL                  OWNER OR DELEGATED SEND/IGNORE
         |                                   |
         v                                   v
 HARD GATES + APPROVAL               RELATIONSHIP EVENT
@@ -132,24 +132,24 @@ SCHEDULER + PUBLISH
 
 This full loop is now the current architecture. Discover still exposes independent source-level controls and the rule-based route, but Today owns the current AI Editorial Plan; selecting a recommendation enters the same existing workflow rather than bypassing it.
 
-A time-sensitive lane may shorten research/writing latency but does not remove human approval or publication serialization:
+A time-sensitive lane may shorten research/writing latency but does not remove publication authority, hard gates, atomic claiming, or serialization:
 
 ```text
-TIME-SENSITIVE SIGNAL -> EDITORIAL/ROUTE DECISION -> FAST DRAFT -> GATE -> HUMAN APPROVAL -> EARLIEST REASONABLE COVERAGE SLOT
+TIME-SENSITIVE SIGNAL -> EDITORIAL/ROUTE DECISION -> FAST DRAFT -> GATE -> OWNER/DELEGATED APPROVAL -> EARLIEST REASONABLE COVERAGE SLOT
 ```
 
 ## Pipeline Types
 
-| Pipeline | Purpose | Main-feed slot? | Draft required? | Human approval? |
+| Pipeline | Purpose | Main-feed slot? | Draft required? | Publication authority? |
 | --- | --- | --- | --- | --- |
-| `original` | Our own thesis, experiment, synthesis, workflow, benchmark, or decision rule | Yes | Yes | Yes |
-| `quote` | Source remains visible evidence and our commentary creates a new information object | Yes | Yes | Yes |
-| `thread` | Multi-step tutorial, benchmark, teardown, or argument that loses value when compressed | Yes | Yes | Yes |
-| `reply` | Relationship building via a concrete technical contribution or informed question | No ordinary main-feed slot | Yes/reviewable text | Yes before sending unless explicitly authorized workflow says otherwise |
-| `repost` | Rare pure amplification when commentary would not improve the source | Yes | No | Yes |
-| `research` | Keep as evidence/input without turning it directly into distribution | No | No | No |
-| `watch` | Re-evaluate a developing signal later | No | No | No |
-| `ignore` | Remove weak/used/off-niche signal from active queue | No | No | No |
+| `original` | Our own thesis, experiment, synthesis, workflow, benchmark, or decision rule | Yes | Yes | Owner approval or eligible Growth Operator mission-agent approval |
+| `quote` | Source remains visible evidence and our commentary creates a new information object | Yes | Yes | Owner approval or eligible Growth Operator mission-agent approval |
+| `thread` | Multi-step tutorial, benchmark, teardown, or argument that loses value when compressed | Yes | Yes | Owner approval or eligible Growth Operator mission-agent approval |
+| `reply` | Relationship/conversation action at the depth the selected purpose needs | No ordinary main-feed slot | Yes/reviewable text | Exact owner send or separately granted autonomous-reply decision/claim |
+| `repost` | Rare pure amplification when commentary would not improve the source | Yes | No | Owner approval/manual completion or eligible source-only Growth Operator mission-agent approval + browser claim |
+| `research` | Keep as evidence/input without turning it directly into distribution | No | No | None |
+| `watch` | Re-evaluate a developing signal later | No | No | None |
+| `ignore` | Remove weak/used/off-niche signal from active queue | No | No | None |
 
 ## Queue States
 
@@ -170,7 +170,7 @@ Alternative terminal states:
 - `ignored`
 - `failed`
 
-AI-controlled transitions stop at `needs_review`. Only a human approval action can move a queued main-feed item to `approved`. Phase 3 keeps scheduler timing advisory while the row remains `approved`; `scheduled_at` is an optional explicit human override, not a separate authorization state. When automatic publication is enabled, the publisher atomically claims the exact approved item as `publishing`; transport success becomes `published`, while a transport failure becomes `failed` and is not silently retried in the same cycle.
+Ordinary generation/review transitions stop at `needs_review`, but approval authority has two explicit paths. A human owner may approve through the ordinary lane; a running revisioned Growth Operator may approve eligible Original/Quote/Thread work through the mission-agent path when current evidence/provenance/persona/content gates pass, and may approve Repost through a separate source-only Growth Focus/provenance path with no Writer draft. Phase 3 keeps scheduler timing advisory while the row remains `approved`; `scheduled_at` is an optional explicit owner timing override, not a separate authorization state. Immediately before publication, the active execution plane atomically claims the exact row as `publishing`; transport success becomes `published`, while an unknown consequential result remains in-flight for reconciliation and must not be blindly retried.
 
 ## Data Model: current workflow plus later learning fields
 
@@ -476,7 +476,8 @@ The scheduler/account-health layer must not convert any of these observations in
 - `drafting.js` — format-aware drafting and hard gates.
 - `agent_bridge.js` — queue/routing/review, opportunity, engagement, and experiment commands without exposing raw SQLite writes.
 - `automation.js` — scheduler-driven queue consumption, read-only engagement-opportunity refresh, fixed-window outcome capture, and experiment/follower-conversion measurement.
-- `x_browser_publish.js` — format-aware quote/thread/media publication through the Clearcote browser UI.
+- persistent Growth Operator browser-agent lane — visible X UI execution for already-authorized Reply/Quote/Original/Thread/Repost work, using Growth OS atomic claim packets, claim-scoped media artifacts, and post-action structural verification/reconciliation.
+- `x_browser_publish.js` — authenticated read/session/recovery and compatibility content-gate helpers; legacy Clearcote/xactions mutation exports remain fail-closed and are not an eligible execution fallback.
 - `README.md` — user-facing workflow once each capability is actually implemented.
 - `AGENTS.md` and `docs/AGENT_WORKFLOW.md` — agent contract once new bridge commands exist.
 
@@ -668,6 +669,8 @@ The scheduler/account-health layer must not convert any of these observations in
 - A research cycle never publishes an unapproved item and never drains several main-feed items in one burst.
 
 ### Task 10: Add format-aware publication
+
+> **Historical implementation note (superseded transport):** the checked steps below describe the earlier Clearcote/xactions mutation implementation. The current execution contract is the persistent Growth Operator browser-agent lane (`browser-publish-claim` / `browser-reply-claim` → `browser-fast` or version-aligned Agent Browser CLI → structural verification → `record-action`). The background daemon remains official-API-only. Do not reactivate the legacy Clearcote/xactions writer from these historical checkboxes.
 
 **Files:**
 - Modify: `x_browser_publish.js`
@@ -947,7 +950,7 @@ Implemented through the human-review boundary:
 - format-aware Original/Quote/Thread/Reply writing and structured writer packets;
 - deterministic hard gates plus the separate 50-point score;
 - persisted thread/editor/gate metadata and human approval;
-- media-plan state plus real operator attachment/readiness; required media stays blocked until the attachment and complete plan exist;
+- media-plan state plus real operator attachment/readiness; browser execution grants the exact claimed `.x-media` file a temporary logical `browser-fast` artifact and verifies/removes it on reconciliation, while the background API transport remains local-media-incapable;
 - recent approved/published content plus relationship/profile-proof packet slots so owned posts can reinforce conversations the account is entering.
 
 ### Phase 3 — Main-feed distribution — IMPLEMENTED
@@ -960,9 +963,10 @@ Implemented:
 - coverage-aware deterministic scheduler with semantic conflict/self-cannibalization checks and `EMPIRICAL_VARIABLE` timing labels;
 - approved queue state as publication authority instead of compatibility-ready draft FIFO;
 - one-winner atomic claim before enabled transport plus inspectable `published` / `failed` outcomes;
-- format-aware Original/Quote/Thread publication through the existing HTTP transport owner;
-- viral pre-emption without burst dumping, while Repost and engagement replies remain outside autonomous main-feed transport;
-- operator-attached image readiness and authenticated upload are implemented; required media remains blocked when the attachment or plan is incomplete.
+- format-aware Original/Quote/Thread publication through the background HTTP/API transport where that transport supports the route;
+- persistent browser-agent execution for claimed Original/Quote/Thread/Repost work, with route-specific structural verification before reconciliation;
+- viral pre-emption without burst dumping; Repost remains rare by strategy but is scheduler-visible and can use source-only delegated browser execution;
+- operator-attached image readiness plus claim-scoped `browser-fast` artifact upload is implemented; required media remains blocked when the attachment or plan is incomplete, and the background API route still rejects local media.
 
 ### Phase 4 — Measurement + content/network experiments — IMPLEMENTED
 

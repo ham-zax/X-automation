@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useRelevanceDecision, type StrategicRelevance } from '../../api/client'
-import { Badge } from '../../components/primitives'
+import { Badge, Disclosure, Notice } from '../../components/primitives'
 
 const STATE_LABELS: Record<StrategicRelevance['state'], string> = {
   core: 'Preferred niche',
   adjacent: 'Adjacent niche',
   exploratory: 'Emerging tech',
-  outside: 'Outside technical scope',
+  outside: 'Outside scope',
   unknown: 'Needs refresh',
 }
 
@@ -38,69 +38,72 @@ export function GrowthFitPanel({
       : growthFit.state === 'outside' ? 'warning' : 'neutral'
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">Growth fit</div>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <Badge tone={tone}>{STATE_LABELS[growthFit.state]}</Badge>
-            <span className="text-xs text-slate-500">Goal: {OBJECTIVE_LABELS[growthFit.objective] || growthFit.objective}</span>
-            {growthFit.topicScore != null && <span className="text-xs text-slate-500">Classifier evidence {growthFit.topicScore}/50</span>}
-          </div>
+    <section className="growth-fit-compact">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Growth fit</span>
+          <Badge tone={tone}>{STATE_LABELS[growthFit.state]}</Badge>
+          {growthFit.topicScore != null && <span className="text-xs tabular-nums text-slate-500">evidence {growthFit.topicScore}/50</span>}
         </div>
-        <a href="#/settings/growth-focus" className="text-sm font-medium text-sky-700 hover:underline">Review Growth Focus</a>
+        <Disclosure summary="Why?" className="compact-disclosure">
+          <div className="max-w-3xl space-y-2 text-sm text-slate-600">
+            <p>{growthFit.explanation}</p>
+            <div className="text-xs text-slate-500">Goal: {OBJECTIVE_LABELS[growthFit.objective] || growthFit.objective}</div>
+            {growthFit.state === 'unknown' && <p className="text-xs text-amber-800">Refresh candidate classification from Growth Focus before approval.</p>}
+            {growthFit.state === 'exploratory' && <p className="text-xs text-cyan-800">Allowed inside the broader configured technical universe without permanently adding a niche.</p>}
+            <a href="#/settings/growth-focus" className="inline-block text-xs font-semibold text-indigo-700 hover:underline">Review Growth Focus →</a>
+          </div>
+        </Disclosure>
       </div>
 
-      <p className="mt-2 text-sm text-slate-700">{growthFit.explanation}</p>
-
-      {growthFit.state === 'unknown' && (
-        <div className="mt-3 text-xs text-amber-800">This is not being treated as outside technical scope. Refresh candidate classification from Growth Focus before approval.</div>
-      )}
-
-      {growthFit.state === 'exploratory' && (
-        <div className="mt-3 text-xs text-sky-800">This topic is not a registered content niche. It is allowed because it falls inside the broader configured technical universe, so live momentum can justify using it without permanently adding a niche.</div>
-      )}
-
       {growthFit.humanOverride && (
-        <div className="mt-3 rounded-md border border-amber-200 bg-white px-3 py-2 text-sm text-amber-900">
-          <strong>Human decision: use anyway.</strong> {growthFit.humanOverride.reason}
-          {!readOnly && (queueItemId != null || candidateKey) && (
-            <button
-              type="button"
-              onClick={() => decision.mutate({ queueItemId: queueItemId ?? undefined, key: candidateKey, decision: 'clear_override' })}
-              disabled={decision.isPending}
-              className="ml-2 text-xs font-medium underline disabled:opacity-50"
-            >
-              Clear decision
-            </button>
-          )}
+        <div className="mt-2">
+          <Notice tone="warning" title="Human decision: use anyway">
+            {growthFit.humanOverride.reason}
+            {!readOnly && (queueItemId != null || candidateKey) && (
+              <button
+                type="button"
+                onClick={() => decision.mutate({ queueItemId: queueItemId ?? undefined, key: candidateKey, decision: 'clear_override' })}
+                disabled={decision.isPending}
+                className="action-button ml-2 !min-h-0 !px-2 !py-1 text-xs"
+                data-variant="ghost"
+              >
+                Clear decision
+              </button>
+            )}
+          </Notice>
         </div>
       )}
 
       {!readOnly && growthFit.state === 'outside' && !growthFit.humanOverride && (queueItemId != null || candidateKey) && (
-        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-          <label className="block text-sm font-medium text-amber-950">
-            Use this opportunity anyway
-            <input
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              placeholder="Short reason this is worth pursuing"
-              className="mt-2 w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-slate-800"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => decision.mutate({ queueItemId: queueItemId ?? undefined, key: candidateKey, decision: 'use_anyway', reason: reason.trim() })}
-            disabled={decision.isPending || !reason.trim()}
-            className="mt-2 rounded-md border border-amber-400 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 disabled:opacity-50"
-          >
-            {decision.isPending ? 'Saving decision…' : 'Use this opportunity anyway'}
-          </button>
-          <div className="mt-1 text-xs text-amber-800">This records a human Growth Focus decision. It does not approve, schedule, publish, or send anything.</div>
+        <div className="mt-2">
+          <Notice tone="warning" title="Outside current Growth Focus">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <label className="min-w-0 flex-1 text-xs font-medium text-slate-700">
+                Reason to use anyway
+                <input
+                  value={reason}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Short reason"
+                  className="mt-1 w-full px-3 py-2 text-sm"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => decision.mutate({ queueItemId: queueItemId ?? undefined, key: candidateKey, decision: 'use_anyway', reason: reason.trim() })}
+                disabled={decision.isPending || !reason.trim()}
+                className="action-button"
+                data-variant="secondary"
+              >
+                {decision.isPending ? 'Saving…' : 'Use anyway'}
+              </button>
+            </div>
+            <div className="mt-1 text-xs text-slate-500">Records a Growth Focus decision only; it does not approve or publish.</div>
+          </Notice>
         </div>
       )}
 
-      {decision.isError && <div className="mt-2 text-sm text-red-700">{decision.error.message}</div>}
+      {decision.isError && <div className="mt-2 text-xs text-red-700">{decision.error.message}</div>}
     </section>
   )
 }

@@ -7,6 +7,7 @@ import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publ
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
   captureQueueApproval,
+  claimApprovedEngagementReply,
   deleteDraft,
   ensureQueueItem,
   getAudienceProfile,
@@ -71,7 +72,7 @@ export const QUEUE_STATUSES = [
 
 const TEXT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
-const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 
 function requireCandidate(key) {
   const candidate = getCandidate(key);
@@ -278,6 +279,18 @@ function normalizeMissionVerificationProvenance(provenance = {}) {
     sourceReferences: normalizeReferences(provenance.sourceReferences, 'sourceReferences', true),
     evidenceReferences: normalizeReferences(provenance.evidenceReferences, 'evidenceReferences'),
   };
+}
+
+function requireMissionSourceProvenance(queueItem, provenance) {
+  const expected = [...new Set(listQueueSources(queueItem.id)
+    .map((source) => getCandidate(source.candidateKey))
+    .filter(Boolean)
+    .map((candidate) => String(candidate.url || candidate.key || '').trim())
+    .filter(Boolean))];
+  const declared = [...new Set((provenance.sourceReferences || []).map((value) => String(value || '').trim()).filter(Boolean))];
+  if (!expected.length || expected.length !== declared.length || expected.some((value) => !declared.includes(value))) {
+    throw new Error('Mission-agent source provenance must exactly match the queue source references.');
+  }
 }
 
 function requireMissionEvidenceProvenance(queueItem, draft, provenance) {
@@ -868,32 +881,44 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem) throw new Error(`Queue item not found: ${key}`);
   if (!['main', 'main_feed'].includes(queueItem.lane) || !AUTOMATED_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) {
-    throw new Error('Mission-agent approval is limited to automated main-feed Original, Quote, and Thread items.');
+    throw new Error('Mission-agent approval is limited to delegated main-feed Original, Quote, Thread, and Repost items.');
   }
   if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before mission-agent approval.');
 
   requireLiveGrowthOperatorDelegation(grantRevision);
-  requireMissionHookExperimentAssignment(queueItem);
   const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
-  let draft = getDraftByCandidate(key);
-  if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
-  requireMissionEvidenceProvenance(queueItem, draft, provenance);
-  requireCurrentStrategyDecision(queueItem, draft);
-  const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
-  draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
-  if (!analysis.publishable) {
-    const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
-    const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-    throw new Error(`Draft is not mission-agent approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+  requireMissionSourceProvenance(queueItem, provenance);
+  const isRepost = queueItem.pipeline === 'repost';
+  let draft = null;
+  let analysis = null;
+
+  if (isRepost) {
+    const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem.relevance?.humanOverride || null });
+    if (growthFit.state === 'unknown') throw new Error('Growth fit needs a current classification before delegated repost approval.');
+    if (!growthFit.allowed) throw new Error('This repost is outside the configured technical scope and cannot use delegated approval without an existing human use-anyway decision.');
+    requireMissionEvidenceProvenance(queueItem, null, provenance);
+  } else {
+    requireMissionHookExperimentAssignment(queueItem);
+    draft = getDraftByCandidate(key);
+    if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    requireMissionEvidenceProvenance(queueItem, draft, provenance);
+    requireCurrentStrategyDecision(queueItem, draft);
+    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
+    draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+    if (!analysis.publishable) {
+      const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
+      const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
+      throw new Error(`Draft is not mission-agent approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+    }
+    draft = saveDraft({ ...draft, status: 'ready' });
   }
-  draft = saveDraft({ ...draft, status: 'ready' });
 
   const result = runStoreTransaction(() => {
     const grant = requireLiveGrowthOperatorDelegation(grantRevision);
     saveQueueItem({
       candidateKey: key,
       status: 'approved',
-      draftId: draft.id,
+      draftId: draft?.id ?? null,
       humanApprovedAt: null,
       publishStartedAt: null,
       publishError: null,
@@ -995,9 +1020,9 @@ async function sendEngagementReplyTransport({
   transport,
 }) {
   if (transport === postTweetBrowser) {
-    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+    throw new Error('The legacy repository reply writer is disabled. Use the exact owner-send lane or let a Live autonomous decision remain eligible_live for persistent-agent browser-reply-claim execution.');
   }
-  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
+  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured; leave autonomous Live work eligible for persistent-agent browser-reply-claim execution.');
   const contentGate = authorizeReplyBrowserContent({
     candidateKey: candidate.key,
     text,
@@ -1140,15 +1165,44 @@ async function sendEngagementReplyTransport({
   }
 }
 
+export function claimApprovedEngagementReplyForBrowser(key, { now = Date.now() } = {}) {
+  const candidate = requireCandidate(key);
+  const queueItem = getQueueItemByCandidate(key);
+  if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
+    throw new Error(`Engagement reply not found: ${key}`);
+  }
+  if (queueItem.status !== 'approved' || !queueItem.humanApprovedAt || !queueItem.approvedText) {
+    throw new Error('Reply must be explicitly human-approved before browser claim.');
+  }
+  if (!queueItem.targetTweetId) throw new Error('Engagement reply is missing targetTweetId.');
+  const draft = getDraftByCandidate(key);
+  if (!draft || draft.status !== 'ready') throw new Error('Approved reply draft is not ready.');
+  const currentText = String(draft.body || '');
+  if (currentText !== queueItem.approvedText) {
+    saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
+    throw new Error('Reply text changed after approval; approval was invalidated.');
+  }
+  const currentAnalysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
+  if (!currentAnalysis.publishable || currentAnalysis.gates?.checks?.understandable !== true) {
+    saveDraft({ ...draft, gates: currentAnalysis.gates, qualityScore: currentAnalysis.score, status: 'draft' });
+    invalidateQueueApproval(key, { actor: 'system', reason: 'Current content gates changed after approval; reply requires review again.' });
+    const firstFailure = currentAnalysis.gates?.failures?.[0];
+    throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
+  }
+  const claimed = claimApprovedEngagementReply(queueItem.id, { expectedUpdatedAt: queueItem.updatedAt, now });
+  if (!claimed) throw new Error('Approved reply browser claim lost or authority changed; re-read engagement state before acting.');
+  return { candidate, queueItem: claimed, draft, analysis: currentAnalysis, exactReply: currentText };
+}
+
 export async function sendApprovedEngagementReply(key, {
   authToken = process.env.AUTH_TOKEN,
   account = process.env.X_ACCOUNT || 'ham_zax',
   transport = postTweetBrowser,
 } = {}) {
   if (transport === postTweetBrowser) {
-    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+    throw new Error('The legacy repository reply writer is disabled. Use persistent-agent browser-reply-claim for this exact approved reply.');
   }
-  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
+  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
@@ -1197,9 +1251,9 @@ export async function sendAutonomousEngagementReply(key, {
   transport = postTweetBrowser,
 } = {}) {
   if (transport === postTweetBrowser) {
-    throw new Error('Scripted x.com reply mutation is disabled. Configure a compliant X API reply transport instead.');
+    throw new Error('The legacy repository reply writer is disabled. Leave the exact decision eligible_live and use persistent-agent browser-reply-claim execution.');
   }
-  if (typeof transport !== 'function') throw new Error('No compliant X reply mutation transport is configured.');
+  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {

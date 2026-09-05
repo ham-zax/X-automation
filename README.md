@@ -48,15 +48,15 @@ Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers so
 
 ### Current implemented architecture
 
-Phase 1A is implemented: sources entering the workflow get a persistent Triage queue item, receive separate Reach/Follow/Conversation/Relationship scores, and keep the rule/AI recommendation separate from the selected route. The ordinary manual lane can move through Drafting -> Needs Review -> owner approval. A running Live Growth Operator delegation may instead create an approved Original/Quote/Thread through mission-agent authority without populating `humanApprovedAt`. The associated text draft remains compatibility `ready` as an approved-content integrity marker, not as the automation selector.
+Phase 1A is implemented: sources entering the workflow get a persistent Triage queue item, receive separate Reach/Follow/Conversation/Relationship scores, and keep the rule/AI recommendation separate from the selected route. The ordinary manual lane can move through Drafting -> Needs Review -> owner approval. A running Live Growth Operator delegation may instead approve eligible Original/Quote/Thread work, or a source-only Repost, through mission-agent authority without populating `humanApprovedAt`. Text routes retain their compatibility `ready` draft as an approved-content integrity marker; Repost deliberately has no Writer draft.
 
 Phase 1B Relationship Intelligence is also implemented: raw `audience_profiles` observations refresh separate strategic `relationship_profiles`; append-only `relationship_events` materialize counters/stages; TargetScore exposes its component breakdown and missing evidence; the dashboard and agent bridge provide read-only relationship inspection.
 
 Phase 1C Engage Next is implemented for discovery, evaluation, drafting, and measurement. Dry-run autonomous reply evaluation remains available. Live delegated replies may be executed by the persistent Growth Operator through its browser-agent lane when the persisted autonomous-reply grant, exact text/target gates, health state, and live context all permit the send. The background Node daemon does not inherit that browser authority.
 
-Phase 2 Content Quality is implemented across manual and delegated authority paths: routed formats persist behavior/persona provenance, text/thread parts, and editor/gate metadata; agents retrieve `writer-packet` and persist allow-listed structured output; approval recomputes purpose/provenance/clarity gates regardless of authority source. Local media publication remains blocked in the official API transport until a compliant media-upload owner is implemented.
+Phase 2 Content Quality is implemented across manual and delegated authority paths: routed text formats persist behavior/persona provenance, text/thread parts, and editor/gate metadata; agents retrieve `writer-packet` and persist allow-listed structured output; approval recomputes purpose/provenance/clarity gates regardless of authority source. Operator-attached local media remains unsupported by the background official-API transport, but the persistent browser lane now grants the exact claimed attachment a temporary `browser-fast` approved-artifact name and removes that allowlist entry after verified reconciliation.
 
-Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; approval may come from the ordinary owner lane or delegated mission-agent lane. The scheduler explains urgency/expiry/coverage/semantic timing. `AUTO_POST=true` requests background-daemon publication, and that daemon claims a row only when official X API user-context mutation is configured and the specific route is supported. Separately, a persistent Growth Operator may execute an already-authorized Original/Quote/Thread through its browser-agent lane and reconcile the verified result through Growth OS. Repost remains outside the scheduler path.
+Phase 3 Main-feed Distribution is implemented: approved main-feed queue rows, not compatibility `draft.status=ready` FIFO, are publication authority; approval may come from the ordinary owner lane or delegated mission-agent lane. The scheduler explains urgency/expiry/coverage/semantic timing for Original/Quote/Thread/Repost. `AUTO_POST=true` requests background-daemon publication, and that daemon claims a row only when its official X API user-context transport supports the specific route. Separately, a persistent Growth Operator may atomically claim and execute an already-authorized Original/Quote/Thread/Repost through its browser-agent lane, verify the exact rendered action/structure, and reconcile it through Growth OS. Native Repost therefore remains rare by strategy, not manual-only by transport.
 
 Phase 1D Account Health is implemented: append-only observed health/visibility evidence retains provenance; `health.js` derives HEALTHY/WATCH/CONSTRAINED plus SaturationPressure, reply repetition, Network Quality, and InteractionYield; the dashboard/bridge expose the structured diagnostics; Under the Hood is recorded only when observable; WATCH changes warnings/priority only, while supported hard evidence blocks explicit engagement send.
 
@@ -109,7 +109,7 @@ node post_thread.js --dry-run "preview only"
 npm run browser:check
 ```
 
-Scripted x.com mutation is disabled. Main-feed automation uses `POST https://api.x.com/2/tweets` only when `X_API_ACCESS_TOKEN` is configured. Transport errors with an unknown remote result stay non-retryable until reconciled; the system never falls back to browser mutation.
+The background Node daemon does not script the x.com UI; its main-feed write path uses `POST https://api.x.com/2/tweets` only when `X_API_ACCESS_TOKEN` is configured. Separately, the persistent Growth Operator may execute already-authorized work through the browser-agent lane (`browser-fast` first, `agent-browser` CLI fallback) and reconcile the verified public result through Growth OS. Unknown consequential results are non-retryable until reconciled.
 
 ## Automation
 
@@ -166,6 +166,9 @@ npm run agent -- research <<<'{"source":"x","limit":10}'
 npm run agent -- queue <<<'{"limit":20}'
 npm run agent -- schedule-next <<<'{}'
 npm run agent -- schedule-inspect <<<'{"key":"https://x.com/example/status/123"}'
+# Persistent Growth Operator only, immediately before an already-authorized browser action:
+npm run agent -- browser-publish-claim <<<'{"key":"https://x.com/example/status/123"}'
+npm run agent -- browser-reply-claim <<<'{"key":"https://x.com/example/status/123"}'
 npm run agent -- measurements <<<'{"limit":20}'
 npm run agent -- experiments <<<'{}'
 npm run agent -- experiment-summary <<<'{"id":1,"windowMinutes":60}'
@@ -200,4 +203,4 @@ When you manually give the agent an X post, it should inspect the exact source, 
 
 ## Important limitation
 
-Authenticated browser/private-web access remains dependent on X's live web application, so discovery, analytics, profile reads, browser-agent publication, and reconciliation can break when X changes its UI. The background Node daemon does **not** use browser mutation and remains official-X-API-only. The persistent Growth Operator has a separate browser-agent execution lane: prefer the harness-owned MCP `browser-fast` surface, use `browser-devtools` for diagnostics, fall back to a named `agent-browser` CLI session when Local/MCP is unavailable, and use raw repository browser/Puppeteer/Clearcote automation only as the final fallback. Browser execution never creates approval; exact repository authority, target/content gates, one-shot send semantics, structural verification, and Growth OS reconciliation remain required.
+Authenticated browser/private-web access remains dependent on X's live web application, so discovery, analytics, profile reads, browser-agent publication, and reconciliation can break when X changes its UI. The background Node daemon does **not** use browser mutation and remains official-X-API-only. The persistent Growth Operator has a separate browser-agent execution lane: prefer the harness-owned MCP `browser-fast` surface, use `browser-devtools` for diagnostics, fall back to the WebHarness-bundled Agent Browser CLI in a named session when Local/MCP is unavailable, and use the global `agent-browser` CLI only as a secondary fallback. The legacy repository Clearcote/xactions writer remains disabled because its reply-target integrity previously failed verification. Browser execution never creates approval; exact repository authority, target/content gates, one-shot send semantics, structural verification, and Growth OS reconciliation remain required.

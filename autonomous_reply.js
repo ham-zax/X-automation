@@ -580,24 +580,6 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
     });
     return { active: true, due: true, grant: startedGrant, runtime: nextRuntime, decisions: [], refreshFailed: true };
   }
-  if (startedGrant.mode === 'live' && typeof transport !== 'function') {
-    const nextRuntime = saveAutonomousReplyRuntimeState({
-      ...runtime,
-      lastAttemptAt: Number(now),
-      nextExpectedRefreshAt: Number(now) + startedGrant.refreshMinutes * 60_000,
-      lastError: 'No compliant X reply mutation transport is configured. AI-powered automatic replies remain disabled.',
-      lastDecisionCounts: { sent: 0, review: 0, skipped: 0 },
-    });
-    return {
-      active: true,
-      due: true,
-      blocked: true,
-      reason: 'compliant_reply_transport_unavailable',
-      grant: startedGrant,
-      runtime: nextRuntime,
-      decisions: [],
-    };
-  }
   const candidates = orderedUndecidedItems(startedGrant);
   const decisions = await processAutonomousReplyBatch(candidates, async (item) => {
     const grant = getAutonomousReplyGrant();
@@ -624,6 +606,10 @@ export async function runAutonomousReplyCycle({ now = Date.now(), refreshErrors 
     if (!authority.allowed) {
       return updateAutonomousReplyDecision(recorded.id, { decision: 'skipped', reasons: [...recorded.reasons, authority.reason] });
     }
+    // The background daemon does not own the persistent browser. Leave the exact
+    // live decision unclaimed so the Growth Operator can atomically claim it
+    // immediately before a verified browser send.
+    if (typeof transport !== 'function') return recorded;
     let claimed;
     try {
       claimed = claimAutonomousReplyDecision(recorded.id, { grantRevision: grant.revision, now: Date.now() });

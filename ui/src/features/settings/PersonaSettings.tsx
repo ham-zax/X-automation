@@ -125,6 +125,22 @@ export function PersonaSettings() {
         )}
       </section>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h3 className="text-lg font-semibold text-slate-900">Own-account evidence patterns</h3>
+        <p className="mt-1 text-sm text-slate-600">Observed public-account tendencies are kept separate from private beliefs and from causal growth claims.</p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {(model.accountEvidencePatterns || []).map((pattern, index) => (
+            <div key={pattern.id || index} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+              <div className="text-sm font-semibold text-slate-900">{humanize(pattern.id || `pattern_${index + 1}`)}</div>
+              {pattern.observation && <p className="mt-2 text-sm text-slate-700">{pattern.observation}</p>}
+              {pattern.use && <p className="mt-2 text-xs text-slate-600"><span className="font-semibold">Use:</span> {pattern.use}</p>}
+              {pattern.limit && <p className="mt-1 text-xs text-amber-700"><span className="font-semibold">Limit:</span> {pattern.limit}</p>}
+            </div>
+          ))}
+          {(model.accountEvidencePatterns || []).length === 0 && <p className="text-sm text-slate-500">No own-account evidence patterns have been promoted into the active model.</p>}
+        </div>
+      </section>
+
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <h3 className="text-lg font-semibold text-slate-900">Candidate beliefs</h3>

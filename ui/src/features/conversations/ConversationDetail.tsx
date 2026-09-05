@@ -4,6 +4,7 @@ import {
   Disclosure,
   Error,
   Loading,
+  Notice,
   Pending,
   TechnicalDetails,
   formatDateTime,
@@ -16,8 +17,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   const { data, isLoading, error, refetch } = useConversationDetail(candidateKey)
   const draftAction = useConversationAction('draft', candidateKey)
   const reviewAction = useConversationAction('review', candidateKey)
-  const approveSendAction = useConversationAction('approve-send', candidateKey)
-  const sendAction = useConversationAction('send', candidateKey)
+  const approveAction = useConversationAction('approve', candidateKey)
   const resolveAction = useConversationAction('resolve', candidateKey)
   const quoteAction = useConversationAction('quote', candidateKey)
 
@@ -34,19 +34,17 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
   }
 
   const editor = data.editor
-  const canApproveSend = data.flags.canApproveSend
-  const canSendApproved = data.flags.approved && !data.health.constrained
+  const canApproveReply = data.flags.canApproveReply
+  const approvedForBrowser = data.flags.approved && !data.health.constrained
   const actionError =
     (draftAction.isError && draftAction.error.message)
     || (reviewAction.isError && reviewAction.error.message)
-    || (approveSendAction.isError && approveSendAction.error.message)
-    || (sendAction.isError && sendAction.error.message)
+    || (approveAction.isError && approveAction.error.message)
     || (resolveAction.isError && resolveAction.error.message)
     || (quoteAction.isError && quoteAction.error.message)
     || null
 
-  const approveSendPending = approveSendAction.isPending
-  const sendPending = sendAction.isPending
+  const approvePending = approveAction.isPending
 
   return (
     <div className="space-y-6">
@@ -54,7 +52,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         <a href="#/conversations" className="text-sm font-medium text-slate-500 hover:text-slate-700">← Back to conversations</a>
       </div>
 
-      <article className="rounded-lg border border-slate-200 bg-white p-6">
+      <article className="operator-surface p-5 sm:p-6" data-tone="primary">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">
@@ -84,7 +82,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         )}
 
         {data.candidate && (
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <div className="operator-surface mt-4 p-4" data-tone="info">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Exact source</div>
             <div className="mt-1 break-words text-sm text-slate-800">{data.candidate.text}</div>
             {data.candidate.url && (
@@ -96,12 +94,11 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
         )}
 
         {data.rejectionReasons.length > 0 && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            This opportunity is currently unavailable.
+          <Notice tone="danger" title="This opportunity is currently unavailable">
             <Disclosure summary="Why?">
               {data.rejectionReasons.map((reason, index) => <div key={index}>{reason}</div>)}
             </Disclosure>
-          </div>
+          </Notice>
         )}
 
         <Disclosure summary="Why this recommendation?">
@@ -129,7 +126,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
       </article>
 
       {data.autonomousDecision && (
-        <section className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+        <section className="operator-surface p-4" data-tone="ai">
           <div className="flex flex-wrap items-center gap-2">
             <strong className="text-sky-950">Autonomous decision</strong>
             <Badge tone={data.autonomousDecision.decision.includes('review') ? 'warning' : data.autonomousDecision.decision.includes('send') || data.autonomousDecision.decision === 'sent' ? 'success' : 'neutral'}>{data.autonomousDecision.decision.replaceAll('_', ' ')}</Badge>
@@ -148,14 +145,11 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
       )}
 
       {data.health.constrained && data.status !== 'published' && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-          <strong>Sending is temporarily unavailable.</strong> Supported account evidence is currently limiting reply approval/sending.
-          {' '}<a href="/legacy?source=health" className="underline">Review account status</a>.
-        </div>
+        <Notice tone="danger" title="Sending is temporarily unavailable">Supported account evidence is currently limiting reply approval/sending. <a href="/legacy?source=health" className="underline">Review account status</a>.</Notice>
       )}
 
       {editor ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-6">
+        <section className="operator-surface p-5 sm:p-6" data-tone="ai">
           <GrowthFitPanel
             growthFit={editor.growthFit}
             queueItemId={editor.queueItem?.id ?? null}
@@ -170,7 +164,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                 <button
                   onClick={() => reviewAction.mutate({})}
                   disabled={reviewAction.isPending}
-                  className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                  className="action-button" data-variant="secondary"
                 >
                   {reviewAction.isPending ? 'Checking…' : editor.queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
                 </button>
@@ -178,62 +172,41 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
               </div>
             )}
 
-            {canApproveSend && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                {approveSendPending ? (
-                  <Pending label="Approving and sending the exact reply…" />
+            {canApproveReply && (
+              <div className="operator-surface p-4" data-tone="success">
+                {approvePending ? (
+                  <Pending label="Approving the exact reply…" />
                 ) : (
                   <button
-                    onClick={() => approveSendAction.mutate({})}
-                    className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                    onClick={() => approveAction.mutate({})}
+                    className="action-button" data-variant="success"
                   >
-                    Approve &amp; send exact reply
+                    Approve exact reply
                   </button>
                 )}
                 <div className="mt-1 text-xs text-emerald-900">
-                  This sends the exact text above as a reply on X after your approval. Nothing sends until you click.
+                  This freezes the exact reply for the browser-agent lane. The web server does not click X; the persistent Growth Operator must inspect the target, claim this exact reply, send once, and verify the parent/text before reconciliation.
                 </div>
               </div>
             )}
 
-            {canSendApproved && (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                {sendPending ? (
-                  <Pending label="Sending the approved reply…" />
-                ) : (
-                  <button
-                    onClick={() => sendAction.mutate({})}
-                    className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"
-                  >
-                    Send approved reply
-                  </button>
-                )}
-                <div className="mt-1 text-xs text-emerald-900">You already approved this exact text. This action sends it on X.</div>
-              </div>
+            {approvedForBrowser && (
+              <Notice tone="success" title="Approved for browser execution"><span className="text-xs">The exact text is frozen. A persistent Growth Operator can now inspect the live target and atomically claim it with <code>browser-reply-claim</code> immediately before the X action.</span></Notice>
             )}
 
-            {approveSendAction.isSuccess && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                Reply sent. The conversation status now reflects the authoritative result.
-              </div>
-            )}
-            {sendAction.isSuccess && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-                Reply sent. The conversation status now reflects the authoritative result.
-              </div>
-            )}
+            {approveAction.isSuccess && <Notice tone="success" title="Reply approved">It is ready for the browser-agent execution lane; no X mutation happened in the web server.</Notice>}
           </div>
         </section>
       ) : draftAction.isPending ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="operator-surface p-5 sm:p-6">
           <Pending label="Generating a reply draft with AI…" />
         </div>
       ) : (
-        <div className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="operator-surface p-5 sm:p-6">
           <div className="text-sm text-slate-600">No reply draft yet. Generate one with AI, then review the exact text before approving.</div>
           <button
             onClick={() => draftAction.mutate({})}
-            className="mt-3 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+            className="action-button mt-3" data-variant="primary"
           >
             Generate reply with AI
           </button>
@@ -250,7 +223,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                   if (draftId) navigate(`/draft/${draftId}`)
                 } })}
                 disabled={quoteAction.isPending}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                className="action-button" data-variant="secondary"
               >
                 Make a quote post instead
               </button>
@@ -258,14 +231,14 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
             <button
               onClick={() => resolveAction.mutate({ action: 'ignore' }, { onSuccess: () => navigate('/conversations') })}
               disabled={resolveAction.isPending}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="action-button" data-variant="secondary"
             >
               Skip conversation
             </button>
             <button
               onClick={() => resolveAction.mutate({ action: 'expire' }, { onSuccess: () => navigate('/conversations') })}
               disabled={resolveAction.isPending}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              className="action-button" data-variant="secondary"
             >
               No longer useful
             </button>
@@ -274,7 +247,7 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
       )}
 
       {actionError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</div>
+        <Notice tone="danger" title="Action failed">{actionError}</Notice>
       )}
     </div>
   )

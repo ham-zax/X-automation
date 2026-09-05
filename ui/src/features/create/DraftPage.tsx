@@ -4,6 +4,7 @@ import {
   Disclosure,
   Error,
   Loading,
+  Notice,
   Pending,
   formatDateTime,
 } from '../../components/primitives'
@@ -39,7 +40,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
         </a>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-6">
+      <div className="operator-surface p-5 sm:p-6" data-tone="ai">
         <GrowthFitPanel
           growthFit={data.growthFit}
           queueItemId={queueItem?.id ?? null}
@@ -48,30 +49,22 @@ export function DraftPage({ draftId }: { draftId: number }) {
         <div className="mt-5"><DraftEditor data={data} /></div>
 
         <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
-          {flags.canApproveSend && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="text-sm text-emerald-900">
-                <strong>Ready to approve and send.</strong> Use the send control in the conversation view to send this exact reply on X.
-              </div>
+          {flags.canApproveReply && (
+            <Notice tone="success" title="Ready for exact-reply approval">
+              Use the conversation view to freeze this text for the browser-agent execution lane.
               {queueItem && (
-                <a href={`#/conversations/${encodeURIComponent(queueItem.candidateKey)}`} className="mt-2 inline-block text-sm font-medium text-emerald-800 underline">
-                  Go to conversation →
-                </a>
+                <a href={`#/conversations/${encodeURIComponent(queueItem.candidateKey)}`} className="mt-2 inline-block text-sm font-semibold text-indigo-700 underline">Go to conversation →</a>
               )}
-            </div>
+            </Notice>
           )}
 
-          {flags.canSendApproved && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-              <div className="text-sm text-emerald-900">
-                <strong>Approved — not sent yet.</strong> Use the send control in the conversation view to send this exact reply on X.
-              </div>
+          {flags.approvedReplyReadyForBrowser && (
+            <Notice tone="success" title="Approved — not sent yet">
+              The exact text is frozen for the persistent Growth Operator; browser execution will claim it only when the live target is ready.
               {queueItem && (
-                <a href={`#/conversations/${encodeURIComponent(queueItem.candidateKey)}`} className="mt-2 inline-block text-sm font-medium text-emerald-800 underline">
-                  Go to conversation →
-                </a>
+                <a href={`#/conversations/${encodeURIComponent(queueItem.candidateKey)}`} className="mt-2 inline-block text-sm font-semibold text-indigo-700 underline">Go to conversation →</a>
               )}
-            </div>
+            </Notice>
           )}
 
           {flags.canReview && (
@@ -79,7 +72,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
               <button
                 onClick={() => review.mutate({ key: data.candidate.key })}
                 disabled={review.isPending}
-                className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+                className="action-button" data-variant="secondary"
               >
                 {review.isPending ? 'Checking…' : queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
               </button>
@@ -88,13 +81,13 @@ export function DraftPage({ draftId }: { draftId: number }) {
           )}
 
           {flags.canApprove && (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+            <div className="operator-surface p-4" data-tone="success">
               {approve.isPending ? (
                 <Pending label="Approving…" />
               ) : (
                 <button
                   onClick={() => approve.mutate({ key: data.candidate.key })}
-                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  className="action-button" data-variant="success"
                 >
                   Approve for publishing
                 </button>
@@ -106,8 +99,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
           )}
 
           {flags.approvedMainFeed && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-              <strong>Approved — not published yet.</strong>
+            <Notice tone="success" title="Approved — not published yet">
               {schedule ? (
                 <>
                   {' '}Recommended publishing time:{' '}
@@ -115,21 +107,18 @@ export function DraftPage({ draftId }: { draftId: number }) {
                 </>
               ) : null}
               {' '}The publishing plan lives in <a href="#/create" className="underline">Posts</a>.
-            </div>
+            </Notice>
           )}
 
           {queueItem?.publishedAt && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-800">
-              <strong>Published.</strong> {formatDateTime(queueItem.publishedAt)}
+            <Notice tone="neutral" title="Published">
+              {formatDateTime(queueItem.publishedAt)}
               {queueItem.outputUrl && <> · <a href={queueItem.outputUrl} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">view post ↗</a></>}
-            </div>
+            </Notice>
           )}
 
           {queueItem?.publishError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
-              <strong>A publishing attempt failed.</strong> {queueItem.publishError}
-              {' '}The item remains inspectable for a human decision.
-            </div>
+            <Notice tone="danger" title="A publishing attempt failed">{queueItem.publishError} The item remains inspectable for a human decision.</Notice>
           )}
         </div>
 
@@ -137,7 +126,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
           <Disclosure summary="Publishing plan details">
             <div className="text-sm text-slate-700">
               Recommended: {schedule.recommendedAt == null ? 'not ready yet' : formatDateTime(schedule.recommendedAt)}
-              {schedule.manualOnly ? ' · reposts remain manual' : ''}
+              {schedule.manualOnly ? ' · repost via browser-agent or manual action' : ''}
               {schedule.scheduleSource === 'human' ? ' · you chose this time' : ''}
             </div>
             <div className="mt-1 text-xs text-slate-500">{schedule.reason}</div>
@@ -147,7 +136,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
       </div>
 
       {actionError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</div>
+        <Notice tone="danger" title="Action failed">{actionError}</Notice>
       )}
     </div>
   )

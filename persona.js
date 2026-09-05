@@ -66,6 +66,7 @@ export function getPersonaModelSummary(options = {}) {
     identity: model.identity || {},
     operatorDecisions: model.operatorDecisions || {},
     candidateBeliefs: Array.isArray(model.candidateBeliefs) ? model.candidateBeliefs : [],
+    accountEvidencePatterns: Array.isArray(model.accountEvidencePatterns) ? model.accountEvidencePatterns : [],
     knownUnknowns: Array.isArray(model.knownUnknowns) ? model.knownUnknowns : [],
     sourceArtifacts: Array.isArray(model.sourceArtifacts) ? model.sourceArtifacts : [],
   };
@@ -78,6 +79,7 @@ export function getPersonaSlice(consumer, options = {}) {
     status: String(model.status || ''),
     identity: model.identity || {},
     operatorDecisions: model.operatorDecisions || {},
+    accountEvidencePatterns: Array.isArray(model.accountEvidencePatterns) ? model.accountEvidencePatterns : [],
     currentStances: getCurrentPersonaStances({ limit: 200 }),
   };
 

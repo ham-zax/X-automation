@@ -6,7 +6,9 @@ import {
   useRoutingDecision,
   type DiscoveredCandidate,
 } from '../../api/client'
-import { Loading, Error, Empty, Badge, Disclosure, Pending, formatDateTime, formatNumber } from '../../components/primitives'
+import { Loading, Error, Empty, Badge, Disclosure, Notice, Pending, formatDateTime, formatNumber } from '../../components/primitives'
+import { PageHeader, SegmentedTabs } from '../../components/workspace'
+import { resolveDiscoverPrimaryAction, resolveDiscoverSelection } from './discoverView'
 import { navigate } from '../../router'
 import { GrowthFitPanel } from '../create/GrowthFitPanel'
 
@@ -23,15 +25,15 @@ const FEEDS = [
 ]
 
 const FEED_DESCRIPTIONS: Record<string, string> = {
-  'for-you': 'Your unresolved inbox across sources. Live source tabs are snapshots; items stay here until you draft, pause, skip, or complete them.',
-  x: 'Latest fetched posts from the configured X topic searches, re-ranked for your topics. This is not X’s global timeline or Trends page.',
-  trending: 'Latest fetched Top results from the core AI/dev-tool X searches over the last 24 hours, then ranked by observed momentum. This is not X’s global Trends page.',
-  opportunities: 'Unresolved X sources in your inbox that match the relationship, career, builder, or business opportunity filters.',
-  github: 'Latest fetched GitHub Trending repositories for Today, preserved in GitHub’s displayed order.',
-  hn: 'Latest fetched Hacker News Top Stories snapshot, preserved in the official API order.',
-  saved: 'Sources you explicitly bookmarked for reference, whether or not you already acted on them.',
-  handled: 'Sources with recorded publication, quote, reply, or repost history.',
-  all: 'Your persisted source history across active, paused, skipped, and completed work.',
+  'for-you': 'Unresolved opportunities across sources.',
+  x: 'Latest X search snapshot, ranked for your topics — not the global timeline.',
+  trending: 'Recent X search results ranked by observed momentum — not global Trends.',
+  opportunities: 'Relationship, career, builder, and business opportunities.',
+  github: 'Today’s GitHub Trending snapshot.',
+  hn: 'Current Hacker News Top Stories snapshot.',
+  saved: 'Bookmarked sources.',
+  handled: 'Sources with recorded actions.',
+  all: 'Persisted source history.',
 }
 
 function candidateMetricLine(candidate: DiscoveredCandidate): string {
@@ -88,7 +90,50 @@ function editorialPlanLabel(candidate: DiscoveredCandidate) {
   return `In today's plan · ${pipeline}`
 }
 
-function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; index: number }) {
+function CandidateRow({
+  candidate,
+  index,
+  selected,
+  onSelect,
+}: {
+  candidate: DiscoveredCandidate
+  index: number
+  selected: boolean
+  onSelect: () => void
+}) {
+  const sourceRank = Number(candidate.metrics.rank || 0) || index + 1
+  const source = candidate.metrics.kind === 'github'
+    ? 'GitHub'
+    : candidate.metrics.kind === 'hn'
+      ? 'Hacker News'
+      : candidate.viral
+        ? 'X momentum'
+        : 'X'
+  const state = candidate.completion?.label
+    || candidate.queue?.statusLabel
+    || editorialPlanLabel(candidate)
+    || (candidate.saved ? 'Bookmarked' : '')
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className="selection-row w-full border-b border-slate-200 bg-white px-3 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50"
+      data-selected={selected ? 'true' : 'false'}
+    >
+      <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+        <span>#{sourceRank} · {source}</span>
+        {state && <span className="max-w-[45%] truncate text-slate-600 normal-case tracking-normal">{state}</span>}
+      </div>
+      <div className="mt-1.5 truncate text-sm font-semibold text-slate-900">{candidate.title}</div>
+      {candidate.displayText && <div className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">{candidate.displayText}</div>}
+      <div className="mt-2 truncate text-[11px] text-slate-500">{candidateMetricLine(candidate)}</div>
+    </button>
+  )
+}
+
+function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate; index: number }) {
   const triage = useDiscoverTriage()
   const routingDecision = useRoutingDecision()
   const pendingAction = triage.variables?.key === candidate.key && triage.isPending ? triage.variables.action : null
@@ -131,9 +176,15 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
     && queue.routingDecision.recommendedPipeline === queue.recommendedPipeline
     && queue.routingDecision.routingReason === queue.routingReason
   const canProceed = candidate.growthFit.allowed && (!ignoredByRecommendation || ignoreOverrideCurrent)
+  const primaryAction = resolveDiscoverPrimaryAction({ recommendedPipeline: queue?.recommendedPipeline, isX, canProceed, skipped })
+  const primaryActionLabel = primaryAction === 'ignore'
+    ? 'Skip source'
+    : primaryAction
+      ? `${skipped ? 'Reopen as' : 'Start'} ${primaryAction === 'original' ? 'original' : primaryAction} ${skipped ? '' : 'draft'}`.trim()
+      : null
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-6">
+    <article className="operator-surface p-5 sm:p-6" data-tone="primary">
       <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
         <div>
           <div className="text-lg font-semibold text-slate-900">#{sourceRank || index + 1} {candidate.title}</div>
@@ -143,22 +194,18 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {candidate.viral
-            ? <Badge tone="danger">Internal momentum · {candidate.viral.label}</Badge>
-            : <Badge>{isGitHubTrending ? 'GitHub Trending' : isGitHub ? 'Legacy GitHub signal' : isHnTopStory ? 'HN Top Stories' : isHn ? 'Historical HN signal' : 'X search signal'}</Badge>}
-          {candidate.saved && <Badge tone="success">Bookmarked</Badge>}
-          {planLabel && <Badge tone={candidate.editorialPlan?.decision === 'RESEARCH_MORE' ? 'warning' : 'info'}>{planLabel}</Badge>}
-          {completion ? <Badge tone="success">Handled · {completion.label}</Badge> : queue && <Badge tone="info">{queue.statusLabel}</Badge>}
+          {candidate.viral && <Badge tone="danger">Momentum</Badge>}
+          {candidate.saved && <Badge tone="success">Saved</Badge>}
+          {completion
+            ? <Badge tone="success">{completion.label}</Badge>
+            : planLabel
+              ? <Badge tone={candidate.editorialPlan?.decision === 'RESEARCH_MORE' ? 'warning' : 'info'}>{planLabel}</Badge>
+              : queue && <Badge tone="info">{queue.statusLabel}</Badge>}
         </div>
       </div>
 
       <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />
 
-      {!classificationNeedsRefresh && candidate.niche.tags.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {candidate.niche.tags.map((tag) => <Badge key={tag.tag} tone="info">{tag.label}</Badge>)}
-        </div>
-      )}
 
       {candidate.viral && (
         <Disclosure summary="X momentum details">
@@ -171,7 +218,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         </Disclosure>
       )}
 
-      {candidate.displayText && <p className="mt-3 text-sm leading-6 text-slate-700 break-words">{candidate.displayText}</p>}
+      {candidate.displayText && <p className="mt-3 line-clamp-4 break-words text-sm leading-6 text-slate-700">{candidate.displayText}</p>}
       <div className="mt-2 text-xs text-slate-500">{candidateMetricLine(candidate)}</div>
       {movement && <div className="mt-1 text-xs font-medium text-slate-600">Source movement: {movement}</div>}
 
@@ -181,10 +228,11 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
         </div>
       )}
       {!completion && ignoredByRecommendation && queue && (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <div className="mt-3"><Notice tone="warning" title={ignoreOverrideCurrent ? 'Human decision: use anyway' : 'Current recommendation: Ignore'}>
+          <div>
           {ignoreOverrideCurrent ? (
             <>
-              <strong>Human decision: use anyway.</strong> {queue.routingDecision.reason}
+              {queue.routingDecision.reason}
               <button
                 type="button"
                 onClick={() => routingDecision.mutate({ queueItemId: queue.id, decision: 'clear_override' })}
@@ -196,7 +244,7 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
             </>
           ) : (
             <>
-              <strong>Current recommendation: Ignore.</strong> Draft actions stay blocked until you explicitly override this recommendation.
+              Draft actions stay blocked until you explicitly override this recommendation.
               <button
                 type="button"
                 onClick={() => {
@@ -204,15 +252,16 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
                   if (reason) routingDecision.mutate({ queueItemId: queue.id, decision: 'use_anyway', reason })
                 }}
                 disabled={routingDecision.isPending}
-                className="ml-2 rounded-md border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 disabled:opacity-50"
+                className="action-button ml-2 !min-h-0 !px-2 !py-1 text-xs" data-variant="secondary"
               >
                 Use anyway
               </button>
             </>
           )}
-          <div className="mt-1 text-xs text-amber-800">This records human routing provenance only. It does not approve, schedule, or publish anything.</div>
+          <div className="mt-1 text-xs text-slate-600">This records human routing provenance only. It does not approve, schedule, or publish anything.</div>
           {routingDecision.error && <div className="mt-1 text-xs text-red-700">{routingDecision.error.message}</div>}
-        </div>
+          </div>
+        </Notice></div>
       )}
       {!completion && queue?.draftId && (
         <div className="mt-2">
@@ -223,25 +272,23 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
       )}
 
       {completion && (
-        <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-          <strong>{completion.summary}</strong>
-          {completion.occurredAt ? ` ${formatDateTime(completion.occurredAt)}.` : ''}
-          {completion.outputUrl && (
-            <> <a href={completion.outputUrl} target="_blank" rel="noopener noreferrer" className="font-medium underline">View your {completion.label.toLowerCase()} ↗</a></>
-          )}
-        </div>
+        <div className="mt-3"><Notice tone="success" title={completion.summary}>
+          {completion.occurredAt ? <>Recorded {formatDateTime(completion.occurredAt)}. </> : null}
+          {completion.outputUrl && <a href={completion.outputUrl} target="_blank" rel="noopener noreferrer" className="font-medium underline">View your {completion.label.toLowerCase()} ↗</a>}
+        </Notice></div>
       )}
       {!completion && skipped && (
         <div className="mt-3 text-sm text-slate-600">You skipped this source. Choosing a draft action below reopens it.</div>
       )}
 
       {!classificationNeedsRefresh && candidate.niche.score != null && (
-        <Disclosure summary="Classification evidence">
+        <Disclosure summary="Classification evidence" className="compact-disclosure">
           <div className="flex flex-wrap gap-1">
+            {candidate.niche.tags.map((tag) => <Badge key={tag.tag} tone="info">{tag.label}</Badge>)}
             {candidate.niche.matches.map((match) => <Badge key={match}>{match}</Badge>)}
-            <Badge>Classifier topic score {candidate.niche.score}/50</Badge>
+            <Badge>Topic score {candidate.niche.score}/50</Badge>
             {candidate.niche.profileRevision != null && candidate.niche.classifierVersion != null && (
-              <Badge>Classification rev {candidate.niche.profileRevision} · v{candidate.niche.classifierVersion}</Badge>
+              <Badge>rev {candidate.niche.profileRevision} · v{candidate.niche.classifierVersion}</Badge>
             )}
           </div>
         </Disclosure>
@@ -255,107 +302,59 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
               ? <Pending label="Discarding draft…" />
               : pendingAction === 'ignore'
                 ? <Pending label="Skipping source…" />
-              : <Pending label={pendingAction === 'unsave' ? 'Removing bookmark…' : 'Saving bookmark…'} />}
+                : <Pending label={pendingAction === 'unsave' ? 'Removing bookmark…' : 'Saving bookmark…'} />}
         </div>
       ) : completion ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${candidate.saved ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-          >
-            {candidate.saved ? 'Remove bookmark' : 'Bookmark for reference'}
+        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+          <button onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')} className="text-sm font-semibold text-indigo-700 hover:underline">
+            {candidate.saved ? 'Remove bookmark' : 'Bookmark'}
           </button>
-          {candidate.url && (
-            <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
-              {openSourceLabel}
-            </a>
-          )}
+          {candidate.url && <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-indigo-700 hover:underline">{openSourceLabel}</a>}
           {isHn && typeof candidate.metrics.hnUrl === 'string' && candidate.metrics.hnUrl && candidate.metrics.hnUrl !== candidate.url && (
-            <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
-              HN discussion ↗
-            </a>
+            <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-indigo-700 hover:underline">HN discussion ↗</a>
           )}
         </div>
       ) : (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => runTriage('original')}
-            disabled={!canProceed}
-            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {skipped ? 'Reopen as original' : 'Start original draft'}
-          </button>
-          {isX && (
-            <button
-              onClick={() => runTriage('quote')}
-              disabled={!canProceed}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-            >
-              {skipped ? 'Reopen as quote' : 'Start quote draft'}
-            </button>
-          )}
-          <button
-            onClick={() => runTriage('thread')}
-            disabled={!canProceed}
-            className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-          >
-            {skipped ? 'Reopen as thread' : 'Start thread draft'}
-          </button>
-          {isX && (
-            <button
-              onClick={() => runTriage('reply')}
-              disabled={!canProceed}
-              className="rounded-md bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-            >
-              {skipped ? 'Reopen as reply' : 'Start reply draft'}
-            </button>
-          )}
-          <button
-            onClick={() => runTriage(candidate.saved ? 'unsave' : 'save')}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium ${candidate.saved ? 'border border-emerald-300 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
-          >
-            {candidate.saved ? 'Remove bookmark' : 'Bookmark for reference'}
-          </button>
-          {queue?.draftId && (
-            <button
-              onClick={() => {
-                if (window.confirm('Discard this draft? The source and its history will remain available.')) runTriage('discard')
-              }}
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700"
-            >
-              Discard draft
-            </button>
-          )}
-          {!skipped && (
-            <button
-              onClick={() => runTriage('ignore')}
-              title="Stop pursuing this source. A bookmarked source stays bookmarked until you remove the bookmark."
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
-            >
-              Skip source
-            </button>
-          )}
-          {candidate.url && (
-            <a
-              href={candidate.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700"
-            >
-              {openSourceLabel}
-            </a>
-          )}
-          {isHn && typeof candidate.metrics.hnUrl === 'string' && candidate.metrics.hnUrl && candidate.metrics.hnUrl !== candidate.url && (
-            <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="rounded-md px-3 py-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
-              HN discussion ↗
-            </a>
-          )}
+        <div className="mt-4">
+          <div className="flex flex-wrap items-center gap-2">
+            {primaryAction && primaryActionLabel && (
+              <button
+                onClick={() => runTriage(primaryAction)}
+                className="action-button"
+                data-variant={primaryAction === 'ignore' ? 'secondary' : 'primary'}
+              >
+                {primaryActionLabel}
+              </button>
+            )}
+            {candidate.saved
+              ? <button onClick={() => runTriage('unsave')} className="text-sm font-semibold text-indigo-700 hover:underline">Remove bookmark</button>
+              : <button onClick={() => runTriage('save')} className="text-sm font-semibold text-indigo-700 hover:underline">Bookmark</button>}
+            {candidate.url && <a href={candidate.url} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-indigo-700 hover:underline">{openSourceLabel}</a>}
+          </div>
+
+          <Disclosure summary="More actions" className="compact-disclosure">
+            <div className="flex flex-wrap items-center gap-2">
+              {primaryAction !== 'original' && <button onClick={() => runTriage('original')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as original' : 'Original draft'}</button>}
+              {isX && primaryAction !== 'quote' && <button onClick={() => runTriage('quote')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as quote' : 'Quote draft'}</button>}
+              {primaryAction !== 'thread' && <button onClick={() => runTriage('thread')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as thread' : 'Thread draft'}</button>}
+              {isX && primaryAction !== 'reply' && <button onClick={() => runTriage('reply')} disabled={!canProceed} className="action-button" data-variant="secondary">{skipped ? 'Reopen as reply' : 'Reply draft'}</button>}
+              {queue?.draftId && (
+                <button
+                  onClick={() => { if (window.confirm('Discard this draft? The source and its history will remain available.')) runTriage('discard') }}
+                  className="action-button"
+                  data-variant="danger"
+                >Discard draft</button>
+              )}
+              {!skipped && primaryAction !== 'ignore' && <button onClick={() => runTriage('ignore')} className="action-button" data-variant="ghost">Skip source</button>}
+              {isHn && typeof candidate.metrics.hnUrl === 'string' && candidate.metrics.hnUrl && candidate.metrics.hnUrl !== candidate.url && (
+                <a href={candidate.metrics.hnUrl} target="_blank" rel="noopener noreferrer" className="action-button" data-variant="ghost">HN discussion ↗</a>
+              )}
+            </div>
+          </Disclosure>
         </div>
       )}
 
-      {error && (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error.message}</div>
-      )}
+      {error && <div className="mt-3"><Notice tone="danger" title="Action blocked">{error.message}</Notice></div>}
     </article>
   )
 }
@@ -363,8 +362,12 @@ function CandidateCard({ candidate, index }: { candidate: DiscoveredCandidate; i
 export function Discover() {
   const [feed, setFeed] = useState('for-you')
   const [tag, setTag] = useState('')
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const { data, isLoading, error, refetch } = useDiscover(feed, tag)
   const refresh = useDiscoverRefresh()
+  const resolvedSelectedKey = resolveDiscoverSelection(data?.candidates || [], selectedKey)
+  const selectedIndex = data?.candidates.findIndex((candidate) => candidate.key === resolvedSelectedKey) ?? -1
+  const selectedCandidate = selectedIndex >= 0 ? data?.candidates[selectedIndex] : null
   const autoRefreshed = useRef<string | null>(null)
 
   // Match legacy behavior: refresh a source automatically when its feed is empty on first load.
@@ -378,66 +381,47 @@ export function Discover() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Discover</h2>
-          <p className="mt-1 text-sm text-slate-600">{FEED_DESCRIPTIONS[feed] || 'Find useful things worth talking about.'}</p>
-        </div>
-        {data?.refreshable && (
+      <PageHeader
+        eyebrow="Signal triage"
+        title="Discover"
+        note={FEED_DESCRIPTIONS[feed] || 'Find useful things worth talking about.'}
+        right={data?.refreshable ? (
           <button
             onClick={() => refresh.mutate(data.refreshable as string)}
             disabled={refresh.isPending}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            className="action-button" data-variant="secondary"
           >
             {refresh.isPending ? 'Refreshing source…' : 'Refresh source'}
           </button>
+        ) : undefined}
+      />
+
+      <div className="space-y-3">
+        <SegmentedTabs
+          active={feed}
+          items={FEEDS}
+          ariaLabel="Discovery source"
+          onChange={(next) => { setFeed(next); setTag(''); setSelectedKey(null) }}
+        />
+
+        {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'x' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
+          <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
+            <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500" htmlFor="discover-topic">Topic</label>
+            <select
+              id="discover-topic"
+              value={tag}
+              onChange={(event) => { setTag(event.target.value); setSelectedKey(null) }}
+              className="min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700"
+            >
+              <option value="">All topics</option>
+              {data.topicFilters.map((topic) => <option key={topic.value} value={topic.value}>{topic.label}</option>)}
+            </select>
+          </div>
         )}
       </div>
 
-      {refresh.isError && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Refresh failed: {refresh.error.message}
-        </div>
-      )}
-      {data?.sourceError && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          The last source refresh had a partial error: {data.sourceError}
-        </div>
-      )}
-
-      <div className="flex flex-wrap gap-2">
-        {FEEDS.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => { setFeed(item.id); setTag('') }}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-              feed === item.id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:text-slate-900'
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'x' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setTag('')}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${!tag ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
-          >
-            All topics
-          </button>
-          {data.topicFilters.map((topic) => (
-            <button
-              key={topic.value}
-              onClick={() => setTag(topic.value)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${tag === topic.value ? 'bg-sky-600 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'}`}
-            >
-              {topic.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {refresh.isError && <Notice tone="warning" title="Refresh failed">{refresh.error.message}</Notice>}
+      {data?.sourceError && <Notice tone="warning" title="Partial source refresh">{data.sourceError}</Notice>}
 
       {isLoading ? (
         <Loading message="Loading discoveries..." />
@@ -449,19 +433,49 @@ export function Discover() {
           message={data?.refreshable ? 'This source refreshes automatically the first time it is empty, or use Refresh source.' : 'Check back later or try another view.'}
         />
       ) : (
-        <>
-          <div className="text-sm text-slate-600">
-            <div>{data.total} {data.total === 1 ? 'item' : 'items'}</div>
-            {data.snapshotAt && <div className="mt-1 text-xs text-slate-500">Source snapshot updated {formatDateTime(data.snapshotAt)}. Refresh source to check upstream again.</div>}
-            {data.lastRefreshAttemptAt && data.lastRefreshAttemptAt !== data.snapshotAt && <div className="mt-1 text-xs text-slate-500">Last refresh attempt {formatDateTime(data.lastRefreshAttemptAt)}.</div>}
-            {data.legacyFallback && <div className="mt-1 text-xs text-amber-700">Showing the preserved legacy snapshot until the next successful canonical refresh.</div>}
-          </div>
-          <div className="space-y-4">
-            {data.candidates.map((candidate, index) => (
-              <CandidateCard key={candidate.key} candidate={candidate} index={index} />
-            ))}
-          </div>
-        </>
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(300px,0.72fr)_minmax(0,1.55fr)]">
+          <section className="operator-surface overflow-hidden" aria-label="Discovery candidates">
+            <div className="border-b border-slate-200 px-3 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-slate-900">To scan</div>
+                <div className="text-xs tabular-nums text-slate-500">{data.total} {data.total === 1 ? 'item' : 'items'}</div>
+              </div>
+              {data.snapshotAt && <div className="mt-1 text-[11px] text-slate-500">Snapshot {formatDateTime(data.snapshotAt)}</div>}
+              {data.lastRefreshAttemptAt && data.lastRefreshAttemptAt !== data.snapshotAt && <div className="mt-1 text-[11px] text-slate-500">Last refresh attempt {formatDateTime(data.lastRefreshAttemptAt)}</div>}
+              {data.legacyFallback && <div className="mt-1 text-[11px] text-amber-700">Preserved legacy snapshot until the next canonical refresh.</div>}
+            </div>
+            <div className="xl:max-h-[calc(100vh-13rem)] xl:overflow-y-auto">
+              {data.candidates.map((candidate, index) => {
+                const selected = candidate.key === resolvedSelectedKey
+                return (
+                  <div key={candidate.key}>
+                    <CandidateRow
+                      candidate={candidate}
+                      index={index}
+                      selected={selected}
+                      onSelect={() => setSelectedKey(candidate.key)}
+                    />
+                    {selected && (
+                      <div className="border-b border-slate-200 bg-[var(--ui-surface-subtle)] p-2 xl:hidden">
+                        <CandidateDetail candidate={candidate} index={index} />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="hidden xl:block" aria-label="Selected discovery detail">
+            <div className="sticky-detail">
+              {selectedCandidate ? (
+                <CandidateDetail candidate={selectedCandidate} index={selectedIndex} />
+              ) : (
+                <Empty title="Select a signal" message="Choose a candidate from the list to inspect its evidence and actions." />
+              )}
+            </div>
+          </section>
+        </div>
       )}
     </div>
   )

@@ -3,11 +3,13 @@ import {
   Disclosure,
   Error,
   Loading,
-  StatCard,
+  Notice,
   TechnicalDetails,
   formatDateTime,
   formatNumber,
 } from '../../components/primitives'
+import { MetricCard, PageHeader } from '../../components/workspace'
+import { describeGrowthConstraint } from './resultsView'
 
 function distributionText(distribution: { values: Record<string, { count: number; share: number }> }) {
   const entries = Object.entries(distribution.values || {})
@@ -118,83 +120,85 @@ export function Results() {
   const health = data.accountHealth
   const responseRate = data.conversations.responseRate
   const continuationRate = data.conversations.continuationRate
+  const growthBrief = describeGrowthConstraint({
+    responseRate,
+    continuationRate,
+    meaningfulInteractions7d: data.conversations.meaningfulInteractions7d,
+  })
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Results</h2>
-          <p className="mt-1 text-sm text-slate-600">A plain-language view of recent outcomes. Detailed measurements remain available when you need them.</p>
-        </div>
-        <button
-          onClick={() => refresh.mutate()}
-          disabled={refresh.isPending}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-        >
-          {refresh.isPending ? 'Refreshing account metrics…' : 'Refresh account metrics'}
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Measured outcomes"
+        title="Results"
+        note="Recent outcomes with uncertainty kept explicit."
+        right={(
+          <button
+            onClick={() => refresh.mutate()}
+            disabled={refresh.isPending}
+            className="action-button" data-variant="secondary"
+          >
+            {refresh.isPending ? 'Refreshing account metrics…' : 'Refresh account metrics'}
+          </button>
+        )}
+      />
 
-      {refresh.isError && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Refresh failed: {refresh.error.message}
-        </div>
-      )}
+      {refresh.isError && <Notice tone="warning" title="Refresh failed">{refresh.error.message}</Notice>}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <StatCard
+      <Notice tone={growthBrief.level === 'watch' ? 'warning' : 'neutral'} title={<><span className="block text-[11px] uppercase tracking-[0.12em] opacity-75">Growth brief</span><span className="mt-1 block text-lg tracking-tight text-slate-900">{growthBrief.title}</span></>}>
+        <span className="max-w-4xl text-sm leading-6">{growthBrief.body}</span>
+      </Notice>
+
+      <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+        <MetricCard
           label="Audience"
-          value={data.account ? formatNumber(data.account.followers) : 'No snapshot yet'}
-          note={
-            data.account
-              ? `${data.audience.relevantFollowers} observed followers match the target AI/developer audience${data.account.followerDelta != null ? ` · ${data.account.followerDelta >= 0 ? '+' : ''}${data.account.followerDelta} since the previous snapshot` : ''}`
-              : 'Refresh account metrics to capture one.'
-          }
+          value={data.account ? formatNumber(data.account.followers) : 'No snapshot'}
+          note={data.account
+            ? `${data.audience.relevantFollowers} observed match target audience${data.account.followerDelta != null ? ` · ${data.account.followerDelta >= 0 ? '+' : ''}${data.account.followerDelta} since previous snapshot` : ''}`
+            : 'Refresh metrics to capture a snapshot.'}
+          tone="primary"
         />
-        <StatCard
-          label="New follower quality · 24h"
-          value={`${data.followerQuality.nicheAlignedNewFollowers} relevant / ${data.followerQuality.newlyObservedFollowers} newly observed`}
-          note="First-observed follower quality, not a claimed causal follow event."
+        <MetricCard
+          label="Follower quality · 24h"
+          value={`${data.followerQuality.nicheAlignedNewFollowers} / ${data.followerQuality.newlyObservedFollowers}`}
+          note="Relevant / newly observed; not a causal follow claim."
+          tone="success"
         />
-        <StatCard
-          label="Conversations"
-          value={`${data.conversations.meaningfulInteractions7d} useful interactions · 7d`}
-          note={
-            responseRate == null
-              ? 'Not enough conversation history for a response rate yet.'
-              : `${responseRate}% of measured initial conversations received a response${continuationRate == null ? '' : ` · ${continuationRate}% continued`}.`
-          }
+        <MetricCard
+          label="Useful interactions · 7d"
+          value={data.conversations.meaningfulInteractions7d}
+          note={responseRate == null ? 'Response rate not established yet.' : `${responseRate}% initial response${continuationRate == null ? '' : ` · ${continuationRate}% continued`}`}
+          tone={continuationRate === 0 ? "warning" : "info"}
         />
-        <StatCard
+        <MetricCard
           label="Account status"
           value={health.label}
-          note="Internal efficiency warnings remain separate from observed platform constraints."
+          note="Efficiency warnings remain separate from platform constraints."
+          tone={health.state === "healthy" ? "success" : health.state === "constrained" ? "danger" : "warning"}
         />
       </div>
 
       {health.state !== 'healthy' ? (
-        <div className={`rounded-lg border p-4 text-sm ${health.state === 'constrained' ? 'border-red-200 bg-red-50 text-red-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-          <strong>{health.label}</strong> {health.explanation}
-          {' '}<a href="/legacy?source=health" className="underline">Review account status</a>.
-        </div>
+        <Notice tone={health.state === 'constrained' ? 'danger' : 'warning'} title={health.label}>
+          <span>{health.state === 'constrained' ? 'Some actions are currently constrained.' : 'Advisory diagnostics need attention.'} <a href="/legacy?source=health" className="font-semibold underline">Review status →</a></span>
+          <Disclosure summary="Why?" className="compact-disclosure"><span className="text-xs text-slate-600">{health.explanation}</span></Disclosure>
+        </Notice>
       ) : (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-          <strong>No account intervention is currently indicated.</strong> Keep using the human-reviewed workflow and judge patterns over repeated outcomes.
-        </div>
+        <Notice tone="success" title="Account healthy">No intervention is currently indicated.</Notice>
       )}
 
       <section>
         <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Recent measured posts</h3>
-            <p className="text-sm text-slate-600">Latest available window for each recent publication.</p>
+            <p className="text-sm text-slate-600">Latest window per post. Follower deltas are associated account change, not direct post causality.</p>
           </div>
-          <a href="#/results/audience" className="text-sm font-medium text-sky-700 hover:underline">Review audience quality →</a>
+          <a href="#/results/audience" className="text-sm font-semibold text-indigo-700 hover:underline">Review audience quality →</a>
         </div>
         {data.measuredPosts.length > 0 ? (
           <div className="space-y-3">
             {data.measuredPosts.map((post, index) => (
-              <article key={index} className="rounded-lg border border-slate-200 bg-white p-5">
+              <article key={index} className="operator-surface p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-slate-900">{post.title}</div>
@@ -204,7 +208,7 @@ export function Results() {
                     </div>
                   </div>
                   {post.outputUrl && (
-                    <a href={post.outputUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                    <a href={post.outputUrl} target="_blank" rel="noopener noreferrer" className="action-button !min-h-0 !px-2.5 !py-1 text-xs" data-variant="ghost">
                       View post ↗
                     </a>
                   )}
@@ -216,8 +220,8 @@ export function Results() {
                   {data.measurementCapabilities.bookmarks.available && post.latest.bookmarks != null && <span><strong>{formatNumber(post.latest.bookmarks)}</strong> bookmarks</span>}
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  {post.latest.followerDelta != null ? `${post.latest.followerDelta >= 0 ? '+' : ''}${post.latest.followerDelta} associated follower change` : 'Follower change unavailable'}
-                  {' '}· isolation confidence {post.latest.attributionConfidence || 'unknown'}. This is associated account-level change, not direct post causality.
+                  {post.latest.followerDelta != null ? `${post.latest.followerDelta >= 0 ? '+' : ''}${post.latest.followerDelta} associated followers` : 'Follower change unavailable'}
+                  {' '}· {post.latest.attributionConfidence || 'unknown'} isolation confidence.
                 </div>
               </article>
             ))}
@@ -229,10 +233,9 @@ export function Results() {
         )}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+      <Disclosure summary={`Writing approach outcomes · ${data.writingStrategyOutcomes.observationCount} observations`} className="operator-surface compact-disclosure p-4">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-slate-900">Writing approach outcomes</h3>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="text-sm text-slate-600">
             Observed {data.writingStrategyOutcomes.windowMinutes / 60}h outcomes for published work. These are associations, not proof that a writing approach caused performance.
           </p>
           <div className="mt-1 text-xs text-slate-500">
@@ -285,19 +288,14 @@ export function Results() {
               : `No mature publication measurement has recorded Writer-generation strategy provenance yet. Existing historical measurements are left unknown rather than attributed from today’s selection. (${data.writingStrategyOutcomes.unavailable.strategyProvenanceNotRecorded} without strategy metadata; ${data.writingStrategyOutcomes.unavailable.generationProvenanceNotRecorded} without generation provenance.)`}
           </div>
         )}
-      </section>
+      </Disclosure>
 
-      <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
-        <strong>Want to compare these outcomes with broader evidence?</strong>
-        {' '}Learn keeps external patterns, your own observations, and explicit tests separate before any strategy interpretation.
-        {' '}<a href="#/learn" className="font-medium underline">Open Learn →</a>
-      </div>
+      <div className="text-sm text-slate-500">Compare external patterns, account evidence, and explicit tests in <a href="#/learn" className="font-semibold text-indigo-700 hover:underline">Learn →</a></div>
 
       {data.editorialOutcomes && (
-        <section className="rounded-lg border border-slate-200 bg-slate-50 p-5">
+        <Disclosure summary={`Editorial outcome observations · ${data.editorialOutcomes.observationCount}`} className="operator-surface compact-disclosure p-4">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-900">Editorial outcome observations</h3>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="text-sm text-slate-600">
               {data.editorialOutcomes.observationCount} real {data.editorialOutcomes.windowMinutes / 60}h publication observations. These cohorts are descriptive associations, not causal proof that a recommendation or format caused the outcome.
             </p>
           </div>
@@ -309,7 +307,7 @@ export function Results() {
               <OutcomeGroups title="Editorial objective" groups={data.editorialOutcomes.byObjective} />
             </Disclosure>
           </div>
-        </section>
+        </Disclosure>
       )}
 
       <Disclosure summary="Technical measurements">

@@ -98,7 +98,7 @@ RELATIONSHIP EVENT
 MEASURE + LEARN
 ```
 
-AI may recommend and prepare work. Human actions remain the authority for consequential outbound actions.
+AI may recommend and prepare work. Consequential authority comes from the owner-controlled workflow boundary: either an exact one-shot human action or a running revisioned Growth Operator/autonomous-reply delegation whose scope, gates, budget, and revocation remain owner-controlled.
 
 ## Current vs planned state
 
@@ -107,9 +107,9 @@ Current repository state:
 - Phases 1A, 1B, 1C, 1D, 2, 3, 4, 5, and 6 are implemented.
 - The shared AI runtime/provider layer is implemented: Direct API/OpenRouter/OpenAI-compatible endpoints, Codex, and installed AGY use the common structured boundary; AI Settings owns profile/default/role configuration and safe secret references.
 - `continuous_scan` remains configuration-only and visibly **Not active** until a concrete background consumer exists. OpenCode uses its documented SDK/server structured-output contract when available; OpenCode 2 remains separately capability-gated rather than being simulated through undocumented output parsing.
-- Operator-attached JPEG/PNG/WebP/GIF media now has a real local readiness, preview, and authenticated publication path. Required proof media must still remain blocked until the attachment and media plan are complete; Writer-planned media does not create files by itself.
+- Operator-attached JPEG/PNG/WebP/GIF media has real local readiness and preview. Background X API publication still rejects local media. The browser-agent lane now owns the end-to-end handoff without weakening `browser-fast`: upload binds the attachment bytes by SHA-256, and immediately before atomic publication claim Growth OS rechecks that hash and maps only the exact current `.x-media` file to short-lived logical artifact `x-growth.queue.<id>.media`; reconciliation requires proof that exact artifact was attached and then removes its allowlist entry. Writer-planned media still does not create files by itself.
 
-Phase-6 editorial planning is current runtime behavior and remains advisory: human route selection, main-feed approval, repost completion, and publication authority stay separate. Reply authority has two explicit paths: exact human approval/send, or the off-by-default autonomous-reply grant with deterministic eligibility checks and atomic autonomous claim.
+Phase-6 editorial planning is current runtime behavior and remains advisory: recommendation, route/behavior selection, approval authority, transport, and reconciliation stay separate. Main-feed approval may come from the ordinary owner lane or the running revisioned Growth Operator mission-agent lane; Repost is a source-only approval with no Writer draft. Reply authority has two explicit paths: exact owner approval staged for browser execution, or the separately persisted autonomous-reply grant with deterministic eligibility, budget, exact-text/target provenance, and atomic claim. Native Repost may likewise use the delegated browser lane after current source/provenance approval, while the manual owner completion path remains available.
 
 ## Phase map
 
@@ -119,11 +119,11 @@ Phase-6 editorial planning is current runtime behavior and remains advisory: hum
 | 1B | Implemented | Relationship Intelligence | target classes, TargetScore, relationship profiles/events/stages, social and technical interaction outcomes |
 | 1C | Implemented | Engage Next + autonomous reply operator | purpose-aware reply/follow-up opportunities, ordinary exact owner send, delegated dry-run evaluation, and separately transport/policy-gated live reply authority |
 | 1D | Implemented | Account Health and visibility observability | HEALTHY/WATCH/CONSTRAINED plus observed diagnostics |
-| 2 | Implemented | Behavior realization, content quality, and profile proof | behavior/persona-aware writer packet, drafts, purpose/provenance gates, quality score, human editorial review |
-| 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, Original/Quote/Thread publication, operator-attached image upload |
+| 2 | Implemented | Behavior realization, content quality, and profile proof | behavior/persona-aware writer packet, drafts, purpose/provenance gates, quality score, separate owner/delegated review authority |
+| 3 | Implemented | Main-feed distribution | urgency/expiry, scheduler, atomic claim, API/browser execution contracts, source-only Repost, claim-scoped browser media artifacts, and structural reconciliation |
 | 4 | Implemented | Measurement and experiments | fixed-window content, follower, relationship, and behavior outcomes plus experiment summaries |
 | 5 | Implemented | Learned strategy | suggested/accepted/retired bounded learned rules; persona beliefs do not auto-mutate |
-| 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware behavior/format recommendations, human selection provenance, writer context, outcome context |
+| 6 | Implemented | AI Editorial Director | current story clusters, controlled evidence, objective-aware behavior/format recommendations, selected-route/authority provenance, writer context, outcome context |
 | P | Implemented alpha | Versioned persona and stance memory | owner-tuned `persona/hamza-v1.json`, bounded persona slices, append-only stance events, per-action persona version |
 
 ### Phase 1A — Workflow foundation
@@ -207,9 +207,9 @@ It owns:
 - the purpose-aware 50-point draft-quality score;
 - media-plan metadata;
 - the ProfileProofCoverage packet/editorial contract plus the strict published-only runtime owner shared by Today and the Writer;
-- final human editorial review.
+- final review/approval boundary, either ordinary owner review or the bounded Growth Operator mission-agent approval path where current policy permits it.
 
-The Writer receives the selected purpose, mode, affect, affect provenance, information depth, conversation stage, persona version, source, and working context. It may improve wording; it must not silently replace the behavior decision. Human approval remains separate.
+The Writer receives the selected purpose, mode, affect, affect provenance, information depth, conversation stage, persona version, source, and working context. It may improve wording; it must not silently replace the behavior decision. Approval remains a separate workflow authority from Writer generation.
 
 ### Phase 3 — Main-feed distribution
 
@@ -223,10 +223,11 @@ It owns:
 - optional explicit human timing override;
 - one-winner main-feed ranking;
 - atomic publication claim;
-- Original/Quote/Thread transport;
-- persisted publication success/failure.
+- route-specific execution: background official-API transport for its supported subset, and persistent browser-agent execution for Original/Quote/Thread/Repost;
+- claim-scoped browser media artifact registration/verification/cleanup;
+- persisted publication success/failure/reconciliation.
 
-Repost remains a deliberate manual action. Reply sending stays outside the autonomous main-feed publisher.
+Repost remains a deliberate, rare distribution action, but it is not manual-only: a running Growth Operator may approve/claim a source-only Repost through the same bounded main-feed delegation. Reply execution stays outside the main-feed publisher and uses its own reply claim.
 
 ### Phase 4 — Measurement and experiments
 
@@ -257,7 +258,7 @@ It owns:
 - bounded production adjustments;
 - retirement/review when evidence reverses or underlying algorithm evidence changes.
 
-A learned rule cannot remove hard publication gates or human approval.
+A learned rule cannot remove hard publication/provenance/health gates or create/widen delegation authority. Manual acceptance and delegated repeated-evidence acceptance remain explicit, inspectable transitions.
 
 ### Phase 6 — AI Editorial Director
 
@@ -669,11 +670,11 @@ source truth                 code/source owner
 research provenance          controlled research owner
 workflow state               queue/pipeline owner
 numeric editorial ordering   deterministic code
-human route choice           operator
-human approval               operator
-publication                  existing transport owner
+route / behavior authority   owner lane or bounded delegation
+approval authority           owner lane or revisioned Growth Operator delegation
+publication                  execution-plane transport owner after claim
 measurement                  Phase 4
-learned-rule acceptance      operator
+learned-rule acceptance      manual authority or bounded repeated-evidence delegation
 ```
 
 A cheaper local model may produce a worse recommendation. It may not gain extra authority because it is local, and a more expensive model may not bypass approval because it is stronger.
@@ -704,7 +705,7 @@ It should not become a second competing editorial planner.
 
 ### Conversations
 
-Conversations owns active/follow-up relationship opportunities and human-reviewed outbound replies.
+Conversations owns active/follow-up relationship opportunities plus both the ordinary human-reviewed reply lane and inspectable autonomous-reply state.
 
 ### Create
 
@@ -722,22 +723,22 @@ Improve shows experiments and bounded evidence-controlled learned strategy, incl
 
 Advanced retains detailed diagnostics. AI Settings owns runtime/provider/model configuration and run/cost visibility.
 
-## Human authority map
+## Authority map
 
-| Action | AI may suggest? | AI may execute automatically? | Human authority |
+| Action | AI may suggest? | Delegated execution? | Owner authority / boundary |
 | --- | --- | --- | --- |
-| Cluster source stories | Yes | Yes, advisory computation | Can ignore/dismiss |
-| Research allowed sources | Yes | Yes, read-only controlled retrieval | Can add/withhold sources |
-| Choose editorial objective | Can suggest | No | Human selects/defaults |
-| Recommend format | Yes | Yes, advisory only | Human selects/overrides |
-| Draft text | Yes | Yes after work exists | Human edits/rejects |
-| Approve main-feed item | No | No | Human only |
-| Send human-reviewed reply | No | No | Human exact approval/send |
-| Send autonomous reply | AI may choose an allowed purpose/mode/affect/depth decision and exact text | Live send requires an explicitly started persisted grant, deterministic eligibility, remaining operator budget, exact persisted behavior/text/provenance, and an atomic claim through the configured transport. | Human configures/pauses/stops/revokes the grant; autonomous decisions never create `humanApprovedAt` |
-| Complete repost | No | No | Human records manual action |
-| Schedule suggestion | Yes | Yes, advisory calculation | Human can override |
-| Publish approved main-feed item | No recommendation authority | Existing automation may transport an already approved eligible item when enabled | Approval remains human authority |
-| Accept learned strategy rule | No | No | Human only |
+| Cluster source stories | Yes | Yes, advisory computation | Owner can ignore/dismiss |
+| Research allowed sources | Yes | Yes, read-only controlled retrieval | Owner can add/withhold sources |
+| Choose editorial objective | Can suggest | Yes while a running Growth Operator uses the configured/default objective | Owner may change the objective/scope |
+| Recommend format | Yes | Yes, advisory only | Owner can override |
+| Draft text | Yes | Yes after work exists | Owner may edit/reject; Writer has no publication authority |
+| Approve main-feed item | AI can recommend readiness | Yes, only through the running revisioned Growth Operator mission-agent path with current evidence/provenance/persona/gates | Owner starts/pauses/stops/revokes delegation; ordinary manual approval remains available |
+| Send human-reviewed reply | No | Yes after exact owner approval, through `browser-reply-claim` and verified browser execution | Owner freezes the exact text; browser execution cannot edit it or create approval |
+| Send autonomous reply | AI may choose allowed behavior and exact text | Yes only with running Live reply grant, deterministic eligibility, remaining budget, exact persisted text/target/provenance, Account Health checks, and atomic `browser-reply-claim`/configured transport | Owner controls grant lifecycle and scope; autonomous decisions never create `humanApprovedAt` |
+| Complete repost | Editorial may recommend Repost | Yes for a currently approved source-only Repost through `browser-publish-claim`, exact source-state verification, and `record-action` | Owner retains manual Repost completion as an alternative and controls/revokes delegation |
+| Schedule suggestion | Yes | Yes, advisory calculation | Owner can override timing |
+| Publish approved main-feed item | No new recommendation authority at transport time | Yes after an atomic claim: background daemon through supported API transport, or persistent Growth Operator through browser-agent execution | Transport does not create approval; owner controls delegation and can revoke it |
+| Accept learned strategy rule | AI may suggest | Yes only under the stricter repeated-qualified-evidence delegated path with no active review suspension | Owner may accept manually, retire, or revoke delegation; rules never widen their own authority |
 
 ## Provenance chain
 
@@ -750,18 +751,18 @@ source snapshots
   -> research evidence rows
   -> editorial run
   -> editorial recommendation + proposed behavior
-  -> human selection / route and behavior override
+  -> selected route / behavior + authority provenance
   -> normalized behavior snapshot + persona version
   -> queue item + source links
   -> draft + evidence IDs + bounded persona slice
-  -> approval
+  -> owner or delegated approval snapshot
   -> publication
   -> 15m/1h/6h/24h measurements
   -> follower/network outcomes
   -> experiment/learning context
 ```
 
-Do not overwrite the original AI recommendation when the human selects a different route. The difference is useful measurement data.
+Do not overwrite the original AI recommendation when the owner or delegated workflow selects a different route. Preserve recommendation versus selected route/behavior and authority provenance as measurement data.
 
 ## Failure semantics
 

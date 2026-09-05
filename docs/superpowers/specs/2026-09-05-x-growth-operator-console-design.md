@@ -124,3 +124,18 @@ Add presentation tests for semantic tone rendering and lifecycle tone mapping. K
 - root `npm run ui:build`;
 - `git diff --check`;
 - visual browser review for Today, Discover, Conversations, Posts, Results at desktop and mobile, plus dark mode.
+
+## Minimalism refinement
+
+After visual review, the first operator-console pass is still too text-heavy. The default screen state must now follow progressive disclosure:
+
+- default cards show decision, title, one short context line, essential state, and the next action;
+- explanatory paragraphs, scoring dimensions, provenance, source lists, and supporting evidence move behind explicit `Why`, `Evidence`, or `Details` disclosures;
+- repeated labels are removed when the surrounding section already establishes context;
+- published/history rows become compact records rather than full workflow cards;
+- Growth Fit becomes a compact status line; its explanation and configuration link are secondary details unless a human override is required;
+- autonomous-decision history and analytics cohort tables are collapsed by default;
+- long source text is line-clamped in queues and fully available only in detail views;
+- every screen should have one visually dominant next action, with secondary actions quiet and destructive actions separated.
+
+No information is deleted from the product model. The default visual layer simply stops presenting all available evidence simultaneously.

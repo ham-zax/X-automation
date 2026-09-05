@@ -39,7 +39,6 @@ import {
   setBehaviorDecision,
   setRelevanceDecision,
   setRoutingDecision,
-  sendApprovedEngagementReply,
 } from './pipeline.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import {
@@ -536,7 +535,7 @@ function queueStatusLabel(queueItem) {
   if (queueItem.status === 'needs_review') return engagement ? 'Reply needs review' : 'Needs review';
   if (queueItem.status === 'approved') {
     if (engagement) return 'Approved · ready to send';
-    if (queueItem.pipeline === 'repost') return 'Approved · repost manually';
+    if (queueItem.pipeline === 'repost') return 'Approved · ready for browser-agent or manual repost';
     return 'Approved · awaiting publish';
   }
   if (queueItem.status === 'publishing') return engagement ? 'Sending now' : 'Publishing now';
@@ -1134,8 +1133,8 @@ function draftEditorPayload(draftId) {
       readOnly,
       canReview: !readOnly && CONTENT_PIPELINES.has(pipeline) && ['drafting', 'needs_review'].includes(queueItem?.status),
       canApprove: queueItem?.status === 'needs_review' && MAIN_FEED_PIPELINES.has(pipeline) && analysis.score >= 40 && gatesPassed && analysis.growthPackaging?.ready === true,
-      canApproveSend: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && analysis.score >= 40 && gatesPassed && analysis.growthPackaging?.ready === true,
-      canSendApproved: engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
+      canApproveReply: engagementReply && !engagementConstrained && queueItem?.status === 'needs_review' && analysis.score >= 40 && gatesPassed && analysis.growthPackaging?.ready === true,
+      approvedReplyReadyForBrowser: engagementReply && !engagementConstrained && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
       approvedMainFeed: !engagementReply && queueItem?.status === 'approved' && Boolean(queueItem.humanApprovedAt),
     },
     relationship: relationship
@@ -1206,7 +1205,7 @@ function formatConversationDetail(key) {
     autonomousDecision: queueItem.targetTweetId ? getAutonomousReplyDecisionForTarget(queueItem.targetTweetId) : null,
     flags: {
       canReview: Boolean(draft) && ['drafting', 'needs_review', 'failed'].includes(queueItem.status),
-      canApproveSend: !constrained && queueItem.status === 'needs_review' && Number(payload?.analysis?.score || 0) >= 40 && gatesPassed,
+      canApproveReply: !constrained && queueItem.status === 'needs_review' && Number(payload?.analysis?.score || 0) >= 40 && gatesPassed,
       approved: !constrained && queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
     },
   };
@@ -1581,6 +1580,7 @@ async function persistDraftMedia(draft, req) {
   fileName = path.basename(fileName).slice(0, 180) || `draft-${draft.id}.${extension}`;
   const localPath = path.join(DRAFT_MEDIA_DIR, `draft-${draft.id}-${Date.now()}.${extension}`);
   await fs.writeFile(localPath, buffer, { mode: 0o600 });
+  const sha256 = createHash('sha256').update(buffer).digest('hex');
 
   const previous = draftMediaAttachment(draft);
   const media = {
@@ -1591,6 +1591,7 @@ async function persistDraftMedia(draft, req) {
       fileName,
       mimeType,
       size: buffer.length,
+      sha256,
       attachedAt: Date.now(),
       provenance: 'operator_upload',
     },
@@ -2363,29 +2364,21 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), editor: draftEditorPayload(result.draft.id) });
       }
 
-      if (action === 'approve-send') {
+      if (action === 'approve') {
         requireEngagementSendAllowed();
-        approveEngagementQueueItem(key, { actor: 'human' });
-        const sent = await sendApprovedEngagementReply(key);
+        const approved = approveEngagementQueueItem(key, { actor: 'human' });
         return sendSuccess({
-          queueItem: formatQueueItem(sent.queueItem),
-          draft: formatDraft(sent.draft),
-          tweetId: sent.tweetId,
-          url: sent.url,
-          sent: true,
+          queueItem: formatQueueItem(approved.queueItem),
+          draft: formatDraft(approved.draft),
+          approved: true,
+          sent: false,
+          browserExecutionRequired: true,
+          nextStep: 'The web server does not own the X browser. A persistent Growth Operator should inspect the live target, call browser-reply-claim, execute the exact approved reply once through browser-fast, verify parent/text, then reconcile with record-action.',
         });
       }
 
-      if (action === 'send') {
-        requireEngagementSendAllowed();
-        const sent = await sendApprovedEngagementReply(key);
-        return sendSuccess({
-          queueItem: formatQueueItem(sent.queueItem),
-          draft: formatDraft(sent.draft),
-          tweetId: sent.tweetId,
-          url: sent.url,
-          sent: true,
-        });
+      if (action === 'approve-send' || action === 'send') {
+        throw new Error(`Conversation action ${action} is retired. The web server does not mutate X; approve the exact reply with /approve, then use the persistent Growth Operator browser-reply-claim lane.`);
       }
 
       if (action === 'resolve') {

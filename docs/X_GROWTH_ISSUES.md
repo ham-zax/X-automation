@@ -1,10 +1,12 @@
 # X Growth Issue Inventory
 
-**Date:** 2026-08-29
+**Original checkpoint:** 2026-08-29
 
-**Status:** historical issue inventory from the earlier bootstrap phase. Revalidate every still-open item against the current Growth Operator/persona/runtime before treating it as active.
+**Last revalidated:** 2026-09-05
 
-This document records the X growth problems observed at that 2026-08-29 checkpoint. It separates observed defects from strategic hypotheses so later implementation does not turn a plausible idea into a production rule without evidence.
+**Status:** historical issue inventory plus current revalidation. The original issue narratives remain useful evidence, but the table below is the current disposition against the Growth Operator, V3.2 persona, measurement/runtime, and browser-agent architecture.
+
+This document records X growth problems without converting plausible ideas into production rules without evidence.
 
 This is not an implementation plan. Each issue should be fixed only after its owner and acceptance condition are confirmed against current runtime state.
 
@@ -24,6 +26,29 @@ This is not an implementation plan. Each issue should be fixed only after its ow
 | XG-10 | Live autonomous replies use the configured transport boundary | resolved implementation constraint | P1 |
 | XG-11 | Bootstrap distribution surface is not sufficiently tested | observed strategic gap | P0 |
 | XG-12 | Growth Focus and understandability gates can collapse development into AI-heavy, hard-to-follow output | observed defect | P0 |
+| XG-13 | Audience unfollow still mutates X through private `xactions` HTTP rather than the browser-agent lane | observed transport inconsistency | P1 |
+| XG-14 | Stored draft media is not yet an end-to-end browser-agent upload artifact | resolved transport gap | P1 |
+| XG-15 | No repository-owned persistent model process consumes browser claims when no agent session is active | observed autonomy gap | P1 |
+
+### 2026-09-05 revalidation
+
+| ID | Current disposition | Evidence / next meaning |
+| --- | --- | --- |
+| XG-01 | **OPEN — P1 efficiency** | Autonomous preparation skips live-`Ignore` recommendations and continues, so throughput deadlock is fixed; Editorial can still spend reasoning on a source that the live distribution owner will later reject. |
+| XG-02 | **OPEN — P0 observation gap** | Growth OS distinguishes account-level follower delta, profile visits, post-attributed follows, and qualification context, but X analytics does not consistently expose enough per-post follow data to optimize the full mission funnel. Missing fields remain unknown rather than zero. |
+| XG-03 | **CLOSED / experiment completed insufficient** | Experiment 2 was rechecked at 60m with completed A/B/C counts `1/0/0`; no winner exists. On 2026-09-05 it was completed so insufficient A/B/C evidence no longer production-gates the persona. |
+| XG-04 | **OPEN — strategic hypothesis** | Own-account evidence confirms Satori, a trading system, and a Catan neural-engine project surface, while recent output remains commentary-heavy. Whether owned proof converts profile visits/follows better remains unproven. |
+| XG-05 | **REFRAMED — strategic hypothesis** | The A/B/C hook campaign is no longer an active production constraint. The useful remaining question is whether any payoff/format/owned-proof treatment increases profile inspection and qualified follow conversion, not whether a clever hook wins attention. |
+| XG-06 | **MITIGATED / monitor** | V4/V3.2, Writer rules, and `x-content` memory now explicitly permit terse/social-only acts and reject automatic lecturer/hidden-boundary framing. Keep monitoring own-account output for recurrence rather than treating shortness as a new universal rule. |
+| XG-07 | **OPEN — P1 efficiency** | Distribution fit is checked and unroutable work is skipped, but Editorial can still spend provider/research budget before weak live distribution becomes decisive. |
+| XG-08 | **OPEN — P1 operating risk** | Account Health currently remains WATCH on author-response/continuation yield. Budgets are ceilings rather than fill targets and generic filler no longer earns relationship credit, but relationship conversion is still weak. |
+| XG-09 | **CLOSED in experiment/Editorial interpretation** | Measurement rows preserve actual capture time; `captureTiming` labels windows that crossed later windows as `collapsed_past_later_window`; age-inappropriate rows are excluded from Editorial cohorts and experiment completion. Historical rows remain descriptive evidence only. |
+| XG-10 | **SUPERSEDED / resolved architecture** | The daemon stays API-only, while the persistent Growth Operator owns browser execution. Current browser handoff uses atomic `browser-publish-claim` / `browser-reply-claim`, one-shot execution, structural verification, and `record-action` reconciliation. |
+| XG-11 | **OPEN — P0 strategic gap** | Distribution-surface evidence remains sparse/confounded. Do not promote Original vs Quote vs Thread as a law from the current small sample. |
+| XG-12 | **CLOSED at the named defect chain** | Growth Focus schema v5 supports editable content/audience groups, derived rotating X queries, exploration, and topic balance. Current probes classify JavaScript/React/Rust/Node/Python as technical scope, and understandability is a separate hard gate. Browser-agent authored writes are required to come from repository-authorized state rather than freehand copy. |
+| XG-13 | **OPEN — P1 transport consistency** | `audience.js::unfollowAudienceUser()` still resolves the user and calls `xactions` private HTTP mutation. It is explicit/human-confirmed and not autonomous posting, but it is the remaining hidden X mutation path and can break independently of the browser-agent contract. |
+| XG-14 | **CLOSED — browser media handoff implemented** | Draft images remain local/previewable. Immediately before an atomic browser publication claim, Growth OS registers only the exact current `.x-media` attachment as logical artifact `x-growth.queue.<id>.media`; a lost claim removes it, successful reconciliation requires proof that exact artifact was attached and removes the allowlist entry, and `browser-fast` still rejects arbitrary paths. The background X API route correctly remains local-media-incapable. |
+| XG-15 | **OPEN — P1 unattended execution** | `automation.js` can research/prepare/schedule indefinitely, but it cannot create or wake a browser-capable model turn. Browser publication works while a persistent Growth Operator agent is active; true unattended browser execution needs a durable CLI-agent consumer or another model-runtime owner. |
 
 ## XG-01 — Editorial can select work the distribution owner will reject
 
@@ -396,29 +421,82 @@ Growth Focus is the single configurable preference/scope source of truth. Conten
 
 Every authored outbound item must also pass an understandability gate that is separate from visual scannability. This gate does not require a plain or neutral voice; humor, technical language, attitude, and stylistic variation are allowed when the point still lands on one read. Repository-owned browser transports may only send text carrying current approval/gate provenance, and the live operator must not type freehand authored copy directly into X.
 
-## Dependency order
+## XG-13 — Audience unfollow still uses private X HTTP mutation
 
-The issues should not be attacked as one refactor. The current dependency order is:
+**Class:** observed transport inconsistency
 
-1. XG-12 — restore configurable topic ownership and comprehension as preconditions for every subsequent content experiment.
-2. XG-02 and XG-09 — make the mission reward and measurement windows trustworthy.
-3. XG-11 — learn which distribution surfaces can reliably earn bootstrap reach and conversion.
-4. XG-03 — collect enough formal A/B/C evidence to change writing decisions inside those surfaces.
-5. XG-01 and XG-07 — remove avoidable Editorial/distribution disagreement and wasted candidate reasoning.
-6. XG-04 and XG-05 — test owned proof and follow-conversion payoff as content hypotheses without conflating proof ownership with distribution surface.
-7. XG-06 — keep the explicit human voice constraint intact throughout all experiments.
-8. XG-08 — optimize engagement for relationship outcomes rather than volume.
-9. XG-10 — use the configured autonomous reply transport under the explicit grant and budget.
+**Priority:** P1
 
-This order is a triage view, not authorization to implement all items.
+**Primary owner:** `audience.js` + Audience UI/browser-operator workflow.
+
+### Problem
+
+`unfollowAudienceUser()` still resolves the target through `xactions` and calls its private Twitter HTTP unfollow helper. The operation is explicitly user-confirmed and never runs from the autonomous Growth Operator, so this is not an authorization bypass. It is nevertheless the one remaining production X mutation path that depends on X private HTTP/GraphQL behavior instead of the browser-agent or official-API execution planes.
+
+### Impact
+
+- X private endpoint changes can break Audience cleanup independently of the browser workflow.
+- The product has two different mutation-recovery models: browser actions use visible-state verification and no blind retry, while unfollow currently trusts the private HTTP success response.
+- Future agents may incorrectly infer that private X mutation is an approved general fallback because one production path still uses it.
+
+### Desired condition
+
+When Audience cleanup is next implemented, route an explicitly confirmed single-account unfollow through a browser-agent execution packet with the same pre-action identity check, one-shot click, post-action visible-state verification, and local reconciliation used by the Growth Operator. Until then, keep the private mutation isolated to this explicit human action and do not reuse it as a posting/engagement transport.
+
+## XG-14 — Draft media browser-agent artifact handoff — resolved
+
+**Class:** resolved transport gap
+
+**Priority:** P1 historical
+
+**Primary owner:** draft-media storage + persistent browser-agent execution boundary.
+
+Growth OS stores validated operator-uploaded JPEG/PNG/WebP/GIF files under `.x-media` and exposes preview/readiness state. The background official API transport intentionally rejects local media. `browser-fast` continues to reject arbitrary filesystem paths and accepts uploads only through logical names in its approved-artifact manifest.
+
+The missing seam is now closed without widening that filesystem boundary. Upload stores a SHA-256 content hash in the approval material. `browser-publish-claim` resolves only the exact current attachment under `.x-media`, recomputes and matches those bytes against the approved hash, registers it as `x-growth.queue.<queueItemId>.media`, then atomically claims the queue row. Growth OS serializes its own manifest updates so concurrent Growth OS claims preserve unrelated entries. If the queue claim loses, the artifact entry is removed. The claim packet returns only the logical artifact plus sanitized attachment metadata, not the local path. `record-action` requires `mediaAttached=true` and the exact logical artifact before reconciliation, then removes the temporary allowlist entry; a cleanup failure is returned explicitly rather than hidden. Unknown remote outcomes stay in-flight so the same claimed capability can be reconciled rather than blindly retried.
+
+Reopen this issue only if claim-scoped artifact cleanup, path confinement, or structural media verification regresses.
+
+## XG-15 — Browser execution is not unattended without a running model agent
+
+**Class:** observed autonomy gap
+
+**Priority:** P1
+
+**Primary owner:** persistent Growth Operator runtime, not `automation.js`.
+
+The Node daemon owns deterministic refresh, preparation, scheduling, measurements, and API-only publication. The browser-agent lane is intentionally owned by a model/agent because it must re-observe dynamic X UI state, reason about the target/source, use current refs, verify structured effects, and reconcile unknown outcomes. A local wait or timer does not create a future model turn.
+
+Current consequence: if no ChatGPT/CLI Growth Operator session is active, browser-authorized work can remain ready/eligible indefinitely; the daemon cannot wake the browser agent. This is not a queue bug.
+
+Desired condition if unattended browser operation is required: run a durable CLI-agent/model consumer using `PERSISTENT_GROWTH_OPERATOR_PROMPT.md` with the same Growth OS bridge and browser-fast MCP contract. Do not make `automation.js` pretend to be the reasoning/browser owner or reintroduce brittle raw-selector posting.
+
+## Current dependency order
+
+Closed items no longer occupy the frontier. The current order is:
+
+1. **XG-02** — improve later-funnel observation where X actually exposes it; keep missing profile/follow data unknown rather than manufacturing attribution.
+2. **XG-11** — accumulate enough matched-age distribution-surface evidence to learn whether Original/Quote/Thread placement changes reach or conversion at the current account stage.
+3. **XG-08** — improve author response, conversation continuation, and recurring-relationship yield instead of filling reply capacity.
+4. **XG-01 / XG-07** — reduce expensive Editorial work on candidates that live distribution will reject or that have weak leverage without owned-proof value.
+5. **XG-04 / reframed XG-05** — test verified owned proof and profile/follow payoff without forcing one hook morphology.
+6. **XG-15** — only if unattended browser execution is a product requirement, add a durable CLI-agent consumer rather than expanding the deterministic daemon into a browser reasoner.
+7. **XG-13** — migrate the explicit Audience unfollow mutation away from private X HTTP when that workflow is next touched.
+8. **XG-06** remains a monitoring condition: preserve role diversity and the V3.2 stopping rule while the account accumulates new evidence.
+
+Closed/superseded items XG-03, XG-09, XG-10, XG-12, and XG-14 should be reopened only with concrete regression evidence.
+
+This order is a triage view, not authorization to turn hypotheses into permanent strategy rules.
 
 ## Current non-issues
 
 Do not reopen these without new evidence:
 
-- Clearcote browser publication plumbing simply because growth is slow;
-- mission-agent approval snapshots;
-- the A/B/C hook assignment gate;
-- the recent conversational-voice correction.
+- the retired A/B/C hook experiment as though it still needs a winner;
+- fixed first-line, fixed block-count, or mandatory hidden-constraint morphology;
+- late nominal measurement rows that are already classified/excluded from matched-age completion;
+- Growth Focus configurability or general software-topic inclusion based on the old pre-schema-v5 probes;
+- the legacy Clearcote/xactions post writer as an eligible fallback—it is intentionally disabled, not a growth lever;
+- mission-agent approval snapshots merely because growth is slow.
 
-Those mechanisms may need future work, but the current growth bottleneck is not established to be in those owners.
+The current growth bottleneck is not established to be any one copy template, one transport, or one X-ranking mechanism.

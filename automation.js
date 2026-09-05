@@ -17,6 +17,7 @@ import {
   refreshGrowthOperatorFollowerState,
 } from './autonomous_main_feed.js';
 import { reconcileRecordedActionWorkflow } from './pipeline.js';
+import { getPersonaModelSummary } from './persona.js';
 import { classifyPublishedContent } from './writing_strategy.js';
 import {
   claimQueueItem,
@@ -359,6 +360,18 @@ export async function processMainFeedQueue({
     return { action: 'scheduled-wait', decision, decisions, transportCapability: capability };
   }
   if (!autoPost) return { action: 'preview', decision, decisions, transportCapability: capability };
+  const personaVersion = getPersonaModelSummary().version;
+  if (decision.item.pipeline !== 'repost'
+    && decision.item.approvalAuthority?.type === 'mission_agent'
+    && String(decision.item.behavior?.personaModelVersion || '') !== String(personaVersion || '')) {
+    return {
+      action: 'persona-stale',
+      decision,
+      decisions,
+      transportCapability: capability,
+      error: `Delegated approval used persona ${decision.item.behavior?.personaModelVersion || 'unknown'}; current persona is ${personaVersion || 'unknown'}. Re-review before publication.`,
+    };
+  }
   if (transport === publishMainFeedBrowser || typeof transport !== 'function' || !capability.supported) {
     return {
       action: 'transport-blocked',

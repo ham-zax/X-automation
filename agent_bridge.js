@@ -1,4 +1,8 @@
 import 'dotenv/config';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
 import { isMeaningfulOutboundInteraction } from './relationship.js';
@@ -30,6 +34,7 @@ import {
 } from './editorial.js';
 import { attachEditorialResearchSource } from './research.js';
 import {
+  claimApprovedEngagementReplyForBrowser,
   ensureCandidateWorkflow,
   inspectGrowthOpportunity,
   inspectWorkflow,
@@ -50,6 +55,8 @@ import {
   acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
+  claimAutonomousReplyDecision,
+  claimQueueItem,
   createExperiment,
   clearAiDefaultProfile,
   clearAiRoleBinding,
@@ -87,6 +94,7 @@ import {
   listAudienceProfiles,
   listAcceptedLearnedRules,
   listAiProfiles,
+  listAutonomousReplyDecisions,
   listCandidateActions,
   listCandidates,
   listDrafts,
@@ -120,8 +128,10 @@ import {
   setAiDefaultProfile,
   setAiRoleBinding,
   setExperimentMinimumCompletedPerVariant,
+  setExperimentStatus,
   setExperimentSecondaryMetrics,
   upsertCandidates,
+  updateAutonomousReplyDecision,
   resolveAiProfileForRole,
 } from './store.js';
 import { listAiRuntimeAvailability } from './ai_runtime.js';
@@ -135,6 +145,108 @@ import {
   selectWritingStrategyAsMissionAgent,
   validateWritingStrategyGenerationContext,
 } from './writing_strategy.js';
+
+const BROWSER_ARTIFACTS_FILE = path.join(os.homedir(), '.config', 'mcp-dev-bridge', 'browser-artifacts.json');
+const BROWSER_ARTIFACTS_LOCK_FILE = `${BROWSER_ARTIFACTS_FILE}.x-growth.lock`;
+const DRAFT_MEDIA_DIR = path.resolve('.x-media');
+
+function queueBrowserMediaArtifactName(queueItemId) {
+  const id = Number(queueItemId);
+  if (!Number.isInteger(id) || id < 1) throw new Error('Browser media artifact requires a positive queue item ID.');
+  return `x-growth.queue.${id}.media`;
+}
+
+async function readBrowserArtifactManifest() {
+  try {
+    const parsed = JSON.parse(await fs.readFile(BROWSER_ARTIFACTS_FILE, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('manifest must be a JSON object');
+    return parsed;
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw new Error(`Browser artifact manifest is unavailable or invalid: ${error.message}`);
+  }
+}
+
+async function writeBrowserArtifactManifest(manifest) {
+  const directory = path.dirname(BROWSER_ARTIFACTS_FILE);
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const temporary = `${BROWSER_ARTIFACTS_FILE}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await fs.writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600 });
+    await fs.rename(temporary, BROWSER_ARTIFACTS_FILE);
+  } finally {
+    await fs.rm(temporary, { force: true }).catch(() => {});
+  }
+}
+
+async function withBrowserArtifactManifestLock(callback) {
+  await fs.mkdir(path.dirname(BROWSER_ARTIFACTS_FILE), { recursive: true, mode: 0o700 });
+  let handle = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      handle = await fs.open(BROWSER_ARTIFACTS_LOCK_FILE, 'wx', 0o600);
+      await handle.writeFile(`${process.pid} ${Date.now()}\n`);
+      break;
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error;
+      const stat = await fs.stat(BROWSER_ARTIFACTS_LOCK_FILE).catch(() => null);
+      if (stat && Date.now() - stat.mtimeMs > 30_000) {
+        await fs.rm(BROWSER_ARTIFACTS_LOCK_FILE, { force: true }).catch(() => {});
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  if (!handle) throw new Error('Browser artifact manifest is busy; re-read publication state before claiming again.');
+  try {
+    return await callback();
+  } finally {
+    await handle.close().catch(() => {});
+    await fs.rm(BROWSER_ARTIFACTS_LOCK_FILE, { force: true }).catch(() => {});
+  }
+}
+
+async function registerQueueBrowserMediaArtifact(queueItemId, filePath, expectedSha256) {
+  const artifact = queueBrowserMediaArtifactName(queueItemId);
+  const resolved = await fs.realpath(path.resolve(String(filePath || '')));
+  if (!resolved.startsWith(`${DRAFT_MEDIA_DIR}${path.sep}`)) {
+    throw new Error('Browser media artifact must come from the Growth OS draft-media directory.');
+  }
+  const stat = await fs.stat(resolved);
+  if (!stat.isFile()) throw new Error('Browser media artifact must resolve to a regular file.');
+  const approvedHash = String(expectedSha256 || '').trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(approvedHash)) {
+    throw new Error('Browser media artifact is not content-hash bound; reattach the media before publication.');
+  }
+  const actualHash = createHash('sha256').update(await fs.readFile(resolved)).digest('hex');
+  if (actualHash !== approvedHash) {
+    throw new Error('Browser media attachment bytes changed after approval; reattach and re-review before publication.');
+  }
+  await withBrowserArtifactManifestLock(async () => {
+    const manifest = await readBrowserArtifactManifest();
+    const existing = manifest[artifact];
+    if (existing !== undefined && path.resolve(String(existing)) !== resolved) {
+      throw new Error(`Browser media artifact ${artifact} already points to a different file; re-read claim state before acting.`);
+    }
+    manifest[artifact] = resolved;
+    await writeBrowserArtifactManifest(manifest);
+  });
+  return { artifact, resolved };
+}
+
+async function unregisterQueueBrowserMediaArtifact(queueItemId, expectedPath = null) {
+  const artifact = queueBrowserMediaArtifactName(queueItemId);
+  return withBrowserArtifactManifestLock(async () => {
+    const manifest = await readBrowserArtifactManifest();
+    if (!Object.hasOwn(manifest, artifact)) return false;
+    if (expectedPath && path.resolve(String(manifest[artifact])) !== path.resolve(String(expectedPath))) {
+      throw new Error('Browser media artifact changed concurrently; refusing to remove a different approved file.');
+    }
+    delete manifest[artifact];
+    await writeBrowserArtifactManifest(manifest);
+    return true;
+  });
+}
 
 async function readInput() {
   let input = '';
@@ -303,16 +415,25 @@ function resolveOperatorCandidate(payload) {
 }
 
 function operatorSourceContext(payload) {
-  if (payload.sourceContext && typeof payload.sourceContext === 'object' && !Array.isArray(payload.sourceContext)) {
-    return payload.sourceContext;
-  }
+  const suppliedContext = payload.sourceContext && typeof payload.sourceContext === 'object' && !Array.isArray(payload.sourceContext)
+    ? payload.sourceContext
+    : null;
   const source = suppliedOperatorSource(payload);
-  if (!source) return null;
+  const publicationVerification = payload.publicationVerification && typeof payload.publicationVerification === 'object' && !Array.isArray(payload.publicationVerification)
+    ? payload.publicationVerification
+    : null;
+  if (!suppliedContext && !source && !publicationVerification) return null;
   return {
-    observedAt: source.observedAt,
-    sourceTimestamp: source.timestamp,
-    sourceKinds: Array.isArray(source.sourceKinds) ? source.sourceKinds : undefined,
-    metrics: source.metrics && typeof source.metrics === 'object' && !Array.isArray(source.metrics) ? source.metrics : {},
+    ...(suppliedContext || {}),
+    ...(source ? {
+      observedAt: source.observedAt ?? suppliedContext?.observedAt,
+      sourceTimestamp: source.timestamp ?? suppliedContext?.sourceTimestamp,
+      sourceKinds: Array.isArray(source.sourceKinds) ? source.sourceKinds : suppliedContext?.sourceKinds,
+      metrics: source.metrics && typeof source.metrics === 'object' && !Array.isArray(source.metrics)
+        ? source.metrics
+        : suppliedContext?.metrics || {},
+    } : {}),
+    ...(publicationVerification ? { publicationVerification } : {}),
   };
 }
 
@@ -731,6 +852,8 @@ function operatorStatus(payload = {}) {
   const remainingReplyBudget = replyGrant.liveBudget == null
     ? null
     : Math.max(0, Number(replyGrant.liveBudget) - Number(replyGrant.budgetUsed || 0));
+  const eligibleBrowserReplies = listAutonomousReplyDecisions({ decision: 'eligible_live', limit: 100 })
+    .filter((decision) => decision.claimedAt == null);
   const browserReadCredentialsPresent = Boolean(process.env.AUTH_TOKEN);
   const xApiAccessToken = String(process.env.X_API_ACCESS_TOKEN || '').trim();
   const xApiAccessTokenPresent = Boolean(xApiAccessToken);
@@ -744,14 +867,29 @@ function operatorStatus(payload = {}) {
     ? getXApiMainFeedCapability(nextScheduleDecision.item, { accessToken: xApiAccessToken })
     : null;
   const accountHealth = getAccountHealthSummary({ now });
-  const integrityWarnings = scheduleDecisions
-    .filter((decision) => decision.item.status === 'approved' && decision.blockers.some((blocker) => blocker.code === 'HARD_GATES_NOT_PASSED'))
-    .map((decision) => ({
-      code: 'APPROVED_ITEM_GATES_FAILED',
-      queueItemId: decision.item.id,
-      candidateKey: decision.item.candidateKey,
-      message: 'Approved queue state exists, but current draft/media hard gates do not pass. Inspect approval integrity before publication.',
-    }));
+  const currentPersonaVersion = getPersonaModelSummary().version;
+  const integrityWarnings = [
+    ...scheduleDecisions
+      .filter((decision) => decision.item.status === 'approved' && decision.blockers.some((blocker) => blocker.code === 'HARD_GATES_NOT_PASSED'))
+      .map((decision) => ({
+        code: 'APPROVED_ITEM_GATES_FAILED',
+        queueItemId: decision.item.id,
+        candidateKey: decision.item.candidateKey,
+        message: 'Approved queue state exists, but current draft/media hard gates do not pass. Inspect approval integrity before publication.',
+      })),
+    ...scheduleDecisions
+      .filter((decision) => decision.item.status === 'approved'
+        && decision.item.approvalAuthority?.type === 'mission_agent'
+        && String(decision.item.behavior?.personaModelVersion || '') !== String(currentPersonaVersion || ''))
+      .map((decision) => ({
+        code: 'DELEGATED_APPROVAL_PERSONA_STALE',
+        queueItemId: decision.item.id,
+        candidateKey: decision.item.candidateKey,
+        approvedPersonaModelVersion: decision.item.behavior?.personaModelVersion || null,
+        currentPersonaModelVersion: currentPersonaVersion || null,
+        message: 'Delegated approval predates the current persona model and must be re-reviewed before publication.',
+      })),
+  ];
   return {
     generatedAt: now,
     account: getPerformanceSnapshot(1)?.account || null,
@@ -799,11 +937,16 @@ function operatorStatus(payload = {}) {
         owner: 'operator_runtime',
         preferred: 'browser-fast',
         diagnostics: 'browser-devtools',
-        fallback: 'agent-browser_cli',
-        rawFallback: 'repository_browser_adapter',
+        fallback: 'webharness_bundled_agent_browser_cli',
+        fallbackRuntime: '/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js',
+        secondaryFallback: 'global_agent-browser_cli',
+        rawFallback: 'disabled_legacy_repository_browser_writer',
         availability: 'not_observed_by_growth_os',
+        mainFeedClaimCommand: 'browser-publish-claim',
+        replyClaimCommand: 'browser-reply-claim',
+        eligibleLiveReplyCount: eligibleBrowserReplies.length,
       },
-      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast session/memory state, agent-browser CLI availability when needed, and the enabled x-content extension in their owning runtime.',
+      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast session/memory state, prefer the WebHarness-bundled Agent Browser CLI when MCP/Local is unavailable, use the global CLI only as a secondary fallback, and verify the enabled x-content extension in its owning runtime.',
     },
     measurements: {
       dueCount: dueMeasurements.length,
@@ -1209,7 +1352,7 @@ async function main() {
       evidence: payload.evidence ?? current.evidence,
       action: payload.action ?? current.action,
       scheduledAt: payload.scheduledAt == null ? current.scheduledAt : Number(payload.scheduledAt),
-      publishedTweetId: payload.publishedTweetId ?? current.publishedTweetId,
+      publishedTweetId: current.publishedTweetId,
     };
     if (pipeline === 'thread') {
       if (payload.threadParts != null && !Array.isArray(payload.threadParts)) throw new Error('threadParts must be an array.');
@@ -1224,13 +1367,9 @@ async function main() {
     next.qualityScore = analysis.score;
     next.gates = {};
     const requestedStatus = payload.status ?? current.status;
-    if (!['draft', 'ready', 'published'].includes(requestedStatus)) throw new Error(`Invalid draft status: ${requestedStatus}`);
-    if (requestedStatus === 'published' && !next.publishedTweetId) throw new Error('published status requires publishedTweetId.');
-
-    if (requestedStatus === 'published') {
-      const draft = saveDraft({ ...next, status: 'published' });
-      result({ draft, analysis, queueItem: inspectWorkflow(candidate.key).queueItem });
-      return;
+    if (!['draft', 'ready'].includes(requestedStatus)) {
+      if (requestedStatus === 'published') throw new Error('update-draft cannot declare publication. Verify the live X output and reconcile it through record-action.');
+      throw new Error(`Invalid draft status: ${requestedStatus}`);
     }
 
     const draft = saveDraft({ ...next, status: 'draft' });
@@ -1281,6 +1420,87 @@ async function main() {
       item,
       decision: recommendMainFeedSchedule(item, schedulerContext(now)),
       readOnly: true,
+    });
+    return;
+  }
+
+  if (command === 'browser-publish-claim') {
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    if (!Number.isFinite(now)) throw new Error('browser-publish-claim now must be numeric when supplied.');
+    let item = null;
+    if (payload.queueItemId != null) {
+      const queueItem = getQueueItem(Number(payload.queueItemId));
+      if (!queueItem) throw new Error(`Queue item not found: ${payload.queueItemId}`);
+      item = getMainFeedScheduleItem(queueItem.candidateKey);
+      if (!item || Number(item.id) !== Number(queueItem.id)) throw new Error('Queue item is not the current main-feed schedule item for its candidate.');
+    } else {
+      const key = String(payload.key || '');
+      if (!key) throw new Error('browser-publish-claim requires queueItemId or key.');
+      item = getMainFeedScheduleItem(key);
+    }
+    if (!item || !['original', 'quote', 'thread', 'repost'].includes(item.pipeline)) {
+      throw new Error('browser-publish-claim supports approved Original, Quote, Thread, or Repost items only.');
+    }
+    const decision = recommendMainFeedSchedule(item, schedulerContext(now));
+    if (!decision.eligible) throw new Error(`Browser publication claim blocked: ${decision.reason}`);
+    const currentPersonaVersion = getPersonaModelSummary().version;
+    if (item.pipeline !== 'repost'
+      && item.approvalAuthority?.type === 'mission_agent'
+      && String(item.behavior?.personaModelVersion || '') !== String(currentPersonaVersion || '')) {
+      throw new Error(`Browser publication claim blocked: delegated approval used persona ${item.behavior?.personaModelVersion || 'unknown'}, current persona is ${currentPersonaVersion || 'unknown'}; re-review before publication.`);
+    }
+    if (decision.recommendedAt == null || Number(decision.recommendedAt) > now) {
+      throw new Error(`Browser publication is not due yet; recommended at ${decision.recommendedAt == null ? 'unknown' : new Date(decision.recommendedAt).toISOString()}.`);
+    }
+    const threadParts = Array.isArray(item.threadParts) ? item.threadParts.map((part) => String(part).trim()).filter(Boolean) : [];
+    const isRepost = item.pipeline === 'repost';
+    const text = isRepost ? '' : (item.pipeline === 'thread' ? String(threadParts[0] || '').trim() : String(item.body || item.text || '').trim());
+    const sourceUrl = ['quote', 'repost'].includes(item.pipeline) ? String(item.candidate?.url || item.candidate?.key || '').trim() : '';
+    if ((!isRepost && !text) || (item.pipeline === 'thread' && threadParts.length === 0) || (['quote', 'repost'].includes(item.pipeline) && !sourceUrl)) {
+      throw new Error('Browser publication packet is incomplete; queue state was not claimed.');
+    }
+    const mediaAttachment = item.media?.attachment || null;
+    let browserMediaArtifact = null;
+    let registeredMediaPath = null;
+    if (mediaAttachment) {
+      if (!mediaAttachment.localPath) throw new Error('Browser publication has attached media without a local file path.');
+      const registered = await registerQueueBrowserMediaArtifact(item.id, mediaAttachment.localPath, mediaAttachment.sha256);
+      browserMediaArtifact = registered.artifact;
+      registeredMediaPath = registered.resolved;
+    }
+    let claimed;
+    try {
+      claimed = claimQueueItem(item.id, { expectedUpdatedAt: item.updatedAt, now });
+      if (!claimed) throw new Error('Browser publication claim lost or authority changed; re-read schedule state before acting.');
+    } catch (error) {
+      if (registeredMediaPath) await unregisterQueueBrowserMediaArtifact(item.id, registeredMediaPath).catch(() => {});
+      throw error;
+    }
+    const mediaPacket = item.media ? {
+      ...item.media,
+      attachment: mediaAttachment ? {
+        fileName: mediaAttachment.fileName || '',
+        mimeType: mediaAttachment.mimeType || '',
+        size: Number(mediaAttachment.size || 0),
+        sha256: mediaAttachment.sha256 || '',
+        attachedAt: mediaAttachment.attachedAt || null,
+        provenance: mediaAttachment.provenance || '',
+      } : null,
+    } : null;
+    result({
+      claimedAt: now,
+      queueItemId: claimed.id,
+      candidateKey: claimed.candidateKey,
+      pipeline: claimed.pipeline,
+      exactText: isRepost ? null : text,
+      threadParts,
+      sourceUrl: ['quote', 'repost'].includes(item.pipeline) ? sourceUrl : null,
+      media: mediaPacket,
+      browserMediaArtifact,
+      actionForReconciliation: item.pipeline === 'quote' ? 'quote' : item.pipeline === 'repost' ? 'repost' : 'direct',
+      executionRule: isRepost
+        ? 'Re-observe the exact source post, execute one native Repost action, verify the account now shows the reposted state for that exact source tweet, then call record-action with publicationVerification.repostedSourceTweetId and repostActive=true. Unknown results stay publishing and must not be retried blindly.'
+        : `Re-observe the exact X tab/source, execute this claimed action once${browserMediaArtifact ? `, upload only the approved browser-fast artifact ${browserMediaArtifact}` : ''}, verify the public ID/URL, rendered text, media when present, and required structure, then call record-action. Unknown results stay publishing and must not be retried blindly.`,
     });
     return;
   }
@@ -1475,8 +1695,8 @@ async function main() {
   if (command === 'experiment-update') {
     requireConfirmedOrDelegated(payload.confirmUpdate, 'experiment-update');
     if (payload.id == null) throw new Error('experiment-update requires id.');
-    if (payload.minimumCompletedPerVariant == null && payload.secondaryMetrics == null) {
-      throw new Error('experiment-update requires minimumCompletedPerVariant and/or secondaryMetrics.');
+    if (payload.minimumCompletedPerVariant == null && payload.secondaryMetrics == null && payload.status == null) {
+      throw new Error('experiment-update requires minimumCompletedPerVariant, secondaryMetrics, and/or status.');
     }
     const currentExperiment = getExperiment(Number(payload.id));
     if (!currentExperiment) throw new Error(`Experiment not found: ${payload.id}`);
@@ -1487,6 +1707,9 @@ async function main() {
       }
       if (payload.secondaryMetrics != null) {
         updated = setExperimentSecondaryMetrics(updated.id, payload.secondaryMetrics);
+      }
+      if (payload.status != null) {
+        updated = setExperimentStatus(updated.id, payload.status);
       }
       return updated;
     });
@@ -1587,6 +1810,98 @@ async function main() {
     const candidate = resolveOperatorCandidate(payload);
     const action = String(payload.action || '');
     if (!['direct', 'quote', 'repost', 'reply'].includes(action)) throw new Error(`Invalid action: ${action}`);
+    const queueBefore = getQueueItemByCandidate(candidate.key);
+    if (queueBefore?.status === 'publishing') {
+      const expectedAction = queueBefore.pipeline === 'quote'
+        ? 'quote'
+        : queueBefore.pipeline === 'repost'
+          ? 'repost'
+          : queueBefore.pipeline === 'reply'
+            ? 'reply'
+            : ['original', 'thread'].includes(queueBefore.pipeline) ? 'direct' : null;
+      if (expectedAction && action !== expectedAction) {
+        throw new Error(`Publishing ${queueBefore.pipeline} reconciliation requires action=${expectedAction}; received ${action}.`);
+      }
+    }
+    let browserMediaCleanup = null;
+    const sendingReply = action === 'reply'
+      ? listAutonomousReplyDecisions({ decision: 'sending', limit: 500 })
+        .filter((decision) => decision.candidateKey === candidate.key)
+        .sort((left, right) => Number(right.claimedAt || 0) - Number(left.claimedAt || 0))[0] || null
+      : null;
+    if (sendingReply) {
+      if (!payload.outputTweetId) throw new Error('Autonomous browser Reply reconciliation requires outputTweetId.');
+      const verifiedParentTweetId = String(payload.publicationVerification?.parentTweetId || '');
+      const verifiedText = String(payload.publicationVerification?.outputText || '').trim();
+      if (!verifiedParentTweetId || verifiedParentTweetId !== String(sendingReply.targetTweetId)
+        || verifiedParentTweetId !== String(queueBefore?.targetTweetId || '')) {
+        throw new Error('Autonomous browser Reply reconciliation requires a verified parentTweetId matching the claimed target.');
+      }
+      if (!verifiedText || verifiedText !== String(sendingReply.exactReply || '').trim()) {
+        throw new Error('Autonomous browser Reply reconciliation requires verified outputText matching the claimed exact reply.');
+      }
+    }
+    if (action === 'reply' && queueBefore?.status === 'publishing' && queueBefore.pipeline === 'reply'
+      && queueBefore.humanApprovedAt && queueBefore.approvedText) {
+      if (!payload.outputTweetId) throw new Error('Human-approved browser Reply reconciliation requires outputTweetId.');
+      const verifiedParentTweetId = String(payload.publicationVerification?.parentTweetId || '');
+      const verifiedText = String(payload.publicationVerification?.outputText || '').trim();
+      if (!verifiedParentTweetId || verifiedParentTweetId !== String(queueBefore.targetTweetId || '')) {
+        throw new Error('Human-approved browser Reply reconciliation requires a verified parentTweetId matching the approved target.');
+      }
+      if (!verifiedText || verifiedText !== String(queueBefore.approvedText || '').trim()) {
+        throw new Error('Human-approved browser Reply reconciliation requires verified outputText matching the approved reply.');
+      }
+    }
+    if (queueBefore?.status === 'publishing' && queueBefore.pipeline === 'repost') {
+      const expectedSourceTweetId = String(candidate.url || candidate.key || '').match(/\/status\/(\d+)/)?.[1] || '';
+      const verifiedSourceTweetId = String(payload.publicationVerification?.repostedSourceTweetId || '');
+      if (!expectedSourceTweetId || verifiedSourceTweetId !== expectedSourceTweetId || payload.publicationVerification?.repostActive !== true) {
+        throw new Error('Browser Repost reconciliation requires repostActive=true and verified repostedSourceTweetId matching the claimed source.');
+      }
+    }
+    if (queueBefore?.status === 'publishing' && ['original', 'quote', 'thread'].includes(queueBefore.pipeline)) {
+      const scheduled = getMainFeedScheduleItem(candidate.key);
+      const mediaAttachment = scheduled?.media?.attachment || null;
+      if (mediaAttachment) {
+        const expectedMediaArtifact = queueBrowserMediaArtifactName(queueBefore.id);
+        if (payload.publicationVerification?.mediaAttached !== true
+          || String(payload.publicationVerification?.mediaArtifact || '') !== expectedMediaArtifact) {
+          throw new Error('Browser main-feed reconciliation requires verified mediaAttached=true and the exact claimed browser media artifact.');
+        }
+        browserMediaCleanup = { queueItemId: queueBefore.id, localPath: mediaAttachment.localPath || null };
+      }
+      const expectedText = queueBefore.pipeline === 'thread'
+        ? String(scheduled?.threadParts?.[0] || '').trim()
+        : String(scheduled?.body || scheduled?.text || '').trim();
+      if (String(payload.publicationVerification?.outputText || '').trim() !== expectedText) {
+        throw new Error('Browser main-feed reconciliation requires verified outputText matching the claimed publication text.');
+      }
+      if (queueBefore.pipeline === 'quote') {
+        const expectedQuotedTweetId = String(scheduled?.candidate?.url || scheduled?.candidate?.key || '').match(/\/status\/(\d+)/)?.[1] || '';
+        if (!expectedQuotedTweetId || String(payload.publicationVerification?.quotedTweetId || '') !== expectedQuotedTweetId) {
+          throw new Error('Browser Quote reconciliation requires verified quotedTweetId matching the approved source.');
+        }
+      }
+      if (queueBefore.pipeline === 'thread') {
+        const tweetIds = Array.isArray(payload.publicationVerification?.threadTweetIds)
+          ? payload.publicationVerification.threadTweetIds.map((value) => String(value || '')).filter(Boolean)
+          : [];
+        const parentIds = Array.isArray(payload.publicationVerification?.threadParentTweetIds)
+          ? payload.publicationVerification.threadParentTweetIds.map((value) => value == null ? null : String(value))
+          : [];
+        const expectedCount = Array.isArray(scheduled?.threadParts) ? scheduled.threadParts.length : 0;
+        const outputTweetId = String(payload.outputTweetId || '');
+        const validChain = tweetIds.length === expectedCount
+          && expectedCount > 0
+          && parentIds.length === expectedCount
+          && tweetIds[0] === outputTweetId
+          && parentIds[0] == null
+          && new Set(tweetIds).size === tweetIds.length
+          && tweetIds.slice(1).every((tweetId, index) => parentIds[index + 1] === tweetIds[index]);
+        if (!validChain) throw new Error('Browser Thread reconciliation requires the verified tweet ID/parent chain for every approved thread part.');
+      }
+    }
     const recorded = recordCandidateAction({
       candidateKey: candidate.key,
       action,
@@ -1597,10 +1912,41 @@ async function main() {
       createdAt: payload.actedAt == null ? Date.now() : Number(payload.actedAt),
     });
     const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
+    let autonomousReplyDecision = null;
+    if (action === 'reply' && payload.outputTweetId) {
+      const sending = listAutonomousReplyDecisions({ decision: 'sending', limit: 500 })
+        .filter((decision) => decision.candidateKey === candidate.key)
+        .sort((left, right) => Number(right.claimedAt || 0) - Number(left.claimedAt || 0))[0] || null;
+      if (sending) {
+        autonomousReplyDecision = updateAutonomousReplyDecision(sending.id, {
+          decision: 'sent',
+          sentAt: payload.actedAt == null ? Date.now() : Number(payload.actedAt),
+          outputTweetId: payload.outputTweetId || null,
+          outputUrl: payload.outputUrl || null,
+        });
+      }
+    }
+    let browserMediaArtifactCleanup = null;
+    if (browserMediaCleanup?.localPath) {
+      try {
+        browserMediaArtifactCleanup = {
+          removed: await unregisterQueueBrowserMediaArtifact(browserMediaCleanup.queueItemId, browserMediaCleanup.localPath),
+          artifact: queueBrowserMediaArtifactName(browserMediaCleanup.queueItemId),
+        };
+      } catch (error) {
+        browserMediaArtifactCleanup = {
+          removed: false,
+          artifact: queueBrowserMediaArtifactName(browserMediaCleanup.queueItemId),
+          error: error.message,
+        };
+      }
+    }
     result({
       candidateKey: candidate.key,
       recorded: listCandidateActions(candidate.key).find((item) => item.action === action) || recorded,
       reconciledQueue,
+      autonomousReplyDecision,
+      browserMediaArtifactCleanup,
       disposition: getCandidateDisposition(candidate.key),
       actions: listCandidateActions(candidate.key),
     });
@@ -1682,6 +2028,57 @@ async function main() {
           .map((recent) => recent.replyArchetype),
         writingStrategy: writerGeneration.writingStrategy,
       }),
+    });
+    return;
+  }
+
+  if (command === 'browser-reply-claim') {
+    const key = String(payload.key || '');
+    if (!key) throw new Error('browser-reply-claim requires key.');
+    const pending = listAutonomousReplyDecisions({ limit: 500 })
+      .filter((decision) => decision.candidateKey === key && decision.decision === 'eligible_live' && decision.claimedAt == null)
+      .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0));
+    const decision = pending[0] || null;
+    const queueItem = getQueueItemByCandidate(key);
+    const candidate = getCandidate(key);
+    if (!queueItem || queueItem.pipeline !== 'reply' || !queueItem.targetTweetId || !candidate) {
+      throw new Error('Reply browser claim is missing its persisted target/workflow state.');
+    }
+
+    if (decision) {
+      if (String(queueItem.targetTweetId) !== String(decision.targetTweetId) || !String(decision.exactReply || '').trim()) {
+        throw new Error('Eligible autonomous reply is mismatched with its persisted target/workflow state.');
+      }
+      const claimed = claimAutonomousReplyDecision(decision.id, { grantRevision: decision.grantRevision, now: Date.now() });
+      if (!claimed) throw new Error('Autonomous reply claim lost or authority changed; re-read engagement state before acting.');
+      result({
+        authorityType: 'autonomous',
+        decisionId: claimed.id,
+        grantRevision: claimed.grantRevision,
+        candidateKey: key,
+        targetTweetId: queueItem.targetTweetId,
+        targetUsername: queueItem.targetUsername || claimed.targetUsername || null,
+        sourceUrl: candidate.url || candidate.key,
+        exactReply: claimed.exactReply,
+        actionForReconciliation: 'reply',
+        executionRule: 'Re-observe the exact target tweet/thread immediately before sending, execute this exact reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with publicationVerification.parentTweetId and outputText. Unknown results remain sending and must not be retried blindly.',
+      });
+      return;
+    }
+
+    const manual = claimApprovedEngagementReplyForBrowser(key, { now: Date.now() });
+    result({
+      authorityType: 'human',
+      decisionId: null,
+      grantRevision: null,
+      queueItemId: manual.queueItem.id,
+      candidateKey: key,
+      targetTweetId: manual.queueItem.targetTweetId,
+      targetUsername: manual.queueItem.targetUsername || null,
+      sourceUrl: candidate.url || candidate.key,
+      exactReply: manual.exactReply,
+      actionForReconciliation: 'reply',
+      executionRule: 'Re-observe the exact target tweet/thread immediately before sending, execute this exact approved reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with publicationVerification.parentTweetId and outputText. Unknown results remain publishing and must not be retried blindly.',
     });
     return;
   }
@@ -1850,7 +2247,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

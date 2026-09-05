@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import { useCreate, useQueueAction, type CreateSection, type QueueItemView, type SchedulePlan } from '../../api/client'
+import { useCreate, useQueueAction, type QueueItemView, type SchedulePlan } from '../../api/client'
 import {
   Badge,
   Disclosure,
   Error,
   GatePanel,
   Loading,
+  Notice,
   Pending,
-  StatCard,
   formatDateTime,
   fromDatetimeLocal,
   toDatetimeLocal,
 } from '../../components/primitives'
 import { GrowthFitPanel } from './GrowthFitPanel'
+import { PageHeader, SegmentedTabs } from '../../components/workspace'
+import { buildPostViews } from './createView'
 
 const ROUTE_OPTIONS = [
   ['original', 'Original post'],
@@ -47,7 +49,7 @@ function RouteForm({ item }: { item: QueueItemView }) {
       <button
         type="submit"
         disabled={route.isPending}
-        className="rounded-md border border-slate-900 bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+        className="action-button" data-variant="primary"
       >
         {route.isPending ? 'Applying…' : 'Apply'}
       </button>
@@ -69,20 +71,20 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
   const recommended = schedule.recommendedAt == null
     ? (schedule.manualOnly ? 'Not ready to repost yet' : 'Not ready to publish yet')
     : schedule.recommendedAt <= Date.now()
-      ? (schedule.manualOnly ? 'Repost when you are ready' : 'Publish when you are ready')
+      ? (schedule.manualOnly ? 'Ready for repost execution' : 'Publish when you are ready')
       : `Around ${new Date(schedule.recommendedAt).toLocaleString()}`
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div className="operator-surface mt-3 p-4" data-tone={schedule.eligible ? 'success' : 'warning'}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <strong className="text-sm text-slate-900">{schedule.manualOnly ? 'Manual repost plan' : 'Publishing plan'}</strong>
+          <strong className="text-sm text-slate-900">{schedule.manualOnly ? 'Repost plan' : 'Publishing plan'}</strong>
           <div className="text-xs text-slate-600">{recommended}</div>
         </div>
         <Badge tone={schedule.eligible ? 'success' : 'warning'}>{schedule.eligible ? (schedule.manualOnly ? 'Ready to repost' : 'Ready') : 'Not ready'}</Badge>
       </div>
       {schedule.manualOnly && (
-        <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">The app does not repost automatically. Repost it on X, then record completion here so this item leaves your active workflow.</div>
+        <div className="mt-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">The web app does not click Repost itself. A running Growth Operator can atomically claim this approved source and execute the native Repost through the browser-agent lane, or you can repost manually and record completion here.</div>
       )}
       <form
         className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4"
@@ -116,7 +118,7 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
           <button
             type="submit"
             disabled={scheduleAction.isPending}
-            className="w-full rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
+            className="action-button w-full" data-variant="secondary"
           >
             {scheduleAction.isPending ? 'Saving…' : 'Save plan'}
           </button>
@@ -137,7 +139,7 @@ function SchedulePanel({ item, schedule }: { item: QueueItemView; schedule: Sche
   )
 }
 
-function QueueCard({ item, automation }: { item: QueueItemView; automation: boolean }) {
+function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: boolean }) {
   const review = useQueueAction('review')
   const approve = useQueueAction('approve')
   const completeRepost = useQueueAction('complete-repost')
@@ -156,73 +158,115 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
       ]
     : []
 
+  const cardTone = item.status === 'failed' || item.publishError
+    ? 'danger'
+    : item.status === 'needs_review'
+      ? 'warning'
+      : ['approved', 'published'].includes(item.status)
+        ? 'success'
+        : item.status === 'drafting'
+          ? 'ai'
+          : ['triage', 'researching'].includes(item.status)
+            ? 'info'
+            : 'neutral'
+
+  if (compact) {
+    return (
+      <article className="operator-surface px-4 py-3" data-tone={cardTone}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="truncate text-sm font-semibold text-slate-900">{item.title}</h4>
+              <Badge tone={item.status === 'published' ? 'success' : 'neutral'}>{item.pipelineLabel}</Badge>
+            </div>
+            <p className="mt-1 line-clamp-1 text-sm text-slate-500">{item.text}</p>
+            <div className="mt-1 text-xs text-slate-400">
+              {item.statusLabel}{item.publishedAt ? ` · ${formatDateTime(item.publishedAt)}` : ''}
+              {item.draft ? ` · quality ${item.draft.qualityScore}/50` : ''}
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {item.outputUrl && <a href={item.outputUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-indigo-700 hover:underline">X ↗</a>}
+            {item.draftId && <a href={`#/draft/${item.draftId}`} className="text-xs font-semibold text-indigo-700 hover:underline">Open →</a>}
+          </div>
+        </div>
+      </article>
+    )
+  }
+
   const publicationState = item.publishStartedAt || item.publishedAt || item.publishError ? (
-    <div className="mt-2 text-sm text-slate-700">
-      <strong>{item.status === 'published' ? 'Completed:' : 'Publishing:'}</strong>{' '}
-      {item.status === 'published' && item.pipeline === 'repost'
-        ? `repost recorded ${formatDateTime(item.publishedAt)}`
-        : <>
-            {item.publishStartedAt ? `started ${formatDateTime(item.publishStartedAt)}` : 'not started'}
-            {item.publishedAt ? ` · published ${formatDateTime(item.publishedAt)}` : ''}
-          </>}
-      {item.publishError ? ` · ${item.publishError}` : ''}
-      {item.outputUrl ? <> · <a href={item.outputUrl} target="_blank" rel="noopener noreferrer" className="text-sky-700 hover:underline">view on X ↗</a></> : ''}
+    <div className="mt-2 text-xs text-slate-500">
+      {item.publishError
+        ? <span className="font-semibold text-red-700">Publication failed</span>
+        : item.status === 'published' && item.pipeline === 'repost'
+          ? `Repost recorded ${formatDateTime(item.publishedAt)}`
+          : <>
+              {item.publishStartedAt ? `Started ${formatDateTime(item.publishStartedAt)}` : 'Not started'}
+              {item.publishedAt ? ` · published ${formatDateTime(item.publishedAt)}` : ''}
+            </>}
+      {item.outputUrl ? <> · <a href={item.outputUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-indigo-700 hover:underline">view on X ↗</a></> : ''}
     </div>
   ) : null
 
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-6">
+    <article className="operator-surface p-4 sm:p-5" data-tone={cardTone}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-lg font-semibold text-slate-900">{item.title}</div>
-          <div className="text-xs text-slate-500">
-            {item.source.toUpperCase()} · {item.pipelineLabel} · {item.statusLabel}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-base font-semibold text-slate-900 sm:text-lg">{item.title}</div>
+            <Badge tone={cardTone === 'danger' ? 'danger' : cardTone === 'warning' ? 'warning' : cardTone === 'success' ? 'success' : cardTone === 'ai' ? 'ai' : 'neutral'}>{item.statusLabel}</Badge>
+          </div>
+          <div className="mt-0.5 text-xs text-slate-500">
+            {item.source.toUpperCase()} · {item.pipelineLabel}
             {item.humanApprovedAt ? ` · approved ${formatDateTime(item.humanApprovedAt)}` : ''}
           </div>
         </div>
         {item.url && (
-          <a href={item.url} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50">
+          <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-indigo-700 hover:underline">
             Source ↗
           </a>
         )}
       </div>
 
-      <p className="mt-3 break-words text-sm text-slate-700">{item.text}</p>
+      <p className="mt-2 line-clamp-2 break-words text-sm leading-6 text-slate-600">{item.text}</p>
 
-      <div className="mt-3">
-        <GrowthFitPanel
-          growthFit={item.growthFit}
-          queueItemId={item.id}
-          candidateKey={item.candidateKey}
-          readOnly={Boolean(item.humanApprovedAt) || ['publishing', 'published'].includes(item.status)}
-        />
-      </div>
-
-      {item.status !== 'published' && item.recommendedPipeline && (
-        <div className="mt-2 text-sm text-slate-700">
-          <strong>Suggested next step:</strong> {item.recommendedPipelineLabel} <span className="text-slate-500">— {item.routingReason}</span>
-        </div>
+      {choosingType && item.recommendedPipeline && (
+        <div className="mt-2 text-xs text-slate-500"><strong className="text-slate-700">Suggested:</strong> {item.recommendedPipelineLabel}</div>
       )}
       {publicationState}
-
-      {item.draft && (
-        <div className="mt-3">
-          {item.status !== 'published' && <GatePanel gates={item.draft.gatesView} />}
-          <div className="mt-1 text-xs text-slate-500">
-            {item.status === 'published' ? 'Recorded writing quality' : 'Writing quality / structure'} {item.draft.qualityScore}/50
-            {item.status !== 'published' ? ' · approval threshold 40 · not a growth/virality prediction' : ''}
-          </div>
-        </div>
-      )}
-
-      {item.schedule && <SchedulePanel item={item} schedule={item.schedule} />}
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {choosingType && <RouteForm item={item} />}
         {item.draftId && !choosingType && (
-          <a href={`#/draft/${item.draftId}`} className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700">
-            {item.status === 'published' ? 'View published text' : item.status === 'drafting' ? 'Continue draft' : 'Review draft'}
+          <a href={`#/draft/${item.draftId}`} className="action-button" data-variant="primary">
+            {item.status === 'published' ? 'View text' : item.status === 'drafting' ? 'Continue draft' : 'Review draft'}
           </a>
+        )}
+        {canApprove && item.pipeline !== 'repost' && (
+          approve.isPending && approve.variables?.key === item.candidateKey ? (
+            <Pending label="Approving…" />
+          ) : (
+            <button onClick={() => approve.mutate({ key: item.candidateKey })} className="action-button" data-variant="success">
+              Approve for publishing
+            </button>
+          )
+        )}
+        {canApprove && item.pipeline === 'repost' && (
+          <button onClick={() => approve.mutate({ key: item.candidateKey })} disabled={approve.isPending} className="action-button" data-variant="success">Approve repost</button>
+        )}
+        {item.pipeline === 'repost' && item.status === 'approved' && (
+          <button
+            onClick={() => {
+              if (window.confirm('Have you already reposted this source on X? This records that manual action as completed.')) {
+                completeRepost.mutate({ key: item.candidateKey, confirmCompleted: true })
+              }
+            }}
+            disabled={completeRepost.isPending}
+            className="action-button"
+            data-variant="success"
+          >
+            {completeRepost.isPending ? 'Recording…' : 'Mark reposted'}
+          </button>
         )}
         {item.draftId && !['publishing', 'published'].includes(item.status) && (
           <button
@@ -230,103 +274,74 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
               if (window.confirm('Discard this draft? The source and its history will remain available.')) discard.mutate({ key: item.candidateKey })
             }}
             disabled={discard.isPending}
-            className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+            className="action-button"
+            data-variant="ghost"
           >
-            {discard.isPending ? 'Discarding…' : 'Discard draft'}
+            Discard
           </button>
-        )}
-        {canApprove && item.pipeline !== 'repost' && (
-          <div className="w-full">
-            {approve.isPending && approve.variables?.key === item.candidateKey ? (
-              <Pending label="Approving…" />
-            ) : (
-              <button
-                onClick={() => approve.mutate({ key: item.candidateKey })}
-                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                Approve for publishing
-              </button>
-            )}
-            <div className="mt-1 text-xs text-slate-500">Approval is not publication. {automation ? 'Automation may publish it at the planned time.' : 'Automation is off; publishing happens only when enabled and scheduled.'}</div>
-          </div>
-        )}
-        {canApprove && item.pipeline === 'repost' && (
-          <button
-            onClick={() => approve.mutate({ key: item.candidateKey })}
-            disabled={approve.isPending}
-            className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            Approve repost
-          </button>
-        )}
-        {item.pipeline === 'repost' && item.status === 'approved' && (
-          <div>
-            <button
-              onClick={() => {
-                if (window.confirm('Have you already reposted this source on X? This records that manual action as completed.')) {
-                  completeRepost.mutate({ key: item.candidateKey, confirmCompleted: true })
-                }
-              }}
-              disabled={completeRepost.isPending}
-              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {completeRepost.isPending ? 'Recording…' : 'Mark reposted'}
-            </button>
-            <div className="mt-1 text-xs text-slate-500">Use this only after you actually reposted it on X. The app records your confirmation; it does not perform the repost.</div>
-          </div>
         )}
       </div>
 
-      {canRequestReview && (
-        <Disclosure summary="Approval readiness">
-          <button
-            onClick={() => review.mutate({ key: item.candidateKey })}
-            disabled={review.isPending}
-            className="rounded-md border border-sky-300 bg-sky-50 px-3 py-1.5 text-sm font-medium text-sky-800 hover:bg-sky-100 disabled:opacity-50"
-          >
-            {review.isPending ? 'Checking…' : item.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
-          </button>
-          <div className="mt-1 text-xs text-slate-500">This checks whether the current draft is ready for human approval. It does not publish anything.</div>
-        </Disclosure>
-      )}
-
       {mainFeedReview && !canApprove && (
-        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <strong>Not ready for approval.</strong>{' '}
+        <div className="mt-3"><Notice tone="warning" title="Not ready for approval">
           {item.draft
             ? approvalBlockers.length
               ? approvalBlockers.slice(0, 2).join(' ')
               : 'Open the draft to fix the checks or complete the required confirmations.'
             : 'Create a draft first.'}
-        </div>
+        </Notice></div>
       )}
 
       {(review.isError && review.variables?.key === item.candidateKey) || (approve.isError && approve.variables?.key === item.candidateKey) || (completeRepost.isError && completeRepost.variables?.key === item.candidateKey) || (discard.isError && discard.variables?.key === item.candidateKey) ? (
-        <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-3"><Notice tone="danger" title="Action failed">
           {(review.isError && review.variables?.key === item.candidateKey ? review.error.message : '')}
           {(approve.isError && approve.variables?.key === item.candidateKey ? approve.error.message : '')}
           {(completeRepost.isError && completeRepost.variables?.key === item.candidateKey ? completeRepost.error.message : '')}
           {(discard.isError && discard.variables?.key === item.candidateKey ? discard.error.message : '')}
-        </div>
+        </Notice></div>
       ) : null}
 
-      <Disclosure summary="Why this recommendation?">
-        <div className="space-y-3 text-sm text-slate-700">
-          <div>
-            <strong>Suggested next step:</strong>{' '}
-            {item.recommendedPipelineLabel || item.pipelineLabel}
-            {item.routingReason ? ` — ${item.routingReason}` : ''}
-          </div>
-          {mainFeedReview && !canApprove && approvalBlockers.length > 0 && (
-            <div><strong>Why approval is blocked:</strong> {approvalBlockers.join(' ')}</div>
+      <Disclosure summary="Details & evidence" className="compact-disclosure">
+        <div className="space-y-3">
+          <GrowthFitPanel
+            growthFit={item.growthFit}
+            queueItemId={item.id}
+            candidateKey={item.candidateKey}
+            readOnly={Boolean(item.humanApprovedAt) || ['publishing', 'published'].includes(item.status)}
+          />
+
+          {item.draft && (
+            <div>
+              {item.status !== 'published' && <GatePanel gates={item.draft.gatesView} />}
+              <div className="mt-1 text-xs text-slate-500">
+                Writing quality {item.draft.qualityScore}/50{item.status !== 'published' ? ' · approval threshold 40' : ''}
+              </div>
+            </div>
           )}
+
+          {item.schedule && <SchedulePanel item={item} schedule={item.schedule} />}
+
+          {item.publishError && <Notice tone="danger" title="Publication failure">{item.publishError}</Notice>}
+
+          {canRequestReview && (
+            <div>
+              <button onClick={() => review.mutate({ key: item.candidateKey })} disabled={review.isPending} className="action-button" data-variant="secondary">
+                {review.isPending ? 'Checking…' : item.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
+              </button>
+              <div className="mt-1 text-xs text-slate-500">Readiness check only; this does not publish.</div>
+            </div>
+          )}
+
+          <div className="text-sm text-slate-700">
+            <strong>Why this route:</strong> {item.recommendedPipelineLabel || item.pipelineLabel}{item.routingReason ? ` — ${item.routingReason}` : ''}
+          </div>
           <div className="flex flex-wrap gap-2">
             <Badge>Reach {item.potentials.reach}</Badge>
             <Badge>Follow {item.potentials.follow}</Badge>
             <Badge>Conversation {item.potentials.conversation}</Badge>
             <Badge>Relationship {item.potentials.relationship}</Badge>
           </div>
-          <div className="text-xs text-slate-500">These scores help rank attention; they do not override the writing checks or your approval decision.</div>
+          <div className="text-xs text-slate-500">These scores rank attention; they do not override writing checks or approval.</div>
         </div>
       </Disclosure>
     </article>
@@ -335,6 +350,7 @@ function QueueCard({ item, automation }: { item: QueueItemView; automation: bool
 
 export function Create() {
   const { data, isLoading, error, refetch } = useCreate()
+  const [activeView, setActiveView] = useState<string | null>(null)
 
   if (isLoading) {
     return <Loading message="Loading your create workspace..." />
@@ -347,10 +363,11 @@ export function Create() {
   if (!data || data.sections.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Posts</h2>
-          <p className="mt-1 text-sm text-slate-600">Move a source through drafting, review, approval, and publishing.</p>
-        </div>
+        <PageHeader
+          eyebrow="Publishing lifecycle"
+          title="Posts"
+          note="Draft → review → approve → publish."
+        />
         <div className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">
           No active post work. Start in Discover and choose what a source should become.
         </div>
@@ -358,35 +375,48 @@ export function Create() {
     )
   }
 
+  const views = buildPostViews(data.sections)
+  const initialView = views.find((view) => view.id === 'attention' && view.count > 0)
+    || views.find((view) => view.id !== 'published' && view.count > 0)
+    || views.find((view) => view.id === 'published')
+    || views[0]
+  const selectedView = views.find((view) => view.id === activeView) || initialView
+  const visibleSections = selectedView.sections.filter((section) => section.items.length > 0)
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">Posts</h2>
-          <p className="mt-1 text-sm text-slate-600">Move a source through drafting, review, approval, and publishing.</p>
-        </div>
-        <Badge tone={data.automation ? 'danger' : 'neutral'}>Auto-publishing {data.automation ? 'on' : 'off'}</Badge>
+      <PageHeader
+        eyebrow="Publishing lifecycle"
+        title="Posts"
+        note="Draft → review → approve → publish."
+        right={<Badge tone={data.automation ? 'success' : 'neutral'}>Auto-publishing {data.automation ? 'on' : 'off'}</Badge>}
+      />
+
+      <div className="lifecycle-tabs">
+      <SegmentedTabs
+        active={selectedView.id}
+        onChange={setActiveView}
+        ariaLabel="Post lifecycle"
+        items={views.map((view) => ({ id: view.id, label: view.label, count: view.count, tone: view.tone }))}
+      />
       </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Sources to decide" value={data.counts.ideas} />
-        <StatCard label="Drafts in progress" value={data.counts.drafting} />
-        <StatCard label="Needs review" value={data.counts.review} />
-        <StatCard label="Approved" value={data.counts.approvedWaiting} />
-      </div>
 
-      {data.sections.map((section: CreateSection) => (
+
+      {visibleSections.length === 0 ? (
+        <Notice tone="neutral" title="Nothing here">Nothing is in this lifecycle view right now.</Notice>
+      ) : visibleSections.map((section) => (
         <section key={section.id}>
           <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <div>
               <h3 className="text-lg font-semibold text-slate-900">{section.title}</h3>
-              <p className="text-sm text-slate-600">{section.note}</p>
+              <p className="mt-0.5 text-sm text-slate-600">{section.note}</p>
             </div>
-            <Badge>{section.items.length}</Badge>
+            {selectedView.sections.length > 1 && <span className="text-xs tabular-nums text-slate-500">{section.items.length}</span>}
           </div>
           <div className="space-y-3">
             {section.items.map((item) => (
-              <QueueCard key={item.id} item={item} automation={data.automation} />
+              <QueueCard key={item.id} item={item} compact={selectedView.id === 'published'} />
             ))}
           </div>
         </section>

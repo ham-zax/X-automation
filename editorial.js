@@ -815,8 +815,8 @@ export function selectEditorialRecommendationAsMissionAgent(id, { grantRevision 
     if (!recommendation || recommendation.status !== 'suggested' || recommendation.decision !== 'PREPARE') {
       throw new Error('Mission-agent editorial selection requires a current suggested PREPARE recommendation.');
     }
-    if (!['original', 'quote', 'thread'].includes(String(recommendation.pipeline || ''))) {
-      throw new Error('Mission-agent editorial selection is limited to Original, Quote, and Thread recommendations.');
+    if (!['original', 'quote', 'thread', 'repost'].includes(String(recommendation.pipeline || ''))) {
+      throw new Error('Mission-agent editorial selection is limited to Original, Quote, Thread, and Repost recommendations.');
     }
     return selectEditorialRecommendationWithAuthority(id, {
       selectedBy: 'mission_agent',

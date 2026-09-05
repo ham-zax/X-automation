@@ -3,7 +3,7 @@ import { applyAcceptedLearnedRules } from './learning.js';
 const HOUR_MS = 3_600_000;
 const MAIN_FEED_LANES = new Set(['main', 'main_feed']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
-const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread']);
+const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const URGENCY_MODIFIERS = { evergreen: 0, timely: 7, viral: 15 };
 const SEMANTIC_CONFLICT_THRESHOLD = 0.50;
 
@@ -222,7 +222,7 @@ export function evaluateScheduleEligibility(item, context = {}) {
       const grantRevision = Number(authority.grantRevision);
       const grant = item?.missionGrant || null;
       if (!AUTOMATED_MAIN_FEED_PIPELINES.has(pipeline) || authority.mission !== 'growth_operator') {
-        addIssue(blockers, 'MISSION_APPROVAL_SCOPE_INVALID', 'Delegated Growth Operator authority is limited to automated Original, Quote, and Thread main-feed items.');
+        addIssue(blockers, 'MISSION_APPROVAL_SCOPE_INVALID', 'Delegated Growth Operator authority is limited to approved Original, Quote, Thread, and Repost main-feed items.');
       }
       if (!Number.isInteger(grantRevision) || grantRevision < 1) {
         addIssue(blockers, 'MISSION_APPROVAL_REVISION_INVALID', 'Mission-agent approval must carry a positive grant revision.');
@@ -301,8 +301,8 @@ export function calculateSchedulePriority(item, context = {}) {
     ...context.learningContext,
     hardGatePassed: gatesPassed(item),
     expired: expiresAtOf(item) != null && expiresAtOf(item) <= now,
-    humanApprovalRequired: true,
-    humanApproved: approvedAtOf(item) != null,
+    approvalRequired: true,
+    approved: approvalAuthorityOf(item) != null,
     manualScheduleOverride: humanOverrideAtOf(item) != null,
   };
   const learningTargets = ['scheduler_timing_preference', 'content_preference', 'format_preference', 'topic_preference'];

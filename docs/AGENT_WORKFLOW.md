@@ -80,7 +80,7 @@ npm run agent -- editorial-select <<<'{"recommendationId":1}'
 npm run agent -- editorial-add-source <<<'{"recommendationId":2,"url":"https://example.com/evidence","claim":"Claim to investigate","claimType":"other"}'
 ```
 
-`editorial-select` is route selection, not approval. Original/Quote/Thread/Reply enter the existing editable workflow, Repost enters its existing manual-review flow, and `RESEARCH_MORE` opens the research route by default while a caller may explicitly override it into another editable route. Writer evidence references are optional context carried into the draft; free-form labels may remain descriptive context.
+`editorial-select` is route selection, not approval. Original/Quote/Thread/Reply enter the editable workflow. Repost enters a source-only review path with no Writer draft; it may later receive ordinary owner approval or bounded Growth Operator mission-agent approval. `RESEARCH_MORE` opens the research route by default while a caller may explicitly override it into another editable route. Writer evidence references are optional context carried into authored drafts; free-form labels may remain descriptive context.
 
 ## Distribution decision before drafting or engaging
 
@@ -372,7 +372,7 @@ JSON
 
 The writer output pipeline must match the currently routed queue item. `evidenceUsed` may contain only exact IDs present in the supplied writer packet's `evidence` array; leave it empty when the packet supplies no evidence rows. `apply-writer-output` validates the echoed generation context against both the append-only human selection history and the exact draft revision that `writer-packet` prepared. A successful apply changes that draft revision, so the same packet cannot be replayed to persist a second output; request a fresh `writer-packet` after any draft edit or completed generation. The command persists generation provenance with the draft and returns the item to `drafting`; it never requests review or approval. If the external Writer has inspectable execution metadata, pass it separately as `writerAiExecution`; otherwise execution remains explicitly unavailable for that bridge generation. `DO_NOT_POST` is preserved with a recommendation to route Research/Watch/Ignore rather than deleting the draft/history.
 
-The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media planning remains draft/editor metadata; operator-attached JPEG/PNG/WebP/GIF files can now provide real readiness, preview in the dashboard, and upload through the authenticated X transport at publication time. Required media remains approval-blocking until the attachment and media plan are complete.
+The persisted media vocabulary is exactly `none | screenshot | chart | code | diagram`. Media planning remains draft/editor metadata; operator-attached JPEG/PNG/WebP/GIF files provide real readiness and dashboard preview. The background official-API transport still cannot upload local media. For browser publication, `browser-publish-claim` temporarily registers only the current `.x-media` attachment as `x-growth.queue.<queueItemId>.media` in the `browser-fast` approved-artifact manifest; the browser action must use that logical name, `record-action` must verify the same artifact was attached, and verified reconciliation removes the allowlist entry.
 
 ### 7. Edit and request review
 
@@ -401,7 +401,7 @@ Current writing-quality dimensions:
 
 These total 40 raw writing points and are proportionally normalized to the 50-point writing-quality scale. Growth fit and Growth Packaging are separate; the score is not a virality or follower-growth prediction.
 
-Final human approval requires at least **40/50** and a passing deterministic gate result. The 50-point score is purpose-aware: purpose, clarity, provenance, originality, and realization. Gates cover behavior validity, purpose/context integrity, factual and implied-biographical provenance, strategic relevance, source/recent duplication, understandability/placeholders/weighted length, CTA/treatment/media integrity, and format rules. Approval recomputes the latest saved content. For main-feed routes, approval sets the queue item to `approved` and its draft to compatibility `ready`. For Engage Next, approval snapshots the exact reply body; only the explicit send path can consume it. No bridge command creates human approval.
+Ordinary owner approval for authored main-feed text requires at least **40/50** and a passing deterministic gate result. The 50-point score is purpose-aware: purpose, clarity, provenance, originality, and realization. Gates cover behavior validity, purpose/context integrity, factual and implied-biographical provenance, strategic relevance, source/recent duplication, understandability/placeholders/weighted length, CTA/treatment/media integrity, and format rules. Approval recomputes the latest saved content. Original/Quote/Thread approval sets the queue item to `approved` and its draft to compatibility `ready`; Repost has no Writer draft and uses current Growth Focus plus source/provenance authority. For Engage Next, owner approval freezes the exact reply body for later `browser-reply-claim`; it does not itself mutate X.
 
 ## Queue and automation interaction
 
@@ -413,10 +413,10 @@ Phase 1A workflow is current:
 2. `route` selects the pipeline but does not approve it; newly created text drafts use the actual Original/Quote/Thread/Reply scaffold.
 3. `writer-packet` prepares inspectable writing context and `apply-writer-output` persists allow-listed editor output without workflow authorization.
 4. `status: ready` through `update-draft` only requests `needs_review`; review computes and persists current hard gates even when they fail so the human can inspect them.
-5. The ordinary dashboard **Approve for publishing** action recomputes the latest gates and moves a main-feed item to `approved`. A running delegated main-feed mission may use the separate mission-agent approval authority for Original/Quote/Thread without populating `humanApprovedAt`; both paths bind the exact approved snapshot and current gates.
-6. Engage Next uses the same drafting/content gates. Manual replies retain their explicit owner approval lane, while delegated autonomous reply evaluation uses its separate grant; Live automatic reply mutation remains disabled until a compliant reply transport and X's separate approval/recipient-policy prerequisites exist.
-7. Phase 3 uses the approved **main-feed queue row** as publication authority. The scheduler computes priority/time without changing approval; an optional concrete human time override is stored separately from approval.
-8. With `AUTO_POST=true`, automation may atomically claim one due Original/Quote/Thread row only when a compliant official X API transport is configured and supports that route. Without it, the row stays `approved` and unclaimed. Scripted x.com mutation is not a fallback.
+5. The ordinary dashboard **Approve for publishing** action recomputes the latest route-specific gates and moves a main-feed item to `approved`. A running delegated main-feed mission may use the separate mission-agent approval authority for Original/Quote/Thread, or a source-only Repost, without populating `humanApprovedAt`; both paths bind an exact approval snapshot. Repost does not invent a Writer draft or persona-text gate.
+6. Engage Next uses the same drafting/content gates. Manual replies retain their explicit owner approval lane, while delegated autonomous reply evaluation uses its separate grant. A persistent Growth Operator may execute a reply through its browser-agent lane only when the exact reply authority/grant, target, current content gates, Account Health, and live thread context support that action; the background daemon does not inherit browser authority.
+7. Phase 3 uses the approved **main-feed queue row** as publication authority. The scheduler computes priority/time without changing approval; an optional concrete human time override is stored separately from approval. Browser-agent publication must claim the exact due approved row before the consequential click so another execution plane cannot publish the same item concurrently.
+8. With `AUTO_POST=true`, the background daemon may atomically claim one due main-feed row only when its compliant official X API transport supports that exact route; unsupported Quote/Repost/local-media work stays `approved` and unclaimed. Separately, the persistent Growth Operator may use the browser-agent execution lane for Original/Quote/Thread/Repost; this does not turn `AUTO_POST` into a browser publisher.
 
 Inspect workflow state:
 
@@ -425,7 +425,19 @@ printf '%s' '{"limit":20}' | node agent_bridge.js queue
 printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js workflow
 printf '%s' '{}' | node agent_bridge.js schedule-next
 printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js schedule-inspect
+# After browser preflight is ready and the schedule says the item is due:
+printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js browser-publish-claim
 ```
+
+`browser-publish-claim` is a consequential state transition: it atomically moves the exact due approved Original/Quote/Thread/Repost row to `publishing` so another execution plane cannot act concurrently. For attached media it also grants a short-lived logical `browserMediaArtifact` rather than exposing an arbitrary path. Call it immediately before the visible browser action, not during planning. After live verification, reconcile through `record-action`: authored posts require exact output text, Quote requires the exact quoted source, Thread requires the verified tweet/parent chain, Repost requires the exact source plus active repost state, and media requires the exact claimed artifact. Unknown results remain in-flight and must not be blindly retried.
+
+For delegated Live Replies, the daemon may leave an exact `eligible_live` decision waiting for the persistent browser operator when no daemon reply transport exists. After inspecting the exact live target, claim it with:
+
+```bash
+printf '%s' '{"key":"https://x.com/example/status/123"}' | node agent_bridge.js browser-reply-claim
+```
+
+That claim consumes the persisted autonomous-reply budget atomically and returns the exact text plus target tweet ID. Verify the reply is actually a child of that target before `record-action` reconciliation.
 
 Route an item without approving it:
 
@@ -433,13 +445,13 @@ Route an item without approving it:
 printf '%s' '{"key":"https://x.com/example/status/123","pipeline":"original"}' | node agent_bridge.js route
 ```
 
-The automation daemon refreshes real X source snapshots and Engage Next after research, with observed responses checked before cold opportunities. Dry-run autonomous reply evaluation can continue without mutation. Live AI-powered automatic replies are currently transport-blocked: scripted x.com reply automation is disabled, and no API reply bot is enabled until X's separate approval/recipient-policy prerequisites are satisfied. Main-feed selection remains separate and can use the official X API v2 for supported approved routes once `X_API_ACCESS_TOKEN` is configured.
+The automation daemon refreshes real X source snapshots and Engage Next after research, with observed responses checked before cold opportunities. Dry-run autonomous reply evaluation can continue without mutation. The daemon itself remains API-only for X writes. A persistent Growth Operator may separately execute an already-authorized Reply/Quote/Original/Thread/Repost through the browser-agent lane and then reconcile the verified public result through Growth OS.
 
-`AUTO_POST` requests main-feed publication but does not create transport capability. When false, automation previews only. When true without `X_API_ACCESS_TOKEN`, the approved row remains unclaimed. With a configured user-context token, the official API transport supports text Originals and Threads; Quote is capability-gated to Enterprise and local media remains fail-closed. The autonomous-reply grant is separate and defaults to stopped.
+`AUTO_POST` requests **background-daemon** main-feed publication but does not create transport capability. When false, daemon publication previews only. When true without `X_API_ACCESS_TOKEN`, the daemon leaves the approved row unclaimed. A persistent operator browser lane is independent of `AUTO_POST` and must preserve its own authority, atomic claim, target/text verification, one-shot send, and reconciliation semantics. The autonomous-reply grant remains separate from main-feed authority.
 
-A successful main-feed transport marks the queue item `published`, stores its root tweet ID/output URL/publication time, updates the associated draft, and records the candidate action. A definitive API failure after claim becomes `failed`; an unknown/partial remote result remains `publishing` and is never silently retried. Exact-text automatic reconciliation is allowed only for plain Originals. Reply/Quote/Thread outcomes require parent/quote/thread structure verification before they can be reconciled, so text coincidence cannot misattribute a structured action.
+A successful authored main-feed transport marks the queue item `published`, stores its root tweet ID/output URL/publication time, updates the associated draft, and records the candidate action. A verified native Repost records the exact source action without inventing an output tweet ID. A definitive API failure after claim becomes `failed`; an unknown/partial remote result remains `publishing` and is never silently retried. Exact-text automatic reconciliation is allowed only for plain Originals. Reply/Quote/Thread/Repost outcomes require their parent/quote/thread/source-state verification before they can be reconciled, so text coincidence or an arbitrary action record cannot misattribute a structured action.
 
-Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next plus the off-by-default persistent autonomous-reply operator, Phase-1D Account Health, Phase-3 queue-aware main-feed scheduling/claiming plus official X API v2 text Original/Thread publication with route capability gates, Phase-4 fixed-window measurement/experiments, and Phase-5 learned strategy. Quote requires Enterprise capability and local media publication remains blocked until an official API media-upload owner exists.
+Implemented here: Phase-2 format-aware writing/gates, Phase-1C Engage Next plus the persisted autonomous-reply operator, Phase-1D Account Health, Phase-3 queue-aware main-feed scheduling/claiming, the background official X API transport, and the separate persistent-agent browser execution contract, plus Phase-4 fixed-window measurement/experiments and Phase-5 learned strategy. Transport-specific Quote/media limitations apply only to the transport being used; browser execution still requires exact route/target/media verification.
 
 Inspect and manage learned strategy without editing SQLite directly:
 
@@ -497,7 +509,7 @@ Use persisted candidates whose active Growth Focus groups have role `adjacent`, 
 - Do not impose an arbitrary daily reply cap or fake-human timing/jitter rule. High activity can be healthy when it is human-reviewed, substantive, and genuinely conversational.
 - Treat target saturation, repeated archetype, concentration, and InteractionYield as advisory diagnostics; accepted learned rules may tune their bounded soft effect, while exact/near-duplicate replies remain a hard stop owned by the content gate.
 - Replies and quote-posts must realize a specific purpose. Technical contribution is one valid purpose; independent judgment, answer, support, humor, celebration, relationship continuation, taste, or amplification can also be complete when context supports them. Generic praise or engagement bait remains invalid.
-- Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another path has not already done so. The Engage Next approved-send path records its own successful `reply` action and `our_reply` relationship event exactly once.
+- Record successful candidate-based direct/quote/repost/reply actions through `record-action` when another transport path has not already reconciled them. Browser-executed owner-approved and autonomous Replies both reconcile through `record-action`, which records the successful `reply` action and relationship event exactly once.
 - Preserve the canonical behavior/content standards in `CONTENT_OPERATING_STANDARD.md`, `NETWORK_GROWTH_OPERATING_SYSTEM.md`, `RELATIONSHIP_INTELLIGENCE.md`, and `POST_GENERATION_PROMPT.md`; use `GROWTH_DISTRIBUTION_PLAYBOOK.md` only as supporting distribution guidance where it does not conflict.
 
 ## Feedback loop

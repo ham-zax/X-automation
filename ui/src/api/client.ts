@@ -120,6 +120,7 @@ export interface PersonaModelSummary {
   identity: Record<string, unknown>
   operatorDecisions: Record<string, unknown>
   candidateBeliefs: { id?: string; statement?: string; status?: string; confidence?: string; basis?: string }[]
+  accountEvidencePatterns?: { id?: string; observation?: string; use?: string; limit?: string }[]
   knownUnknowns: string[]
   sourceArtifacts: string[]
 }
@@ -790,8 +791,8 @@ export interface DraftEditorData {
     readOnly: boolean
     canReview: boolean
     canApprove: boolean
-    canApproveSend: boolean
-    canSendApproved: boolean
+    canApproveReply: boolean
+    approvedReplyReadyForBrowser: boolean
     approvedMainFeed: boolean
   }
   relationship: { username: string; stage: string; targetScore: number; classes: string[]; theirRepliesToUs: number; meaningfulInteractions: number } | null
@@ -832,7 +833,7 @@ export interface ConversationDetailData {
   editor: DraftEditorData | null
   health: { state: string; constrained: boolean }
   autonomousDecision: AutonomousReplyDecision | null
-  flags: { canReview: boolean; canApproveSend: boolean; approved: boolean }
+  flags: { canReview: boolean; canApproveReply: boolean; approved: boolean }
 }
 
 export function useConversationDetail(key: string | null) {
