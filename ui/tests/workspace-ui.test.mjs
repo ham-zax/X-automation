@@ -23,10 +23,10 @@ function render(element) {
 
 test('workspace navigation exposes all primary destinations and current route', () => {
   const html = render(React.createElement(workspace.WorkspaceNav, { active: 'discover' }))
-  for (const label of ['Today', 'Discover', 'Conversations', 'Posts', 'Results', 'Learn']) {
+  for (const label of ['Overview', 'Discover', 'Conversations', 'Posts', 'Results', 'Learn']) {
     assert.match(html, new RegExp(`>${label}<`))
   }
-  assert.match(html, /aria-current="page"[^>]*data-active="true"[^>]*>Discover</)
+  assert.match(html, /<a[^>]*href="#\/discover"[^>]*aria-current="page"[^>]*data-active="true"[^>]*>[\s\S]*?<span>Discover<\/span><\/a>/)
 })
 
 test('page header keeps the current action and explanation in one hierarchy', () => {
