@@ -505,6 +505,7 @@ export interface DiscoveredCandidate {
   timestamp: number | null
   score: number
   saved: boolean
+  sourceKinds: string[]
   metrics: Record<string, number | string> & { kind: string }
   niche: {
     tags: { tag: string; label: string }[]

@@ -8,25 +8,15 @@ import {
 } from '../../api/client'
 import { Loading, Error, Empty, Badge, Disclosure, Notice, Pending, formatDateTime, formatNumber } from '../../components/primitives'
 import { PageHeader, SegmentedTabs } from '../../components/workspace'
-import { resolveDiscoverPrimaryAction, resolveDiscoverSelection } from './discoverView'
+import { DISCOVER_FEEDS, discoverSourceLabels, resolveDiscoverPrimaryAction, resolveDiscoverSelection } from './discoverView'
 import { navigate } from '../../router'
 import { GrowthFitPanel } from '../create/GrowthFitPanel'
 import { SourceRefreshError } from '../../components/SourceRefreshError'
 
-const FEEDS = [
-  { id: 'for-you', label: 'To review' },
-  { id: 'x', label: 'X latest' },
-  { id: 'trending', label: 'X momentum' },
-  { id: 'opportunities', label: 'Opportunities' },
-  { id: 'github', label: 'GitHub Trending' },
-  { id: 'hn', label: 'Hacker News' },
-  { id: 'saved', label: 'Bookmarks' },
-  { id: 'handled', label: 'Handled' },
-  { id: 'all', label: 'All sources' },
-]
-
 const FEED_DESCRIPTIONS: Record<string, string> = {
-  'for-you': 'Unresolved opportunities across sources.',
+  'to-review': 'Unresolved opportunities across sources.',
+  'x-for-you': 'Posts observed from the authenticated X For You feed. Recommendation presence is not a virality claim.',
+  creators: 'Newest original posts from relationship targets and the explicit creator watchlist.',
   x: 'Latest X search snapshot, ranked for your topics — not the global timeline.',
   trending: 'Recent X search results ranked by observed momentum — not global Trends.',
   opportunities: 'Relationship, career, builder, and business opportunities.',
@@ -110,6 +100,7 @@ function CandidateRow({
       : candidate.viral
         ? 'X momentum'
         : 'X'
+  const sourceLabels = discoverSourceLabels(candidate.sourceKinds)
   const state = candidate.completion?.label
     || candidate.queue?.statusLabel
     || editorialPlanLabel(candidate)
@@ -130,6 +121,11 @@ function CandidateRow({
       <div className="mt-2 break-words text-base font-semibold text-slate-900">{candidate.title}</div>
       {candidate.displayText && <div className="mt-2 line-clamp-4 text-sm leading-6 text-slate-600">{candidate.displayText}</div>}
       <div className="mt-3 text-xs leading-5 text-slate-500">{candidateMetricLine(candidate)}</div>
+      {sourceLabels.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {sourceLabels.map((label) => <Badge key={label} tone="info">{label}</Badge>)}
+        </div>
+      )}
     </button>
   )
 }
@@ -155,6 +151,7 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
   const isGitHubTrending = candidate.metrics.kind === 'github'
   const isHnTopStory = candidate.metrics.kind === 'hn'
   const sourceRank = Number(candidate.metrics.rank || 0) || null
+  const sourceLabels = discoverSourceLabels(candidate.sourceKinds)
   const sourceLabel = isGitHubTrending
     ? 'GITHUB TRENDING'
     : isGitHub
@@ -195,7 +192,7 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {candidate.viral && <Badge tone="info">Momentum</Badge>}
+          {sourceLabels.map((label) => <Badge key={label} tone="info">{label}</Badge>)}
           {candidate.saved && <Badge tone="success">Saved</Badge>}
           {completion
             ? <Badge tone="success">{completion.label}</Badge>
@@ -360,7 +357,7 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
 }
 
 export function Discover() {
-  const [feed, setFeed] = useState('for-you')
+  const [feed, setFeed] = useState('to-review')
   const [tag, setTag] = useState('')
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const { data, isLoading, error, refetch } = useDiscover(feed, tag)
@@ -399,12 +396,12 @@ export function Discover() {
       <div className="space-y-3">
         <SegmentedTabs
           active={feed}
-          items={FEEDS}
+          items={[...DISCOVER_FEEDS]}
           ariaLabel="Discovery source"
           onChange={(next) => { setFeed(next); setTag(''); setSelectedKey(null) }}
         />
 
-        {data && data.topicFilters.length > 0 && (feed === 'for-you' || feed === 'x' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
+        {data && data.topicFilters.length > 0 && (feed === 'to-review' || feed === 'x-for-you' || feed === 'creators' || feed === 'x' || feed === 'trending' || feed === 'opportunities' || feed === 'all' || feed === 'saved' || feed === 'handled') && (
           <div className="flex items-center gap-3 border-b border-slate-200 pb-3">
             <label className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500" htmlFor="discover-topic">Topic</label>
             <select

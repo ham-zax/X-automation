@@ -22,6 +22,11 @@ import { getGrowthOperatorMainFeedStatus } from './autonomous_main_feed.js';
 import { getXApiMainFeedCapability } from './x_api_publish.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
+import {
+  getXSignalWatchlist,
+  ingestXForYouObservation,
+  updateXSignalWatchlist,
+} from './x_discovery.js';
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { assessDiscoveryQuality, classifyNiche, getActiveContentGroups, getActiveNicheProfile, recommendDistributionAction } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
@@ -68,6 +73,7 @@ import {
   getAudienceSummary,
   getCandidate,
   getCandidateDisposition,
+  getCandidateSourceKinds,
   getDraft,
   getDraftByCandidate,
   getDiscoverSnapshot,
@@ -703,8 +709,8 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
   };
 }
 
-function growthRead(payload = {}) {
-  const snapshots = ['x_latest', 'x_momentum', 'github_trending', 'hn_top'].map((kind) => getDiscoverSnapshot(kind));
+export function growthRead(payload = {}) {
+  const snapshots = SOURCE_SNAPSHOT_KINDS.map((kind) => getDiscoverSnapshot(kind));
   const merged = new Map();
   for (const snapshot of snapshots) {
     for (const candidate of snapshot.candidates) {
@@ -720,7 +726,7 @@ function growthRead(payload = {}) {
   const includeDisposed = payload.includeDisposed === true;
   const includeLowSignal = payload.includeLowSignal === true;
   const items = [...merged.values()]
-    .map(({ candidate, sourceKinds }) => growthOperatorPacket(candidate, sourceKinds, topicBalance))
+    .map(({ candidate }) => growthOperatorPacket(candidate, getCandidateSourceKinds(candidate.key), topicBalance))
     .filter((item) => !item.growthFit || item.growthFit.allowed || includeIgnored)
     .filter((item) => item.discoveryQuality.allowed)
     .filter((item) => includeLowSignal || item.signal?.low !== true)
@@ -752,6 +758,7 @@ function compactGrowthItem(item) {
     url: item.url,
     author: item.author,
     text: item.text,
+    sourceKinds: item.sourceKinds,
     recommendation: item.recommendation,
     operatorPriority: item.operatorPriority,
     urgency: item.urgency,
@@ -1225,6 +1232,21 @@ async function main() {
 
   if (command === 'rescore-candidates') {
     result({ classification: rescoreCandidateRelevance() });
+    return;
+  }
+
+  if (command === 'x-for-you-ingest') {
+    result({ ingest: ingestXForYouObservation(payload) });
+    return;
+  }
+
+  if (command === 'x-signal-watchlist') {
+    result({ watchlist: getXSignalWatchlist() });
+    return;
+  }
+
+  if (command === 'x-signal-watchlist-update') {
+    result({ watchlist: updateXSignalWatchlist(payload) });
     return;
   }
 
@@ -2260,7 +2282,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

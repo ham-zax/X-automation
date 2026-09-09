@@ -60,7 +60,14 @@ export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode'
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
 export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer']);
-export const SOURCE_SNAPSHOT_KINDS = Object.freeze(['x_latest', 'x_momentum', 'github_trending', 'hn_top']);
+export const SOURCE_SNAPSHOT_KINDS = Object.freeze([
+  'x_latest',
+  'x_momentum',
+  'github_trending',
+  'hn_top',
+  'x_for_you',
+  'x_creator_latest',
+]);
 
 const AI_RUNTIME_SET = new Set(AI_RUNTIME_TYPES);
 const AI_PROVIDER_SET = new Set(AI_PROVIDER_KINDS);
@@ -4894,6 +4901,22 @@ export function getDiscoverSnapshot(kind) {
     error: status?.error ? String(status.error) : null,
     legacyFallback: legacy,
   };
+}
+
+export function getCandidateSourceKinds(candidateKeyValue) {
+  const candidateKeyText = String(candidateKeyValue || '').trim();
+  if (!candidateKeyText) return [];
+  const hasObservation = db.prepare(`SELECT 1 FROM source_observations
+    WHERE candidate_key = ? AND snapshot_kind = ? AND observed_at = ? LIMIT 1`);
+  const sourceKinds = [];
+  for (const snapshotKind of SOURCE_SNAPSHOT_KINDS) {
+    const stored = parseAppStateJson(`${DISCOVER_SNAPSHOT_PREFIX}${snapshotKind}`, null);
+    const fetchedAt = Number(stored?.fetchedAt || 0);
+    const keys = Array.isArray(stored?.keys) ? stored.keys : [];
+    if (!fetchedAt || !keys.includes(candidateKeyText)) continue;
+    if (hasObservation.get(candidateKeyText, snapshotKind, fetchedAt)) sourceKinds.push(snapshotKind);
+  }
+  return sourceKinds;
 }
 
 export function recordSourceObservations(observations = []) {

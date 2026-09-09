@@ -1,6 +1,27 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { resolveDiscoverSelection } from '../src/features/discover/discoverView.ts'
+import { DISCOVER_FEEDS, discoverSourceLabels, resolveDiscoverSelection } from '../src/features/discover/discoverView.ts'
+
+test('discover canonical feed IDs reserve X For You for the authenticated source', () => {
+  assert.deepEqual(DISCOVER_FEEDS.slice(0, 3), [
+    { id: 'to-review', label: 'To review' },
+    { id: 'x-for-you', label: 'X For You' },
+    { id: 'creators', label: 'Creator watch' },
+  ])
+  assert.equal(DISCOVER_FEEDS.some((feed) => feed.id === 'for-you'), false)
+})
+
+test('discover source labels are compact, deduplicated, and canonically ordered', () => {
+  assert.deepEqual(discoverSourceLabels([
+    'x_latest',
+    'x_creator_latest',
+    'x_for_you',
+    'x_momentum',
+    'x_for_you',
+    'unknown_source',
+  ]), ['For You', 'Momentum', 'Creator watch', 'X latest'])
+  assert.deepEqual(discoverSourceLabels([]), [])
+})
 
 test('discover selection returns null for an empty candidate list', () => {
   assert.equal(resolveDiscoverSelection([], 'old'), null)

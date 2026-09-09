@@ -67,6 +67,7 @@ import {
   getAiRuntimeSettings,
   getAiRoleBinding,
   getCandidate,
+  getCandidateSourceKinds,
   getDraft,
   getDraftByCandidate,
   getEditorialRecommendation,
@@ -160,8 +161,15 @@ const DRAFT_MEDIA_MIME = Object.freeze({
   'image/gif': 'gif',
 });
 const MAX_DRAFT_MEDIA_BYTES = 5 * 1024 * 1024;
-const DISCOVER_FEEDS = new Set(['for-you', 'x', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
-const DISCOVER_SOURCE_KINDS = Object.freeze({ x: 'x_latest', trending: 'x_momentum', github: 'github_trending', hn: 'hn_top' });
+const DISCOVER_FEEDS = new Set(['to-review', 'x-for-you', 'creators', 'x', 'trending', 'opportunities', 'github', 'hn', 'all', 'saved', 'handled']);
+const DISCOVER_SOURCE_KINDS = Object.freeze({
+  'x-for-you': 'x_for_you',
+  creators: 'x_creator_latest',
+  x: 'x_latest',
+  trending: 'x_momentum',
+  github: 'github_trending',
+  hn: 'hn_top',
+});
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
 const VIRAL_RESEARCH_WINDOWS = new Set([14, 21, 30]);
@@ -864,6 +872,7 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
     timestamp: candidate.timestamp || null,
     score: candidate.score || 0,
     saved: Boolean(candidate.saved),
+    sourceKinds: getCandidateSourceKinds(candidate.key),
     metrics: candidate.source === 'github'
       ? metrics.starsToday != null && metrics.rank != null
         ? {
@@ -2103,7 +2112,9 @@ export async function handleApi(req, res, requestUrl) {
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'discover') {
-      const feed = DISCOVER_FEEDS.has(query.get('feed')) ? query.get('feed') : 'for-you';
+      const requestedFeed = query.get('feed') || 'to-review';
+      const canonicalFeed = requestedFeed === 'for-you' ? 'to-review' : requestedFeed;
+      const feed = DISCOVER_FEEDS.has(canonicalFeed) ? canonicalFeed : 'to-review';
       const tag = query.get('tag') || '';
       const objective = editorialObjective(query.get('objective'));
       const currentPlan = getLatestEditorialPlan(objective);
@@ -2120,6 +2131,24 @@ export async function handleApi(req, res, requestUrl) {
       let legacyFallback = false;
       const sourceKind = DISCOVER_SOURCE_KINDS[feed] || null;
       switch (feed) {
+        case 'x-for-you': {
+          const snapshot = getDiscoverSnapshot('x_for_you');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
+          break;
+        }
+        case 'creators': {
+          const snapshot = getDiscoverSnapshot('x_creator_latest');
+          candidates = snapshot.candidates;
+          snapshotAt = snapshot.fetchedAt;
+          lastRefreshAttemptAt = snapshot.lastRefreshAttemptAt;
+          sourceError = snapshot.error;
+          legacyFallback = snapshot.legacyFallback;
+          break;
+        }
         case 'x': {
           const snapshot = getDiscoverSnapshot('x_latest');
           candidates = snapshot.candidates;

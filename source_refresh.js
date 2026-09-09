@@ -8,7 +8,6 @@ import {
 } from './tech_news.js';
 import { personalizeCandidates } from './strategy.js';
 import {
-  SOURCE_SNAPSHOT_KINDS,
   getDiscoverSnapshot,
   getPreferenceProfile,
   recordDiscoverSnapshotError,
@@ -16,6 +15,13 @@ import {
   saveDiscoverSnapshot,
   upsertCandidates,
 } from './store.js';
+
+export const PULL_SOURCE_SNAPSHOT_KINDS = Object.freeze([
+  'x_latest',
+  'x_momentum',
+  'github_trending',
+  'hn_top',
+]);
 
 const SOURCE_ALIASES = Object.freeze({
   x: 'x_latest',
@@ -162,7 +168,7 @@ export async function refreshSourceSnapshot(inputKind) {
 
 export async function refreshAllSourceSnapshots() {
   const results = [];
-  for (const kind of SOURCE_SNAPSHOT_KINDS) results.push(await refreshSourceSnapshot(kind));
+  for (const kind of PULL_SOURCE_SNAPSHOT_KINDS) results.push(await refreshSourceSnapshot(kind));
   return {
     fetchedAt: Date.now(),
     results,

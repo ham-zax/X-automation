@@ -1,5 +1,6 @@
 import { applyAcceptedLearnedRules } from './learning.js';
 import { selectBehaviorDecision } from './persona.js';
+import { refreshCreatorLatestDiscovery } from './x_discovery.js';
 
 export const ENGAGEMENT_KINDS = ['initial_reply', 'follow_up', 'own_post_response'];
 
@@ -537,6 +538,7 @@ export async function refreshEngagementOpportunities({
   targetSinceHours = 24,
   responseSinceHours = 72,
   refreshTargetTimelines = true,
+  creatorRefresh = refreshCreatorLatestDiscovery,
 } = {}) {
   const [store, tech, opportunity, strategy, health] = await Promise.all([
     import('./store.js'),
@@ -764,22 +766,26 @@ export async function refreshEngagementOpportunities({
     }
   }
 
-  if (coldProfiles.length) {
-    const targetRead = await tech.fetchXTargetRecentPosts(
-      coldProfiles.map((profile) => profile.username),
-      { maxTargets: coldProfiles.length, postsPerTarget, since: now - targetSinceHours * 3_600_000 },
-    );
-    errors.push(...targetRead.errors.map((item) => `target @${item.targetUsername}: ${item.error}`));
-    const profilesByUsername = new Map(coldProfiles.map((profile) => [profile.username, profile]));
-    for (const post of targetRead.posts) {
-      const profile = profilesByUsername.get(post.targetUsername);
+  if (refreshTargetTimelines) {
+    const creatorRead = await creatorRefresh({
+      relationshipProfiles: coldProfiles,
+      postsPerTarget,
+      since: now - targetSinceHours * 3_600_000,
+      observedAt: now,
+      fetchRecentPosts: tech.fetchXTargetRecentPosts,
+      classifyNiche: strategy.classifyNiche,
+    });
+    errors.push(...(creatorRead.errors || []).map((item) => `target @${item.targetUsername || 'unknown'}: ${item.error}`));
+    const profilesByUsername = new Map(coldProfiles.map((profile) => [String(profile.username || '').replace(/^@/, '').toLowerCase(), profile]));
+    for (const entry of creatorRead.entries || []) {
+      const profile = profilesByUsername.get(entry.targetUsername);
       if (!profile) continue;
-      const candidate = candidateFromPost(post, profile, false);
+      const candidate = entry.candidate;
       persistOpportunity(candidate, profile, {
         source: 'target_timeline',
         sourceClass: 'normal',
-        targetUsername: post.targetUsername,
-        targetTweetId: post.id,
+        targetUsername: entry.targetUsername,
+        targetTweetId: entry.post?.id || tweetIdFromCandidate(candidate),
         engagementKind: 'initial_reply',
       });
     }
