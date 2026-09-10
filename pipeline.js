@@ -6,8 +6,12 @@ import { scoreOpportunity } from './opportunity.js';
 import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
 import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
+  confirmPublicationAttemptPublished,
+  markPublicationAttemptInvestigating,
+} from './publication_reconciliation.js';
+import {
   captureQueueApproval,
-  claimApprovedEngagementReply,
+  claimApprovedEngagementReplyForPublication,
   deleteDraft,
   ensureQueueItem,
   getAudienceProfile,
@@ -19,6 +23,7 @@ import {
   getAutonomousReplyGrantState,
   getGrowthOperatorDelegation,
   getLatestEditorialSelectionForQueueItem,
+  getLatestPublicationAttemptForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
   getPreferenceProfile,
   getPerformanceSnapshot,
@@ -36,6 +41,7 @@ import {
   listRecentPublishedContent,
   listRelationshipEvents,
   markCandidateSaved,
+  markPublicationAttemptSendStarted,
   recordCandidateAction,
   recordRelationshipEvent,
   rescoreCandidateClassifications,
@@ -64,6 +70,7 @@ export const QUEUE_STATUSES = [
   'approved',
   'publishing',
   'published',
+  'unresolved',
   'watching',
   'ignored',
   'expired',
@@ -371,7 +378,7 @@ export function refreshQueueRecommendation(key, context = {}) {
 export function refreshCandidateRecommendations() {
   let refreshed = 0;
   for (const queueItem of listQueueItems({ lane: 'main', limit: 10_000 })) {
-    if (['approved', 'publishing', 'published'].includes(queueItem.status)) continue;
+    if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status)) continue;
     refreshQueueRecommendation(queueItem.candidateKey);
     refreshed += 1;
   }
@@ -389,8 +396,8 @@ export function setRelevanceDecision(key, { decision, reason = '', actor = 'huma
   const candidate = requireCandidate(key);
   ensureQueueItem(key);
   const queueItem = getQueueItemByCandidate(key);
-  if (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw new Error('Growth Focus decisions cannot be changed after approval or publication.');
+  if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw new Error('Growth Focus decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
   }
   if (decision === 'clear_override') {
     const saved = saveQueueItem({ candidateKey: key, relevance: {} });
@@ -427,8 +434,8 @@ export function setRoutingDecision(key, { decision, reason = '', actor = 'human'
   requireCandidate(key);
   ensureQueueItem(key);
   let queueItem = getQueueItemByCandidate(key);
-  if (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw new Error('Routing decisions cannot be changed after approval or publication.');
+  if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw new Error('Routing decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
   }
   refreshQueueRecommendation(key);
   queueItem = getQueueItemByCandidate(key);
@@ -577,8 +584,8 @@ export function discardCandidateDraft(key) {
   const queueItem = getQueueItemByCandidate(key);
   const draft = getDraftByCandidate(key);
   if (!draft) return queueItem;
-  if (queueItem && (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
-    throw new Error('Publishing or published work cannot be discarded.');
+  if (queueItem && (['publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
+    throw new Error('Publishing, published, or unresolved work cannot be discarded.');
   }
   if (queueItem?.status === 'approved') {
     invalidateQueueApproval(key, { actor: 'human', reason: 'draft discarded after approval' });
@@ -636,8 +643,8 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
 
     ensureQueueItem(key);
     let previousQueueItem = getQueueItemByCandidate(key);
-    if (['publishing', 'published'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
-      throw new Error('Published or publishing items cannot be rerouted; use the publication reconciliation path instead.');
+    if (['publishing', 'published', 'unresolved'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
+      throw new Error('Published, publishing, or unresolved items cannot be rerouted; use the publication reconciliation path instead.');
     }
     if (previousQueueItem.status === 'approved') {
       invalidateQueueApproval(key, { actor, reason: `route changed from ${previousQueueItem.pipeline} to ${pipeline} after approval` });
@@ -753,7 +760,7 @@ export function setBehaviorDecision(key, input = {}, { actor = 'human' } = {}) {
     if (!TEXT_PIPELINES.has(queueItem.pipeline)) {
       throw new Error(`Behavior selection requires a routed text pipeline; current pipeline is ${queueItem.pipeline || 'missing'}.`);
     }
-    if (['approved', 'publishing', 'published'].includes(queueItem.status)
+    if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status)
         || queueItem.humanApprovedAt
         || queueItem.outputTweetId
         || queueItem.publishedAt) {
@@ -987,8 +994,8 @@ export function resolveEngagementItem(key, resolution, reason = '') {
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement') throw new Error(`Engagement item not found: ${key}`);
   if (!['ignore', 'expire'].includes(resolution)) throw new Error(`Invalid engagement resolution: ${resolution}`);
-  if (['publishing', 'published'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt) {
-    throw new Error('Published or publishing engagement items cannot be resolved backward.');
+  if (['publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt) {
+    throw new Error('Published, publishing, or unresolved engagement items cannot be resolved backward.');
   }
   const status = resolution === 'ignore' ? 'ignored' : 'expired';
   return saveQueueItem({
@@ -1018,6 +1025,7 @@ async function sendEngagementReplyTransport({
   authToken,
   account,
   transport,
+  attemptId,
 }) {
   if (transport === postTweetBrowser) {
     throw new Error('The legacy repository reply writer is disabled. Use the exact owner-send lane or let a Live autonomous decision remain eligible_live for persistent-agent browser-reply-claim execution.');
@@ -1028,6 +1036,14 @@ async function sendEngagementReplyTransport({
     text,
     targetTweetId: queueItem.targetTweetId,
     authority,
+  });
+  const attempt = getLatestPublicationAttemptForQueueItem(queueItem.id);
+  if (!attempt || attempt.attemptId !== String(attemptId || '')) {
+    throw new Error('Reply transport requires the exact publication attempt created by its claim.');
+  }
+  markPublicationAttemptSendStarted(attempt.attemptId, {
+    now: Date.now(),
+    preSendEvidence: { transport: 'reply_transport', authorityType: authority.type },
   });
   const publishingItem = saveQueueItem({
     ...queueItem,
@@ -1047,34 +1063,30 @@ async function sendEngagementReplyTransport({
       contentGate,
     });
   } catch (error) {
-    if (error?.code === 'TRANSPORT_RESULT_NO_TWEET_ID') {
-      saveQueueItem({
-        ...publishingItem,
-        status: 'publishing',
-        humanApprovedAt: authority.type === 'human' ? publishingItem.humanApprovedAt : null,
-        approvedText: authority.type === 'human' ? publishingItem.approvedText : null,
-        engagement: {
-          ...(publishingItem.engagement || {}),
-          send: { authority, postedAt: Date.now(), recordingError: error.message },
-        },
-      });
-      throw new Error(`Reply browser publication is ambiguous and requires reconciliation: ${error.message}`);
-    }
+    markPublicationAttemptInvestigating(attempt.attemptId, {
+      reason: `Reply transport result is not proven not-sent and requires reconciliation: ${error.message}`,
+      evidence: { transport: 'reply_transport', code: error?.code || null, outcomeKnown: false },
+    });
     saveQueueItem({
       ...publishingItem,
-      status: 'failed',
-      humanApprovedAt: null,
-      approvedText: null,
+      status: 'publishing',
+      humanApprovedAt: authority.type === 'human' ? publishingItem.humanApprovedAt : null,
+      approvedText: authority.type === 'human' ? publishingItem.approvedText : null,
       engagement: {
         ...(publishingItem.engagement || {}),
-        send: { authority, failedAt: Date.now(), error: error.message },
+        send: { authority, attemptedAt: Date.now(), recordingError: error.message },
       },
     });
-    throw error;
+    throw new Error(`Reply publication outcome is ambiguous and requires reconciliation: ${error.message}`);
   }
 
   const { tweetId, url } = outputTweetIdentity(result, account);
   if (!tweetId) {
+    markPublicationAttemptInvestigating(attempt.attemptId, {
+      reason: 'Reply transport completed without a confirmed tweet ID.',
+      evidence: { transport: 'reply_transport', outputUrl: url || null, outcomeKnown: false },
+      outputUrl: url || null,
+    });
     saveQueueItem({
       ...publishingItem,
       status: 'publishing',
@@ -1086,6 +1098,14 @@ async function sendEngagementReplyTransport({
     });
     throw new Error('Reply transport completed but returned no tweet ID; item remains publishing for reconciliation and cannot be retried automatically.');
   }
+
+  confirmPublicationAttemptPublished(attempt.attemptId, {
+    outputTweetId: tweetId,
+    outputUrl: url || null,
+    evidence: { transport: 'reply_transport', transportReturnedTweetId: true, tweetId },
+    executionEvidence: result || {},
+    now: Date.now(),
+  });
 
   try {
     const publishedDraft = saveDraft({ ...draft, status: 'published', publishedTweetId: tweetId });
@@ -1165,7 +1185,11 @@ async function sendEngagementReplyTransport({
   }
 }
 
-export function claimApprovedEngagementReplyForBrowser(key, { now = Date.now() } = {}) {
+export function claimApprovedEngagementReplyForBrowser(key, {
+  now = Date.now(),
+  runId = null,
+  claimHolder = '',
+} = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
@@ -1189,9 +1213,15 @@ export function claimApprovedEngagementReplyForBrowser(key, { now = Date.now() }
     const firstFailure = currentAnalysis.gates?.failures?.[0];
     throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
   }
-  const claimed = claimApprovedEngagementReply(queueItem.id, { expectedUpdatedAt: queueItem.updatedAt, now });
+  const claimed = claimApprovedEngagementReplyForPublication(queueItem.id, {
+    expectedUpdatedAt: queueItem.updatedAt,
+    now,
+    runId,
+    transport: 'browser_agent',
+    claimHolder,
+  });
   if (!claimed) throw new Error('Approved reply browser claim lost or authority changed; re-read engagement state before acting.');
-  return { candidate, queueItem: claimed, draft, analysis: currentAnalysis, exactReply: currentText };
+  return { candidate, queueItem: claimed.queueItem, attempt: claimed.attempt, draft, analysis: currentAnalysis, exactReply: currentText };
 }
 
 export async function sendApprovedEngagementReply(key, {
@@ -1226,15 +1256,23 @@ export async function sendApprovedEngagementReply(key, {
     const firstFailure = currentAnalysis.gates?.failures?.[0];
     throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
   }
+  const claimed = claimApprovedEngagementReplyForPublication(queueItem.id, {
+    expectedUpdatedAt: queueItem.updatedAt,
+    now: Date.now(),
+    transport: 'reply_transport',
+    claimHolder: 'pipeline',
+  });
+  if (!claimed) throw new Error('Approved reply transport claim lost or authority changed; re-read engagement state before acting.');
   return sendEngagementReplyTransport({
     candidate,
-    queueItem,
+    queueItem: claimed.queueItem,
     draft,
     text: currentText,
     authority: { type: 'human', humanApprovedAt: queueItem.humanApprovedAt },
     authToken,
     account,
     transport,
+    attemptId: claimed.attempt.attemptId,
   });
 }
 
@@ -1263,8 +1301,8 @@ export async function sendAutonomousEngagementReply(key, {
     throw new Error('Autonomous reply authority cannot consume or overwrite human approval.');
   }
   if (!queueItem.targetTweetId) throw new Error('Autonomous engagement reply is missing targetTweetId.');
-  if (hasCandidateAction(key, 'reply') || queueItem.outputTweetId || queueItem.status === 'published') {
-    throw new Error('This target already has a recorded reply; autonomous resend is blocked.');
+  if (hasCandidateAction(key, 'reply') || queueItem.outputTweetId || ['published', 'unresolved'].includes(queueItem.status)) {
+    throw new Error('This target already has a recorded or unresolved reply; autonomous resend is blocked.');
   }
   const decision = getAutonomousReplyDecision(Number(decisionId));
   if (!decision
@@ -1296,6 +1334,10 @@ export async function sendAutonomousEngagementReply(key, {
     humanApprovedAt: null,
     approvedText: null,
   });
+  const attempt = getLatestPublicationAttemptForQueueItem(preparedItem.id);
+  if (!attempt || attempt.state !== 'claimed') {
+    throw new Error('Autonomous reply is missing the publication attempt created by its live claim.');
+  }
   return sendEngagementReplyTransport({
     candidate,
     queueItem: preparedItem,
@@ -1312,6 +1354,7 @@ export async function sendAutonomousEngagementReply(key, {
     authToken,
     account,
     transport,
+    attemptId: attempt.attemptId,
   });
 }
 

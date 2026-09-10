@@ -12,6 +12,7 @@
     "agent": "node agent_bridge.js",
     "audience:sync": "node audience.js",
     "automation": "node automation.js",
+    "growth-agent": "node growth_agent_runner.js",
     "automation:once": "node automation.js --once",
     "viral:collect": "node viral_style_research.js collect",
     "viral:snapshot": "node viral_style_research.js snapshot",

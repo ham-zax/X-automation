@@ -5,6 +5,10 @@ import {
 } from './editorial.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import {
+  conservativeMainFeedActivityAt,
+  getPublicationReconciliationReadiness,
+} from './publication_reconciliation.js';
+import {
   approveQueueItemAsMissionAgent,
   requestQueueReview,
   routeCandidate,
@@ -28,14 +32,12 @@ import {
   listEditorialRecommendations,
   listExperimentAssignments,
   listExperiments,
-  listQueueItems,
   listQueueSources,
   listRecentMainFeedPublications,
   recordPerformanceSnapshot,
 } from './store.js';
 import { selectWritingStrategyAsMissionAgent } from './writing_strategy.js';
 const MISSION_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
-const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const MISSION_REPAIRABLE_GATE_CODES = new Set(['THREAD_PART_TOO_LONG']);
 
 function compactGrant(grant) {
@@ -65,36 +67,33 @@ function approvedSchedulerWork(now) {
   const approved = listApprovedMainFeedItems({ automatedOnly: true, limit: 100 });
   if (!approved.length) return null;
   const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  const unresolvedActivityAt = conservativeMainFeedActivityAt();
+  const lastMainFeedPostAt = Math.max(Number(recentPosts[0]?.publishedAt || 0), Number(unresolvedActivityAt || 0)) || null;
   const decisions = rankMainFeedItems(approved, {
     now,
     recentPosts,
-    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    lastMainFeedPostAt,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   });
   return decisions.find((decision) => decision.eligible) || null;
 }
 
-function unresolvedPublishingItem() {
-  return listQueueItems({ status: 'publishing', limit: 100 })
-    .find((item) => ['main', 'main_feed'].includes(item.lane) && MAIN_FEED_PIPELINES.has(item.pipeline)) || null;
-}
-
-export function getGrowthOperatorMainFeedStatus({ now = Date.now() } = {}) {
+export function getGrowthOperatorMainFeedStatus({ now = Date.now(), operatorLeaseId = null } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('Growth Operator main-feed status requires numeric now.');
   const grant = getGrowthOperatorDelegation();
   const followers = storedFollowerState(grant);
   const health = getAccountHealthSummary({ now: timestamp }).health;
   const lease = getOperatorLeaseStatus({ now: timestamp });
-  const publishing = unresolvedPublishingItem();
+  const reconciliation = getPublicationReconciliationReadiness();
   const approved = approvedSchedulerWork(timestamp);
 
   let blockingReason = null;
   if (grant.state !== 'running') blockingReason = `grant_${grant.state}`;
   else if (grant.mode !== 'live') blockingReason = `grant_mode_${grant.mode}`;
   else if (health.state === 'constrained') blockingReason = 'account_health_constrained';
-  else if (lease.active) blockingReason = 'operator_lease_active';
-  else if (publishing) blockingReason = 'publishing_reconciliation_required';
+  else if (lease.active && String(lease.leaseId || '') !== String(operatorLeaseId || '')) blockingReason = 'operator_lease_active';
+  else if (reconciliation.mainFeedBlockingAttemptId) blockingReason = 'publishing_reconciliation_required';
   else if (approved) blockingReason = 'approved_scheduler_work_available';
 
   return {
@@ -109,7 +108,8 @@ export function getGrowthOperatorMainFeedStatus({ now = Date.now() } = {}) {
     preparation: {
       allowed: blockingReason == null,
       blockingReason,
-      publishingQueueItemId: publishing?.id ?? null,
+      publishingQueueItemId: reconciliation.mainFeedBlockingQueueItemId,
+      publicationAttemptId: reconciliation.mainFeedBlockingAttemptId,
       approvedQueueItemId: approved?.item?.id ?? null,
     },
   };
@@ -258,8 +258,8 @@ function resumableMissionSelection(grantRevision) {
     .sort((left, right) => Number(left.selection.selectedAt) - Number(right.selection.selectedAt))[0] || null;
 }
 
-function requirePreparationAuthority(grantRevision, now = Date.now()) {
-  const status = getGrowthOperatorMainFeedStatus({ now });
+function requirePreparationAuthority(grantRevision, now = Date.now(), operatorLeaseId = null) {
+  const status = getGrowthOperatorMainFeedStatus({ now, operatorLeaseId });
   if (Number(status.grant.revision) !== Number(grantRevision)) {
     throw new Error('Growth Operator delegation revision changed during autonomous preparation.');
   }
@@ -306,10 +306,11 @@ function missionVerificationProvenance(queueItem, draft) {
 export async function prepareAutonomousMainFeed({
   now = Date.now(),
   editorialAlreadyRefreshed = false,
+  operatorLeaseId = null,
 } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('Autonomous main-feed preparation requires numeric now.');
-  const initialStatus = getGrowthOperatorMainFeedStatus({ now: timestamp });
+  const initialStatus = getGrowthOperatorMainFeedStatus({ now: timestamp, operatorLeaseId });
   if (!initialStatus.preparation.allowed) {
     return { action: 'noop', reason: initialStatus.preparation.blockingReason, status: initialStatus };
   }
@@ -320,12 +321,12 @@ export async function prepareAutonomousMainFeed({
   if (!work) {
     const selectedObjective = objective();
     let plan = getLatestEditorialPlan(selectedObjective);
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     work = selectUsableRecommendation(plan?.recommendations || [], grantRevision);
     if (!work && !editorialRefreshed) {
       await refreshEditorialPlan({ objective: selectedObjective, refreshSources: false });
       editorialRefreshed = true;
-      requirePreparationAuthority(grantRevision);
+      requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
       plan = getLatestEditorialPlan(selectedObjective);
       work = selectUsableRecommendation(plan?.recommendations || [], grantRevision);
     }
@@ -341,10 +342,10 @@ export async function prepareAutonomousMainFeed({
   if (queueItem.pipeline !== 'repost') {
     if (!draft) throw new Error(`Mission-owned queue item ${queueItem.id} has no draft.`);
 
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     queueItem = assignContentExperimentIfEligible(queueItem);
 
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     strategySelection = currentMissionStrategy(queueItem, grantRevision);
     if (!strategySelection) {
       strategySelection = await selectWritingStrategyAsMissionAgent(queueItem.id, {
@@ -353,7 +354,7 @@ export async function prepareAutonomousMainFeed({
       });
     }
 
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     if (!generationMatchesSelection(draft, strategySelection)) {
       const { generateDraftCandidate } = await import('./web_api.js');
       const generated = await generateDraftCandidate(draft);
@@ -361,7 +362,7 @@ export async function prepareAutonomousMainFeed({
       queueItem = generated.queueItem;
     }
 
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     if (draft?.editor?.decision === 'DO_NOT_POST') {
       const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
         actor: 'agent',
@@ -379,7 +380,7 @@ export async function prepareAutonomousMainFeed({
     }
   }
 
-  requirePreparationAuthority(grantRevision);
+  requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
   if (queueItem.status !== 'needs_review') {
     const reviewed = requestQueueReview(queueItem.candidateKey);
     if (queueItem.pipeline === 'repost') {
@@ -392,18 +393,18 @@ export async function prepareAutonomousMainFeed({
   }
 
   if (draft && missionRepairableDraft(draft)) {
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     const { generateDraftCandidate } = await import('./web_api.js');
     const repaired = await generateDraftCandidate(draft);
     draft = repaired.saved;
     queueItem = repaired.queueItem;
-    requirePreparationAuthority(grantRevision);
+    requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
     const reviewed = requestQueueReview(queueItem.candidateKey);
     queueItem = reviewed.queueItem;
     draft = reviewed.draft;
   }
 
-  requirePreparationAuthority(grantRevision);
+  requirePreparationAuthority(grantRevision, Date.now(), operatorLeaseId);
   const provenance = missionVerificationProvenance(queueItem, draft);
   if (!provenance.sourceReferences.length) {
     const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {

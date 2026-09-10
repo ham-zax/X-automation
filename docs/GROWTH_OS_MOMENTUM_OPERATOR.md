@@ -85,7 +85,7 @@ The structural insight is that **candidate selection, distribution leverage, and
 
 Use this loop during live Growth OS operation:
 
-`operator-status -> select lane champions -> refresh only when useful -> preserve last good -> inspect exact source -> select purpose/mode/affect/depth or silence -> act once OR disposition -> verify live action -> record local truth -> measure -> learn`
+`operator-readiness -> growth-run begin/resume -> recover uncertain attempts -> sense/refresh only when useful -> preserve last good -> select lane champions -> inspect exact source -> verify claims -> select purpose/mode/affect/depth or silence -> prepare -> claim exact action -> send-start -> act once -> reconcile -> measure -> learn -> finish/resume`
 
 ### 1. Refresh without destroying useful state
 
@@ -95,13 +95,16 @@ The refresh status still records the problem. Stale data is visible as stale; it
 
 ### 2. Ask Growth OS for the next actions
 
-Start with the compact, network-independent cross-lane cockpit:
+Start with operational truth, then bind the work to a durable run:
 
 ```bash
-npm run agent -- operator-status <<<'{}'
+npm run agent -- operator-readiness <<<'{}'
+npm run agent -- growth-run-begin <<<'{"adapterType":"chatgpt_webharness","sessionId":"<session>","capabilities":{"reasoning":true,"browser_read":true,"browser_mutation":true,"x_authenticated":true,"primary_source_web_research":true}}'
 ```
 
-It exposes cached discovery and engagement champions, approved-main-feed readiness, autonomous-reply transport state, due measurements, the durable 4–5 interaction memory checkpoint, and approved-item gate mismatches without returning full workflow packets. Priorities remain lane-local; the operator arbitrates lane champions rather than comparing unlike scores.
+`operator-readiness` keeps delegation, agent attachment, sensor freshness, mutation capability, reconciliation, and scheduler state separate. The Growth Run binds the exact delegation revision and existing operator lease, then returns the current stage plus `recommendedOperation` / `permittedOperations`. Another supported reasoning session can resume the same `runId` instead of reconstructing the mission from chat history.
+
+`operator-status` remains the compact cross-lane cockpit for cached discovery/engagement champions, approved-main-feed readiness, due measurements, memory checkpoint state, and integrity warnings. Priorities remain lane-local; the reasoning operator arbitrates lane champions rather than comparing unlike scores.
 
 Then use the detailed discovery view when that lane is competitive:
 
@@ -109,7 +112,7 @@ Then use the detailed discovery view when that lane is competitive:
 npm run agent -- growth-next <<<'{"limit":12}'
 ```
 
-`growth-next` is deliberately network-independent by default. It reads the current last-known-good X Latest and X Momentum snapshots, merges duplicate sources, excludes this account's own posts, derives the current Growth Focus and distribution recommendation, attaches source-momentum observations, and returns the highest-priority usable candidates immediately.
+`growth-next` is deliberately network-independent by default. It reads the current last-known-good canonical discovery snapshots available to Growth OS—including personalized `x_for_you`, creator-latest, X latest/momentum, and external discovery sources when present—merges duplicate sources, excludes this account's own posts, derives the current Growth Focus and distribution recommendation, attaches source-momentum observations, and returns the highest-priority usable candidates immediately.
 
 When a source needs refreshing, run the explicit maintenance primitive:
 
@@ -117,7 +120,7 @@ When a source needs refreshing, run the explicit maintenance primitive:
 npm run agent -- growth-refresh <<<'{"kind":"x_momentum"}'
 ```
 
-Omit `kind` to refresh X Latest and X Momentum together. Refresh is allowed to be slow or degraded; next-action selection is not. If a refresh outlives one harness RPC, keep operating from the visible last-known-good snapshot rather than issuing duplicate refreshes.
+Omit `kind` to refresh the pull-capable discovery sources owned by source maintenance. Personalized `x_for_you` is intentionally browser-agent pushed, not an HTTP/background pull source; when a Growth Run requests it, collect it from the authenticated X browser and submit `x-for-you-ingest` with `accountHandle`, adapter/session/run, and browser provenance. Refresh is allowed to be slow or degraded; next-action selection is not. If a refresh outlives one harness RPC, keep operating from the visible last-known-good snapshot rather than issuing duplicate refreshes.
 
 The response includes:
 
@@ -160,16 +163,19 @@ Before a live action:
 3. confirm the visible metrics and timestamp are still materially current;
 4. confirm we have not already acted on the source;
 5. choose and persist the strongest purposeful behavior supported by the source, relationship, social field, and current growth objective;
-6. realize it at the depth it actually needs and send once;
-7. verify the live result before recording it.
+6. realize it at the depth it actually needs;
+7. claim the exact authorized action through `browser-publish-claim` or `browser-reply-claim`, retaining the returned `attemptId`;
+8. immediately before the consequential browser mutation, call `publication-attempt-send-start` for that exact attempt;
+9. send once;
+10. verify the live output text and route-specific structure before reconciling through `record-action` with the same `attemptId`.
 
-If a consequential click is ambiguous, do not blind-retry. Establish whether the action exists on the source thread, account profile, search, or network mutation result first.
+If a consequential click is ambiguous, do not blind-retry. Establish whether the action exists on the source thread, account profile, search, or network mutation result first. Failure to find it is not enough to claim `confirmed_not_sent`: keep the attempt investigating, or close it `closed_unresolved` with evidence after useful recovery is exhausted. The exact action remains duplicate-fenced while unrelated future work can continue.
 
 ### Record live truth without a manual ingest round trip
 
 `record-action` and `record-disposition` now accept either an existing candidate key or an inline `source` object containing the exact URL/text/identity plus only the metrics actually observed. A live-discovered source can therefore become durable state in the same local recording call after the external X action has already been verified, or in the same disposition call when the operator intentionally skips/defers it.
 
-`record-action` does not publish. It is idempotent local reconciliation for the same candidate/action, requires the confirmed live output ID or URL for direct/quote/reply actions, preserves the original action timestamp/context on ordinary retries, and rejects a conflicting output tweet ID instead of implying a second send. Newly recorded actions snapshot the source conditions known at action time: source/observation timestamps, route, views/likes/reposts/replies/bookmarks when observed, reply/bookmark density when computable, available viral/momentum fields, and the same source-style feature shape exposed by `growth-next`. Missing metrics remain `null`/unknown rather than being manufactured as observed zero.
+`record-action` does not publish. For a claimed browser publication it is idempotent local reconciliation for the same candidate/action **and publication attempt**, requires the confirmed live output ID or URL for direct/quote/reply actions plus the route-specific structural verification, preserves the original action timestamp/context on ordinary retries, and rejects a conflicting output tweet ID instead of implying a second send. Newly recorded actions snapshot the source conditions known at action time: source/observation timestamps, route, views/likes/reposts/replies/bookmarks when observed, reply/bookmark density when computable, available viral/momentum fields, and the same source-style feature shape exposed by `growth-next`. Missing metrics remain `null`/unknown rather than being manufactured as observed zero.
 
 `record-disposition` stores only exact-candidate operator state (`skip`, `defer`, or cleared) with a visible reason and optional expiry. It is not an author/topic saturation rule. Normal `growth-next` excludes an active disposition; `includeDisposed: true` is an inspection escape hatch.
 

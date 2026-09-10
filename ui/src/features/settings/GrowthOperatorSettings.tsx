@@ -10,6 +10,25 @@ function timestamp(value: number | null) {
   return value ? formatDateTime(value) : 'Not recorded'
 }
 
+function ReadinessCell({ label, ready, warning = false, value, detail }: {
+  label: string
+  ready: boolean
+  warning?: boolean
+  value: string
+  detail: string
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</span>
+        <span aria-hidden="true" className={`h-2 w-2 rounded-full ${ready ? 'bg-emerald-500' : warning ? 'bg-amber-500' : 'bg-slate-300'}`} />
+      </div>
+      <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+      <div className="mt-1 text-xs leading-5 text-slate-500">{detail}</div>
+    </div>
+  )
+}
+
 function ConfigForm({ data }: { data: GrowthOperatorData }) {
   const configure = useGrowthOperatorAction('configure')
   const [mode, setMode] = useState(data.grant.mode)
@@ -88,6 +107,14 @@ export function GrowthOperatorSettings() {
   const actionSucceeded = start.isSuccess || pause.isSuccess || stop.isSuccess
   const stateTone = grant.state === 'running' ? 'success' : grant.state === 'paused' ? 'warning' : grant.state === 'completed' ? 'info' : 'neutral'
   const liveAuthorityActive = grant.state === 'running' && grant.mode === 'live'
+  const readiness = data.readiness
+  const browserReady = readiness.transports.browserAgent.runtimeAttached
+    && readiness.transports.browserAgent.browserMutation
+    && readiness.transports.browserAgent.xAuthenticated
+    && readiness.transports.browserAgent.accountVerified
+  const forYouReady = readiness.sensors.xForYou.fresh && readiness.sensors.xForYou.authenticatedAccountVerified
+  const reconciliationClear = readiness.reconciliation.activeCount === 0
+  const schedulerReady = readiness.scheduler.growthAgent.configured && readiness.scheduler.growthAgent.enabled
 
   return (
     <div className="space-y-6">
@@ -149,6 +176,62 @@ export function GrowthOperatorSettings() {
         </div>
       </section>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Operational readiness</div>
+            <p className="mt-1 text-sm text-slate-600">Permission is only the first gate. These are the live dependencies required to keep a Growth Run moving.</p>
+          </div>
+          <span className="text-xs text-slate-500">Observed {formatDateTime(readiness.generatedAt)}</span>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <ReadinessCell
+            label="Permission"
+            ready={readiness.permission.live}
+            value={readiness.permission.live ? 'Live' : `${readiness.permission.state}`}
+            detail={`Delegation rev ${readiness.permission.revision}`}
+          />
+          <ReadinessCell
+            label="Agent"
+            ready={readiness.reasoningAgent.attached}
+            value={readiness.reasoningAgent.attached ? 'Attached' : 'Not attached'}
+            detail={readiness.reasoningAgent.attached ? `${readiness.reasoningAgent.adapterType || 'agent'} · ${readiness.reasoningAgent.activeRunStage || 'idle'}` : 'No recent runtime heartbeat'}
+          />
+          <ReadinessCell
+            label="Browser"
+            ready={browserReady}
+            value={browserReady ? 'Ready' : 'Not ready'}
+            detail={browserReady ? `@${readiness.transports.browserAgent.accountObserved}` : 'Read, mutation, auth, or account check missing'}
+          />
+          <ReadinessCell
+            label="For You"
+            ready={forYouReady}
+            warning={!forYouReady}
+            value={forYouReady ? `${readiness.sensors.xForYou.count} fresh` : 'Refresh needed'}
+            detail={readiness.sensors.xForYou.fetchedAt ? timestamp(readiness.sensors.xForYou.fetchedAt) : 'No verified snapshot'}
+          />
+          <ReadinessCell
+            label="Reconcile"
+            ready={reconciliationClear}
+            warning={!reconciliationClear}
+            value={reconciliationClear ? 'Clear' : `${readiness.reconciliation.activeCount} active`}
+            detail={readiness.reconciliation.closedUnresolvedCount ? `${readiness.reconciliation.closedUnresolvedCount} historical unresolved · fenced` : 'No uncertain writes'}
+          />
+          <ReadinessCell
+            label="Scheduler"
+            ready={schedulerReady}
+            warning={!schedulerReady}
+            value={schedulerReady ? 'Active' : 'Not active'}
+            detail={readiness.scheduler.growthAgent.nextInvocationAt ? `Next ${timestamp(readiness.scheduler.growthAgent.nextInvocationAt)}` : 'No unattended wake scheduled'}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+          <span>Background API daemon: {readiness.scheduler.backgroundAutomation.stale ? 'stale' : 'healthy'}</span>
+          <span>Account health: {readiness.accountHealth.state}</span>
+          {readiness.reasoningAgent.activeRunId && <span>Run {readiness.reasoningAgent.activeRunId.slice(0, 8)}…</span>}
+        </div>
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-sky-200 bg-sky-50 p-5">
           <div className="flex flex-wrap items-center gap-2">
@@ -163,13 +246,14 @@ export function GrowthOperatorSettings() {
 
         <section className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="flex flex-wrap items-center gap-2">
-            <strong className="text-slate-900">AUTO_POST publication transport</strong>
-            <Badge tone={data.autoPost ? 'success' : 'neutral'}>{data.autoPost ? 'On' : 'Off'}</Badge>
+            <strong className="text-slate-900">Publication transports</strong>
+            <Badge tone={browserReady ? 'success' : 'neutral'}>{browserReady ? 'Browser ready' : 'Browser unavailable'}</Badge>
+            <Badge tone={readiness.transports.xApi.credentialsPresent ? 'info' : 'neutral'}>{readiness.transports.xApi.credentialsPresent ? 'X API configured' : 'X API unavailable'}</Badge>
           </div>
           <p className="mt-2 text-sm text-slate-700">
-            AUTO_POST is separate from delegation. It requests publication of already-approved work only when a compliant mutation transport exists. Delegation Start, Resume, Pause, and Stop never change AUTO_POST.
+            AUTO_POST is {data.autoPost ? 'configured' : 'off'}, but that flag is not publication readiness. Browser and X API capability are checked independently at the point of action.
           </p>
-          <p className="mt-2 text-xs text-slate-500">Live delegation never bypasses content gates, queue identity, account-health constraints, or external platform requirements.</p>
+          <p className="mt-2 text-xs text-slate-500">Live delegation never bypasses exact-content gates, attempt identity, account-health constraints, or structural reconciliation.</p>
         </section>
       </div>
 

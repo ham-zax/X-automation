@@ -158,9 +158,11 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
       ]
     : []
 
-  const cardTone = item.status === 'failed' || item.publishError
-    ? 'danger'
-    : item.status === 'needs_review'
+  const cardTone = item.status === 'unresolved'
+    ? 'warning'
+    : item.status === 'failed' || item.publishError
+      ? 'danger'
+      : item.status === 'needs_review'
       ? 'warning'
       : ['approved', 'published'].includes(item.status)
         ? 'success'
@@ -196,8 +198,10 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
 
   const publicationState = item.publishStartedAt || item.publishedAt || item.publishError ? (
     <div className="mt-2 text-xs text-slate-500">
-      {item.publishError
-        ? <span className="font-semibold text-red-700">Publication failed</span>
+      {item.status === 'unresolved'
+        ? <span className="font-semibold text-amber-700">Outcome unresolved · duplicate fenced</span>
+        : item.publishError
+          ? <span className="font-semibold text-red-700">Publication failed</span>
         : item.status === 'published' && item.pipeline === 'repost'
           ? `Repost recorded ${formatDateTime(item.publishedAt)}`
           : <>
@@ -268,7 +272,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
             {completeRepost.isPending ? 'Recording…' : 'Mark reposted'}
           </button>
         )}
-        {item.draftId && !['publishing', 'published'].includes(item.status) && (
+        {item.draftId && !['publishing', 'published', 'unresolved'].includes(item.status) && (
           <button
             onClick={() => {
               if (window.confirm('Discard this draft? The source and its history will remain available.')) discard.mutate({ key: item.candidateKey })
@@ -307,7 +311,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
             growthFit={item.growthFit}
             queueItemId={item.id}
             candidateKey={item.candidateKey}
-            readOnly={Boolean(item.humanApprovedAt) || ['publishing', 'published'].includes(item.status)}
+            readOnly={Boolean(item.humanApprovedAt) || ['publishing', 'published', 'unresolved'].includes(item.status)}
           />
 
           {item.draft && (
@@ -321,7 +325,7 @@ function QueueCard({ item, compact = false }: { item: QueueItemView; compact?: b
 
           {item.schedule && <SchedulePanel item={item} schedule={item.schedule} />}
 
-          {item.publishError && <Notice tone="danger" title="Publication failure">{item.publishError}</Notice>}
+          {item.publishError && <Notice tone={item.status === 'unresolved' ? 'warning' : 'danger'} title={item.status === 'unresolved' ? 'Publication outcome unresolved' : 'Publication failure'}>{item.publishError}</Notice>}
 
           {canRequestReview && (
             <div>

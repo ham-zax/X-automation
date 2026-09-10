@@ -19,6 +19,22 @@ import {
   renewOperatorLease,
 } from './operator_lease.js';
 import { getGrowthOperatorMainFeedStatus } from './autonomous_main_feed.js';
+import {
+  advanceGrowthRun,
+  beginGrowthRun,
+  finishGrowthRun,
+  getGrowthRunStatus,
+  resumeGrowthRun,
+} from './growth_run.js';
+import { heartbeatGrowthAgentRuntime } from './growth_agent_runtime.js';
+import { getOperatorReadiness } from './operator_readiness.js';
+import {
+  closePublicationAttemptUnresolved,
+  confirmPublicationAttemptNotSent,
+  confirmPublicationAttemptPublished,
+  ensureLegacyPublicationAttemptMigration,
+  getPublicationReconciliationReadiness,
+} from './publication_reconciliation.js';
 import { getXApiMainFeedCapability } from './x_api_publish.js';
 import { fetchXUnderTheHoodReport } from './tech_news.js';
 import { refreshSourceSnapshot } from './source_refresh.js';
@@ -61,7 +77,7 @@ import {
   assignExperimentVariant,
   candidateKey,
   claimAutonomousReplyDecision,
-  claimQueueItem,
+  claimQueueItemForPublication,
   createExperiment,
   clearAiDefaultProfile,
   clearAiRoleBinding,
@@ -89,6 +105,8 @@ import {
   getNewFollowerQuality,
   getNicheProfile,
   getPublicationMeasurements,
+  getPublicationAttempt,
+  getLatestPublicationAttemptForQueueItem,
   getPerformanceSnapshot,
   getCurrentPersonaStances,
   getQueueItem,
@@ -110,6 +128,7 @@ import {
   listExperiments,
   listApprovedMainFeedItems,
   listPublicationMeasurementSeries,
+  listPublicationAttempts,
   listPersonaStanceEvents,
   listQueueItems,
   listRecentMainFeedPublications,
@@ -126,6 +145,7 @@ import {
   recordPersonaStanceEvent,
   recordRelationshipEvent,
   recordUnderTheHoodSnapshot,
+  markPublicationAttemptSendStarted,
   refreshLearnedRuleSuggestion,
   runStoreTransaction,
   retireLearnedRule,
@@ -282,6 +302,21 @@ function requireConfirmedOrDelegated(confirmed, label, { requireLive = false } =
   } catch (error) {
     throw new Error(`${label} requires an explicit confirmation or a running Growth Operator delegation: ${error.message}`);
   }
+}
+
+function requireGrowthRunLease(runId, sessionId = '', now = Date.now()) {
+  const expectedRunId = String(runId || '').trim();
+  if (!expectedRunId) return null;
+  const expectedSessionId = String(sessionId || '').trim();
+  if (!expectedSessionId) throw new Error(`Growth Run ${expectedRunId} public mutation requires sessionId.`);
+  const lease = getOperatorLeaseStatus({ now });
+  if (!lease.active || String(lease.runId || '') !== expectedRunId) {
+    throw new Error(`Growth Run ${expectedRunId} does not own the active operator lease.`);
+  }
+  if (lease.sessionId && String(lease.sessionId) !== expectedSessionId) {
+    throw new Error(`Growth Run ${expectedRunId} is leased to session ${lease.sessionId}, not ${expectedSessionId}.`);
+  }
+  return lease;
 }
 
 const ACCOUNT_ANALYTICS_CONTENT_TYPES = new Set(['posts', 'replies', 'all']);
@@ -916,6 +951,7 @@ function operatorStatus(payload = {}) {
       operatorLease: getOperatorLeaseStatus({ now }),
     },
     growthOperator: getGrowthOperatorMainFeedStatus({ now }),
+    readiness: getOperatorReadiness({ now }),
     execution: {
       mainFeed: {
         autoPostEnabled,
@@ -1456,9 +1492,84 @@ async function main() {
     return;
   }
 
+  if (command === 'publication-attempts') {
+    ensureLegacyPublicationAttemptMigration();
+    result({
+      attempts: listPublicationAttempts({
+        state: payload.state || null,
+        queueItemId: payload.queueItemId == null ? null : Number(payload.queueItemId),
+        runId: payload.runId || null,
+        limit: Number(payload.limit || 100),
+      }),
+      readiness: getPublicationReconciliationReadiness(),
+    });
+    return;
+  }
+
+  if (command === 'publication-attempt-send-start') {
+    const attemptId = String(payload.attemptId || '').trim();
+    if (!attemptId) throw new Error('publication-attempt-send-start requires attemptId.');
+    const attempt = getPublicationAttempt(attemptId);
+    if (!attempt) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (attempt.runId && payload.runId && String(payload.runId) !== String(attempt.runId)) {
+      throw new Error('Publication attempt runId does not match the active caller run.');
+    }
+    if (attempt.runId) requireGrowthRunLease(attempt.runId, payload.sessionId || '', payload.now == null ? Date.now() : Number(payload.now));
+    const queueItem = getQueueItem(attempt.queueItemId);
+    if (!queueItem || queueItem.status !== 'publishing') throw new Error('Publication attempt queue item is no longer in publishing state.');
+    const authority = queueItem.approvalSnapshot?.authority || {};
+    if (authority?.type === 'mission_agent') {
+      const currentAuthority = requireGrowthOperatorDelegation({ actor: 'agent', requireLive: true });
+      if (Number(currentAuthority.grant.revision) !== Number(attempt.delegationRevision)) {
+        throw new Error('Publication attempt delegation revision is no longer current.');
+      }
+    } else if (authority?.type === 'autonomous_reply') {
+      const replyGrant = getAutonomousReplyGrant();
+      if (replyGrant.state !== 'running' || replyGrant.mode !== 'live'
+        || Number(replyGrant.revision) !== Number(authority.grantRevision)) {
+        throw new Error('Autonomous Reply authority is no longer current for this publication attempt.');
+      }
+    }
+    if (getAccountHealthSummary({ now: Date.now() }).health.state === 'constrained') {
+      throw new Error('Publication attempt send is blocked by constrained Account Health.');
+    }
+    result({
+      attempt: markPublicationAttemptSendStarted(attemptId, {
+        now: payload.now == null ? Date.now() : Number(payload.now),
+        preSendEvidence: payload.preSendEvidence || {},
+      }),
+      executionRule: 'The consequential transport/browser mutation may now be attempted exactly once. Reconcile the same attempt afterward; an unknown outcome must not be retried.',
+    });
+    return;
+  }
+
+  if (command === 'publication-attempt-resolve') {
+    const attemptId = String(payload.attemptId || '').trim();
+    if (!attemptId) throw new Error('publication-attempt-resolve requires attemptId.');
+    const state = String(payload.state || '').trim();
+    if (state === 'confirmed_not_sent') {
+      result(confirmPublicationAttemptNotSent(attemptId, {
+        reason: payload.reason,
+        evidence: payload.evidence,
+        now: payload.now == null ? Date.now() : Number(payload.now),
+      }));
+      return;
+    }
+    if (state === 'closed_unresolved') {
+      result(closePublicationAttemptUnresolved(attemptId, {
+        reason: payload.reason,
+        evidence: payload.evidence,
+        now: payload.now == null ? Date.now() : Number(payload.now),
+      }));
+      return;
+    }
+    throw new Error('publication-attempt-resolve supports confirmed_not_sent or closed_unresolved. Confirmed publication must use record-action with positive structural verification.');
+  }
+
   if (command === 'browser-publish-claim') {
     const now = payload.now == null ? Date.now() : Number(payload.now);
     if (!Number.isFinite(now)) throw new Error('browser-publish-claim now must be numeric when supplied.');
+    requireGrowthRunLease(payload.runId, payload.sessionId || '', now);
     let item = null;
     if (payload.queueItemId != null) {
       const queueItem = getQueueItem(Number(payload.queueItemId));
@@ -1501,9 +1612,18 @@ async function main() {
       registeredMediaPath = registered.resolved;
     }
     let claimed;
+    let publicationAttempt;
     try {
-      claimed = claimQueueItem(item.id, { expectedUpdatedAt: item.updatedAt, now });
-      if (!claimed) throw new Error('Browser publication claim lost or authority changed; re-read schedule state before acting.');
+      const claimedResult = claimQueueItemForPublication(item.id, {
+        expectedUpdatedAt: item.updatedAt,
+        now,
+        runId: payload.runId || null,
+        transport: 'browser_agent',
+        claimHolder: String(payload.sessionId || payload.claimHolder || 'agent_bridge'),
+      });
+      if (!claimedResult) throw new Error('Browser publication claim lost or authority changed; re-read schedule state before acting.');
+      claimed = claimedResult.queueItem;
+      publicationAttempt = claimedResult.attempt;
     } catch (error) {
       if (registeredMediaPath) await unregisterQueueBrowserMediaArtifact(item.id, registeredMediaPath).catch(() => {});
       throw error;
@@ -1522,6 +1642,7 @@ async function main() {
     result({
       claimedAt: now,
       queueItemId: claimed.id,
+      attemptId: publicationAttempt.attemptId,
       candidateKey: claimed.candidateKey,
       pipeline: claimed.pipeline,
       exactText: isRepost ? null : text,
@@ -1531,8 +1652,8 @@ async function main() {
       browserMediaArtifact,
       actionForReconciliation: item.pipeline === 'quote' ? 'quote' : item.pipeline === 'repost' ? 'repost' : 'direct',
       executionRule: isRepost
-        ? 'Re-observe the exact source post, execute one native Repost action, verify the account now shows the reposted state for that exact source tweet, then call record-action with publicationVerification.repostedSourceTweetId and repostActive=true. Unknown results stay publishing and must not be retried blindly.'
-        : `Re-observe the exact X tab/source, execute this claimed action once${browserMediaArtifact ? `, upload only the approved browser-fast artifact ${browserMediaArtifact}` : ''}, verify the public ID/URL, rendered text, media when present, and required structure, then call record-action. Unknown results stay publishing and must not be retried blindly.`,
+        ? `Re-observe the exact source post. Immediately before the native Repost mutation call publication-attempt-send-start with attemptId=${publicationAttempt.attemptId}. Execute once, verify the account now shows the reposted state for that exact source tweet, then call record-action with the same attemptId plus publicationVerification.repostedSourceTweetId and repostActive=true. Unknown results stay unresolved and must not be retried blindly.`
+        : `Re-observe the exact X tab/source. Immediately before the consequential browser mutation call publication-attempt-send-start with attemptId=${publicationAttempt.attemptId}. Execute this claimed action once${browserMediaArtifact ? `, upload only the approved browser-fast artifact ${browserMediaArtifact}` : ''}, verify the public ID/URL, rendered text, media when present, and required structure, then call record-action with the same attemptId. Unknown results stay unresolved and must not be retried blindly.`,
     });
     return;
   }
@@ -1610,8 +1731,90 @@ async function main() {
     return;
   }
 
+  if (command === 'operator-readiness') {
+    result(getOperatorReadiness({
+      now: payload.now == null ? Date.now() : Number(payload.now),
+      operatorLeaseId: payload.operatorLeaseId || null,
+    }));
+    return;
+  }
+
+  if (command === 'agent-runtime-heartbeat') {
+    result(heartbeatGrowthAgentRuntime({
+      adapterType: payload.adapterType,
+      sessionId: payload.sessionId,
+      runId: payload.runId || '',
+      accountHandle: payload.accountHandle || '',
+      capabilities: payload.capabilities || {},
+      lastError: payload.lastError || null,
+      now: payload.now == null ? Date.now() : Number(payload.now),
+      ttlMs: payload.ttlMs == null ? undefined : Number(payload.ttlMs),
+    }));
+    return;
+  }
+
+  if (command === 'growth-run-begin') {
+    result(beginGrowthRun({
+      adapterType: payload.adapterType || 'agent_bridge',
+      sessionId: payload.sessionId || '',
+      capabilities: payload.capabilities || {},
+      ceilings: payload.ceilings || {},
+      now: payload.now == null ? Date.now() : Number(payload.now),
+    }));
+    return;
+  }
+
+  if (command === 'growth-run-status') {
+    const runId = String(payload.runId || '').trim();
+    if (!runId) throw new Error('growth-run-status requires runId.');
+    result(getGrowthRunStatus(runId, { now: payload.now == null ? Date.now() : Number(payload.now) }));
+    return;
+  }
+
+  if (command === 'growth-run-resume') {
+    const runId = String(payload.runId || '').trim();
+    if (!runId) throw new Error('growth-run-resume requires runId.');
+    result(resumeGrowthRun(runId, {
+      adapterType: payload.adapterType == null ? null : String(payload.adapterType),
+      sessionId: payload.sessionId == null ? null : String(payload.sessionId),
+      capabilities: payload.capabilities == null ? null : payload.capabilities,
+      now: payload.now == null ? Date.now() : Number(payload.now),
+    }));
+    return;
+  }
+
+  if (command === 'growth-run-next') {
+    const runId = String(payload.runId || '').trim();
+    if (!runId) throw new Error('growth-run-next requires runId.');
+    result(await advanceGrowthRun(runId, {
+      operation: payload.operation || null,
+      capabilities: payload.capabilities == null ? null : payload.capabilities,
+      now: payload.now == null ? Date.now() : Number(payload.now),
+    }));
+    return;
+  }
+
+  if (command === 'growth-run-finish') {
+    const runId = String(payload.runId || '').trim();
+    if (!runId) throw new Error('growth-run-finish requires runId.');
+    result(finishGrowthRun(runId, {
+      status: payload.status || 'completed',
+      stopReason: payload.stopReason || 'no_worthwhile_eligible_work',
+      stopDetail: payload.stopDetail || '',
+      result: payload.result || {},
+      now: payload.now == null ? Date.now() : Number(payload.now),
+    }));
+    return;
+  }
+
   if (command === 'operator-lease-acquire') {
-    result(acquireOperatorLease());
+    result(acquireOperatorLease({
+      holder: payload.holder || '',
+      runId: payload.runId || '',
+      adapterType: payload.adapterType || '',
+      sessionId: payload.sessionId || '',
+      now: payload.now == null ? Date.now() : Number(payload.now),
+    }));
     return;
   }
 
@@ -1846,7 +2049,21 @@ async function main() {
     const action = String(payload.action || '');
     if (!['direct', 'quote', 'repost', 'reply'].includes(action)) throw new Error(`Invalid action: ${action}`);
     const queueBefore = getQueueItemByCandidate(candidate.key);
+    let publicationAttempt = null;
     if (queueBefore?.status === 'publishing') {
+      ensureLegacyPublicationAttemptMigration();
+      publicationAttempt = payload.attemptId
+        ? getPublicationAttempt(String(payload.attemptId))
+        : getLatestPublicationAttemptForQueueItem(queueBefore.id);
+      if (!publicationAttempt || Number(publicationAttempt.queueItemId) !== Number(queueBefore.id)) {
+        throw new Error('Publishing reconciliation requires the publication attempt created by the exact queue claim.');
+      }
+      if (publicationAttempt.state === 'claimed') {
+        throw new Error('Publication attempt send boundary was not recorded. Call publication-attempt-send-start immediately before the consequential mutation.');
+      }
+      if (!['send_started', 'investigating', 'confirmed_published'].includes(publicationAttempt.state)) {
+        throw new Error(`Publication attempt ${publicationAttempt.attemptId} cannot be reconciled as published from ${publicationAttempt.state}.`);
+      }
       const expectedAction = queueBefore.pipeline === 'quote'
         ? 'quote'
         : queueBefore.pipeline === 'repost'
@@ -1936,6 +2153,18 @@ async function main() {
           && tweetIds.slice(1).every((tweetId, index) => parentIds[index + 1] === tweetIds[index]);
         if (!validChain) throw new Error('Browser Thread reconciliation requires the verified tweet ID/parent chain for every approved thread part.');
       }
+    }
+    if (publicationAttempt && publicationAttempt.state !== 'confirmed_published') {
+      publicationAttempt = confirmPublicationAttemptPublished(publicationAttempt.attemptId, {
+        outputTweetId: payload.outputTweetId || null,
+        outputUrl: payload.outputUrl || null,
+        evidence: {
+          ...(payload.publicationVerification || {}),
+          reconciledBy: 'agent_bridge_record_action',
+        },
+        executionEvidence: payload.executionEvidence || {},
+        now: payload.actedAt == null ? Date.now() : Number(payload.actedAt),
+      });
     }
     const recorded = recordCandidateAction({
       candidateKey: candidate.key,
@@ -2068,6 +2297,7 @@ async function main() {
   }
 
   if (command === 'browser-reply-claim') {
+    requireGrowthRunLease(payload.runId, payload.sessionId || '', payload.now == null ? Date.now() : Number(payload.now));
     const key = String(payload.key || '');
     if (!key) throw new Error('browser-reply-claim requires key.');
     const pending = listAutonomousReplyDecisions({ limit: 500 })
@@ -2084,36 +2314,50 @@ async function main() {
       if (String(queueItem.targetTweetId) !== String(decision.targetTweetId) || !String(decision.exactReply || '').trim()) {
         throw new Error('Eligible autonomous reply is mismatched with its persisted target/workflow state.');
       }
-      const claimed = claimAutonomousReplyDecision(decision.id, { grantRevision: decision.grantRevision, now: Date.now() });
-      if (!claimed) throw new Error('Autonomous reply claim lost or authority changed; re-read engagement state before acting.');
+      const claimedResult = claimAutonomousReplyDecision(decision.id, {
+        grantRevision: decision.grantRevision,
+        now: Date.now(),
+        runId: payload.runId || null,
+        transport: 'browser_agent',
+        claimHolder: String(payload.sessionId || payload.claimHolder || 'agent_bridge'),
+      });
+      if (!claimedResult) throw new Error('Autonomous reply claim lost or authority changed; re-read engagement state before acting.');
+      const claimed = claimedResult.decision;
       result({
         authorityType: 'autonomous',
         decisionId: claimed.id,
         grantRevision: claimed.grantRevision,
+        queueItemId: claimedResult.queueItem.id,
+        attemptId: claimedResult.attempt.attemptId,
         candidateKey: key,
-        targetTweetId: queueItem.targetTweetId,
-        targetUsername: queueItem.targetUsername || claimed.targetUsername || null,
+        targetTweetId: claimedResult.queueItem.targetTweetId,
+        targetUsername: claimedResult.queueItem.targetUsername || claimed.targetUsername || null,
         sourceUrl: candidate.url || candidate.key,
         exactReply: claimed.exactReply,
         actionForReconciliation: 'reply',
-        executionRule: 'Re-observe the exact target tweet/thread immediately before sending, execute this exact reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with publicationVerification.parentTweetId and outputText. Unknown results remain sending and must not be retried blindly.',
+        executionRule: `Re-observe the exact target tweet/thread. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${claimedResult.attempt.attemptId}. Execute this exact reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
       });
       return;
     }
 
-    const manual = claimApprovedEngagementReplyForBrowser(key, { now: Date.now() });
+    const manual = claimApprovedEngagementReplyForBrowser(key, {
+      now: Date.now(),
+      runId: payload.runId || null,
+      claimHolder: String(payload.sessionId || payload.claimHolder || 'agent_bridge'),
+    });
     result({
       authorityType: 'human',
       decisionId: null,
       grantRevision: null,
       queueItemId: manual.queueItem.id,
+      attemptId: manual.attempt.attemptId,
       candidateKey: key,
       targetTweetId: manual.queueItem.targetTweetId,
       targetUsername: manual.queueItem.targetUsername || null,
       sourceUrl: candidate.url || candidate.key,
       exactReply: manual.exactReply,
       actionForReconciliation: 'reply',
-      executionRule: 'Re-observe the exact target tweet/thread immediately before sending, execute this exact approved reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with publicationVerification.parentTweetId and outputText. Unknown results remain publishing and must not be retried blindly.',
+      executionRule: `Re-observe the exact target tweet/thread. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${manual.attempt.attemptId}. Execute this exact approved reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
     });
     return;
   }
@@ -2229,7 +2473,7 @@ async function main() {
   if (command === 'behavior-select') {
     const key = String(payload.key || '').trim();
     if (!key) throw new Error('behavior-select requires key.');
-    const selected = setBehaviorDecision(key, payload.behavior || {}, { actor: 'human' });
+    const selected = setBehaviorDecision(key, payload.behavior || {}, { actor: 'agent' });
     result(selected);
     return;
   }
@@ -2282,7 +2526,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-readiness|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

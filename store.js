@@ -31,7 +31,7 @@ import {
   reviewLearnedRules,
   transitionLearnedRule,
 } from './learning.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import {
   CANDIDATE_CLASSIFIER_VERSION,
   GROWTH_FOCUS_OBJECTIVES,
@@ -363,6 +363,61 @@ db.exec(`
     FOREIGN KEY(draft_id) REFERENCES drafts(id)
   );
 
+  CREATE TABLE IF NOT EXISTS publication_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    attempt_id TEXT NOT NULL UNIQUE,
+    queue_item_id INTEGER NOT NULL,
+    candidate_key TEXT NOT NULL,
+    run_id TEXT,
+    lane TEXT NOT NULL,
+    pipeline TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    action_fingerprint TEXT NOT NULL,
+    delegation_revision INTEGER,
+    authority_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    approved_content TEXT NOT NULL DEFAULT '',
+    approved_content_hash TEXT NOT NULL DEFAULT '',
+    target_tweet_id TEXT,
+    target_url TEXT,
+    source_identity_json TEXT NOT NULL DEFAULT '{}',
+    transport TEXT NOT NULL DEFAULT '',
+    claim_holder TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL,
+    claimed_at INTEGER NOT NULL,
+    send_started_at INTEGER,
+    pre_send_evidence_json TEXT NOT NULL DEFAULT '{}',
+    execution_evidence_json TEXT NOT NULL DEFAULT '{}',
+    reconciliation_evidence_json TEXT NOT NULL DEFAULT '{}',
+    output_tweet_id TEXT,
+    output_url TEXT,
+    reconciled_at INTEGER,
+    closure_reason TEXT NOT NULL DEFAULT '',
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(queue_item_id) REFERENCES queue_items(id),
+    FOREIGN KEY(candidate_key) REFERENCES candidates(key)
+  );
+
+  CREATE TABLE IF NOT EXISTS growth_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL UNIQUE,
+    delegation_revision INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    adapter_type TEXT NOT NULL DEFAULT '',
+    session_id TEXT NOT NULL DEFAULT '',
+    lease_id TEXT NOT NULL DEFAULT '',
+    ceilings_json TEXT NOT NULL DEFAULT '{}',
+    started_at INTEGER NOT NULL,
+    last_resumed_at INTEGER,
+    updated_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    stop_reason TEXT NOT NULL DEFAULT '',
+    stop_detail TEXT NOT NULL DEFAULT '',
+    result_json TEXT NOT NULL DEFAULT '{}'
+  );
+
   CREATE TABLE IF NOT EXISTS queue_approval_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     queue_item_id INTEGER NOT NULL,
@@ -679,6 +734,10 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_health_type_observed ON account_health_observations(type, observed_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_status_updated ON queue_items(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_pipeline_status ON queue_items(pipeline, status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_publication_attempts_queue_state ON publication_attempts(queue_item_id, state, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_publication_attempts_fingerprint_state ON publication_attempts(action_fingerprint, state, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_publication_attempts_run_time ON publication_attempts(run_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_growth_runs_status_time ON growth_runs(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_time ON autonomous_reply_decisions(created_at DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_status ON autonomous_reply_decisions(decision, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_target ON autonomous_reply_decisions(target_username, created_at DESC);
@@ -1332,6 +1391,452 @@ export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
   };
 }
 
+export const PUBLICATION_ATTEMPT_STATES = Object.freeze([
+  'claimed',
+  'send_started',
+  'confirmed_published',
+  'confirmed_not_sent',
+  'investigating',
+  'closed_unresolved',
+]);
+
+const PUBLICATION_ATTEMPT_STATE_SET = new Set(PUBLICATION_ATTEMPT_STATES);
+const PUBLICATION_ATTEMPT_TERMINAL_STATES = new Set(['confirmed_published', 'confirmed_not_sent', 'closed_unresolved']);
+const PUBLICATION_ATTEMPT_DUPLICATE_FENCE_STATES = new Set(['claimed', 'send_started', 'confirmed_published', 'investigating', 'closed_unresolved']);
+
+function publicationActionType(pipeline) {
+  if (pipeline === 'reply') return 'reply';
+  if (pipeline === 'quote') return 'quote';
+  if (pipeline === 'repost') return 'repost';
+  return 'direct';
+}
+
+function publicationTargetTweetId(queueItem, candidate = null) {
+  if (queueItem?.targetTweetId) return String(queueItem.targetTweetId);
+  if (queueItem?.pipeline === 'quote' || queueItem?.pipeline === 'repost') {
+    const source = String(candidate?.url || candidate?.key || '');
+    return source.match(/\/status\/(\d+)/)?.[1] || '';
+  }
+  return '';
+}
+
+function publicationApprovedContent(queueItem, draft = null, candidate = null) {
+  if (queueItem?.pipeline === 'thread') {
+    const parts = Array.isArray(draft?.threadParts) ? draft.threadParts.map((part) => String(part || '').trim()).filter(Boolean) : [];
+    return JSON.stringify(parts);
+  }
+  if (queueItem?.pipeline === 'repost') return String(candidate?.url || candidate?.key || '').trim();
+  return String(draft?.body || queueItem?.approvedText || '').trim();
+}
+
+export function computePublicationActionFingerprint(queueItem, { draft = null, candidate = null, approvedContentHash = '' } = {}) {
+  if (!queueItem) throw new Error('Publication action fingerprint requires a queue item.');
+  const resolvedCandidate = candidate || getCandidate(queueItem.candidateKey);
+  const resolvedDraft = draft || (queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey));
+  const contentHash = String(approvedContentHash || queueItem.approvalSnapshot?.contentHash || '').trim()
+    || hashCanonical(publicationApprovedContent(queueItem, resolvedDraft, resolvedCandidate));
+  return hashCanonical({
+    pipeline: String(queueItem.pipeline || ''),
+    candidateKey: String(queueItem.candidateKey || ''),
+    targetTweetId: publicationTargetTweetId(queueItem, resolvedCandidate),
+    contentHash,
+  });
+}
+
+function decodePublicationAttempt(row) {
+  return row ? {
+    id: Number(row.id),
+    attemptId: row.attempt_id,
+    queueItemId: Number(row.queue_item_id),
+    candidateKey: row.candidate_key,
+    runId: row.run_id || null,
+    lane: row.lane,
+    pipeline: row.pipeline,
+    actionType: row.action_type,
+    actionFingerprint: row.action_fingerprint,
+    delegationRevision: row.delegation_revision == null ? null : Number(row.delegation_revision),
+    authoritySnapshot: json(row.authority_snapshot_json, {}),
+    approvedContent: row.approved_content || '',
+    approvedContentHash: row.approved_content_hash || '',
+    targetTweetId: row.target_tweet_id || '',
+    targetUrl: row.target_url || '',
+    sourceIdentity: json(row.source_identity_json, {}),
+    transport: row.transport || '',
+    claimHolder: row.claim_holder || '',
+    state: row.state,
+    claimedAt: Number(row.claimed_at || 0),
+    sendStartedAt: row.send_started_at == null ? null : Number(row.send_started_at),
+    preSendEvidence: json(row.pre_send_evidence_json, {}),
+    executionEvidence: json(row.execution_evidence_json, {}),
+    reconciliationEvidence: json(row.reconciliation_evidence_json, {}),
+    outputTweetId: row.output_tweet_id || null,
+    outputUrl: row.output_url || null,
+    reconciledAt: row.reconciled_at == null ? null : Number(row.reconciled_at),
+    closureReason: row.closure_reason || '',
+    lastError: row.last_error || '',
+    createdAt: Number(row.created_at || 0),
+    updatedAt: Number(row.updated_at || 0),
+  } : null;
+}
+
+export function getPublicationAttempt(attemptId) {
+  const key = String(attemptId || '').trim();
+  if (!key) return null;
+  return decodePublicationAttempt(db.prepare('SELECT * FROM publication_attempts WHERE attempt_id = ?').get(key));
+}
+
+export function getLatestPublicationAttemptForQueueItem(queueItemId) {
+  return decodePublicationAttempt(db.prepare(`SELECT * FROM publication_attempts
+    WHERE queue_item_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
+}
+
+export function listPublicationAttempts({ state = null, queueItemId = null, runId = null, limit = 100 } = {}) {
+  const where = [];
+  const params = [];
+  if (state) { where.push('state = ?'); params.push(String(state)); }
+  if (queueItemId != null) { where.push('queue_item_id = ?'); params.push(Number(queueItemId)); }
+  if (runId) { where.push('run_id = ?'); params.push(String(runId)); }
+  params.push(Math.max(1, Math.min(500, Number(limit || 100))));
+  return db.prepare(`SELECT * FROM publication_attempts ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY created_at DESC, id DESC LIMIT ?`).all(...params).map(decodePublicationAttempt);
+}
+
+export function getDuplicateFencedPublicationAttempt(actionFingerprint) {
+  const fingerprint = String(actionFingerprint || '').trim();
+  if (!fingerprint) return null;
+  const attempts = db.prepare(`SELECT * FROM publication_attempts
+    WHERE action_fingerprint = ? ORDER BY created_at DESC, id DESC`).all(fingerprint).map(decodePublicationAttempt);
+  return attempts.find((attempt) => PUBLICATION_ATTEMPT_DUPLICATE_FENCE_STATES.has(attempt.state)) || null;
+}
+
+function insertPublicationAttempt(queueItem, {
+  runId = null,
+  transport = '',
+  claimHolder = '',
+  now = Date.now(),
+  state = 'claimed',
+  actionFingerprint = null,
+  authoritySnapshot = null,
+  preSendEvidence = null,
+  sendStartedAt = null,
+  executionEvidence = null,
+  approvedContent = null,
+  approvedContentHash = null,
+} = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt timestamp must be numeric.');
+  if (!PUBLICATION_ATTEMPT_STATE_SET.has(state)) throw new Error(`Invalid publication attempt state: ${state}.`);
+  const candidate = getCandidate(queueItem.candidateKey);
+  const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey);
+  const resolvedApprovedContent = approvedContent == null
+    ? publicationApprovedContent(queueItem, draft, candidate)
+    : String(approvedContent);
+  const resolvedApprovedContentHash = String(approvedContentHash || queueItem.approvalSnapshot?.contentHash || '').trim()
+    || hashCanonical(resolvedApprovedContent);
+  const fingerprint = String(actionFingerprint || computePublicationActionFingerprint(queueItem, {
+    draft,
+    candidate,
+    approvedContentHash: resolvedApprovedContentHash,
+  })).trim();
+  const targetTweetId = publicationTargetTweetId(queueItem, candidate);
+  const targetUrl = ['quote', 'repost'].includes(queueItem.pipeline) ? String(candidate?.url || candidate?.key || '').trim() : '';
+  const authority = authoritySnapshot || queueItem.approvalSnapshot?.authority || getQueueApprovalAuthority(queueItem) || {};
+  const delegationRevision = Number.isInteger(Number(authority?.grantRevision)) ? Number(authority.grantRevision) : null;
+  const attemptId = randomUUID();
+  db.prepare(`INSERT INTO publication_attempts(
+    attempt_id, queue_item_id, candidate_key, run_id, lane, pipeline, action_type, action_fingerprint,
+    delegation_revision, authority_snapshot_json, approved_content, approved_content_hash,
+    target_tweet_id, target_url, source_identity_json, transport, claim_holder, state, claimed_at,
+    send_started_at, pre_send_evidence_json, execution_evidence_json, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    attemptId,
+    Number(queueItem.id),
+    queueItem.candidateKey,
+    runId == null ? null : String(runId),
+    queueItem.lane || '',
+    queueItem.pipeline || '',
+    publicationActionType(queueItem.pipeline),
+    fingerprint,
+    delegationRevision,
+    JSON.stringify(authority || {}),
+    resolvedApprovedContent,
+    resolvedApprovedContentHash,
+    targetTweetId || null,
+    targetUrl || null,
+    JSON.stringify({ candidateKey: queueItem.candidateKey, sourceUrl: String(candidate?.url || candidate?.key || '') }),
+    String(transport || ''),
+    String(claimHolder || ''),
+    state,
+    timestamp,
+    sendStartedAt == null ? null : Number(sendStartedAt),
+    JSON.stringify(preSendEvidence || {}),
+    JSON.stringify(executionEvidence || {}),
+    timestamp,
+    timestamp,
+  );
+  return getPublicationAttempt(attemptId);
+}
+
+export function markPublicationAttemptSendStarted(attemptId, { preSendEvidence = null, now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication send-start timestamp must be numeric.');
+  return runStoreTransaction(() => {
+    const attempt = getPublicationAttempt(attemptId);
+    if (!attempt) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (attempt.state === 'send_started') return attempt;
+    if (attempt.state !== 'claimed') throw new Error(`Publication attempt ${attemptId} cannot start send from ${attempt.state}.`);
+    db.prepare(`UPDATE publication_attempts SET state = 'send_started', send_started_at = ?,
+      pre_send_evidence_json = ?, updated_at = ? WHERE attempt_id = ? AND state = 'claimed'`).run(
+      timestamp,
+      JSON.stringify(preSendEvidence || attempt.preSendEvidence || {}),
+      timestamp,
+      attempt.attemptId,
+    );
+    return getPublicationAttempt(attempt.attemptId);
+  });
+}
+
+export function appendPublicationAttemptReconciliationEvidence(attemptId, evidence, { now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt evidence timestamp must be numeric.');
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || Object.keys(evidence).length === 0) {
+    throw new Error('Publication attempt evidence must be a non-empty object.');
+  }
+  return runStoreTransaction(() => {
+    const current = getPublicationAttempt(attemptId);
+    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    const existing = current.reconciliationEvidence && typeof current.reconciliationEvidence === 'object'
+      && !Array.isArray(current.reconciliationEvidence)
+      ? current.reconciliationEvidence
+      : {};
+    const additionalChecks = Array.isArray(existing.additionalChecks) ? existing.additionalChecks : [];
+    const nextEvidence = {
+      ...existing,
+      additionalChecks: [...additionalChecks, { ...evidence, observedAt: timestamp }],
+    };
+    db.prepare('UPDATE publication_attempts SET reconciliation_evidence_json = ?, updated_at = ? WHERE attempt_id = ?').run(
+      JSON.stringify(nextEvidence),
+      timestamp,
+      current.attemptId,
+    );
+    return getPublicationAttempt(current.attemptId);
+  });
+}
+
+export function transitionPublicationAttempt(attemptId, {
+  state,
+  reconciliationEvidence = null,
+  executionEvidence = null,
+  outputTweetId = undefined,
+  outputUrl = undefined,
+  closureReason = '',
+  lastError = '',
+  now = Date.now(),
+} = {}) {
+  const nextState = String(state || '');
+  if (!PUBLICATION_ATTEMPT_STATE_SET.has(nextState)) throw new Error(`Invalid publication attempt state: ${nextState || 'missing'}.`);
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt transition timestamp must be numeric.');
+  return runStoreTransaction(() => {
+    const current = getPublicationAttempt(attemptId);
+    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (PUBLICATION_ATTEMPT_TERMINAL_STATES.has(current.state)) {
+      if (current.state !== nextState) throw new Error(`Publication attempt ${attemptId} is already terminal as ${current.state}.`);
+      return current;
+    }
+    const allowed = current.state === 'claimed'
+      ? new Set(['send_started', 'confirmed_not_sent', 'investigating', 'closed_unresolved'])
+      : current.state === 'send_started'
+        ? new Set(['confirmed_published', 'confirmed_not_sent', 'investigating', 'closed_unresolved'])
+        : current.state === 'investigating'
+          ? new Set(['confirmed_published', 'confirmed_not_sent', 'closed_unresolved'])
+          : new Set();
+    if (!allowed.has(nextState)) throw new Error(`Publication attempt ${attemptId} cannot transition from ${current.state} to ${nextState}.`);
+    const reconciledAt = PUBLICATION_ATTEMPT_TERMINAL_STATES.has(nextState) ? timestamp : current.reconciledAt;
+    db.prepare(`UPDATE publication_attempts SET state = ?, reconciliation_evidence_json = ?, execution_evidence_json = ?,
+      output_tweet_id = ?, output_url = ?, reconciled_at = ?, closure_reason = ?, last_error = ?, updated_at = ?
+      WHERE attempt_id = ?`).run(
+      nextState,
+      JSON.stringify(reconciliationEvidence || current.reconciliationEvidence || {}),
+      JSON.stringify(executionEvidence || current.executionEvidence || {}),
+      outputTweetId === undefined ? current.outputTweetId : (outputTweetId || null),
+      outputUrl === undefined ? current.outputUrl : (outputUrl || null),
+      reconciledAt ?? null,
+      String(closureReason || current.closureReason || ''),
+      String(lastError || current.lastError || ''),
+      timestamp,
+      current.attemptId,
+    );
+    return getPublicationAttempt(current.attemptId);
+  });
+}
+
+export const GROWTH_RUN_STAGES = Object.freeze([
+  'startup',
+  'recovery',
+  'sensing',
+  'selection',
+  'preparation',
+  'acting',
+  'reconciliation',
+  'finishing',
+]);
+
+export const GROWTH_RUN_STATUSES = Object.freeze(['active', 'completed', 'partial', 'blocked', 'unresolved']);
+const GROWTH_RUN_STAGE_SET = new Set(GROWTH_RUN_STAGES);
+const GROWTH_RUN_STATUS_SET = new Set(GROWTH_RUN_STATUSES);
+
+function decodeGrowthRun(row) {
+  return row ? {
+    id: Number(row.id),
+    runId: row.run_id,
+    delegationRevision: Number(row.delegation_revision),
+    status: row.status,
+    stage: row.stage,
+    adapterType: row.adapter_type || '',
+    sessionId: row.session_id || '',
+    leaseId: row.lease_id || '',
+    ceilings: json(row.ceilings_json, {}),
+    startedAt: Number(row.started_at),
+    lastResumedAt: row.last_resumed_at == null ? null : Number(row.last_resumed_at),
+    updatedAt: Number(row.updated_at),
+    finishedAt: row.finished_at == null ? null : Number(row.finished_at),
+    stopReason: row.stop_reason || '',
+    stopDetail: row.stop_detail || '',
+    result: json(row.result_json, {}),
+  } : null;
+}
+
+export function createGrowthRun({
+  delegationRevision,
+  adapterType = '',
+  sessionId = '',
+  leaseId = '',
+  ceilings = {},
+  now = Date.now(),
+  runId = randomUUID(),
+} = {}) {
+  const revision = Number(delegationRevision);
+  const timestamp = Number(now);
+  if (!Number.isInteger(revision) || revision < 0) throw new Error('Growth Run requires a delegation revision.');
+  if (!Number.isFinite(timestamp)) throw new Error('Growth Run timestamp must be numeric.');
+  const id = String(runId || '').trim();
+  if (!id) throw new Error('Growth Run requires runId.');
+  db.prepare(`INSERT INTO growth_runs(
+    run_id, delegation_revision, status, stage, adapter_type, session_id, lease_id, ceilings_json,
+    started_at, last_resumed_at, updated_at, result_json
+  ) VALUES (?, ?, 'active', 'startup', ?, ?, ?, ?, ?, ?, ?, '{}')`).run(
+    id,
+    revision,
+    String(adapterType || ''),
+    String(sessionId || ''),
+    String(leaseId || ''),
+    JSON.stringify(ceilings && typeof ceilings === 'object' && !Array.isArray(ceilings) ? ceilings : {}),
+    timestamp,
+    timestamp,
+    timestamp,
+  );
+  return getGrowthRun(id);
+}
+
+export function getGrowthRun(runId) {
+  const id = String(runId || '').trim();
+  if (!id) return null;
+  return decodeGrowthRun(db.prepare('SELECT * FROM growth_runs WHERE run_id = ?').get(id));
+}
+
+export function listGrowthRuns({ status = null, limit = 20 } = {}) {
+  const bounded = Math.max(1, Math.min(200, Number(limit || 20)));
+  const rows = status
+    ? db.prepare('SELECT * FROM growth_runs WHERE status = ? ORDER BY updated_at DESC, id DESC LIMIT ?').all(String(status), bounded)
+    : db.prepare('SELECT * FROM growth_runs ORDER BY updated_at DESC, id DESC LIMIT ?').all(bounded);
+  return rows.map(decodeGrowthRun);
+}
+
+export function updateGrowthRun(runId, patch = {}) {
+  const current = getGrowthRun(runId);
+  if (!current) throw new Error(`Growth Run not found: ${runId}`);
+  const status = patch.status == null ? current.status : String(patch.status);
+  const stage = patch.stage == null ? current.stage : String(patch.stage);
+  if (!GROWTH_RUN_STATUS_SET.has(status)) throw new Error(`Invalid Growth Run status: ${status}.`);
+  if (!GROWTH_RUN_STAGE_SET.has(stage)) throw new Error(`Invalid Growth Run stage: ${stage}.`);
+  if (current.status !== 'active' && status !== current.status) {
+    throw new Error(`Growth Run ${runId} is already terminal as ${current.status}.`);
+  }
+  const now = Number(patch.now || Date.now());
+  if (!Number.isFinite(now)) throw new Error('Growth Run update timestamp must be numeric.');
+  const terminal = status !== 'active';
+  db.prepare(`UPDATE growth_runs SET status = ?, stage = ?, adapter_type = ?, session_id = ?, lease_id = ?,
+    ceilings_json = ?, last_resumed_at = ?, updated_at = ?, finished_at = ?, stop_reason = ?, stop_detail = ?, result_json = ?
+    WHERE run_id = ?`).run(
+    status,
+    stage,
+    patch.adapterType == null ? current.adapterType : String(patch.adapterType || ''),
+    patch.sessionId == null ? current.sessionId : String(patch.sessionId || ''),
+    patch.leaseId == null ? current.leaseId : String(patch.leaseId || ''),
+    JSON.stringify(patch.ceilings == null ? current.ceilings : patch.ceilings),
+    patch.lastResumedAt === undefined ? current.lastResumedAt : patch.lastResumedAt,
+    now,
+    terminal ? Number(patch.finishedAt || now) : null,
+    patch.stopReason == null ? current.stopReason : String(patch.stopReason || ''),
+    patch.stopDetail == null ? current.stopDetail : String(patch.stopDetail || ''),
+    JSON.stringify(patch.result == null ? current.result : patch.result),
+    current.runId,
+  );
+  return getGrowthRun(current.runId);
+}
+
+export function migrateLegacyPublishingQueueItems() {
+  return runStoreTransaction(() => {
+    const rows = db.prepare(`SELECT q.* FROM queue_items q
+      WHERE q.status = 'publishing'
+        AND NOT EXISTS (SELECT 1 FROM publication_attempts p WHERE p.queue_item_id = q.id)
+      ORDER BY q.updated_at ASC, q.id ASC`).all();
+    const migrated = [];
+    for (const row of rows) {
+      const queueItem = decodeQueueItem(row);
+      const startedAt = Number(queueItem.publishStartedAt || queueItem.updatedAt || Date.now());
+      const attempt = insertPublicationAttempt(queueItem, {
+        now: startedAt,
+        state: 'investigating',
+        transport: 'legacy_unknown',
+        claimHolder: 'legacy_migration',
+        sendStartedAt: startedAt,
+        preSendEvidence: {
+          legacyQueueStatus: 'publishing',
+          migratedFromQueueItem: true,
+        },
+        executionEvidence: {
+          outputTweetId: queueItem.outputTweetId || null,
+          outputUrl: queueItem.outputUrl || null,
+        },
+      });
+      if (queueItem.publishError || queueItem.outputTweetId || queueItem.outputUrl) {
+        db.prepare(`UPDATE publication_attempts SET output_tweet_id = ?, output_url = ?, last_error = ?, updated_at = ?
+          WHERE attempt_id = ?`).run(
+          queueItem.outputTweetId || null,
+          queueItem.outputUrl || null,
+          queueItem.publishError || 'Legacy publishing state migrated for explicit reconciliation.',
+          Date.now(),
+          attempt.attemptId,
+        );
+      }
+      migrated.push(getPublicationAttempt(attempt.attemptId));
+    }
+    return migrated;
+  });
+}
+
+export function listRecentUnresolvedMainFeedAttempts({ limit = 20 } = {}) {
+  const bounded = Math.max(1, Math.min(100, Number(limit || 20)));
+  return db.prepare(`SELECT * FROM publication_attempts
+    WHERE lane IN ('main', 'main_feed')
+      AND pipeline IN ('original', 'quote', 'thread', 'repost')
+      AND state IN ('investigating', 'closed_unresolved')
+    ORDER BY COALESCE(send_started_at, claimed_at, updated_at) DESC, id DESC
+    LIMIT ?`).all(bounded).map(decodePublicationAttempt);
+}
+
 export function buildApprovalSnapshot(queueItem, draft, candidate = null, { authority = null, verificationProvenance = null } = {}) {
   const fp = computeApprovalFingerprint(queueItem, draft, candidate);
   return {
@@ -1838,14 +2343,23 @@ export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human
   });
 }
 
-export function claimApprovedEngagementReply(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
+export function claimApprovedEngagementReplyForPublication(id, {
+  expectedUpdatedAt = null,
+  now = Date.now(),
+  runId = null,
+  transport = 'browser_agent',
+  claimHolder = '',
+} = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('claimApprovedEngagementReply requires a numeric now timestamp.');
+  if (!Number.isFinite(timestamp)) throw new Error('claimApprovedEngagementReplyForPublication requires a numeric now timestamp.');
   return runStoreTransaction(() => {
     const preItem = getQueueItem(Number(id));
     if (!preItem || preItem.lane !== 'engagement' || preItem.pipeline !== 'reply' || preItem.status !== 'approved') return null;
     if (!preItem.humanApprovedAt || !String(preItem.approvedText || '').trim() || !String(preItem.targetTweetId || '').trim()) return null;
     if (preItem.publishedAt || preItem.outputTweetId) return null;
+    const fingerprint = computePublicationActionFingerprint(preItem);
+    const fenced = getDuplicateFencedPublicationAttempt(fingerprint);
+    if (fenced) throw new Error(`Reply action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
 
     const params = [timestamp, timestamp, Number(id)];
     let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
@@ -1858,13 +2372,29 @@ export function claimApprovedEngagementReply(id, { expectedUpdatedAt = null, now
       params.push(Number(expectedUpdatedAt));
     }
     const result = db.prepare(sql).run(...params);
-    return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+    if (Number(result.changes || 0) !== 1) return null;
+    const queueItem = getQueueItem(Number(id));
+    const attempt = insertPublicationAttempt(queueItem, {
+      runId,
+      transport,
+      claimHolder,
+      now: timestamp,
+      actionFingerprint: fingerprint,
+      authoritySnapshot: { type: 'human', humanApprovedAt: queueItem.humanApprovedAt },
+    });
+    return { queueItem, attempt };
   });
 }
 
-export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() } = {}) {
+export function claimQueueItemForPublication(id, {
+  expectedUpdatedAt = null,
+  now = Date.now(),
+  runId = null,
+  transport = '',
+  claimHolder = '',
+} = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('claimQueueItem requires a numeric now timestamp.');
+  if (!Number.isFinite(timestamp)) throw new Error('claimQueueItemForPublication requires a numeric now timestamp.');
   return runStoreTransaction(() => {
     const preItem = getQueueItem(Number(id));
     if (!preItem || preItem.status !== 'approved') return null;
@@ -1892,6 +2422,12 @@ export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() 
       if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') return null;
     }
 
+    const fingerprint = computePublicationActionFingerprint(preItem);
+    const fenced = getDuplicateFencedPublicationAttempt(fingerprint);
+    if (fenced) {
+      throw new Error(`Publication action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
+    }
+
     const params = [timestamp, timestamp, Number(id), timestamp];
     let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
       WHERE id = ? AND lane IN ('main', 'main_feed') AND status = 'approved'
@@ -1904,7 +2440,17 @@ export function claimQueueItem(id, { expectedUpdatedAt = null, now = Date.now() 
       params.push(Number(expectedUpdatedAt));
     }
     const result = db.prepare(sql).run(...params);
-    return Number(result.changes || 0) === 1 ? getQueueItem(Number(id)) : null;
+    if (Number(result.changes || 0) !== 1) return null;
+    const queueItem = getQueueItem(Number(id));
+    const attempt = insertPublicationAttempt(queueItem, {
+      runId,
+      transport,
+      claimHolder,
+      now: timestamp,
+      actionFingerprint: fingerprint,
+      authoritySnapshot: authority,
+    });
+    return { queueItem, attempt };
   });
 }
 
@@ -1920,17 +2466,7 @@ export function markQueuePublished(id, tweetId, outputUrl = null, { publishedAt 
   return getQueueItem(Number(id));
 }
 
-export function markQueueFailed(id, error, { failedAt = Date.now() } = {}) {
-  const timestamp = Number(failedAt);
-  if (!Number.isFinite(timestamp)) throw new Error('markQueueFailed requires a numeric failedAt timestamp.');
-  const message = String(error?.message || error || 'Publication failed.');
-  const result = db.prepare(`UPDATE queue_items SET status = 'failed', publish_error = ?, updated_at = ?
-    WHERE id = ? AND status = 'publishing'`).run(message, timestamp, Number(id));
-  if (Number(result.changes || 0) !== 1) throw new Error(`Queue item ${id} is not in publishing state.`);
-  return getQueueItem(Number(id));
-}
-
-const ENGAGEMENT_TERMINAL_STATUSES = new Set(['ignored', 'expired', 'published', 'failed']);
+const ENGAGEMENT_TERMINAL_STATUSES = new Set(['ignored', 'expired', 'published', 'failed', 'unresolved']);
 
 export function ensureEngagementItem(item = {}) {
   const candidateKey = String(item.candidateKey || '');
@@ -2114,7 +2650,13 @@ export function updateAutonomousReplyDecision(id, patch = {}) {
   return getAutonomousReplyDecision(id);
 }
 
-export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now() } = {}) {
+export function claimAutonomousReplyDecision(id, {
+  grantRevision,
+  now = Date.now(),
+  runId = null,
+  transport = 'browser_agent',
+  claimHolder = '',
+} = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp) || !Number.isInteger(Number(grantRevision))) {
     throw new Error('Autonomous reply claim requires numeric time and grant revision.');
@@ -2126,7 +2668,21 @@ export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now
       db.exec('ROLLBACK');
       return null;
     }
-    if (!String(decision.exactReply || '').trim()) throw new Error('Autonomous reply decision has no exact text for live send.');
+    const exactReply = String(decision.exactReply || '').trim();
+    if (!exactReply) throw new Error('Autonomous reply decision has no exact text for live send.');
+    const queueItem = decision.queueItemId == null ? getQueueItemByCandidate(decision.candidateKey) : getQueueItem(decision.queueItemId);
+    if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply'
+      || String(queueItem.targetTweetId || '') !== String(decision.targetTweetId || '')) {
+      throw new Error('Autonomous reply decision no longer matches its engagement queue item.');
+    }
+    if (queueItem.humanApprovedAt || queueItem.approvedText || ['publishing', 'published', 'unresolved'].includes(queueItem.status)
+      || queueItem.outputTweetId || queueItem.publishedAt) {
+      throw new Error('Autonomous reply queue state is no longer eligible for a delegated send claim.');
+    }
+    const approvedContentHash = hashCanonical(exactReply);
+    const actionFingerprint = computePublicationActionFingerprint(queueItem, { approvedContentHash });
+    const fenced = getDuplicateFencedPublicationAttempt(actionFingerprint);
+    if (fenced) throw new Error(`Autonomous Reply is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
     const storedGrant = db.prepare('SELECT value FROM app_state WHERE key = ?').get(AUTONOMOUS_REPLY_GRANT_STATE_KEY)?.value;
     const grant = json(storedGrant, {});
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(grantRevision)) {
@@ -2145,12 +2701,33 @@ export function claimAutonomousReplyDecision(id, { grantRevision, now = Date.now
       db.exec('ROLLBACK');
       return null;
     }
+    const queueChange = db.prepare(`UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
+      WHERE id = ? AND lane = 'engagement' AND pipeline = 'reply'
+        AND status NOT IN ('publishing', 'published', 'unresolved')
+        AND human_approved_at IS NULL AND approved_text IS NULL
+        AND published_at IS NULL AND output_tweet_id IS NULL`).run(timestamp, timestamp, queueItem.id);
+    if (Number(queueChange.changes || 0) !== 1) throw new Error('Autonomous reply queue claim lost before publication attempt creation.');
+    const claimedQueueItem = getQueueItem(queueItem.id);
+    const attempt = insertPublicationAttempt(claimedQueueItem, {
+      runId,
+      transport,
+      claimHolder,
+      now: timestamp,
+      actionFingerprint,
+      authoritySnapshot: {
+        type: 'autonomous_reply',
+        decisionId: Number(decision.id),
+        grantRevision: Number(grantRevision),
+      },
+      approvedContent: exactReply,
+      approvedContentHash,
+    });
     const nextGrant = { ...grant, budgetUsed: budgetUsed + 1, lastClaimAt: timestamp };
     db.prepare(`INSERT INTO app_state(key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value`)
       .run(AUTONOMOUS_REPLY_GRANT_STATE_KEY, JSON.stringify(nextGrant));
     db.exec('COMMIT');
-    return { decision: getAutonomousReplyDecision(id), grant: nextGrant };
+    return { decision: getAutonomousReplyDecision(id), grant: nextGrant, queueItem: claimedQueueItem, attempt };
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch {}
     throw error;

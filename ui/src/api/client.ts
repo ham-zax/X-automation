@@ -629,9 +629,118 @@ export interface GrowthOperatorGrant {
   completedBy: string | null
 }
 
+export interface OperatorReadiness {
+  generatedAt: number
+  permission: {
+    state: string
+    mode: string
+    revision: number
+    live: boolean
+    mainFeedDelegated: boolean
+    autonomousReply: {
+      state: string
+      mode: string
+      revision: number
+      remainingBudget: number | null
+    }
+  }
+  accountHealth: {
+    state: string
+    constrained: boolean
+    reasons: Array<{ code: string; level: string; message: string }>
+  }
+  reasoningAgent: {
+    attached: boolean
+    adapterType: string
+    sessionId: string
+    runId: string
+    lastSeenAt: number | null
+    expiresAt: number | null
+    activeRunId: string
+    activeRunStage: string | null
+    operatorLease: {
+      status: string
+      active: boolean
+      leaseId: string | null
+      holder: string
+      runId: string
+      adapterType: string
+      sessionId: string
+      acquiredAt: number | null
+      expiresAt: number | null
+    }
+  }
+  sensors: {
+    xForYou: {
+      fetchedAt: number | null
+      count: number
+      ageMinutes: number | null
+      fresh: boolean
+      error: string | null
+      authenticatedAccountVerified: boolean
+      provenance: {
+        accountHandle?: string
+        collectionStatus?: string
+        acceptedCount?: number
+        runId?: string
+        sessionId?: string
+      } | null
+    }
+  }
+  transports: {
+    autoPostConfigured: boolean
+    xApi: {
+      credentialsPresent: boolean
+      pipelines: Record<string, { supported: boolean; code?: string; reason?: string }>
+    }
+    browserAgent: {
+      runtimeAttached: boolean
+      browserRead: boolean
+      browserMutation: boolean
+      xAuthenticated: boolean
+      accountExpected: string
+      accountObserved: string | null
+      accountVerified: boolean
+    }
+  }
+  reconciliation: {
+    activeCount: number
+    investigatingCount: number
+    sendStartedCount: number
+    claimedCount: number
+    closedUnresolvedCount: number
+    mainFeedBlockingAttemptId: string | null
+    mainFeedBlockingQueueItemId: number | null
+  }
+  scheduler: {
+    growthAgent: {
+      configured: boolean
+      enabled: boolean
+      lastInvocationAt: number | null
+      lastInvocationResult: Record<string, unknown> | null
+      activeRunId: string
+      nextInvocationAt: number | null
+      lastError: string | null
+    }
+    backgroundAutomation: {
+      stale: boolean
+      heartbeatAt: number | null
+      latestError: string | null
+    }
+  }
+  mainFeed: {
+    allowed: boolean
+    blockingReason: string | null
+    publicationAttemptId: string | null
+    publishingQueueItemId: number | null
+    approvedQueueItemId: number | null
+  }
+}
+
 export interface GrowthOperatorData {
   grant: GrowthOperatorGrant
   autoPost: boolean
+  readiness: OperatorReadiness
 }
 
 export function useGrowthOperator() {

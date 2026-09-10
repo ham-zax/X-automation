@@ -55,6 +55,15 @@ npm run agent -- apply-writer-output
 npm run agent -- update-draft
 npm run agent -- queue
 npm run agent -- operator-status
+npm run agent -- operator-readiness
+npm run agent -- growth-run-begin
+npm run agent -- growth-run-status
+npm run agent -- growth-run-resume
+npm run agent -- growth-run-next
+npm run agent -- growth-run-finish
+npm run agent -- publication-attempts
+npm run agent -- publication-attempt-send-start
+npm run agent -- publication-attempt-resolve
 npm run agent -- operator-memory-review
 npm run agent -- schedule-next
 npm run agent -- schedule-inspect
@@ -119,7 +128,7 @@ An approved main-feed text draft requires >=40/50 and a passing purpose-aware ha
 - Never request review or human approval for a scaffold that still contains placeholders.
 - Never silently enable `AUTO_POST`.
 - Never bypass the queue for ordinary scheduled publishing.
-- Never bypass repository authority/content gates when using the x.com UI. For persistent-agent browser writes, use the installed `agent-browser` routing contract: prefer the harness-owned logical `browser-fast` MCP surface; use `browser-devtools` only for diagnostics; if Local/MCP is unavailable, prefer the WebHarness-bundled Agent Browser CLI (`/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js`) in a named session so behavior stays aligned with the provider runtime; use the global `agent-browser` CLI only as a secondary fallback. The legacy repository Clearcote/xactions writer is not an eligible raw fallback because its reply-target integrity previously failed verification. For due approved Original/Quote/Thread/Repost work, atomically claim the exact queue row with `browser-publish-claim` immediately before the browser action. A claimed media attachment is exposed only as the temporary logical `browserMediaArtifact`; never substitute the local path. For an approved or autonomous Reply, claim the exact persisted reply authority with `browser-reply-claim`. Re-observe the exact tab/source immediately before a consequential send, execute once, never blind-retry an unknown result, verify exact text/parent/quote/thread/repost/media structure as applicable, then reconcile through `record-action`. The background Node daemon remains official-API-only unless a separate transport is implemented.
+- Never bypass repository authority/content gates when using the x.com UI. For persistent-agent browser writes, use the installed `agent-browser` routing contract: prefer the harness-owned logical `browser-fast` MCP surface; use `browser-devtools` only for diagnostics; if Local/MCP is unavailable, prefer the WebHarness-bundled Agent Browser CLI (`/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js`) in a named session so behavior stays aligned with the provider runtime; use the global `agent-browser` CLI only as a secondary fallback. The legacy repository Clearcote/xactions writer is not an eligible raw fallback because its reply-target integrity previously failed verification. For `continue growing`, use the durable Growth Run contract in `docs/GROWTH_RUN_PROTOCOL.md`; run-bound public claims must include the current `runId` and `sessionId` and own the active operator lease. For due approved Original/Quote/Thread/Repost work, atomically claim the exact queue row with `browser-publish-claim`; for an approved or autonomous Reply, claim the exact persisted reply authority with `browser-reply-claim`. Each claim creates an immutable publication `attemptId`. A claimed media attachment is exposed only as the temporary logical `browserMediaArtifact`; never substitute the local path. Re-observe the exact tab/source immediately before a consequential send, call `publication-attempt-send-start` for that exact attempt (and run/session when run-bound), execute once, never blind-retry an unknown result, verify exact text/parent/quote/thread/repost/media structure as applicable, then reconcile through `record-action` with the same attempt ID. Failure to find an output is not proof of `confirmed_not_sent`; close `closed_unresolved` with evidence when useful recovery is exhausted. The background Node daemon remains official-API-only unless a separate transport is implemented.
 - Understandability is a hard content invariant. Humor, wit, attitude, technical vocabulary, and a smart voice are allowed; if most technically curious readers would still have to decode the sentence before getting the point, rewrite it before approval or send.
 - Never turn a source tweet into a near-copy.
 - Keep explicit saved-post preferences and actual performance data separate from guessed preferences.

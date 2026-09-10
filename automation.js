@@ -17,21 +17,31 @@ import {
   refreshGrowthOperatorFollowerState,
 } from './autonomous_main_feed.js';
 import { reconcileRecordedActionWorkflow } from './pipeline.js';
+import {
+  confirmPublicationAttemptNotSent,
+  confirmPublicationAttemptPublished,
+  conservativeMainFeedActivityAt,
+  ensureLegacyPublicationAttemptMigration,
+  markPublicationAttemptInvestigating,
+} from './publication_reconciliation.js';
 import { getPersonaModelSummary } from './persona.js';
 import { classifyPublishedContent } from './writing_strategy.js';
 import {
-  claimQueueItem,
+  claimQueueItemForPublication,
   getAccountHealthSummary,
   getAppState,
   getCandidate,
   getDraftByCandidate,
   getPublicationFollowerBaseline,
+  getPublicationAttempt,
+  getQueueItem,
   listDueMeasurementWindows,
   listAcceptedLearnedRules,
   listApprovedMainFeedItems,
+  listPublicationAttempts,
   listQueueItems,
   listRecentMainFeedPublications,
-  markQueueFailed,
+  markPublicationAttemptSendStarted,
   markQueuePublished,
   recordCandidateAction,
   recordPerformanceSnapshot,
@@ -278,53 +288,106 @@ export async function reconcilePendingBrowserPublications({
   account = process.env.X_ACCOUNT || 'ham_zax',
   finder = findOwnPublishedPostBrowser,
 } = {}) {
-  const pending = listQueueItems({ status: 'publishing', limit: 100 })
-    .filter((item) => ['original', 'quote', 'thread', 'reply'].includes(item.pipeline));
+  ensureLegacyPublicationAttemptMigration();
+  const pending = listPublicationAttempts({ limit: 200 })
+    .filter((attempt) => ['send_started', 'investigating', 'confirmed_published'].includes(attempt.state))
+    .filter((attempt) => ['original', 'quote', 'thread', 'reply', 'repost'].includes(attempt.pipeline));
   if (!pending.length) return { checked: 0, reconciled: [], unresolved: [] };
-  if (!authToken) return { checked: 0, reconciled: [], unresolved: pending.map((item) => ({ queueItemId: item.id, reason: 'missing_auth_token' })) };
 
   const reconciled = [];
   const unresolved = [];
-  for (const queueItem of pending) {
-    if (queueItem.pipeline !== 'original') {
-      unresolved.push({ queueItemId: queueItem.id, reason: 'structured_publication_requires_parent_or_thread_verification' });
+  for (const attempt of pending) {
+    const queueItem = getQueueItem(attempt.queueItemId);
+    const candidate = getCandidate(attempt.candidateKey);
+    if (!queueItem || !candidate) {
+      unresolved.push({ attemptId: attempt.attemptId, queueItemId: attempt.queueItemId, reason: queueItem ? 'missing_candidate' : 'missing_queue_item' });
       continue;
     }
-    const candidate = getCandidate(queueItem.candidateKey);
+    const action = publicationAction(attempt.pipeline);
+
+    if (attempt.state === 'confirmed_published') {
+      if (attempt.actionType !== 'repost' && !attempt.outputTweetId && !attempt.outputUrl) {
+        unresolved.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, reason: 'confirmed_attempt_missing_output_identity' });
+        continue;
+      }
+      const recorded = recordCandidateAction({
+        candidateKey: candidate.key,
+        action,
+        outputTweetId: attempt.outputTweetId,
+        outputUrl: attempt.outputUrl,
+        commentary: attempt.approvedContent,
+        createdAt: attempt.reconciledAt || attempt.sendStartedAt || attempt.claimedAt || Date.now(),
+      });
+      const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
+      reconciled.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, candidateKey: queueItem.candidateKey, action, tweetId: attempt.outputTweetId, url: attempt.outputUrl, status: reconciledQueue?.status || null });
+      continue;
+    }
+
+    if (!authToken) {
+      unresolved.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, reason: 'missing_auth_token' });
+      continue;
+    }
+    if (attempt.pipeline !== 'original') {
+      unresolved.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, reason: 'structured_publication_requires_parent_or_thread_verification' });
+      continue;
+    }
     const draft = getDraftByCandidate(queueItem.candidateKey);
-    const text = reconciliationText(queueItem, draft);
-    const action = publicationAction(queueItem.pipeline);
-    if (!candidate || !text) {
-      unresolved.push({ queueItemId: queueItem.id, reason: candidate ? 'missing_exact_text' : 'missing_candidate' });
+    const text = String(attempt.approvedContent || reconciliationText(queueItem, draft)).trim();
+    if (!text) {
+      unresolved.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, reason: 'missing_exact_text' });
       continue;
     }
 
     const identity = await finder(text, { authToken }, {
       account,
-      publishedAfter: Math.max(0, reconciliationStartedAt(queueItem) - 5_000),
+      publishedAfter: Math.max(0, Number(attempt.sendStartedAt || reconciliationStartedAt(queueItem)) - 5_000),
     });
     if (!identity?.tweetId) {
-      unresolved.push({ queueItemId: queueItem.id, reason: 'not_found_on_live_x' });
+      if (attempt.state === 'send_started') {
+        markPublicationAttemptInvestigating(attempt.attemptId, {
+          reason: 'Live-X reconciliation did not find the exact Original; outcome remains unknown.',
+          evidence: { checkedLiveX: true, exactText: text, found: false, account },
+        });
+      }
+      unresolved.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, reason: 'not_found_on_live_x' });
       continue;
     }
 
     const observedPublishedAt = identity.publishedAt ? Date.parse(identity.publishedAt) : NaN;
+    const reconciledAt = Number.isFinite(observedPublishedAt) ? observedPublishedAt : Date.now();
+    confirmPublicationAttemptPublished(attempt.attemptId, {
+      outputTweetId: identity.tweetId,
+      outputUrl: identity.url || null,
+      evidence: { checkedLiveX: true, exactText: text, found: true, account, tweetId: identity.tweetId },
+      now: reconciledAt,
+    });
     const recorded = recordCandidateAction({
       candidateKey: candidate.key,
       action,
       outputTweetId: identity.tweetId,
       outputUrl: identity.url || null,
       commentary: text,
-      createdAt: Number.isFinite(observedPublishedAt) ? observedPublishedAt : Date.now(),
+      createdAt: reconciledAt,
     });
     const reconciledQueue = reconcileRecordedActionWorkflow(candidate, action, recorded);
-    reconciled.push({ queueItemId: queueItem.id, candidateKey: queueItem.candidateKey, action, tweetId: identity.tweetId, url: identity.url || null, status: reconciledQueue?.status || null });
+    reconciled.push({ attemptId: attempt.attemptId, queueItemId: queueItem.id, candidateKey: queueItem.candidateKey, action, tweetId: identity.tweetId, url: identity.url || null, status: reconciledQueue?.status || null });
   }
   return { checked: pending.length, reconciled, unresolved };
 }
 
 function publicationCommentary(item) {
   return item.pipeline === 'thread' ? (item.threadParts || []).join('\n\n') : String(item.body || item.text || '');
+}
+
+function transportProvesNotSent(error) {
+  const code = String(error?.code || '');
+  return code === 'X_API_HTTP_ERROR'
+    || code === 'X_API_AUTH_MISSING'
+    || code === 'X_API_FETCH_UNAVAILABLE'
+    || code.startsWith('X_API_MISSING_')
+    || code.startsWith('X_API_UNSUPPORTED_')
+    || code === 'X_API_QUOTE_REQUIRES_ENTERPRISE'
+    || code === 'X_API_MEDIA_UPLOAD_UNAVAILABLE';
 }
 
 export async function processMainFeedQueue({
@@ -339,10 +402,12 @@ export async function processMainFeedQueue({
   if (!Number.isFinite(currentTime)) throw new Error('processMainFeedQueue requires a numeric now timestamp.');
   const items = listApprovedMainFeedItems({ automatedOnly: true, limit: 100 });
   const recentPosts = listRecentMainFeedPublications({ limit: 20 });
+  const unresolvedActivityAt = conservativeMainFeedActivityAt();
+  const lastMainFeedPostAt = Math.max(Number(recentPosts[0]?.publishedAt || 0), Number(unresolvedActivityAt || 0)) || null;
   const decisions = rankMainFeedItems(items, {
     now: currentTime,
     recentPosts,
-    lastMainFeedPostAt: recentPosts[0]?.publishedAt ?? null,
+    lastMainFeedPostAt,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   });
   const eligible = decisions.filter((item) => item.eligible);
@@ -383,54 +448,102 @@ export async function processMainFeedQueue({
   }
 
   const contentGate = authorizeMainFeedContent(decision.item);
-  const claimed = claimQueueItem(decision.item.id, {
+  const transportName = transport === publishMainFeedApi ? 'x_api_v2' : 'custom_transport';
+  const claimedResult = claimQueueItemForPublication(decision.item.id, {
     expectedUpdatedAt: decision.item.updatedAt,
     now: currentTime,
+    transport: transportName,
+    claimHolder: 'automation',
   });
-  if (!claimed) return { action: 'claim-lost', decision, decisions };
+  if (!claimedResult) return { action: 'claim-lost', decision, decisions };
+  const claimed = claimedResult.queueItem;
+  const attempt = claimedResult.attempt;
+
+  markPublicationAttemptSendStarted(attempt.attemptId, {
+    now: Date.now(),
+    preSendEvidence: {
+      transport: transportName,
+      capabilityCode: capability.code || null,
+      authorityRevalidatedAt: Date.now(),
+    },
+  });
 
   let output;
   try {
     output = await transport(decision.item, { accessToken: apiAccessToken }, { account, contentGate });
   } catch (error) {
-    if (['TRANSPORT_RESULT_NO_TWEET_ID', 'TRANSPORT_RESULT_UNKNOWN', 'TRANSPORT_PARTIAL_PUBLICATION'].includes(error?.code)) {
-      const queueItem = saveQueueItem({
-        ...claimed,
-        status: 'publishing',
-        outputTweetId: error.tweetId || claimed.outputTweetId || null,
-        outputUrl: error.url || claimed.outputUrl || null,
-        publishError: `Transport result requires reconciliation and must not be retried automatically: ${error.message}${Array.isArray(error.threadTweetIds) && error.threadTweetIds.length ? ` Known thread tweet IDs: ${error.threadTweetIds.join(',')}.` : ''}`,
+    const message = String(error?.message || error || 'Publication transport failed.');
+    if (transportProvesNotSent(error)) {
+      const resolved = confirmPublicationAttemptNotSent(attempt.attemptId, {
+        reason: message,
+        evidence: {
+          sendBoundaryCrossed: false,
+          transport: transportName,
+          code: error?.code || null,
+          status: error?.status || null,
+        },
       });
-      return {
-        action: 'posted-recording-incomplete',
-        decision,
-        decisions,
-        queueItem,
-        tweetId: error.tweetId || null,
-        url: error.url || null,
-        threadTweetIds: error.threadTweetIds || null,
-        error: queueItem.publishError,
-      };
+      return { action: 'not-sent', decision, decisions, attempt: resolved.attempt, queueItem: resolved.queueItem, error: message };
     }
-    const queueItem = markQueueFailed(claimed.id, error, { failedAt: Date.now() });
-    return { action: 'failed', decision, decisions, queueItem, error: error.message };
+
+    const uncertain = markPublicationAttemptInvestigating(attempt.attemptId, {
+      reason: `Transport result requires reconciliation and must not be retried automatically: ${message}`,
+      evidence: {
+        transport: transportName,
+        code: error?.code || null,
+        outcomeKnown: false,
+      },
+      executionEvidence: {
+        tweetId: error?.tweetId || null,
+        url: error?.url || null,
+        threadTweetIds: Array.isArray(error?.threadTweetIds) ? error.threadTweetIds : [],
+      },
+      outputTweetId: error?.tweetId || null,
+      outputUrl: error?.url || null,
+    });
+    return {
+      action: 'posted-recording-incomplete',
+      decision,
+      decisions,
+      attempt: uncertain.attempt,
+      queueItem: uncertain.queueItem,
+      tweetId: error?.tweetId || null,
+      url: error?.url || null,
+      threadTweetIds: error?.threadTweetIds || null,
+      error: uncertain.attempt.lastError,
+    };
   }
+
+  const publishedAt = Date.now();
+  confirmPublicationAttemptPublished(attempt.attemptId, {
+    outputTweetId: output.tweetId,
+    outputUrl: output.url || null,
+    evidence: {
+      transport: transportName,
+      transportReturnedTweetId: Boolean(output.tweetId),
+      tweetId: output.tweetId,
+      threadTweetIds: output.threadTweetIds || null,
+    },
+    executionEvidence: output.result || {},
+    now: publishedAt,
+  });
 
   let queueItem;
   try {
-    queueItem = markQueuePublished(claimed.id, output.tweetId, output.url || null, { publishedAt: Date.now() });
+    queueItem = markQueuePublished(claimed.id, output.tweetId, output.url || null, { publishedAt });
   } catch (error) {
     const current = saveQueueItem({
       ...claimed,
       status: 'publishing',
       outputTweetId: output.tweetId,
       outputUrl: output.url || null,
-      publishError: `Transport succeeded, but publication transition is incomplete: ${error.message}`,
+      publishError: `Publication attempt is confirmed published, but the queue transition is incomplete: ${error.message}`,
     });
     return {
       action: 'posted-recording-incomplete',
       decision,
       decisions,
+      attempt: getPublicationAttempt(attempt.attemptId),
       queueItem: current,
       tweetId: output.tweetId,
       url: output.url || null,
@@ -617,10 +730,10 @@ async function runCycleBody() {
     console.log(`[automation] Main-feed recommendation waits until ${new Date(mainFeed.decision.recommendedAt).toLocaleString()}: ${mainFeed.decision.reason}`);
   } else if (mainFeed.action === 'posted') {
     console.log(`[automation] Published ${mainFeed.decision.item.pipeline} queue item ${mainFeed.decision.item.id} as ${mainFeed.tweetId}.`);
-  } else if (mainFeed.action === 'failed') {
-    console.log(`[automation] Publication failed after claim: ${mainFeed.error}`);
+  } else if (mainFeed.action === 'not-sent') {
+    console.log(`[automation] Publication transport proved the action was not sent; queue item returned to approved: ${mainFeed.error}`);
   } else if (mainFeed.action === 'posted-recording-incomplete') {
-    console.log(`[automation] Publication reached X as ${mainFeed.tweetId}, but local recording is incomplete: ${mainFeed.error}`);
+    console.log(`[automation] Publication outcome requires reconciliation and will not be retried automatically: ${mainFeed.error}`);
   } else if (mainFeed.action === 'claim-lost') {
     console.log('[automation] Main-feed recommendation changed before claim; no transport call was made.');
   } else if (mainFeed.action === 'transport-blocked') {

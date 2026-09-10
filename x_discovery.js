@@ -13,6 +13,7 @@ import { classifyNiche as classifyNicheDefault } from './strategy.js';
 
 const X_SNOWFLAKE_EPOCH = 1288834974657n;
 const X_SIGNAL_WATCHLIST_STATE_KEY = 'x_signal_watchlist_v1';
+const X_FOR_YOU_SENSOR_STATE_KEY = 'x_for_you_sensor_provenance_v1';
 const X_STATUS_URL = /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/([^/?#]+)\/status\/(\d+)(?:[/?#].*)?$/i;
 const X_USERNAME = /^[A-Za-z0-9_]{1,15}$/;
 const X_METRIC_KEYS = Object.freeze(['views', 'likes', 'reposts', 'replies', 'bookmarks']);
@@ -150,10 +151,16 @@ function failureResult({ observedAt, rejectedCount = 0, skippedCount = 0, diagno
 export function ingestXForYouObservation(payload = {}) {
   const diagnostics = [];
   let observedAt = Number(payload?.observedAt);
+  let accountHandle = '';
   try {
     if (String(payload?.kind || '') !== 'x_for_you') throw new Error('X For You ingest kind must be x_for_you.');
     if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('X For You observedAt must be a positive timestamp.');
     if (!Array.isArray(payload.posts)) throw new Error('X For You posts must be an array.');
+    accountHandle = normalizeXUsername(payload.accountHandle);
+    const expectedAccount = normalizeXUsername(process.env.X_ACCOUNT || 'ham_zax');
+    if (accountHandle !== expectedAccount) {
+      throw new Error(`X For You observation belongs to @${accountHandle}, expected @${expectedAccount}.`);
+    }
   } catch (error) {
     return failureResult({ observedAt, diagnostics, error });
   }
@@ -217,6 +224,22 @@ export function ingestXForYouObservation(payload = {}) {
   const candidates = accepted.map((item) => item.candidate);
   upsertCandidates(candidates);
   const snapshot = saveDiscoverSnapshot('x_for_you', candidates, observedAt);
+  setAppState(X_FOR_YOU_SENSOR_STATE_KEY, JSON.stringify({
+    observedAt,
+    accountHandle,
+    accountVerified: true,
+    adapterType: String(payload.adapterType || ''),
+    sessionId: String(payload.sessionId || ''),
+    runId: String(payload.runId || ''),
+    browserTarget: String(payload.browserTarget || ''),
+    browserBackend: String(payload.browserBackend || ''),
+    browserProfile: payload.browserProfile == null ? null : String(payload.browserProfile),
+    sensorVersion: String(payload.sensorVersion || 'x_for_you_v1'),
+    collectionStatus: String(payload.collectionStatus || 'complete'),
+    acceptedCount: accepted.length,
+    rejectedCount,
+    skippedCount,
+  }));
   recordSourceObservations(accepted.map((item) => ({
     candidateKey: item.candidate.key,
     snapshotKind: 'x_for_you',
@@ -236,6 +259,16 @@ export function ingestXForYouObservation(payload = {}) {
     diagnostics,
     candidates: snapshot.candidates,
   };
+}
+
+export function getXForYouSensorStatus() {
+  try {
+    const raw = getAppState(X_FOR_YOU_SENSOR_STATE_KEY, null);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function mergeCreatorTargets(relationshipProfiles = [], signalWatchTargets = []) {

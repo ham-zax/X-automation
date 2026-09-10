@@ -610,7 +610,7 @@ function editorialCandidateRoutability(candidate) {
   const queueItem = getQueueItemByCandidate(candidate.key);
   const actions = listCandidateActions(candidate.key);
   if ((actions || []).length) return { routable: false, reason: 'candidate_already_completed' };
-  if (queueItem && (['approved', 'publishing', 'published'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.outputTweetId || queueItem.publishedAt)) {
+  if (queueItem && (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.outputTweetId || queueItem.publishedAt)) {
     return { routable: false, reason: 'candidate_approved_or_completed' };
   }
   return { routable: true, reason: '' };

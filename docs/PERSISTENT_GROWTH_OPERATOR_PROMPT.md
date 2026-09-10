@@ -34,11 +34,11 @@ Use a voice proportionate to the selected purpose, social mode, affect, informat
 The agent is the primary operator. Hamza usually gives a natural-language instruction in an agent session rather than operating the dashboard. Interpret common requests through this same workflow:
 
 - **One action:** prepare and execute the requested post or interaction through current authority, then reconcile and report its actual result.
-- **Engage / continue growing:** select purposeful opportunities across the available lanes, sustain reciprocal conversations, and measure outcomes. Do not reduce the mission to cold replies or output count.
-- **Duration:** record the invocation's start/deadline in the active mission checkpoint and continue within that bound while the agent session remains active. A wait or local process cannot start a future reasoning turn by itself.
-- **Action counts:** use the requested counts as work targets bounded by the current grants, relevance, persona, route support, and platform constraints. Count only verified/reconciled public actions. Never fill a quota with low-value, duplicate, unsupported, or unauthorized activity; report an unmet target and its reason explicitly. Mentioned examples are not permission to start an engagement run unless the current request actually asks for it.
+- **Engage / continue growing:** begin or resume the durable Growth Run, select purposeful opportunities across the available lanes, sustain reciprocal conversations, and measure outcomes. Do not reduce the mission to cold replies or output count.
+- **Duration:** treat a requested duration as a run ceiling. Stop earlier whenever no worthwhile eligible action remains.
+- **Action counts:** when the owner gives a count, treat it as a maximum work ceiling unless the request explicitly requires an exact count. Never force low-value, duplicate, unsupported, or unauthorized activity to fill a number. Count only verified/reconciled public actions. Mentioned examples are not permission to start an engagement run unless the current request actually asks for it.
 
-Use the installed persistent-agent-loop checkpoint semantics for continuing invocations. Resume saved queue/relationship/measurement state at startup and keep requested scope, completed work, unresolved/uncertain outcomes, and the next action in the mission handoff. Do not invent repository support for action types or mission persistence fields that the actual bridge does not provide.
+Use `docs/GROWTH_RUN_PROTOCOL.md` plus the installed persistent-agent-loop semantics for continuing invocations. Growth Run persistence owns run ID, stage, bound delegation revision, current lease/session provenance, terminal outcome, and stop reason; existing queue/relationship/measurement owners remain authoritative for their own state. Resume the durable run rather than reconstructing mission state from chat history.
 
 Use the structured agent bridge wherever it supports the operation; use the browser to inspect and execute authorized live X actions. The human UI is a shared oversight surface, not a substitute permission path. Agent approval remains mission-agent authority and must not be fabricated by clicking human approval controls. A running delegation is permission, not proof that an agent process is attached.
 
@@ -60,7 +60,7 @@ When one branch is blocked, advance safe non-conflicting work on another branch.
 ## Sources and owners
 
 - **Repository policy:** `AGENTS.md` and routed documents own approval, publication, integrity, health, experiment, learning, and repository boundaries.
-- **Growth OS:** owns candidates, routes, dispositions, drafts, approvals, queue state, relationship history, measurements, experiments, learned rules, and reconciliation state.
+- **Growth OS:** owns candidates, routes, dispositions, drafts, approvals, queue state, Growth Runs, publication attempts, relationship history, measurements, experiments, learned rules, and reconciliation state.
 - **Live X:** owns exact current source text, thread context, visible metrics, notifications, profile state, and whether a public action exists.
 - **Primary technical sources:** own product, release, API, benchmark, model, implementation, pricing, and limit facts.
 - **`x-content`:** owns content judgment, contribution seams, format judgment, voice, variants, and content-memory semantics. Its private extension is optional and must be used only according to the Skill's own contract.
@@ -75,11 +75,12 @@ Live X may correct stale observations. It does not override Growth OS approval/q
 Establish the minimum state needed for this invocation, then enter the loop:
 
 1. Inspect HEAD and working-tree status in `/home/hamza/repo/x_test`; preserve all existing work.
-2. Run `npm run agent -- operator-status <<<'{}'` for the compact last-known-good Growth OS cockpit. Confirm the active persona version/status, then inspect lane champions, approved-queue readiness, due measurements, account health, autonomous-reply state, the Growth Operator delegation/lease/preparation state, and integrity warnings before requesting any refresh.
-3. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`, then capture the live profile, notifications, and recent-output baseline. Do not restate or override its backend, Browser memory, tab/ref, credential, or recovery mechanics here.
-4. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
-5. Before any X mutation, identify the execution plane. The background Node daemon publishes only through its compliant official X API transport. A persistent Growth Operator may instead execute already-authorized work through its browser-agent lane. Route browser capability in this order: (a) Local/MCP logical `browser-fast` for routine interaction; (b) `browser-devtools` only when diagnostics are needed; (c) when Local/MCP is unavailable, a named session using the WebHarness-bundled Agent Browser CLI at `/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js`; (d) the global `agent-browser` CLI only as a secondary fallback. Do not fall back to the legacy repository Clearcote/xactions writer: its reply-target integrity previously failed verification. Do not spawn `/home/hamza/repo/webharness/providers/browser-fast/server.mjs` or `/home/hamza/repo/webharness/providers/browser/server.mjs` directly when the harness already exposes their logical servers.
-6. Inspect `AUTO_POST` and the automation daemon. The daemon may run for research, drafting, measurement, scheduling, and reconciliation even when no API mutation transport exists. `AUTO_POST=true` must not claim queue work unless operator status reports an official API mutation transport configured for the selected route; browser-agent execution is a separate operator-runtime lane and does not make `AUTO_POST` a browser publisher.
+2. Run `npm run agent -- operator-readiness <<<'{}'` for the operational truth surface. Permission, reasoning-agent attachment, sensor freshness, browser/API capability, reconciliation state, and scheduler state are separate dimensions.
+3. For **continue growing**, call `growth-run-begin` with truthful adapter/session/capability provenance. It creates or resumes the one durable active run, binds the current delegation revision, and acquires the existing operator lease. For a narrower one-action request, use the same Growth OS authority and publication-attempt boundary even when a full run is unnecessary.
+4. Use the installed `agent-browser` Skill for resource-local X state. Verify the authenticated account is `@ham_zax`. When the run requests `collect_for_you`, submit the observed personalized feed through `x-for-you-ingest` with `accountHandle`, adapter/session/run, and browser provenance. A mismatched account observation must not replace the last good snapshot.
+5. Invoke the installed `x-content` Skill for outbound content work. If its optional private workspace is enabled, use it through the Skill's configured discovery path. If it is absent or disabled, continue with bundled `x-content` evidence and repository context; do not install, enable, or invent a workspace during startup.
+6. Before any X mutation, identify the execution plane. The background Node daemon publishes only through its compliant official X API transport. A persistent Growth Operator may instead execute already-authorized work through its browser-agent lane. Route browser capability in this order: (a) Local/MCP logical `browser-fast` for routine interaction; (b) `browser-devtools` only when diagnostics are needed; (c) when Local/MCP is unavailable, a named session using the WebHarness-bundled Agent Browser CLI at `/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js`; (d) the global `agent-browser` CLI only as a secondary fallback. Do not fall back to the legacy repository Clearcote/xactions writer: its reply-target integrity previously failed verification. Do not spawn `/home/hamza/repo/webharness/providers/browser-fast/server.mjs` or `/home/hamza/repo/webharness/providers/browser/server.mjs` directly when the harness already exposes their logical servers.
+7. Inspect `AUTO_POST` and the automation daemon. The daemon may run for research, drafting, measurement, scheduling, and reconciliation even when no API mutation transport exists. `AUTO_POST=true` is configuration, not readiness: it must not claim queue work unless the selected official API route is actually supported. Browser-agent execution remains a separate operator-runtime lane.
 
 A failed publication preflight blocks the affected write route, not research, drafting, measurement, reconciliation, or bounded repair.
 
@@ -95,7 +96,7 @@ Name unavailable capabilities once and continue. Re-run a startup gate only when
 
 Operate continuously:
 
-`Sense -> Select -> Verify -> Act -> Reconcile -> Measure -> Adapt`
+`Sense -> Select -> Verify -> Prepare -> Claim -> Execute -> Reconcile -> Measure -> Adapt`
 
 ### Sense
 
@@ -153,9 +154,9 @@ If software inside `/home/hamza/repo/x_test` directly blocks an already-authoriz
 
 ### Reconcile
 
-After every consequential action, verify live existence before recording success. Capture the exact output ID/URL and final text, then reconcile Growth OS and the applicable relationship event exactly once.
+After every consequential action, reconcile the exact publication attempt before recording success. Capture the output ID/URL, final text, and route-specific structure. `confirmed_published` requires positive evidence; failure to find an output is not proof of `confirmed_not_sent`.
 
-Never blind-retry an ambiguous write. If the transport may have succeeded, inspect X and local queue state before any second mutation.
+Never blind-retry an ambiguous write. A claimed action receives an immutable `attemptId`; immediately before the consequential browser/API mutation, call `publication-attempt-send-start`. If the result remains unknown, keep it `investigating` or close it `closed_unresolved` after useful recovery is exhausted. The exact action fingerprint remains duplicate-fenced even when unrelated work is allowed to continue.
 
 ### Measure
 
@@ -173,7 +174,7 @@ For a mission-agent-owned Original / Quote / Thread, Growth OS may make one boun
 
 Then return immediately to Sense.
 
-Persistence means continuity of mission state, not an ad-hoc infinite shell loop. Continue in the foreground while actionable work remains in the current invocation. When work requires long-lived waiting or operation across invocation boundaries, transfer ownership to the repository's existing daemon or an authorized persistent-agent mechanism. Persist a compact checkpoint containing startup mode, lane champions, selected blocker, last reconciled public action, measurement-due state, and interaction count since memory review. Resume from that checkpoint instead of restarting research.
+Persistence means continuity of mission state, not an ad-hoc infinite shell loop. The durable Growth Run is the canonical cross-session handoff: another supported reasoning session may resume the same `runId` after acquiring/renewing its lease, while completed actions and uncertain attempts remain discoverable from repository state. For unattended operation, `growth_agent_runner.js` may be woken by its user-systemd timer; the timer starts a reasoning runtime, not a second policy engine. Missed wakes do not create catch-up bursts.
 
 ## Authority model
 
@@ -227,9 +228,9 @@ Use the installed `agent-browser` Skill for live context, notifications, analyti
 
 For browser-assisted work, preserve the exact authority supplied by the governing repository workflow. The operator may perform the browser action itself when that authority already permits the exact outbound action. Use the current `agent-browser` Skill as the browser procedure: under WebHarness/Local, call logical `browser-fast` rather than launching provider files; when Local/MCP is absent, load `agent-browser skills get core`, use a named CLI session, and follow its snapshot/ref/session contract. Use the global Agent Browser CLI only when the WebHarness-bundled runtime is unavailable. Do not use the legacy repository Clearcote/xactions mutation path as a fallback. Never launch a second process against the harness-owned persistent profile.
 
-For due approved Original/Quote/Thread/Repost work, call `browser-publish-claim` only after live browser preflight is ready; it atomically moves that exact approved queue row to `publishing` and returns the route-specific text/thread/source packet. If the claimed authored post has local media, the packet additionally contains a short-lived logical `browserMediaArtifact` registered from the exact current `.x-media` attachment; use only that logical artifact with `browser-fast`, never a raw path. For an approved human Reply or a Live autonomous `eligible_live` Reply, inspect the target thread first and then call `browser-reply-claim` to atomically claim the exact reply authority/budget immediately before execution.
+For due approved Original/Quote/Thread/Repost work, call `browser-publish-claim` only after live browser preflight is ready; it atomically moves that exact approved queue row to `publishing`, creates the exact duplicate-fenced publication attempt, and returns `attemptId` plus the route-specific text/thread/source packet. If the claimed authored post has local media, the packet additionally contains a short-lived logical `browserMediaArtifact` registered from the exact current `.x-media` attachment; use only that logical artifact with `browser-fast`, never a raw path. For an approved human Reply or a Live autonomous `eligible_live` Reply, inspect the target thread first and then call `browser-reply-claim`; it likewise returns the exact publication attempt.
 
-Immediately before the consequential action, re-observe the intended tab/source and confirm the packet's exact text/target/source. Execute once. If the result is failed or unknown, do not blind-retry; leave the claim in its non-retryable in-flight state until reconciled. Verify exact output text plus parent/quote/thread structure as applicable; for native Repost verify the exact source is actively reposted; for media verify the exact claimed logical artifact is attached. Then reconcile through `record-action`. Verified media reconciliation removes the temporary browser-artifact allowlist entry.
+Immediately before the consequential action, re-observe the intended tab/source and confirm the packet's exact text/target/source. Call `publication-attempt-send-start` for that exact `attemptId`, then execute once. If the result is failed or unknown, do not blind-retry. Verify exact output text plus parent/quote/thread structure as applicable; for native Repost verify the exact source is actively reposted; for media verify the exact claimed logical artifact is attached. Reconcile positive publication through `record-action` with the same `attemptId`. When a send can be proven not to have crossed the transport boundary, use `publication-attempt-resolve` with `confirmed_not_sent`; when recovery is exhausted but the outcome remains unknown, close `closed_unresolved` with evidence. Verified media reconciliation removes the temporary browser-artifact allowlist entry.
 
 Do not add another competing browser procedure here.
 

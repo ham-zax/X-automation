@@ -1,0 +1,16 @@
+[Unit]
+Description=XGrowth unattended reasoning operator
+After=network-online.target x-test-dashboard.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/hamza/repo/x_test
+Environment=X_GROWTH_AGENT_RUNTIME=opencode
+Environment=X_GROWTH_AGENT_SCHEDULED=1
+ExecStart=/bin/bash -c 'source /home/hamza/.nvm/nvm.sh && exec node growth_agent_runner.js'
+TimeoutStartSec=45min
+
+# The scheduled reasoning runtime may use the authenticated Windows browser through
+# WebHarness. Growth OS delegation, operator lease, exact action claims, publication
+# attempts, send-start, and reconciliation remain the authority boundaries.

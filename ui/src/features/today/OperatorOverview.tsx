@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { useAutonomousReplies, useGrowthOperator, usePersona } from '../../api/client'
 import { Badge, formatDateTime } from '../../components/primitives'
 
-const SESSION_BRIEF = `Use Growth OS in /home/hamza/repo/x_test for @ham_zax. Read AGENTS.md and docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md, then run operator-status through agent_bridge.js. Resume from durable state rather than starting the account history again.
+const SESSION_BRIEF = `Use Growth OS in /home/hamza/repo/x_test for @ham_zax. Read AGENTS.md, docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md, and docs/GROWTH_RUN_PROTOCOL.md when present. Run operator-readiness through agent_bridge.js, then begin or resume the durable Growth Run instead of rebuilding account context from chat history.
 
-Follow my current request: it may be a single post, ongoing engagement, a duration, or action-count bounds. Keep the active versioned Hamza persona, Growth Focus, exact-content approval, grants, account-health constraints, and browser claim/reconciliation contracts authoritative. Do not treat a count as permission to force low-value engagement or use an unsupported route.
+Follow my current request: it may be a single post, ongoing engagement, a duration, or a ceiling on work. Keep the active versioned Hamza persona, Growth Focus, exact-content approval, grants, account-health constraints, publication-attempt identity, and browser claim/reconciliation contracts authoritative. Ceilings are limits, never targets; do not force low-value engagement.
 
-Choose purposeful opportunities, sustain worthwhile conversations, verify public actions, record outcomes, and improve from observed evidence. Relevant follower growth is the goal; output count alone is not success. Report completed, skipped, blocked, and uncertain work distinctly. An active delegation is not proof that a browser/model session is running.`
+Choose purposeful opportunities, sustain worthwhile conversations, verify material claims, execute each claimed public action at most once, structurally reconcile it, and improve from observed evidence. Relevant follower growth and useful relationships are the goal; output count alone is not success. Report completed, skipped, blocked, and uncertain work distinctly. Permission, an attached reasoning agent, browser capability, source freshness, reconciliation state, and scheduler state are separate facts.`
 
 export function OperatorOverview() {
   const operator = useGrowthOperator()
@@ -16,6 +16,13 @@ export function OperatorOverview() {
   const grant = operator.data?.grant
   const model = persona.data?.model
   const replyGrant = replies.data?.grant
+  const readiness = operator.data?.readiness
+  const browserReady = Boolean(readiness?.transports.browserAgent.runtimeAttached
+    && readiness.transports.browserAgent.browserMutation
+    && readiness.transports.browserAgent.xAuthenticated
+    && readiness.transports.browserAgent.accountVerified)
+  const forYouReady = Boolean(readiness?.sensors.xForYou.fresh && readiness.sensors.xForYou.authenticatedAccountVerified)
+  const schedulerReady = Boolean(readiness?.scheduler.growthAgent.configured && readiness.scheduler.growthAgent.enabled)
 
   async function copyBrief() {
     try {
@@ -35,6 +42,27 @@ export function OperatorOverview() {
         </div>
         <a href="#/settings/growth-operator" className="action-button">Manage delegation</a>
       </div>
+      {readiness && (
+        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6" aria-label="Growth Operator readiness chain">
+          {[
+            { label: 'Permission', ok: readiness.permission.live, value: readiness.permission.live ? 'Live' : readiness.permission.state },
+            { label: 'Agent', ok: readiness.reasoningAgent.attached, value: readiness.reasoningAgent.attached ? 'Attached' : 'Detached' },
+            { label: 'Browser', ok: browserReady, value: browserReady ? 'Ready' : 'Not ready' },
+            { label: 'For You', ok: forYouReady, value: forYouReady ? `${readiness.sensors.xForYou.count} fresh` : 'Refresh' },
+            { label: 'Reconcile', ok: readiness.reconciliation.activeCount === 0, value: readiness.reconciliation.activeCount === 0 ? 'Clear' : `${readiness.reconciliation.activeCount} active` },
+            { label: 'Scheduler', ok: schedulerReady, value: schedulerReady ? 'Active' : 'Off' },
+          ].map((item, index) => (
+            <div key={item.label} className="relative rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm">
+              {index < 5 && <span aria-hidden="true" className="absolute -right-2 top-1/2 hidden h-px w-2 bg-slate-300 xl:block" />}
+              <div className="flex items-center gap-2">
+                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{item.label}</span>
+              </div>
+              <div className="mt-2 text-sm font-semibold text-slate-900">{item.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="operator-status-grid">
         <div className="operator-status-cell">
           <h4>Permission to act</h4>
@@ -66,10 +94,10 @@ export function OperatorOverview() {
         </div>
       </div>
       <div className="operator-handoff">
-        <p><strong>Continue in another agent session.</strong> The repository carries persona, queue, relationship history, and results. Browser execution still needs an active agent; this page does not launch one.</p>
+        <p><strong>Continue in another agent session.</strong> Growth Runs now carry durable orchestration state in addition to persona, queue, relationship history, attempts, and results. A scheduled runtime may attach independently; this page reports its readiness but does not impersonate one.</p>
         <button type="button" className="action-button" onClick={() => void copyBrief()}>Copy session brief</button>
       </div>
-      <div role="status" aria-live="polite" className="mt-2 text-sm text-slate-600">{copyState === 'copied' ? 'Session brief copied. Add your objective, duration, or action-count bounds in the agent session.' : copyState === 'manual' ? 'Clipboard access is unavailable. Select and copy the brief below.' : ''}</div>
+      <div role="status" aria-live="polite" className="mt-2 text-sm text-slate-600">{copyState === 'copied' ? 'Session brief copied. Add your objective, duration, or work ceilings in the agent session.' : copyState === 'manual' ? 'Clipboard access is unavailable. Select and copy the brief below.' : ''}</div>
       {copyState === 'manual' && <textarea aria-label="Agent session brief" readOnly value={SESSION_BRIEF} rows={8} className="mt-3 w-full border p-3 text-sm" onFocus={(event) => event.target.select()} />}
     </section>
   )

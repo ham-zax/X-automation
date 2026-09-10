@@ -146,6 +146,7 @@ import {
   validateWritingStrategyGenerationContext,
 } from './writing_strategy.js';
 import { getWritingStrategyFeedbackReadModel, getWritingStrategyOutcomeSummary } from './strategy_outcomes.js';
+import { getOperatorReadiness } from './operator_readiness.js';
 
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const ACCOUNT = process.env.X_ACCOUNT || 'ham_zax';
@@ -552,6 +553,7 @@ function queueStatusLabel(queueItem) {
     if (queueItem.pipeline === 'repost') return 'Reposted';
     return 'Published';
   }
+  if (queueItem.status === 'unresolved') return engagement ? 'Reply outcome unresolved · do not retry' : 'Publication outcome unresolved · do not retry';
   if (queueItem.status === 'failed') return engagement ? 'Send failed' : 'Publish failed';
   return label(STATUS_LABELS, queueItem.status);
 }
@@ -1619,6 +1621,7 @@ function growthOperatorView() {
   return {
     grant: getGrowthOperatorDelegation(),
     autoPost: AUTO_POST,
+    readiness: getOperatorReadiness(),
   };
 }
 
