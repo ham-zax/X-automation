@@ -1,104 +1,130 @@
-import { useState } from 'react'
-import { useAutonomousReplies, useGrowthOperator, usePersona } from '../../api/client'
+import { useGrowthOperator } from '../../api/client'
 import { Badge, formatDateTime } from '../../components/primitives'
 
-const SESSION_BRIEF = `Use Growth OS in /home/hamza/repo/x_test for @ham_zax. Read AGENTS.md, docs/PERSISTENT_GROWTH_OPERATOR_PROMPT.md, and docs/GROWTH_RUN_PROTOCOL.md when present. Run operator-readiness through agent_bridge.js, then begin or resume the durable Growth Run instead of rebuilding account context from chat history.
-
-Follow my current request: it may be a single post, ongoing engagement, a duration, or a ceiling on work. Keep the active versioned Hamza persona, Growth Focus, exact-content approval, grants, account-health constraints, publication-attempt identity, and browser claim/reconciliation contracts authoritative. Ceilings are limits, never targets; do not force low-value engagement.
-
-Choose purposeful opportunities, sustain worthwhile conversations, verify material claims, execute each claimed public action at most once, structurally reconcile it, and improve from observed evidence. Relevant follower growth and useful relationships are the goal; output count alone is not success. Report completed, skipped, blocked, and uncertain work distinctly. Permission, an attached reasoning agent, browser capability, source freshness, reconciliation state, and scheduler state are separate facts.`
+function actionSummary(actions: { replies: number; quotes: number; reposts: number; originals: number; total: number }) {
+  if (!actions.total) return 'No public actions'
+  const parts = [
+    actions.replies ? `${actions.replies} ${actions.replies === 1 ? 'reply' : 'replies'}` : '',
+    actions.quotes ? `${actions.quotes} ${actions.quotes === 1 ? 'quote' : 'quotes'}` : '',
+    actions.reposts ? `${actions.reposts} ${actions.reposts === 1 ? 'repost' : 'reposts'}` : '',
+    actions.originals ? `${actions.originals} ${actions.originals === 1 ? 'post' : 'posts'}` : '',
+  ].filter(Boolean)
+  return parts.join(' · ')
+}
 
 export function OperatorOverview() {
   const operator = useGrowthOperator()
-  const persona = usePersona()
-  const replies = useAutonomousReplies()
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'manual'>('idle')
-  const grant = operator.data?.grant
-  const model = persona.data?.model
-  const replyGrant = replies.data?.grant
   const readiness = operator.data?.readiness
-  const browserReady = Boolean(readiness?.transports.browserAgent.runtimeAttached
-    && readiness.transports.browserAgent.browserMutation
-    && readiness.transports.browserAgent.xAuthenticated
-    && readiness.transports.browserAgent.accountVerified)
-  const forYouReady = Boolean(readiness?.sensors.xForYou.fresh && readiness.sensors.xForYou.authenticatedAccountVerified)
-  const schedulerReady = Boolean(readiness?.scheduler.growthAgent.configured && readiness.scheduler.growthAgent.enabled)
 
-  async function copyBrief() {
-    try {
-      await navigator.clipboard.writeText(SESSION_BRIEF)
-      setCopyState('copied')
-    } catch {
-      setCopyState('manual')
-    }
+  if (operator.error) {
+    return (
+      <section className="operator-surface operator-overview" aria-labelledby="operator-overview-title">
+        <div className="operator-overview-heading">
+          <div>
+            <h3 id="operator-overview-title">Growth</h3>
+            <p>Autonomous growth status is temporarily unavailable.</p>
+          </div>
+          <a href="#/settings/growth-operator" className="action-button">Settings</a>
+        </div>
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{operator.error.message}</div>
+      </section>
+    )
   }
+
+  if (!readiness) {
+    return (
+      <section className="operator-surface operator-overview" aria-labelledby="operator-overview-title">
+        <div className="operator-overview-heading">
+          <div>
+            <h3 id="operator-overview-title">Growth</h3>
+            <p>Checking whether autonomous growth is ready.</p>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  const agentActive = Boolean(readiness.reasoningAgent.attached && readiness.reasoningAgent.activeRunId)
+  const xConnected = Boolean(readiness.transports.browserAgent.accountVerified || readiness.sensors.xForYou.authenticatedAccountVerified)
+  const unresolved = readiness.reconciliation.closedUnresolvedCount
+  const verificationInProgress = readiness.reconciliation.activeCount
+  const schedulerReady = Boolean(readiness.scheduler.growthAgent.configured && readiness.scheduler.growthAgent.enabled)
+  const needsAttention = !readiness.permission.live
+    || readiness.accountHealth.constrained
+    || !xConnected
+    || (verificationInProgress > 0 && !agentActive)
+  const growthState = needsAttention ? 'Needs attention' : agentActive ? 'Growing' : 'Ready'
+  const growthTone = needsAttention ? 'warning' : agentActive ? 'info' : 'success'
+  const attention: string[] = []
+
+  if (!readiness.permission.live) attention.push('Autonomous growth is paused or not in Live mode.')
+  if (!xConnected) attention.push('The authenticated X account is not currently verified.')
+  if (readiness.accountHealth.constrained) {
+    attention.push(readiness.accountHealth.reasons[0]?.message || 'Account health is currently constraining public actions.')
+  }
+  if (verificationInProgress > 0 && !agentActive) attention.push(`${verificationInProgress} ${verificationInProgress === 1 ? 'action is' : 'actions are'} mid-verification while the agent is idle.`)
+
+  const accountHandle = readiness.transports.browserAgent.accountObserved || readiness.transports.browserAgent.accountExpected
+  const lastRun = readiness.lastRun
 
   return (
     <section className="operator-surface operator-overview" aria-labelledby="operator-overview-title">
       <div className="operator-overview-heading">
         <div>
-          <h3 id="operator-overview-title">Your agent's operating context</h3>
-          <p>Give the agent an objective. Inspect its authority and voice here, then judge the work by relevant followers and conversations that continue.</p>
+          <h3 id="operator-overview-title">Growth</h3>
+          <p>One glance for readiness, agent activity, X connection, and anything that needs intervention.</p>
         </div>
-        <a href="#/settings/growth-operator" className="action-button">Manage delegation</a>
+        <a href="#/settings/growth-operator" className="action-button">Settings</a>
       </div>
-      {readiness && (
-        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6" aria-label="Growth Operator readiness chain">
-          {[
-            { label: 'Permission', ok: readiness.permission.live, value: readiness.permission.live ? 'Live' : readiness.permission.state },
-            { label: 'Agent', ok: readiness.reasoningAgent.attached, value: readiness.reasoningAgent.attached ? 'Attached' : 'Detached' },
-            { label: 'Browser', ok: browserReady, value: browserReady ? 'Ready' : 'Not ready' },
-            { label: 'For You', ok: forYouReady, value: forYouReady ? `${readiness.sensors.xForYou.count} fresh` : 'Refresh' },
-            { label: 'Reconcile', ok: readiness.reconciliation.activeCount === 0, value: readiness.reconciliation.activeCount === 0 ? 'Clear' : `${readiness.reconciliation.activeCount} active` },
-            { label: 'Scheduler', ok: schedulerReady, value: schedulerReady ? 'Active' : 'Off' },
-          ].map((item, index) => (
-            <div key={item.label} className="relative rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm">
-              {index < 5 && <span aria-hidden="true" className="absolute -right-2 top-1/2 hidden h-px w-2 bg-slate-300 xl:block" />}
-              <div className="flex items-center gap-2">
-                <span aria-hidden="true" className={`h-2 w-2 rounded-full ${item.ok ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{item.label}</span>
-              </div>
-              <div className="mt-2 text-sm font-semibold text-slate-900">{item.value}</div>
-            </div>
-          ))}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Growth status">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Growth</div>
+          <div className="mt-2"><Badge tone={growthTone}>{growthState}</Badge></div>
+          <p className="mt-2 text-sm text-slate-600">{growthState === 'Growing' ? 'An autonomous run is active.' : growthState === 'Ready' ? 'Ready for the next Growth Run.' : 'One or more conditions need attention.'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Agent</div>
+          <div className="mt-2 text-lg font-semibold text-slate-950">{agentActive ? 'Active' : 'Idle'}</div>
+          <p className="mt-1 text-sm text-slate-600">{agentActive ? 'Working on the current Growth Run.' : 'No reasoning agent is working right now.'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">X</div>
+          <div className="mt-2 text-lg font-semibold text-slate-950">{xConnected ? `Connected as @${accountHandle}` : 'Browser unavailable'}</div>
+          <p className="mt-1 text-sm text-slate-600">{xConnected ? 'Account identity has been verified.' : 'Reconnect the authenticated X browser before public actions.'}</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">Last run</div>
+          <div className="mt-2 text-lg font-semibold text-slate-950">{lastRun ? actionSummary(lastRun.actions) : 'No run yet'}</div>
+          <p className="mt-1 text-sm text-slate-600">{lastRun ? `${lastRun.status}${lastRun.finishedAt ? ` · ${formatDateTime(lastRun.finishedAt)}` : ''}` : 'Completed Growth Runs will appear here.'}</p>
+        </div>
+      </div>
+
+      {attention.length > 0 && (
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4" aria-label="Growth attention">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="font-semibold text-amber-950">Attention</h4>
+            <Badge tone="warning">{attention.length}</Badge>
+          </div>
+          <ul className="mt-2 space-y-1 text-sm text-amber-950">
+            {attention.map((item) => <li key={item}>• {item}</li>)}
+          </ul>
         </div>
       )}
-      <div className="operator-status-grid">
-        <div className="operator-status-cell">
-          <h4>Permission to act</h4>
-          {operator.error ? <Badge tone="warning">Status unavailable</Badge> : grant ? (
-            <div className="flex flex-wrap gap-2">
-              <Badge tone={grant.state === 'running' ? 'info' : 'neutral'}>{grant.state}</Badge>
-              <Badge>{grant.mode === 'live' ? 'Live delegation' : 'Dry run'}</Badge>
-            </div>
-          ) : <span className="text-sm text-slate-500">Loading delegation…</span>}
-          <p>{operator.error ? operator.error.message : grant ? `Revision ${grant.revision}. Permission is separate from an active agent session and from publication readiness.` : 'No readiness is assumed until the saved delegation is available.'}</p>
-          {grant?.updatedAt && <p>Changed {formatDateTime(grant.updatedAt)}</p>}
-          <a href="#/settings/growth-operator">Inspect or pause delegation →</a>
+
+      <details className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-700">Diagnostics</summary>
+        <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+          <p><strong className="text-slate-900">Delegation:</strong> {readiness.permission.state} · {readiness.permission.mode}</p>
+          <p><strong className="text-slate-900">Agent runtime:</strong> {readiness.reasoningAgent.attached ? 'attached' : 'detached'}{readiness.reasoningAgent.lastSeenAt ? ` · ${formatDateTime(readiness.reasoningAgent.lastSeenAt)}` : ''}</p>
+          <p><strong className="text-slate-900">For You:</strong> {readiness.sensors.xForYou.count} stored · {readiness.sensors.xForYou.fresh ? 'fresh' : 'stale'}</p>
+          <p><strong className="text-slate-900">Scheduler:</strong> {schedulerReady ? 'active' : 'inactive'}</p>
+          <p><strong className="text-slate-900">Reply budget:</strong> {readiness.permission.autonomousReply.remainingBudget == null ? 'no fixed count limit' : `${readiness.permission.autonomousReply.remainingBudget} remaining`}</p>
+          <p><strong className="text-slate-900">X API main-feed transport:</strong> {readiness.transports.xApi.credentialsPresent ? 'credentials present' : 'unavailable · missing access token'}</p>
+          <p><strong className="text-slate-900">Publication state:</strong> {verificationInProgress} active · {unresolved} unresolved</p>
+          <p><strong className="text-slate-900">Run:</strong> {readiness.reasoningAgent.activeRunId ? `${readiness.reasoningAgent.activeRunStage || 'active'}` : 'none active'}</p>
         </div>
-        <div className="operator-status-cell">
-          <h4>Hamza's persona</h4>
-          {persona.error ? <Badge tone="warning">Model unavailable</Badge> : model ? (
-            <div className="flex flex-wrap gap-2"><Badge tone="primary">{model.version}</Badge><Badge>{model.status}</Badge></div>
-          ) : <span className="text-sm text-slate-500">Loading persona…</span>}
-          <p>{persona.error ? persona.error.message : 'The saved model guides purpose, voice, and social behavior. Each authored action still needs its own content and provenance checks.'}</p>
-          <a href="#/settings/persona">Inspect persona & evidence →</a>
-        </div>
-        <div className="operator-status-cell">
-          <h4>Autonomous replies</h4>
-          {replies.error ? <Badge tone="warning">Reply status unavailable</Badge> : replyGrant ? (
-            <div className="flex flex-wrap gap-2"><Badge tone={replyGrant.mode === 'live' && replyGrant.state === 'running' ? 'info' : 'neutral'}>{replyGrant.state}</Badge><Badge>{replyGrant.mode === 'live' ? 'Live replies' : 'Dry run · not sending'}</Badge></div>
-          ) : <span className="text-sm text-slate-500">Loading reply authority…</span>}
-          <p>{replies.error ? replies.error.message : replyGrant ? `${replyGrant.budgetUsed} budget units used · ${replyGrant.remainingBudget == null ? 'no fixed count limit' : `${replyGrant.remainingBudget} remaining`}. This is a work bound, not a growth result.` : 'Reply authority is checked independently of main-feed delegation.'}</p>
-          <a href="#/settings/autonomous-replies">Inspect reply scope & budget →</a>
-        </div>
-      </div>
-      <div className="operator-handoff">
-        <p><strong>Continue in another agent session.</strong> Growth Runs now carry durable orchestration state in addition to persona, queue, relationship history, attempts, and results. A scheduled runtime may attach independently; this page reports its readiness but does not impersonate one.</p>
-        <button type="button" className="action-button" onClick={() => void copyBrief()}>Copy session brief</button>
-      </div>
-      <div role="status" aria-live="polite" className="mt-2 text-sm text-slate-600">{copyState === 'copied' ? 'Session brief copied. Add your objective, duration, or work ceilings in the agent session.' : copyState === 'manual' ? 'Clipboard access is unavailable. Select and copy the brief below.' : ''}</div>
-      {copyState === 'manual' && <textarea aria-label="Agent session brief" readOnly value={SESSION_BRIEF} rows={8} className="mt-3 w-full border p-3 text-sm" onFocus={(event) => event.target.select()} />}
+      </details>
     </section>
   )
 }

@@ -728,6 +728,20 @@ export interface OperatorReadiness {
       latestError: string | null
     }
   }
+  lastRun: {
+    runId: string
+    status: string
+    stopReason: string | null
+    startedAt: number
+    finishedAt: number | null
+    actions: {
+      replies: number
+      quotes: number
+      reposts: number
+      originals: number
+      total: number
+    }
+  } | null
   mainFeed: {
     allowed: boolean
     blockingReason: string | null

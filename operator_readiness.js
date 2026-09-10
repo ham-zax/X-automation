@@ -11,6 +11,7 @@ import {
   getDiscoverSnapshot,
   getGrowthOperatorDelegation,
   listGrowthRuns,
+  listPublicationAttempts,
 } from './store.js';
 
 const AUTOMATION_RUNTIME_STATE_KEY = 'automation_runtime';
@@ -82,6 +83,18 @@ export function getOperatorReadiness({ now = Date.now(), operatorLeaseId = null 
   const forYou = sourceStatus('x_for_you', timestamp);
   const forYouSensor = getXForYouSensorStatus();
   const activeRun = listGrowthRuns({ status: 'active', limit: 1 })[0] || null;
+  const latestRun = listGrowthRuns({ limit: 20 }).find((run) => run.status !== 'active') || null;
+  const latestRunPublications = latestRun
+    ? listPublicationAttempts({ runId: latestRun.runId, limit: 100 }).filter((attempt) => attempt.state === 'confirmed_published')
+    : [];
+  const latestRunActions = latestRunPublications.reduce((counts, attempt) => {
+    const key = attempt.actionType === 'reply' ? 'replies'
+      : attempt.actionType === 'quote' ? 'quotes'
+        : attempt.actionType === 'repost' ? 'reposts' : 'originals';
+    counts[key] += 1;
+    counts.total += 1;
+    return counts;
+  }, { replies: 0, quotes: 0, reposts: 0, originals: 0, total: 0 });
   const apiPipelines = Object.fromEntries(['original', 'thread', 'quote', 'repost'].map((pipeline) => [
     pipeline,
     getXApiPipelineCapability(pipeline),
@@ -154,6 +167,14 @@ export function getOperatorReadiness({ now = Date.now(), operatorLeaseId = null 
       backgroundAutomation: automationStatus(timestamp),
       autonomousReplyNextExpectedRefreshAt: replyRuntime.nextExpectedRefreshAt || null,
     },
+    lastRun: latestRun ? {
+      runId: latestRun.runId,
+      status: latestRun.status,
+      stopReason: latestRun.stopReason || null,
+      startedAt: latestRun.startedAt,
+      finishedAt: latestRun.finishedAt,
+      actions: latestRunActions,
+    } : null,
     mainFeed: mainFeed.preparation,
   };
 }

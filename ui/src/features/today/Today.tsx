@@ -383,59 +383,54 @@ export function Today() {
 
       <OperatorOverview />
 
-      <section aria-labelledby="today-attention">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Now</div>
-            <h3 id="today-attention" className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Next decisions</h3>
+      {data.actions.length > 0 && (
+        <section aria-labelledby="today-attention">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Now</div>
+              <h3 id="today-attention" className="mt-1 text-xl font-semibold tracking-tight text-slate-900">Needs your attention</h3>
+            </div>
+            <span className="text-sm tabular-nums text-slate-500">{data.actions.length}</span>
           </div>
-          <span className="text-sm tabular-nums text-slate-500">{data.actions.length}</span>
-        </div>
-        {data.actions.length > 0 ? (
           <div className="grid gap-3 lg:grid-cols-2">
             {data.actions.map((action, index) => (
               <ActionCard key={index} action={action} />
             ))}
           </div>
-        ) : (
-          <Notice tone="success" title="Caught up">No immediate decisions are waiting. Discover a new signal or check recent results when you are ready.</Notice>
-        )}
-      </section>
+        </section>
+      )}
 
-      <section aria-labelledby="today-pulse">
-        <div className="mb-3">
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Current state</div>
-          <h3 id="today-pulse" className="mt-1 text-lg font-semibold text-slate-900">Growth pulse</h3>
-        </div>
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-          <MetricCard label="Active conversations" value={data.stats.activeConversations} tone="primary" />
-          <MetricCard label="Posts awaiting review" value={data.stats.waitingForReview} tone="warning" />
-          <MetricCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} tone="info" />
-          <MetricCard
-            label="Relevant followers · 24h"
-            value={data.stats.newRelevantFollowers24h}
-            note={`of ${data.stats.newlyObservedFollowers24h} newly observed`}
-            tone="success"
-          />
-        </div>
-      </section>
-
-      <EditorialPlan objective={objective} onObjectiveChange={setObjective} />
-
-      <section className="border-t border-slate-200 pt-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Account status</div>
-            <div className="mt-1 text-base font-semibold text-slate-900">{data.accountHealth.label}</div>
-            {data.nextScheduled && (
-              <div className="mt-1 text-sm text-slate-600">
-                Next post {formatDateTime(data.nextScheduled.recommendedAt)} · {data.automation ? 'automation enabled' : 'manual publishing'}
+      <Disclosure summary="Analysis & planning" className="border-t border-slate-200 pt-4">
+        <div className="space-y-8 pb-2">
+          <section aria-labelledby="today-pulse">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Current state</div>
+                <h3 id="today-pulse" className="mt-1 text-lg font-semibold text-slate-900">Growth pulse</h3>
               </div>
-            )}
+              <a href="#/results" className="text-sm font-semibold text-indigo-700 hover:underline">View performance →</a>
+            </div>
+            <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+              <MetricCard label="Active conversations" value={data.stats.activeConversations} tone="primary" />
+              <MetricCard label="Posts awaiting review" value={data.stats.waitingForReview} tone="warning" />
+              <MetricCard label="Useful interactions · 7d" value={data.stats.meaningfulInteractions7d} tone="info" />
+              <MetricCard
+                label="Relevant followers · 24h"
+                value={data.stats.newRelevantFollowers24h}
+                note={`of ${data.stats.newlyObservedFollowers24h} newly observed`}
+                tone="success"
+              />
+            </div>
+          </section>
+
+          <EditorialPlan objective={objective} onObjectiveChange={setObjective} />
+
+          <div className="text-sm text-slate-600">
+            <strong className="text-slate-900">Account health:</strong> {data.accountHealth.label}
+            {data.nextScheduled && <> · Next post {formatDateTime(data.nextScheduled.recommendedAt)} · {data.automation ? 'automation enabled' : 'manual publishing'}</>}
           </div>
-          <a href="#/results" className="text-sm font-semibold text-indigo-700 hover:underline">View performance →</a>
         </div>
-      </section>
+      </Disclosure>
     </div>
   )
 }
