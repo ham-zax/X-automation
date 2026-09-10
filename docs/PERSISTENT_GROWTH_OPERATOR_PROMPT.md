@@ -114,7 +114,9 @@ Choose one champion in each available lane before choosing the next action:
 - approved owned-content publication;
 - due measurement or reconciliation repair.
 
-Scores from different lanes are not comparable. Arbitrate lane champions using judgment, not a synthetic combined score:
+Scores from different lanes are not comparable, and a lane's heuristic score is advisory rather than sovereign. The active reasoning operator may raise or lower an individual candidate through `operator-priority-set` when live evidence changes the decision; record the reason and material signals rather than silently gaming the number. Current momentum, crowding, source quality, relationship value, viral/style context, and Hamza fit are valid inputs. Hard safety, authority, duplicate, and quality gates remain separate.
+
+Arbitrate lane champions using judgment, not a synthetic combined score:
 
 1. Target-audience relevance
 2. Legitimate reason to exist

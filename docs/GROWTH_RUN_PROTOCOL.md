@@ -90,6 +90,8 @@ printf '%s\n' '{"runId":"<run-id>","status":"completed","stopReason":"no_worthwh
 
 The run state returns `recommendedOperation` and `permittedOperations`. When it returns `recommendedOperation: "claim_action"`, it may also return a concrete `claim` object naming the lane, command, queue item, run, and session that own the next executable action. The deterministic layer coordinates what may happen next; the reasoning agent still owns opportunity judgment, exact-source inspection, verification, social purpose, route selection, and the decision to remain silent when live evidence invalidates an otherwise eligible action.
 
+Heuristic opportunity scores are advisory evidence, not immutable truth. During an active Growth Run the reasoning operator may call `operator-priority-set` with the current `runId`, `sessionId`, candidate key, a 0-100 score, a concrete reason, and optional structured signals. The run-scoped judgment may raise or lower execution priority based on live momentum, source quality, thread crowding, relationship value, current viral/style context, or Hamza/persona fit. Hard authority, duplicate, account-health, factual, and content-quality gates remain independent. The underlying heuristic score remains visible for comparison and becomes authoritative again when the run ends.
+
 An unattended adapter should verify the existing Windows X session/account before beginning whenever practical. If authentication is established or changes after begin, resume the same run with updated truthful capabilities rather than starting a second run.
 
 ## Personalized For You sensing

@@ -100,6 +100,7 @@ import {
   getExperiment,
   getExperimentSummary,
   getGrowthOperatorMemoryCheckpoint,
+  getGrowthRun,
   getLearningOverview,
   getLatestEditorialPlan,
   getMainFeedScheduleItem,
@@ -112,6 +113,7 @@ import {
   getCurrentPersonaStances,
   getQueueItem,
   getQueueItemByCandidate,
+  ensureQueueItem,
   getRelationshipProfile,
   requireGrowthOperatorDelegation,
   getSourceMomentum,
@@ -490,8 +492,20 @@ function engagementPacket(queueItem) {
   return { queueItem, candidate, draft, relationship };
 }
 
+function activeAgentPriorityJudgment(queueItem) {
+  const judgment = queueItem?.routingDecision?.agentPriorityJudgment;
+  if (!judgment || typeof judgment !== 'object' || Array.isArray(judgment)) return null;
+  const score = Number(judgment.score);
+  const runId = String(judgment.runId || '').trim();
+  if (!Number.isFinite(score) || score < 0 || score > 100 || !runId) return null;
+  const run = getGrowthRun(runId);
+  if (!run || run.status !== 'active') return null;
+  return { ...judgment, score };
+}
+
 function compactEngagementPacket(queueItem) {
   const candidate = getCandidate(queueItem.candidateKey);
+  const priorityJudgment = activeAgentPriorityJudgment(queueItem);
   return {
     id: queueItem.id,
     candidateKey: queueItem.candidateKey,
@@ -505,7 +519,9 @@ function compactEngagementPacket(queueItem) {
     engagementKind: queueItem.engagementKind,
     sourceClass: queueItem.engagement?.sourceClass || null,
     status: queueItem.status,
-    priority: queueItem.priority,
+    priority: priorityJudgment?.score ?? queueItem.priority,
+    heuristicPriority: queueItem.engagement?.engagePriority ?? queueItem.priority,
+    agentPriorityJudgment: priorityJudgment,
     urgency: queueItem.urgency,
     expiresAt: queueItem.expiresAt,
     contribution: {
@@ -526,12 +542,22 @@ function engagementRefreshOptions(payload) {
 }
 
 function engagementRead(payload, { refresh = null, compact = false } = {}) {
+  const requestedMinPriority = Number(payload.minPriority || 0);
+  const requestedLimit = Math.max(1, Math.min(200, Number(payload.limit || 50)));
   const items = listEngagementItems({
     status: payload.status || undefined,
-    minPriority: Number(payload.minPriority || 0),
+    minPriority: 0,
     includeExpired: Boolean(payload.includeExpired),
-    limit: Math.max(1, Math.min(200, Number(payload.limit || 50))),
-  });
+    limit: 200,
+  })
+    .map((item) => {
+      const priorityJudgment = activeAgentPriorityJudgment(item);
+      return priorityJudgment ? { ...item, priority: priorityJudgment.score } : item;
+    })
+    .filter((item) => Number(item.priority || 0) >= requestedMinPriority)
+    .sort((left, right) => Number(right.priority || 0) - Number(left.priority || 0)
+      || Number(right.updatedAt || 0) - Number(left.updatedAt || 0))
+    .slice(0, requestedLimit);
   const packets = items.map(compact ? compactEngagementPacket : engagementPacket);
   const kindOf = (item) => compact ? item.engagementKind : item.queueItem.engagementKind;
   const accountHealth = getAccountHealthSummary();
@@ -655,7 +681,7 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
         ? 'soon'
         : 'normal';
   const topicBalanceDecision = candidateTopicBalance(candidate, topicBalance);
-  const operatorPriority = Math.round(
+  const heuristicPriority = Math.round(
     scores.reachPotential * 0.45
       + scores.conversationPotential * 0.25
       + scores.followPotential * 0.20
@@ -666,6 +692,8 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
       - (lowSignal ? 25 : 0)
       - (recommendation.action === 'ignore' ? 60 : 0)
   );
+  const priorityJudgment = activeAgentPriorityJudgment(getQueueItemByCandidate(candidate.key));
+  const operatorPriority = priorityJudgment?.score ?? heuristicPriority;
   return {
     key: candidate.key,
     url: candidate.url,
@@ -676,7 +704,11 @@ function growthOperatorPacket(candidate, sourceKinds = [], topicBalance = null) 
     metrics: candidate.metrics || {},
     recommendation,
     operatorPriority,
-    priorityBasis: 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution, freshness, bounded configured topic-balance adjustments, and a low-signal penalty for unproven X sources. Not an X ranking-law claim.',
+    heuristicPriority,
+    agentPriorityJudgment: priorityJudgment,
+    priorityBasis: priorityJudgment
+      ? 'Active Growth Run agent judgment. The heuristic score remains visible as evidence but is not sovereign; the reasoning operator may re-rank from live momentum, source quality, thread crowding, relationship value, current style context, and Hamza fit.'
+      : 'Empirical operator heuristic: Reach 45%, Conversation 25%, Follow 20%, Relationship 10%, plus borrowed-distribution, freshness, bounded configured topic-balance adjustments, and a low-signal penalty for unproven X sources. Not an X ranking-law claim.',
     topicBalance: topicBalanceDecision,
     urgency,
     distribution: {
@@ -797,6 +829,8 @@ function compactGrowthItem(item) {
     sourceKinds: item.sourceKinds,
     recommendation: item.recommendation,
     operatorPriority: item.operatorPriority,
+    heuristicPriority: item.heuristicPriority,
+    agentPriorityJudgment: item.agentPriorityJudgment,
     urgency: item.urgency,
     momentum: {
       tier: item.momentum.tier,
@@ -1755,6 +1789,62 @@ async function main() {
     return;
   }
 
+  if (command === 'operator-priority-set') {
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    const runId = String(payload.runId || '').trim();
+    const sessionId = String(payload.sessionId || '').trim();
+    const key = String(payload.key || '').trim();
+    const score = Number(payload.score);
+    const reason = String(payload.reason || '').trim();
+    if (!runId || !sessionId) throw new Error('operator-priority-set requires runId and sessionId.');
+    requireGrowthRunLease(runId, sessionId, now);
+    requireCandidate(key);
+    if (!Number.isFinite(score) || score < 0 || score > 100) throw new Error('operator-priority-set score must be between 0 and 100.');
+    if (!reason) throw new Error('operator-priority-set requires a reason.');
+    if (payload.signals != null && (typeof payload.signals !== 'object' || Array.isArray(payload.signals))) {
+      throw new Error('operator-priority-set signals must be an object when supplied.');
+    }
+    ensureQueueItem(key);
+    const queueItem = getQueueItemByCandidate(key);
+    if (['publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt) {
+      throw new Error('operator-priority-set cannot rescore publishing, published, or unresolved work.');
+    }
+    const growthHeuristicPriority = growthOperatorPacket(
+      getCandidate(key),
+      getCandidateSourceKinds(key),
+      recentTopicBalance(null),
+    ).heuristicPriority;
+    const engagementHeuristicPriority = queueItem.lane === 'engagement'
+      ? Number(queueItem.engagement?.engagePriority ?? queueItem.priority ?? 0)
+      : null;
+    const judgment = {
+      score: Math.round(score * 10) / 10,
+      heuristicPriority: growthHeuristicPriority,
+      engagementHeuristicPriority,
+      reason,
+      signals: payload.signals || {},
+      actor: 'operator',
+      runId,
+      sessionId,
+      selectedAt: now,
+    };
+    const updated = saveQueueItem({
+      ...queueItem,
+      routingDecision: {
+        ...(queueItem.routingDecision || {}),
+        agentPriorityJudgment: judgment,
+      },
+    });
+    result({
+      key,
+      priority: judgment.score,
+      heuristicPriority: judgment.heuristicPriority,
+      judgment,
+      queueItem: updated,
+    });
+    return;
+  }
+
   if (command === 'agent-runtime-heartbeat') {
     result(heartbeatGrowthAgentRuntime({
       adapterType: payload.adapterType,
@@ -2322,10 +2412,12 @@ async function main() {
       throw new Error('Reply browser claim is missing its persisted target/workflow state.');
     }
     const humanApprovalActive = Boolean(queueItem.humanApprovedAt || String(queueItem.approvedText || '').trim());
+    const priorityJudgment = activeAgentPriorityJudgment(queueItem);
+    const effectiveQueueItem = priorityJudgment ? { ...queueItem, priority: priorityJudgment.score } : queueItem;
     let decision = null;
     let liveEvaluation = null;
     if (!humanApprovalActive) {
-      liveEvaluation = await ensureAutonomousReplyLiveDecision(queueItem);
+      liveEvaluation = await ensureAutonomousReplyLiveDecision(effectiveQueueItem);
       if (liveEvaluation.decision?.decision === 'eligible_live' && liveEvaluation.decision.claimedAt == null) {
         decision = liveEvaluation.decision;
       }
