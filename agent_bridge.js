@@ -153,6 +153,7 @@ import {
   runStoreTransaction,
   retireLearnedRule,
   saveDraft,
+  saveNicheProfile,
   saveQueueItem,
   setAiDefaultProfile,
   setAiRoleBinding,
@@ -1789,6 +1790,87 @@ async function main() {
     return;
   }
 
+  if (command === 'growth-focus-expand') {
+    const now = payload.now == null ? Date.now() : Number(payload.now);
+    const runId = String(payload.runId || '').trim();
+    const sessionId = String(payload.sessionId || '').trim();
+    const groupTag = String(payload.groupTag || '').trim().toLowerCase();
+    const reason = String(payload.reason || '').trim();
+    if (!runId || !sessionId) throw new Error('growth-focus-expand requires runId and sessionId.');
+    requireGrowthRunLease(runId, sessionId, now);
+    const authority = requireGrowthOperatorDelegation({ actor: 'agent', requireLive: true });
+    if (!/^[a-z0-9][a-z0-9/_-]{0,63}$/.test(groupTag)) throw new Error('growth-focus-expand requires a valid groupTag.');
+    if (!reason) throw new Error('growth-focus-expand requires a reason.');
+    const terms = [...new Set((Array.isArray(payload.terms) ? payload.terms : [])
+      .map((term) => String(term || '').trim().toLowerCase())
+      .filter(Boolean))].slice(0, 50);
+    if (!terms.length) throw new Error('growth-focus-expand requires at least one term.');
+
+    const niche = getNicheProfile();
+    const blocked = new Set((niche.profile.exclusionTerms || []).map((term) => String(term || '').trim().toLowerCase()));
+    const blockedTerms = terms.filter((term) => blocked.has(term));
+    if (blockedTerms.length) {
+      throw new Error(`growth-focus-expand cannot promote explicit exclusion terms: ${blockedTerms.join(', ')}`);
+    }
+
+    const contentGroups = niche.profile.contentGroups.map((group) => ({ ...group, terms: [...group.terms] }));
+    const index = contentGroups.findIndex((group) => group.tag === groupTag);
+    let addedTerms = terms;
+    if (index >= 0) {
+      const existing = new Set(contentGroups[index].terms.map((term) => String(term).toLowerCase()));
+      addedTerms = terms.filter((term) => !existing.has(term));
+      if (!addedTerms.length) {
+        result({
+          authorityRevision: authority.grant.revision,
+          runId,
+          sessionId,
+          reason,
+          previousRevision: niche.revision,
+          revision: niche.revision,
+          groupTag,
+          addedTerms: [],
+          group: contentGroups[index],
+          classification: null,
+          unchanged: true,
+        });
+        return;
+      }
+      contentGroups[index] = {
+        ...contentGroups[index],
+        terms: [...contentGroups[index].terms, ...addedTerms],
+      };
+    } else {
+      const label = String(payload.label || '').trim();
+      if (!label) throw new Error('growth-focus-expand requires label when creating a new group.');
+      const role = ['core', 'adjacent'].includes(payload.role) ? payload.role : 'adjacent';
+      contentGroups.push({
+        tag: groupTag,
+        label,
+        weight: Number.isFinite(Number(payload.weight)) ? Number(payload.weight) : 8,
+        role,
+        targetShare: Number.isFinite(Number(payload.targetShare)) ? Number(payload.targetShare) : 0,
+        researchTier: Number.isFinite(Number(payload.researchTier)) ? Number(payload.researchTier) : 3,
+        discover: payload.discover === true,
+        terms,
+      });
+    }
+
+    const saved = saveNicheProfile({ ...niche.profile, contentGroups });
+    result({
+      authorityRevision: authority.grant.revision,
+      runId,
+      sessionId,
+      reason,
+      previousRevision: niche.revision,
+      revision: saved.revision,
+      groupTag,
+      addedTerms,
+      group: saved.profile.contentGroups.find((group) => group.tag === groupTag) || null,
+      classification: saved.classification,
+    });
+    return;
+  }
+
   if (command === 'operator-priority-set') {
     const now = payload.now == null ? Date.now() : Number(payload.now);
     const runId = String(payload.runId || '').trim();
@@ -2646,7 +2728,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-readiness|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-readiness|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

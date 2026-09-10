@@ -2,7 +2,7 @@
 
 This document describes the default preferences and technical universe for `@ham_zax`. The runtime source of truth is the persisted Growth Focus profile; `strategy.js` supplies defaults plus schema/normalization. Preferred content groups and broader audience/scope groups can be added, removed, renamed, reweighted, or disabled without code changes. Preferred groups bias selection; they do not hard-block a strong unregistered technical opportunity.
 
-The goal is not to become a generic technology-news account or an AI-only account. The account should be recognizable as a **developer and builder in tech**: strongly inclined toward software development and the registered Growth Focus topics, but able to exploit worthwhile adjacent or newly emerging technical conversations. AI-assisted development is one topic family inside that identity.
+The goal is not to become a generic technology-news account or an AI-only account. The account should be recognizable as a **developer and builder in tech**: strongly inclined toward software development and the registered Growth Focus topics, but able to exploit worthwhile adjacent or newly emerging technical conversations. AI-assisted development is one topic family inside that identity. Social participation with relevant builders, founders, indie hackers, developer creators, and technical communities can be in-scope even when an individual source post is not itself technical; the purpose and relationship context matter alongside source keywords.
 
 ## 1. Positioning
 

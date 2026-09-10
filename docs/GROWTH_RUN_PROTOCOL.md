@@ -92,6 +92,8 @@ The run state returns `recommendedOperation` and `permittedOperations`. When it 
 
 Heuristic opportunity scores are advisory evidence, not immutable truth. During an active Growth Run the reasoning operator may call `operator-priority-set` with the current `runId`, `sessionId`, candidate key, a 0-100 score, a concrete reason, and optional structured signals. The run-scoped judgment may raise or lower execution priority based on live momentum, source quality, thread crowding, relationship value, current viral/style context, or Hamza/persona fit. Hard authority, duplicate, account-health, factual, and content-quality gates remain independent. The underlying heuristic score remains visible for comparison and becomes authoritative again when the run ends.
 
+Growth Focus is also evolvable under live delegation. `growth-focus-expand` may extend an existing content group or create a justified `core`/`adjacent` group when the reasoning operator finds a durable developer/builder identity, community, or adjacent-interest term that the static profile is missing. The command requires the active `runId`/`sessionId`, a concrete reason, and explicit terms; it persists a new Growth Focus revision and reclassifies stored candidates. Explicit exclusion terms cannot be promoted. Prefer expansion for durable identity/scope learning, not as a one-off mechanism to force an unrelated post through the gate.
+
 An unattended adapter should verify the existing Windows X session/account before beginning whenever practical. If authentication is established or changes after begin, resume the same run with updated truthful capabilities rather than starting a second run.
 
 ## Personalized For You sensing

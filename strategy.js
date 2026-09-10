@@ -89,7 +89,7 @@ export const NICHE_GROUPS = [
     role: 'core',
     targetShare: 5,
     researchTier: 2,
-    terms: ['indie hacker', 'developer founder', 'micro-saas', 'build in public', 'building in public', 'shipping software', 'ship products', 'product launch', 'technical founder', 'software founder', 'saas'],
+    terms: ['indie hacker', 'indie hackers', 'indie developer', 'indie developers', 'ai builder', 'ai builders', 'developer builder', 'developer builders', 'developer founder', 'startup founder', 'startup founders', 'micro-saas', 'side project', 'side projects', 'build in public', 'building in public', 'shipping software', 'ship products', 'product launch', 'technical founder', 'software founder', 'tech creator', 'tech creators', 'maker', 'makers', 'saas'],
   },
   {
     tag: 'jobs/career',
@@ -117,7 +117,7 @@ export const NICHE_GROUPS = [
 
 export const GROWTH_FOCUS_PROFILE_VERSION = 5;
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 8;
+export const CANDIDATE_CLASSIFIER_VERSION = 9;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
