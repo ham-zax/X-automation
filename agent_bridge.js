@@ -8,6 +8,7 @@ import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
 import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
+  ensureAutonomousReplyLiveDecision,
   getAutonomousReplyGrant,
   getAutonomousReplyRuntime,
 } from './autonomous_reply.js';
@@ -2315,14 +2316,26 @@ async function main() {
     requireGrowthRunLease(payload.runId, payload.sessionId || '', payload.now == null ? Date.now() : Number(payload.now));
     const key = String(payload.key || '');
     if (!key) throw new Error('browser-reply-claim requires key.');
-    const pending = listAutonomousReplyDecisions({ limit: 500 })
-      .filter((decision) => decision.candidateKey === key && decision.decision === 'eligible_live' && decision.claimedAt == null)
-      .sort((left, right) => Number(right.createdAt || 0) - Number(left.createdAt || 0));
-    const decision = pending[0] || null;
     const queueItem = getQueueItemByCandidate(key);
     const candidate = getCandidate(key);
     if (!queueItem || queueItem.pipeline !== 'reply' || !queueItem.targetTweetId || !candidate) {
       throw new Error('Reply browser claim is missing its persisted target/workflow state.');
+    }
+    const humanApprovalActive = Boolean(queueItem.humanApprovedAt || String(queueItem.approvedText || '').trim());
+    let decision = null;
+    let liveEvaluation = null;
+    if (!humanApprovalActive) {
+      liveEvaluation = await ensureAutonomousReplyLiveDecision(queueItem);
+      if (liveEvaluation.decision?.decision === 'eligible_live' && liveEvaluation.decision.claimedAt == null) {
+        decision = liveEvaluation.decision;
+      }
+    }
+
+    if (!decision && !humanApprovalActive && (liveEvaluation?.decision || liveEvaluation?.reason)) {
+      const firstReason = liveEvaluation.reason?.reason
+        || liveEvaluation.decision?.reasons?.[0]?.reason
+        || 'The live autonomous reply evaluator did not authorize this candidate.';
+      throw new Error(`Autonomous Reply is not live-eligible: ${firstReason}`);
     }
 
     if (decision) {

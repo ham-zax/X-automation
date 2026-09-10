@@ -18,6 +18,7 @@ const X_STATUS_URL = /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/([^/?#]+)\/
 const X_USERNAME = /^[A-Za-z0-9_]{1,15}$/;
 const X_METRIC_KEYS = Object.freeze(['views', 'likes', 'reposts', 'replies', 'bookmarks']);
 const TIMESTAMP_MISMATCH_MS = 5 * 60_000;
+const MAX_OBSERVED_FUTURE_SKEW_MS = 5 * 60_000;
 
 export function normalizeXUsername(value) {
   const username = String(value || '').trim().replace(/^@+/, '').toLowerCase();
@@ -131,7 +132,11 @@ function normalizeForYouPost(post, diagnostics, index) {
 }
 
 function failureResult({ observedAt, rejectedCount = 0, skippedCount = 0, diagnostics = [], error }) {
-  const attemptedAt = Number.isFinite(Number(observedAt)) && Number(observedAt) > 0 ? Number(observedAt) : Date.now();
+  const suppliedAt = Number(observedAt);
+  const now = Date.now();
+  const attemptedAt = Number.isSafeInteger(suppliedAt) && suppliedAt > 0 && suppliedAt <= now + MAX_OBSERVED_FUTURE_SKEW_MS
+    ? suppliedAt
+    : now;
   const message = String(error?.message || error || 'Invalid X For You observation batch.');
   const current = getDiscoverSnapshot('x_for_you');
   recordDiscoverSnapshotError('x_for_you', message, attemptedAt);
@@ -154,7 +159,10 @@ export function ingestXForYouObservation(payload = {}) {
   let accountHandle = '';
   try {
     if (String(payload?.kind || '') !== 'x_for_you') throw new Error('X For You ingest kind must be x_for_you.');
-    if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('X For You observedAt must be a positive timestamp.');
+    if (!Number.isSafeInteger(observedAt) || observedAt <= 0) throw new Error('X For You observedAt must be a positive safe-integer timestamp.');
+    if (observedAt > Date.now() + MAX_OBSERVED_FUTURE_SKEW_MS) {
+      throw new Error('X For You observedAt is implausibly far in the future.');
+    }
     if (!Array.isArray(payload.posts)) throw new Error('X For You posts must be an array.');
     accountHandle = normalizeXUsername(payload.accountHandle);
     const expectedAccount = normalizeXUsername(process.env.X_ACCOUNT || 'ham_zax');

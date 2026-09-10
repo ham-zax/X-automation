@@ -1,4 +1,4 @@
-import { getAppState, setAppState } from './store.js';
+import { getAppState, getGrowthRun, setAppState } from './store.js';
 
 const RUNTIME_STATE_KEY = 'growth_agent_runtime_v1';
 const SCHEDULER_STATE_KEY = 'growth_agent_scheduler_v1';
@@ -87,12 +87,15 @@ export function detachGrowthAgentRuntime({ now = Date.now() } = {}) {
 
 export function getGrowthAgentSchedulerStatus() {
   const state = readJsonState(SCHEDULER_STATE_KEY);
+  const storedActiveRunId = String(state.activeRunId || '');
+  const storedActiveRun = storedActiveRunId ? getGrowthRun(storedActiveRunId) : null;
+  const activeRunId = storedActiveRun?.status === 'active' ? storedActiveRunId : '';
   return {
     configured: state.configured === true,
     enabled: state.enabled === true,
     lastInvocationAt: Number(state.lastInvocationAt || 0) || null,
     lastInvocationResult: state.lastInvocationResult || null,
-    activeRunId: String(state.activeRunId || ''),
+    activeRunId,
     nextInvocationAt: Number(state.nextInvocationAt || 0) || null,
     lastError: state.lastError ? String(state.lastError) : null,
   };

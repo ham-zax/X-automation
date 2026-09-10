@@ -21,6 +21,7 @@ import {
   listRecentPublishedContent,
   listRelationshipEvents,
   recordAutonomousReplyDecision,
+  runStoreTransaction,
   saveAutonomousReplyGrantState,
   saveAutonomousReplyRuntimeState,
   updateAutonomousReplyDecision,
@@ -40,8 +41,8 @@ export const AUTONOMOUS_REPLY_INTENTS = Object.freeze([
 ]);
 export const AUTONOMOUS_REPLY_TONES = Object.freeze(['direct', 'warm', 'conversational', 'light_humor', 'dry_wit']);
 export const AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES = 5;
-const AUTONOMOUS_COLD_PRIORITY_MIN = 60;
-const AUTONOMOUS_ACTIVE_PRIORITY_MIN = 40;
+const AUTONOMOUS_COLD_PRIORITY_MIN = 25;
+const AUTONOMOUS_ACTIVE_PRIORITY_MIN = 25;
 const HUMOR_TONES = new Set(['light_humor', 'dry_wit']);
 
 const ARCHETYPE_TO_INTENT = Object.freeze({
@@ -299,7 +300,9 @@ function relationshipContext(profile) {
   };
 }
 
-function preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, tone, behavior) {
+function preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, tone, behavior, {
+  allowOperatorDraft = false,
+} = {}) {
   if (!item.targetTweetId) return { decision: 'skipped', reason: boundedReason('MISSING_TARGET_TWEET_ID', 'A real X target tweet ID is required.') };
   if (!grant.allowedSources.includes(sourceClass)) return { decision: 'skipped', reason: boundedReason('SOURCE_CLASS_NOT_ALLOWED', `${sourceClass} sources are not enabled by the current grant.`) };
   if (!intent) return { decision: 'review', reason: boundedReason('NO_ALLOWED_REPLY_INTENT', 'The current contribution does not map to an intent allowed by the grant.') };
@@ -308,17 +311,25 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
     return { decision: 'skipped', reason: boundedReason('ALREADY_REPLIED', 'This candidate already has a recorded reply action or published reply.') };
   }
   if (item.engagement?.expiry?.effectiveExpired === true) return { decision: 'skipped', reason: boundedReason('EXPIRED', 'The opportunity expired without an active-conversation override.') };
-  if (['needs_review', 'approved', 'publishing', 'failed'].includes(item.status) || item.humanApprovedAt) {
+  const draft = getDraftByCandidate(item.candidateKey);
+  const operatorDraft = allowOperatorDraft
+    && !item.humanApprovedAt
+    && String(draft?.body || '').trim()
+    && (
+      String(item.behavior?.selectionSource || '') === 'operator'
+      || String(draft?.editor?.behavior?.selectionSource || '') === 'operator'
+    );
+  if (['approved', 'publishing', 'failed'].includes(item.status) || item.humanApprovedAt || (item.status === 'needs_review' && !operatorDraft)) {
     return { decision: 'skipped', reason: boundedReason('HUMAN_WORKFLOW_ACTIVE', 'An existing human review/send state is already active for this reply.') };
   }
-  const draft = getDraftByCandidate(item.candidateKey);
-  if (String(draft?.body || '').trim()) return { decision: 'skipped', reason: boundedReason('HUMAN_DRAFT_PRESENT', 'A reply draft already exists; autonomous mode will not overwrite human work.') };
+  if (String(draft?.body || '').trim() && !operatorDraft) return { decision: 'skipped', reason: boundedReason('HUMAN_DRAFT_PRESENT', 'A reply draft already exists; autonomous mode will not overwrite human work.') };
   const health = getAccountHealthSummary().health;
   if (health.state === 'constrained') return { decision: 'skipped', reason: boundedReason('ACCOUNT_CONSTRAINED', 'Supported Account Health evidence currently constrains replies.') };
   const growthFit = assessStrategicRelevance(candidate, { humanOverride: item.relevance?.humanOverride || null });
   const minPriority = sourceClass === 'active' ? AUTONOMOUS_ACTIVE_PRIORITY_MIN : AUTONOMOUS_COLD_PRIORITY_MIN;
-  if (Number(item.priority || 0) < minPriority) {
-    return { decision: 'skipped', reason: boundedReason('AUTONOMOUS_VALUE_TOO_LOW', `Internal autonomous value threshold is ${minPriority}; current EngagePriority is ${Math.round(Number(item.priority || 0))}.`) };
+  const currentPriority = Number(item.priority || 0);
+  if (currentPriority < minPriority) {
+    return { decision: 'skipped', reason: boundedReason('AUTONOMOUS_VALUE_TOO_LOW', `Internal autonomous value threshold is ${minPriority}; current EngagePriority is ${Math.round(currentPriority)}.`) };
   }
   if (intent === 'social_reaction') {
     const established = ['responsive', 'recurring', 'connected', 'mutual'].includes(profile?.relationshipStage);
@@ -331,7 +342,7 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
   if (grant.mode === 'live' && Number(grant.budgetUsed || 0) >= Number(grant.liveBudget || 0)) {
     return { decision: 'skipped', reason: boundedReason('LIVE_BUDGET_EXHAUSTED', 'The explicit operator live safety budget has no remaining capacity.') };
   }
-  return { decision: 'continue', growthFit, health };
+  return { decision: 'continue', growthFit, health, operatorDraft: operatorDraft || null };
 }
 
 async function generateExactReply(item, candidate, profile, grant, strategy) {
@@ -414,7 +425,10 @@ function autonomousGateResult(item, candidate, generated, recentReplies, recentR
   };
 }
 
-export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousReplyGrant() } = {}) {
+export async function evaluateAutonomousReplyItem(item, {
+  grant = getAutonomousReplyGrant(),
+  allowOperatorDraft = false,
+} = {}) {
   const candidate = getCandidate(item.candidateKey);
   if (!candidate) {
     return { decision: 'skipped', sourceClass: 'normal', intent: null, tone: null, exactReply: '', reasons: [boundedReason('CANDIDATE_MISSING', 'The source candidate no longer exists.')] };
@@ -424,7 +438,9 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
   const behavior = normalizeBehaviorDecision(item.behavior || {}, { pipeline: 'reply' });
   const intent = chooseIntent(item, candidate, grant);
   const toneChoice = chooseTone(intent, candidate, grant, behavior);
-  const pre = preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, toneChoice.tone, behavior);
+  const pre = preGenerationDecision(item, candidate, profile, grant, sourceClass, intent, toneChoice.tone, behavior, {
+    allowOperatorDraft,
+  });
   const base = {
     sourceClass,
     intent,
@@ -450,6 +466,41 @@ export async function evaluateAutonomousReplyItem(item, { grant = getAutonomousR
     reasons: pre.reason ? [pre.reason] : [],
   };
   if (pre.decision !== 'continue') return { ...base, decision: pre.decision };
+
+  if (pre.operatorDraft) {
+    const recentReplies = listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key });
+    const recentReplyArchetypes = listEngagementItems({ includeExpired: true, limit: 30 })
+      .map((entry) => entry.replyArchetype).filter(Boolean).slice(0, 20);
+    const gates = autonomousGateResult(item, candidate, pre.operatorDraft, recentReplies, recentReplyArchetypes, profile);
+    const checkedDraft = {
+      ...pre.operatorDraft,
+      gates: gates.analysis.gates,
+      qualityScore: gates.analysis.score,
+    };
+    const checks = {
+      ...base.checks,
+      writingScore: gates.analysis.score,
+      growthPackagingReady: gates.analysis.growthPackaging?.ready === true,
+      deterministicFailures: gates.deterministicFailures,
+      reusedOperatorDraft: true,
+    };
+    const exactReply = String(pre.operatorDraft.body || '').trim();
+    if (gates.passed) {
+      return {
+        ...base,
+        exactReply,
+        aiExecution: pre.operatorDraft.editor?.generation?.writerAiExecution || null,
+        generatedDraft: checkedDraft,
+        checks,
+        decision: 'send',
+        reasons: [],
+      };
+    }
+    // An operator-authored draft is not human approval. If it fails current
+    // autonomous quality gates, regenerate rather than forcing review or send.
+    // The persisted operator draft remains untouched for provenance/audit.
+
+  }
 
   let generated;
   try {
@@ -513,6 +564,111 @@ function persistDecision(item, grant, evaluation, decision) {
     mode: grant.mode,
     decision,
   });
+}
+
+export async function ensureAutonomousReplyLiveDecision(item, { grant = getAutonomousReplyGrant() } = {}) {
+  if (grant.state !== 'running' || grant.mode !== 'live') {
+    return { decision: null, evaluation: null, reason: boundedReason('LIVE_AUTHORITY_UNAVAILABLE', 'Autonomous reply grant is not running in live mode.') };
+  }
+  const candidate = getCandidate(item.candidateKey);
+  const draft = getDraftByCandidate(item.candidateKey);
+  const evidenceUpdatedAt = Math.max(
+    Number(item.updatedAt || 0),
+    Number(candidate?.updatedAt || 0),
+    Number(draft?.updatedAt || 0),
+  );
+  const nonReevaluatable = (decision) => Boolean(decision && (
+    decision.claimedAt != null
+    || ['sending', 'sent', 'reconciliation_required', 'send_failed'].includes(String(decision.decision || ''))
+  ));
+  const isCurrentEligible = (decision) => Boolean(decision
+    && Number(decision.grantRevision || 0) === Number(grant.revision || 0)
+    && String(decision.decision || '') === 'eligible_live'
+    && decision.claimedAt == null
+    && Number(decision.updatedAt || 0) >= evidenceUpdatedAt);
+
+  const existing = getAutonomousReplyDecisionForTarget(item.targetTweetId);
+  if (nonReevaluatable(existing) || isCurrentEligible(existing)) {
+    return { decision: existing, evaluation: null, reason: null };
+  }
+
+  const evaluation = await evaluateAutonomousReplyItem(item, {
+    grant,
+    allowOperatorDraft: true,
+  });
+  const persistOrRefresh = (evaluated, decision) => runStoreTransaction(() => {
+    const latest = getAutonomousReplyDecisionForTarget(item.targetTweetId);
+    if (nonReevaluatable(latest) || isCurrentEligible(latest)) return latest;
+    if (!latest) return persistDecision(item, grant, evaluated, decision);
+    return updateAutonomousReplyDecision(latest.id, {
+      targetUsername: item.targetUsername,
+      sourceClass: evaluated.sourceClass,
+      relationshipStage: evaluated.relationshipStage,
+      intent: evaluated.intent,
+      tone: evaluated.tone,
+      exactReply: evaluated.exactReply,
+      selection: { ...(evaluated.selection || {}), behavior: evaluated.behavior || evaluated.selection?.behavior || null },
+      relationshipContext: evaluated.relationshipContext,
+      aiExecution: evaluated.aiExecution || {},
+      checks: evaluated.checks || {},
+      reasons: evaluated.reasons || [],
+      grantRevision: grant.revision,
+      mode: grant.mode,
+      decision,
+      claimedAt: null,
+      sentAt: null,
+      outputTweetId: null,
+      outputUrl: null,
+    });
+  });
+  if (evaluation.decision !== 'send') {
+    const delegatedEvaluation = evaluation.decision === 'review'
+      ? {
+          ...evaluation,
+          reasons: [
+            ...(evaluation.reasons || []),
+            boundedReason('DELEGATED_REVIEW_SKIPPED', 'Delegated live mode does not wait for human review; this candidate was skipped and the mission continues.'),
+          ],
+        }
+      : evaluation;
+    const recorded = persistOrRefresh(delegatedEvaluation, 'skipped');
+    if (nonReevaluatable(recorded) || String(recorded?.decision || '') === 'eligible_live') {
+      return {
+        decision: recorded,
+        evaluation,
+        reason: boundedReason('DECISION_STATE_CHANGED', 'Autonomous reply state changed while the live evaluation was running; preserved the newer decision.'),
+      };
+    }
+    return { decision: recorded, evaluation, reason: delegatedEvaluation.reasons?.[0] || null };
+  }
+  let recorded = persistOrRefresh(evaluation, 'eligible_live');
+  if (!recorded || String(recorded.decision || '') !== 'eligible_live' || recorded.claimedAt != null) {
+    return {
+      decision: recorded,
+      evaluation,
+      reason: boundedReason('DECISION_STATE_CHANGED', 'Autonomous reply state changed while the live evaluation was running; preserved the newer decision.'),
+    };
+  }
+  const authority = currentLiveAuthority(item, recorded, grant.revision);
+  if (!authority.allowed) {
+    recorded = runStoreTransaction(() => {
+      const latest = getAutonomousReplyDecisionForTarget(item.targetTweetId);
+      if (!latest
+        || nonReevaluatable(latest)
+        || String(latest.decision || '') !== 'eligible_live'
+        || Number(latest.id) !== Number(recorded.id)
+        || Number(latest.grantRevision || 0) !== Number(recorded.grantRevision || 0)
+        || Number(latest.updatedAt || 0) !== Number(recorded.updatedAt || 0)) {
+        return latest || recorded;
+      }
+      return updateAutonomousReplyDecision(latest.id, {
+        decision: 'skipped',
+        reasons: [...latest.reasons, authority.reason],
+      });
+    });
+    return { decision: recorded, evaluation, reason: authority.reason };
+  }
+  return { decision: recorded, evaluation, reason: null };
 }
 
 function currentLiveAuthority(item, decision, expectedRevision) {

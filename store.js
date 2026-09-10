@@ -5510,7 +5510,7 @@ export function recordSourceObservations(observations = []) {
       if (!key) throw new Error('Source observation candidateKey is required.');
       const snapshotKind = requireSourceSnapshotKind(observation.snapshotKind);
       const observedAt = Number(observation.observedAt);
-      if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Source observation observedAt must be a positive timestamp.');
+      if (!Number.isSafeInteger(observedAt) || observedAt <= 0) throw new Error('Source observation observedAt must be a positive safe-integer timestamp.');
       const rank = observation.rank == null ? null : Number(observation.rank);
       if (rank != null && (!Number.isInteger(rank) || rank < 1)) throw new Error('Source observation rank must be a positive integer when supplied.');
       statement.run(key, snapshotKind, observedAt, rank, JSON.stringify(observation.metrics || {}));
