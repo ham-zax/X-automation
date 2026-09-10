@@ -1,12 +1,17 @@
 import {
   appendPublicationAttemptReconciliationEvidence,
+  getAutonomousReplyDecision,
+  getAutonomousReplyGrantState,
   getPublicationAttempt,
   getQueueItem,
   listPublicationAttempts,
   listRecentUnresolvedMainFeedAttempts,
   migrateLegacyPublishingQueueItems,
+  runStoreTransaction,
+  saveAutonomousReplyGrantState,
   saveQueueItem,
   transitionPublicationAttempt,
+  updateAutonomousReplyDecision,
 } from './store.js';
 
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
@@ -65,23 +70,67 @@ export function confirmPublicationAttemptNotSent(attemptId, {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || evidence.sendBoundaryCrossed !== false) {
     throw new Error('confirmed_not_sent requires evidence.sendBoundaryCrossed=false.');
   }
-  const attempt = transitionPublicationAttempt(attemptId, {
-    state: 'confirmed_not_sent',
-    reconciliationEvidence: evidence,
-    closureReason: reason,
-    lastError: reason,
-    now,
+  return runStoreTransaction(() => {
+    const current = requireAttempt(attemptId);
+    const attempt = current.state === 'confirmed_not_sent'
+      ? current
+      : transitionPublicationAttempt(attemptId, {
+        state: 'confirmed_not_sent',
+        reconciliationEvidence: evidence,
+        closureReason: reason,
+        lastError: reason,
+        now,
+      });
+    const queueItem = queueForAttempt(attempt);
+    const saved = queueItem.status === 'publishing'
+      ? saveQueueItem({
+        ...queueItem,
+        status: 'approved',
+        publishStartedAt: null,
+        publishError: String(reason),
+      })
+      : queueItem;
+
+    let autonomousReplyDecision = null;
+    let autonomousReplyBudgetRefunded = false;
+    if (attempt.authoritySnapshot?.type === 'autonomous_reply' && Number.isInteger(Number(attempt.authoritySnapshot?.decisionId))) {
+      const decision = getAutonomousReplyDecision(Number(attempt.authoritySnapshot.decisionId));
+      const sameClaim = decision
+        && decision.decision === 'sending'
+        && decision.sentAt == null
+        && !decision.outputTweetId
+        && !decision.outputUrl
+        && Number(decision.queueItemId) === Number(attempt.queueItemId)
+        && String(decision.candidateKey || '') === String(attempt.candidateKey || '')
+        && String(decision.targetTweetId || '') === String(attempt.targetTweetId || '')
+        && Number(decision.grantRevision) === Number(attempt.authoritySnapshot.grantRevision)
+        && Number(decision.claimedAt) === Number(attempt.claimedAt);
+      if (sameClaim) {
+        autonomousReplyDecision = updateAutonomousReplyDecision(decision.id, {
+          decision: 'eligible_live',
+          claimedAt: null,
+          updatedAt: Number(now),
+        });
+        const grant = getAutonomousReplyGrantState();
+        if (grant
+          && Number(grant.revision) === Number(attempt.authoritySnapshot.grantRevision)
+          && Number(grant.budgetUsed || 0) > 0) {
+          saveAutonomousReplyGrantState({
+            ...grant,
+            budgetUsed: Number(grant.budgetUsed || 0) - 1,
+          });
+          autonomousReplyBudgetRefunded = true;
+        }
+      }
+    }
+
+    return {
+      attempt,
+      queueItem: saved,
+      autonomousReplyDecision,
+      autonomousReplyBudgetRefunded,
+    };
   });
-  const queueItem = queueForAttempt(attempt);
-  const saved = queueItem.status === 'publishing'
-    ? saveQueueItem({
-      ...queueItem,
-      status: 'approved',
-      publishStartedAt: null,
-      publishError: String(reason),
-    })
-    : queueItem;
-  return { attempt, queueItem: saved };
 }
 
 export function closePublicationAttemptUnresolved(attemptId, {
