@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { getGrowthAgentSchedulerStatus, updateGrowthAgentSchedulerStatus } from './growth_agent_runtime.js';
+import {
+  getGrowthAgentSchedulerStatus,
+  renewGrowthAgentRuntimeHeartbeat,
+  updateGrowthAgentSchedulerStatus,
+} from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { getGrowthOperatorDelegation, listGrowthRuns } from './store.js';
 
@@ -60,7 +64,7 @@ Then follow the run state rather than improvising a parallel workflow:
 3. Use \`growth-next\`, \`inspect\`, relationship/context commands, exact live-source inspection, owner-supplied evidence from \`docs/OWNER_PROFILE_EVIDENCE.md\`, and primary sources where claims are material. Treat heuristic scores and the current Growth Focus taxonomy as advisory evidence, not cages. When your live judgment materially differs, call \`operator-priority-set\` with this runId/sessionId, a 0-100 score, a concrete reason, and the signals that changed your view (for example momentum, crowding, source quality, relationship value, current viral/style context, or Hamza fit). If a clearly durable developer/builder identity or community term is missing from Growth Focus, use \`growth-focus-expand\` under the active run to extend the relevant group (or add a justified Core/Adjacent group) with a concrete reason, then re-evaluate. Do not expand from random off-topic noise or promote explicit exclusion terms. The source itself need not be technical when the social act has a coherent builder-identity, relationship, community, or profile-discovery purpose. The active-run score becomes the execution priority while the heuristic remains visible for comparison. Do not act on a weak social paraphrase when verification matters.
 4. Supply purpose/behavior judgment through canonical bridge commands. Preserve Hamza's persona and the rule that not every useful social act needs a technical lesson.
 5. Choose Reply, Quote, Repost, Original, or silence dynamically. Likes are not part of the dependable-autonomy contract yet and must not be performed invisibly.
-6. When \`growth-run-next\` recommends \`claim_action\` and includes a \`claim\` object, treat that object as the canonical next executable action. For \`lane=main_feed\`, call its \`browser-publish-claim\` with exactly the supplied queueItemId plus this runId/sessionId. Do not reject browser-owned work merely because the background daemon lacks X API credentials. For an eligible Reply, use \`browser-reply-claim\` with this runId/sessionId. A successful claim returns an attemptId. Re-observe the exact target immediately before mutation. Immediately before the consequential browser mutation call \`publication-attempt-send-start\` with that attemptId plus this runId and sessionId. Execute once. Verify the live result structurally. Then call \`record-action\` with the same attemptId and positive publicationVerification.
+6. When \`growth-run-next\` recommends \`claim_action\` and includes a \`claim\` object, treat that object as the canonical next executable action. For \`lane=main_feed\`, call its \`browser-publish-claim\` with exactly the supplied queueItemId plus this runId/sessionId. Do not reject browser-owned work merely because the background daemon lacks X API credentials. For an eligible Reply, use \`browser-reply-claim\` with this runId/sessionId. A successful claim returns an attemptId whose immutable claim already stores run/session provenance. Re-observe the exact target immediately before mutation. Immediately before the consequential browser mutation call \`publication-attempt-send-start\` with that attemptId only. Execute once. Verify the live result structurally. Then call \`record-action\` with the same attemptId and positive publicationVerification.
 7. Re-read \`growth-run-next\` after durable transitions. If it names an executable claim, either execute that claim or record the specific live/policy evidence that invalidated it; do not silently reinterpret it as daemon-owned work. Continue only while another worthwhile eligible action exists and within the run ceilings.
 8. Finish via \`growth-run-finish\` with an accurate structured outcome and stop reason. If a capability/auth/authority blocker prevents useful continuation, record that blocker rather than bypassing policy.
 
@@ -119,6 +123,15 @@ async function runCodexWithInput(command, prompt) {
   });
 }
 
+function startRuntimeHeartbeatPump(adapterType, sessionId) {
+  const renew = () => {
+    try { renewGrowthAgentRuntimeHeartbeat({ adapterType, sessionId }); } catch {}
+  };
+  const timer = setInterval(renew, 60_000);
+  timer.unref();
+  return () => clearInterval(timer);
+}
+
 async function main() {
   const now = Date.now();
   const scheduledInvocation = String(process.env.X_GROWTH_AGENT_SCHEDULED || '') === '1';
@@ -171,6 +184,7 @@ async function main() {
   const prompt = operatorPrompt({ runtime: config.runtime, sessionId });
   const command = commandFor(config, prompt);
 
+  const stopHeartbeatPump = startRuntimeHeartbeatPump(`${config.runtime}_unattended`, sessionId);
   try {
     if (config.runtime === 'codex') await runCodexWithInput(command, prompt);
     else await runChild(command.executable, command.args);
@@ -199,6 +213,8 @@ async function main() {
       lastError: String(error?.message || error),
     });
     throw error;
+  } finally {
+    stopHeartbeatPump();
   }
 }
 

@@ -120,7 +120,7 @@ When a source needs refreshing, run the explicit maintenance primitive:
 npm run agent -- growth-refresh <<<'{"kind":"x_momentum"}'
 ```
 
-Omit `kind` to refresh the pull-capable discovery sources owned by source maintenance. Personalized `x_for_you` is intentionally browser-agent pushed, not an HTTP/background pull source; when a Growth Run requests it, collect it from the authenticated X browser and submit `x-for-you-ingest` with `accountHandle`, adapter/session/run, and browser provenance. Refresh is allowed to be slow or degraded; next-action selection is not. If a refresh outlives one harness RPC, keep operating from the visible last-known-good snapshot rather than issuing duplicate refreshes.
+Omit `kind` to refresh the pull-capable discovery sources owned by source maintenance. Personalized `x_for_you` is intentionally browser-agent pushed, not an HTTP/background pull source; when a Growth Run requests it, collect it from the authenticated X browser and submit `x-for-you-ingest` with `accountHandle`, adapter/session/run, and browser provenance. Ingestion immediately evaluates/materializes only those observed For You candidates into engagement work. `engage-refresh` is therefore a bounded local re-evaluation tool, not a global source-maintenance prerequisite. Pull-source refresh may still be slow or degraded; next-action selection is not. If a source refresh outlives one harness RPC, keep operating from the visible last-known-good snapshot rather than issuing duplicate refreshes.
 
 The response includes:
 
@@ -169,7 +169,7 @@ Before a live action:
 9. send once;
 10. verify the live output text and route-specific structure before reconciling through `record-action` with the same `attemptId`.
 
-If a consequential click is ambiguous, do not blind-retry. Establish whether the action exists on the source thread, account profile, search, or network mutation result first. Failure to find it is not enough to claim `confirmed_not_sent`: keep the attempt investigating, or close it `closed_unresolved` with evidence after useful recovery is exhausted. The exact action remains duplicate-fenced while unrelated future work can continue.
+If a consequential click is ambiguous, do not blind-retry. Browser action completion and an unchanged composer are not publication outcomes: X can accept the visible action before the resulting post becomes observable. Establish whether the action exists on the source thread, account profile, search, or network mutation result first. `confirmed_not_sent` is allowed only with definitive proof that the mutation was never dispatched or was rejected before acceptance; otherwise keep the attempt investigating, or close it `closed_unresolved` with evidence after useful recovery is exhausted. The exact action remains duplicate-fenced while unrelated future work can continue.
 
 ### Record live truth without a manual ingest round trip
 

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { normalizeBehaviorDecision } from './behavior.js';
 import { applyWriterOutput, buildWriterPacket, createDraftScaffold, scoreDraft } from './drafting.js';
 import { sendAutonomousEngagementReply } from './pipeline.js';
-import { assessStrategicRelevance } from './strategy.js';
+import { assessActionRelevance } from './strategy.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import {
   claimAutonomousReplyDecision,
@@ -312,37 +312,38 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
   }
   if (item.engagement?.expiry?.effectiveExpired === true) return { decision: 'skipped', reason: boundedReason('EXPIRED', 'The opportunity expired without an active-conversation override.') };
   const draft = getDraftByCandidate(item.candidateKey);
-  const operatorDraft = allowOperatorDraft
+  const operatorDraftEligible = Boolean(allowOperatorDraft
     && !item.humanApprovedAt
     && String(draft?.body || '').trim()
     && (
       String(item.behavior?.selectionSource || '') === 'operator'
       || String(draft?.editor?.behavior?.selectionSource || '') === 'operator'
-    );
-  if (['approved', 'publishing', 'failed'].includes(item.status) || item.humanApprovedAt || (item.status === 'needs_review' && !operatorDraft)) {
+    ));
+  if (['approved', 'publishing', 'failed'].includes(item.status) || item.humanApprovedAt || (item.status === 'needs_review' && !operatorDraftEligible)) {
     return { decision: 'skipped', reason: boundedReason('HUMAN_WORKFLOW_ACTIVE', 'An existing human review/send state is already active for this reply.') };
   }
-  if (String(draft?.body || '').trim() && !operatorDraft) return { decision: 'skipped', reason: boundedReason('HUMAN_DRAFT_PRESENT', 'A reply draft already exists; autonomous mode will not overwrite human work.') };
+  if (String(draft?.body || '').trim() && !operatorDraftEligible) return { decision: 'skipped', reason: boundedReason('HUMAN_DRAFT_PRESENT', 'A reply draft already exists; autonomous mode will not overwrite human work.') };
   const health = getAccountHealthSummary().health;
   if (health.state === 'constrained') return { decision: 'skipped', reason: boundedReason('ACCOUNT_CONSTRAINED', 'Supported Account Health evidence currently constrains replies.') };
-  const growthFit = assessStrategicRelevance(candidate, { humanOverride: item.relevance?.humanOverride || null });
+  const parentConversation = item.parentOurTweetId
+    ? listRecentOurConversationPosts({ limit: 100 }).find((entry) => String(entry.tweetId) === String(item.parentOurTweetId))
+    : null;
+  const growthFit = assessActionRelevance(candidate, {
+    humanOverride: item.relevance?.humanOverride || null,
+    pipeline: 'reply',
+    behavior,
+    relationship: profile,
+    conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
+  });
   const minPriority = sourceClass === 'active' ? AUTONOMOUS_ACTIVE_PRIORITY_MIN : AUTONOMOUS_COLD_PRIORITY_MIN;
   const currentPriority = Number(item.priority || 0);
   if (currentPriority < minPriority) {
     return { decision: 'skipped', reason: boundedReason('AUTONOMOUS_VALUE_TOO_LOW', `Internal autonomous value threshold is ${minPriority}; current EngagePriority is ${Math.round(currentPriority)}.`) };
   }
-  if (intent === 'social_reaction') {
-    const established = ['responsive', 'recurring', 'connected', 'mutual'].includes(profile?.relationshipStage);
-    const momentumPurpose = sourceClass === 'momentum'
-      && ['celebration', 'humor', 'taste', 'social_presence', 'support', 'de_escalation'].includes(String(behavior?.primaryPurpose || ''));
-    if (sourceClass !== 'active' && !established && !momentumPurpose) {
-      return { decision: 'review', reason: boundedReason('SOCIAL_ACTION_CONTEXT_WEAK', 'The social-only behavior is valid in principle but lacks enough relationship or high-momentum context for autonomous send authority.') };
-    }
-  }
   if (grant.mode === 'live' && Number(grant.budgetUsed || 0) >= Number(grant.liveBudget || 0)) {
     return { decision: 'skipped', reason: boundedReason('LIVE_BUDGET_EXHAUSTED', 'The explicit operator live safety budget has no remaining capacity.') };
   }
-  return { decision: 'continue', growthFit, health, operatorDraft: operatorDraft || null };
+  return { decision: 'continue', growthFit, health, operatorDraft: operatorDraftEligible ? draft : null };
 }
 
 async function generateExactReply(item, candidate, profile, grant, strategy) {

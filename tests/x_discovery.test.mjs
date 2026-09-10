@@ -130,6 +130,7 @@ test('authenticated For You ingest validates, normalizes, deduplicates, and reco
   const payload = {
     kind: 'x_for_you',
     observedAt,
+    accountHandle: 'ham_zax',
     posts: [
       {
         tweetId: firstId,
@@ -236,6 +237,7 @@ test('invalid or zero-valid For You batches preserve last-known-good snapshot an
   const zeroValid = discovery.ingestXForYouObservation({
     kind: 'x_for_you',
     observedAt: zeroValidAt,
+    accountHandle: 'ham_zax',
     posts: [{
       tweetId: promotedId,
       url: `https://x.com/promoted/status/${promotedId}`,
@@ -477,6 +479,7 @@ test('agent bridge exposes canonical For You ingest and signal-watchlist command
   const ingested = runAgent('x-for-you-ingest', {
     kind: 'x_for_you',
     observedAt,
+    accountHandle: 'ham_zax',
     posts: [{
       tweetId,
       url: `https://x.com/SignalDev/status/${tweetId}`,

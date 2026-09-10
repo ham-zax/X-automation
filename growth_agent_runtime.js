@@ -1,8 +1,9 @@
+import { OPERATOR_LEASE_TTL_MS } from './operator_lease.js';
 import { getAppState, getGrowthRun, setAppState } from './store.js';
 
 const RUNTIME_STATE_KEY = 'growth_agent_runtime_v1';
 const SCHEDULER_STATE_KEY = 'growth_agent_scheduler_v1';
-const DEFAULT_HEARTBEAT_TTL_MS = 5 * 60_000;
+const DEFAULT_HEARTBEAT_TTL_MS = OPERATOR_LEASE_TTL_MS;
 
 function readJsonState(key) {
   try {
@@ -69,6 +70,24 @@ export function heartbeatGrowthAgentRuntime({
   };
   setAppState(RUNTIME_STATE_KEY, JSON.stringify(state));
   return getGrowthAgentRuntimeStatus({ now: timestamp });
+}
+
+export function renewGrowthAgentRuntimeHeartbeat({ adapterType, sessionId, now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Growth agent runtime heartbeat renewal requires numeric now.');
+  const current = getGrowthAgentRuntimeStatus({ now: timestamp });
+  const adapter = String(adapterType || '').trim();
+  const session = String(sessionId || '').trim();
+  if (!current.lastSeenAt || current.adapterType !== adapter || current.sessionId !== session) return current;
+  return heartbeatGrowthAgentRuntime({
+    adapterType: current.adapterType,
+    sessionId: current.sessionId,
+    runId: current.runId,
+    accountHandle: current.accountHandle,
+    capabilities: current.capabilities,
+    lastError: current.lastError,
+    now: timestamp,
+  });
 }
 
 export function detachGrowthAgentRuntime({ now = Date.now() } = {}) {

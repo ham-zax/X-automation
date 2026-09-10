@@ -258,10 +258,11 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
     replyVisibility: replyVisibility.score,
   };
   const missingComponents = Object.keys(PRIORITY_WEIGHTS).filter((name) => components[name] == null);
-  const basePriority = missingComponents.length
-    ? null
-    : round(Object.entries(PRIORITY_WEIGHTS)
-      .reduce((sum, [name, weight]) => sum + components[name] * weight, 0));
+  const availableComponents = Object.entries(PRIORITY_WEIGHTS).filter(([name]) => components[name] != null);
+  const availableWeight = availableComponents.reduce((sum, [, weight]) => sum + weight, 0);
+  const basePriority = availableWeight > 0
+    ? round(availableComponents.reduce((sum, [name, weight]) => sum + components[name] * weight, 0) / availableWeight)
+    : null;
 
   const pressure = softPressureModifier(opportunity);
   const modifiers = {
@@ -315,9 +316,6 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
   }
   if (!finite(now)) rejectionReasons.push(rejection('MISSING_NOW', 'A caller-supplied now timestamp is required for deterministic freshness and expiry.'));
   if (timestamp == null) rejectionReasons.push(rejection('MISSING_SOURCE_TIMESTAMP', 'A source/response timestamp is required for freshness and expiry.'));
-  for (const component of missingComponents) {
-    rejectionReasons.push(rejection('MISSING_PRIORITY_COMPONENT', `Missing required EngagePriority component: ${component}.`));
-  }
   if (opportunity.nearDuplicate === true || opportunity.exactDuplicate === true) {
     rejectionReasons.push(rejection('NEAR_DUPLICATE', 'Caller-supplied duplicate evidence marks the proposed reply as exact/near-duplicate.'));
   }
@@ -369,6 +367,7 @@ export function scoreEngagementOpportunity(opportunity = {}, { now, learnedRules
       model: 'phase1c-purpose-aware-engage-priority',
       weights: { ...PRIORITY_WEIGHTS },
       missingComponents,
+      priorityEvidenceCoverage: round(availableWeight * 100),
       softPressure: pressure,
       healthState: opportunity.healthState || 'healthy',
       healthReasons: Array.isArray(opportunity.healthReasons) ? opportunity.healthReasons : [],
@@ -537,7 +536,9 @@ export async function refreshEngagementOpportunities({
   minTargetScore = 35,
   targetSinceHours = 24,
   responseSinceHours = 72,
+  refreshResponses = true,
   refreshTargetTimelines = true,
+  candidateKeys = [],
   creatorRefresh = refreshCreatorLatestDiscovery,
 } = {}) {
   const [store, tech, opportunity, strategy, health] = await Promise.all([
@@ -723,7 +724,7 @@ export async function refreshEngagementOpportunities({
     return item;
   };
 
-  if (ourPosts.length) {
+  if (refreshResponses && ourPosts.length) {
     const responseRead = await tech.fetchXTargetResponses(
       [],
       ourPosts.map((item) => item.tweetId),
@@ -791,22 +792,44 @@ export async function refreshEngagementOpportunities({
     }
   }
 
-  for (const [snapshotKind, sourceClass] of [['x_latest', 'normal'], ['x_momentum', 'momentum']]) {
-    for (const candidate of store.getDiscoverSnapshot(snapshotKind).candidates.slice(0, 60)) {
-      if (candidate.source !== 'x') continue;
+  const requestedKeys = [...new Set((Array.isArray(candidateKeys) ? candidateKeys : []).map((key) => String(key || '').trim()).filter(Boolean))];
+  if (requestedKeys.length) {
+    for (const key of requestedKeys) {
+      const candidate = store.getCandidate(key);
+      if (!candidate || candidate.source !== 'x') continue;
+      const sourceKinds = store.getCandidateSourceKinds(candidate.key);
+      const source = sourceKinds.includes('x_for_you') ? 'x_for_you'
+        : sourceKinds.includes('x_momentum') ? 'x_momentum'
+          : sourceKinds.includes('x_latest') ? 'x_latest' : 'research_candidate';
+      const sourceClass = sourceKinds.includes('x_momentum') ? 'momentum' : 'normal';
       const username = sourceUsername(candidate);
       const profile = username ? store.getRelationshipProfile(username) : null;
       persistOpportunity(candidate, profile, {
-        source: snapshotKind,
+        source,
         sourceClass,
         targetUsername: username,
         targetTweetId: tweetIdFromCandidate(candidate),
         engagementKind: 'initial_reply',
       });
     }
+  } else {
+    for (const [snapshotKind, sourceClass] of [['x_for_you', 'normal'], ['x_latest', 'normal'], ['x_momentum', 'momentum']]) {
+      for (const candidate of store.getDiscoverSnapshot(snapshotKind).candidates.slice(0, 60)) {
+        if (candidate.source !== 'x') continue;
+        const username = sourceUsername(candidate);
+        const profile = username ? store.getRelationshipProfile(username) : null;
+        persistOpportunity(candidate, profile, {
+          source: snapshotKind,
+          sourceClass,
+          targetUsername: username,
+          targetTweetId: tweetIdFromCandidate(candidate),
+          engagementKind: 'initial_reply',
+        });
+      }
+    }
   }
 
-  for (const queueItem of store.listQueueItems({ limit: 250 })) {
+  for (const queueItem of requestedKeys.length ? [] : store.listQueueItems({ limit: 250 })) {
     if (queueItem.lane === 'engagement'
       || queueItem.recommendedPipeline !== 'reply'
       || queueItem.pipeline !== 'triage'
@@ -827,7 +850,7 @@ export async function refreshEngagementOpportunities({
 
   let expired = 0;
   for (const item of store.listEngagementItems({ includeExpired: true, limit: 500 })) {
-    if (seenItemIds.has(item.id) || ['ignored', 'expired', 'published', 'failed'].includes(item.status)) continue;
+    if (seenItemIds.has(item.id) || ['ignored', 'expired', 'published', 'failed', 'unresolved'].includes(item.status)) continue;
     if (item.expiresAt != null && now >= item.expiresAt) {
       store.saveQueueItem({ ...item, status: 'expired', humanApprovedAt: null, approvedText: null });
       expired++;
@@ -841,6 +864,7 @@ export async function refreshEngagementOpportunities({
     newOpportunities: items.filter((item) => item.engagementKind === 'initial_reply'),
     refreshed: createdOrRefreshed.length,
     rejected: rejected.length,
+    rejections: requestedKeys.length ? rejected : [],
     expired,
     errors,
   };

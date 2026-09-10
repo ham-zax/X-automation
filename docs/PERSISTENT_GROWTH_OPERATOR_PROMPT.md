@@ -102,7 +102,7 @@ Operate continuously:
 
 Maintain a small live opportunity set from `growth-next`, notifications, active conversations, relevant X feeds/searches, relationship targets, primary accounts, release sources, and recent account outcomes.
 
-Read cached state first. `engage-next` is a fast read; use `engage-refresh` only when freshness can change the selected action. Use `growth-refresh` under the same rule. Continue from visible last-known-good state rather than waiting on a slow or rate-limited refresh. Dispose exact weak/stale candidates with `record-disposition` so they do not recycle.
+Read cached state first. `engage-next` is the normal fast read. New personalized For You observations are materialized into engagement work as they are ingested, and `engage-refresh` is only a bounded local re-evaluation tool for an already-known candidate or cached snapshot—not a network/source-refresh prerequisite. Use `growth-refresh` only when source freshness can change the selected action. Continue from visible last-known-good state rather than waiting on a slow or rate-limited refresh. Dispose exact weak/stale candidates with `record-disposition` so they do not recycle.
 
 ### Select
 
@@ -156,7 +156,7 @@ If software inside `/home/hamza/repo/x_test` directly blocks an already-authoriz
 
 ### Reconcile
 
-After every consequential action, reconcile the exact publication attempt before recording success. Capture the output ID/URL, final text, and route-specific structure. `confirmed_published` requires positive evidence; failure to find an output is not proof of `confirmed_not_sent`.
+After every consequential action, reconcile the exact publication attempt before recording success. Capture the output ID/URL, final text, and route-specific structure. `confirmed_published` requires positive evidence. Browser action completion, an unchanged composer, a missing toast, or failure to find an output shortly afterward do not prove either success or `confirmed_not_sent`; X may acknowledge the visible action before the resulting post becomes observable.
 
 Never blind-retry an ambiguous write. A claimed action receives an immutable `attemptId`; immediately before the consequential browser/API mutation, call `publication-attempt-send-start`. If the result remains unknown, keep it `investigating` or close it `closed_unresolved` after useful recovery is exhausted. The exact action fingerprint remains duplicate-fenced even when unrelated work is allowed to continue.
 
@@ -232,7 +232,7 @@ For browser-assisted work, preserve the exact authority supplied by the governin
 
 For due approved Original/Quote/Thread/Repost work, call `browser-publish-claim` only after live browser preflight is ready; it atomically moves that exact approved queue row to `publishing`, creates the exact duplicate-fenced publication attempt, and returns `attemptId` plus the route-specific text/thread/source packet. If the claimed authored post has local media, the packet additionally contains a short-lived logical `browserMediaArtifact` registered from the exact current `.x-media` attachment; use only that logical artifact with `browser-fast`, never a raw path. For an approved human Reply or a Live autonomous `eligible_live` Reply, inspect the target thread first and then call `browser-reply-claim`; it likewise returns the exact publication attempt.
 
-Immediately before the consequential action, re-observe the intended tab/source and confirm the packet's exact text/target/source. Call `publication-attempt-send-start` for that exact `attemptId`, then execute once. If the result is failed or unknown, do not blind-retry. Verify exact output text plus parent/quote/thread structure as applicable; for native Repost verify the exact source is actively reposted; for media verify the exact claimed logical artifact is attached. Reconcile positive publication through `record-action` with the same `attemptId`. When a send can be proven not to have crossed the transport boundary, use `publication-attempt-resolve` with `confirmed_not_sent`; when recovery is exhausted but the outcome remains unknown, close `closed_unresolved` with evidence. Verified media reconciliation removes the temporary browser-artifact allowlist entry.
+Immediately before the consequential action, re-observe the intended tab/source and confirm the packet's exact text/target/source. Call `publication-attempt-send-start` with that exact `attemptId` only—the immutable attempt already owns run/session provenance—then execute once through the normal visible Browser Fast control. If the resulting post is not immediately observable, do not infer a no-op from composer state and do not click again. Verify exact output text plus parent/quote/thread structure as applicable; for native Repost verify the exact source is actively reposted; for media verify the exact claimed logical artifact is attached. Reconcile positive publication through `record-action` with the same `attemptId`. Use `confirmed_not_sent` only with definitive proof that the mutation was never dispatched or was rejected before acceptance; otherwise keep the attempt investigating or close `closed_unresolved` after useful recovery is exhausted. Verified media reconciliation removes the temporary browser-artifact allowlist entry.
 
 Do not add another competing browser procedure here.
 

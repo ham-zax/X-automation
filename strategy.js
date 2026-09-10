@@ -727,6 +727,66 @@ export function assessStrategicRelevance(candidate = {}, { objective, humanOverr
   };
 }
 
+export function assessActionRelevance(candidate = {}, {
+  objective,
+  humanOverride = null,
+  pipeline = '',
+  behavior = null,
+  relationship = null,
+  conversationRelevanceCandidate = null,
+} = {}) {
+  const direct = assessStrategicRelevance(candidate, { objective, humanOverride });
+  if (direct.allowed || direct.state === 'unknown' || pipeline !== 'reply') return direct;
+  if (direct.reasonCodes.includes('OFF_GROUP_MATCH')) return direct;
+
+  if (conversationRelevanceCandidate) {
+    const conversation = assessStrategicRelevance(conversationRelevanceCandidate, { objective, humanOverride });
+    if (conversation.allowed) {
+      return {
+        ...conversation,
+        state: 'contextual',
+        reasonCodes: [...new Set([...(conversation.reasonCodes || []), 'ACTIVE_CONVERSATION_RELEVANCE'])],
+        explanation: `Reply relevance comes from the in-scope parent conversation. ${conversation.explanation}`,
+        directCandidateRelevance: direct,
+      };
+    }
+  }
+
+  const selectedBehavior = normalizeBehaviorDecision(behavior || {}, { pipeline: 'reply' });
+  const contextualPurposes = new Set([
+    'relationship',
+    'support',
+    'celebration',
+    'humor',
+    'learning',
+    'de_escalation',
+    'social_presence',
+    'discovery',
+  ]);
+  const relationshipSignals = [
+    ...(Array.isArray(relationship?.primaryTopics) ? relationship.primaryTopics : []),
+    ...(Array.isArray(relationship?.nicheTags) ? relationship.nicheTags : []),
+    ...(Array.isArray(relationship?.matchedKeywords) ? relationship.matchedKeywords : []),
+  ];
+  const relationshipRelevant = relationshipSignals.length > 0
+    || Number(relationship?.relevanceScore || 0) > 0
+    || Number(relationship?.targetScore || 0) >= 35;
+  if (selectedBehavior.decision === 'ACT'
+    && contextualPurposes.has(String(selectedBehavior.primaryPurpose || ''))
+    && relationshipRelevant) {
+    return {
+      ...direct,
+      state: 'contextual',
+      allowed: true,
+      reasonCodes: [...new Set([...(direct.reasonCodes || []), 'RELEVANT_RELATIONSHIP_CONTEXT'])],
+      explanation: 'The isolated reply target has no technical-keyword match, but the selected social/relationship act is grounded in an existing relevant builder/developer relationship.',
+      directCandidateRelevance: direct,
+    };
+  }
+
+  return direct;
+}
+
 export function classifyAudienceProfile(profile) {
   const username = String(profile?.username || '').replace(/^@/, '');
   const displayName = String(profile?.displayName || username);

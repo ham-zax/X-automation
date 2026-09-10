@@ -143,16 +143,16 @@ The fingerprint binds the route, candidate/source identity, target identity when
 Immediately before invoking the consequential browser/API mutation, record:
 
 ```bash
-printf '%s\n' '{"attemptId":"<attempt-id>","runId":"<run-id>","sessionId":"<session>","preSendEvidence":{...}}' | npm run agent -- publication-attempt-send-start
+printf '%s\n' '{"attemptId":"<attempt-id>","preSendEvidence":{...}}' | npm run agent -- publication-attempt-send-start
 ```
 
-This command revalidates the relevant standing authority and Account Health. For a run-bound attempt it also requires the same Growth Run to still own the active operator lease, and the supplied session must match that lease. It does not prove that the mutation succeeded.
+This command revalidates the relevant standing authority and Account Health. For a run-bound attempt it derives immutable run/session provenance from the claim and requires that same Growth Run/session to still own the active operator lease. Callers do not repeat stored IDs. It does not prove that the mutation succeeded.
 
 ### Reconciliation
 
 `confirmed_published` requires positive live/transport evidence and route-specific structure. Browser publication should normally reconcile through `record-action` with the same attempt ID plus structural `publicationVerification`.
 
-`confirmed_not_sent` is valid only when evidence proves the send boundary was not crossed or an authoritative transport rejection proves the operation was not accepted. Failure to find a post on X is not proof of not-sent.
+`confirmed_not_sent` is retry authority, so it requires definitive evidence that the mutation was never dispatched or that the transport rejected it before acceptance. The bridge records that proof explicitly as `evidence.notSentProof.kind = mutation_not_dispatched | transport_rejected`. Composer persistence, a missing toast, or failure to find a post on X—even after a short wait—are not proof of not-sent.
 
 `investigating` means useful reconciliation remains available.
 
@@ -179,7 +179,7 @@ Read these dimensions independently:
 
 `AUTO_POST=true` means only that automatic publication is requested when a compliant transport exists. It is not proof that X API credentials or an authenticated browser-agent runtime are available.
 
-A heartbeat proves recent runtime attachment only. Consequential authority and capability are rechecked at claim/send time.
+A heartbeat proves recent runtime attachment only. Growth Run begin/resume/next and run-bound claim/send activity maintain liveness automatically for the operator-lease lifetime; the reasoning model does not schedule heartbeat housekeeping. Consequential authority and capability are still rechecked at claim/send time.
 
 ## Unattended runner
 

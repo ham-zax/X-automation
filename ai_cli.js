@@ -9,6 +9,9 @@ const OPENCODE_HOME_BIN = path.join(homedir(), '.opencode', 'bin');
 const OPENCODE_HOME_COMMAND = path.join(OPENCODE_HOME_BIN, 'opencode');
 const OPENCODE_COMMAND = String(process.env.OPENCODE_BIN || '').trim()
   || (existsSync(OPENCODE_HOME_COMMAND) ? OPENCODE_HOME_COMMAND : 'opencode');
+const AGY_HOME_COMMAND = path.join(homedir(), '.local', 'bin', 'agy');
+const AGY_COMMAND = String(process.env.AGY_BIN || '').trim()
+  || (existsSync(AGY_HOME_COMMAND) ? AGY_HOME_COMMAND : 'agy');
 if (path.isAbsolute(OPENCODE_COMMAND)) {
   const binDir = path.dirname(OPENCODE_COMMAND);
   const entries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean);
@@ -19,7 +22,7 @@ const RUNTIME_COMMANDS = Object.freeze({
   codex: 'codex',
   opencode: OPENCODE_COMMAND,
   opencode2: 'opencode2',
-  agy: 'agy',
+  agy: AGY_COMMAND,
 });
 const CODEX_CONFIG_CACHE_MS = 5 * 60_000;
 const codexConfigCache = new Map();
@@ -415,7 +418,7 @@ async function runAgyStructuredAI(profile, { prompt, schema, timeoutMs }) {
     ];
     if (profile.reasoning) args.push('--effort', reasoning);
     args.push('--print', prompt);
-    const { stdout } = await runProcess('agy', args, { timeoutMs, maxOutputChars: 2_000_000, cwd: dir });
+    const { stdout } = await runProcess(AGY_COMMAND, args, { timeoutMs, maxOutputChars: 2_000_000, cwd: dir });
     const body = parseAgyJson(stdout, 'structured execution', { acceptStructuredOutput: true });
     const structured = body.structured_output ?? body.response;
     if (structured == null || structured === '') {
@@ -555,7 +558,7 @@ export async function listCliAiCatalog(profile, { timeoutMs = 15_000, refresh = 
   }
   if (profile.runtime === 'agy') {
     try {
-      const { stdout } = await runProcess('agy', ['--output-format', 'json', 'models'], { timeoutMs, maxOutputChars: 1_000_000 });
+      const { stdout } = await runProcess(AGY_COMMAND, ['--output-format', 'json', 'models'], { timeoutMs, maxOutputChars: 1_000_000 });
       const body = parseAgyJson(stdout, 'model catalog');
       const entries = body?.command?.name === 'models' && Array.isArray(body?.command?.data?.models)
         ? body.command.data.models

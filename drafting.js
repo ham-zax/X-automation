@@ -9,7 +9,7 @@ import {
   validateBehaviorDecision,
 } from './behavior.js';
 import { getPersonaSlice, selectBehaviorDecision } from './persona.js';
-import { assessStrategicRelevance } from './strategy.js';
+import { assessActionRelevance } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
 
 const PLACEHOLDER = /\[[^\]]+\]/;
@@ -590,19 +590,19 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'CORRECTION_EVIDENCE_MISSING', 'A consequential correction requires an inspectable source, evidence reference, or explicit attribution.');
   }
 
-  let growthFit = assessStrategicRelevance(candidate, {
+  const growthFit = assessActionRelevance(candidate, {
     objective: growthObjective,
     humanOverride: relevanceOverride,
+    pipeline,
+    behavior,
+    relationship,
+    conversationRelevanceCandidate,
   });
-  if (pipeline === 'reply' && !growthFit.allowed && conversationRelevanceCandidate) {
-    const conversationGrowthFit = assessStrategicRelevance(conversationRelevanceCandidate, {
-      objective: growthObjective,
-      humanOverride: relevanceOverride,
-    });
-    if (conversationGrowthFit.allowed) {
-      growthFit = conversationGrowthFit;
-      addIssue(warnings, 'ACTIVE_CONVERSATION_RELEVANCE_INHERITED', 'Reply relevance is inherited from the in-focus parent conversation instead of the isolated response text.');
-    }
+  if (growthFit.reasonCodes?.includes('ACTIVE_CONVERSATION_RELEVANCE')) {
+    addIssue(warnings, 'ACTIVE_CONVERSATION_RELEVANCE_INHERITED', 'Reply relevance is inherited from the in-focus parent conversation instead of the isolated response text.');
+  }
+  if (growthFit.reasonCodes?.includes('RELEVANT_RELATIONSHIP_CONTEXT')) {
+    addIssue(warnings, 'RELATIONSHIP_RELEVANCE_INHERITED', 'Reply relevance is established by the existing relevant builder/developer relationship and selected social purpose.');
   }
   if (growthFit.state === 'unknown') {
     checks.growthFocus = false;
@@ -831,7 +831,7 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
 
   const resourcePromise = /\b(?:here(?:'s| is)|check out|try|install|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text);
   const explicitUrl = /https?:\/\/\S+/i.test(text);
-  const nativeSourcePath = pipeline === 'quote' && candidate?.source === 'x';
+  const nativeSourcePath = ['quote', 'reply'].includes(pipeline) && candidate?.source === 'x';
   const sourcePathReady = !resourcePromise || explicitUrl || nativeSourcePath;
   if (!sourcePathReady) blockers.push({ code: 'RESOURCE_ACTION_PATH_MISSING', message: 'The draft promises a resource/tool but gives the reader no usable source or action path.' });
   const generationStrategyStale = context.hasGenerationProvenance === true && (

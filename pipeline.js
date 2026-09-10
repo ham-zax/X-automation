@@ -3,8 +3,9 @@ import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { selectBehaviorDecision } from './persona.js';
 import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { scoreOpportunity } from './opportunity.js';
+import { getOperatorLeaseStatus } from './operator_lease.js';
 import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
-import { assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
+import { assessActionRelevance, assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
 import {
   confirmPublicationAttemptPublished,
   markPublicationAttemptInvestigating,
@@ -22,6 +23,7 @@ import {
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
   getGrowthOperatorDelegation,
+  getGrowthRun,
   getLatestEditorialSelectionForQueueItem,
   getLatestPublicationAttemptForQueueItem,
   getLatestWritingStrategySelectionForQueueItem,
@@ -85,6 +87,28 @@ function requireCandidate(key) {
   const candidate = getCandidate(key);
   if (!candidate) throw new Error(`Candidate not found: ${key}`);
   return candidate;
+}
+
+export function getActiveAgentPriorityJudgment(queueItem, { now = Date.now() } = {}) {
+  const judgment = queueItem?.routingDecision?.agentPriorityJudgment;
+  if (!judgment || typeof judgment !== 'object' || Array.isArray(judgment)) return null;
+  const score = Number(judgment.score);
+  const runId = String(judgment.runId || '').trim();
+  const sessionId = String(judgment.sessionId || '').trim();
+  const candidateKey = String(judgment.candidateKey || '').trim();
+  if (!Number.isFinite(score) || score < 0 || score > 100 || !runId || !sessionId || !candidateKey) return null;
+  if (candidateKey !== String(queueItem?.candidateKey || '')) return null;
+  const run = getGrowthRun(runId);
+  if (!run || run.status !== 'active' || String(run.sessionId || '') !== sessionId) return null;
+  const delegation = getGrowthOperatorDelegation();
+  if (delegation.state !== 'running' || delegation.mode !== 'live'
+    || Number(delegation.revision) !== Number(run.delegationRevision)) return null;
+  const lease = getOperatorLeaseStatus({ now });
+  if (!lease.active
+    || String(lease.runId || '') !== runId
+    || String(lease.sessionId || '') !== sessionId
+    || String(lease.leaseId || '') !== String(run.leaseId || '')) return null;
+  return { ...judgment, score };
 }
 
 function sourceUsername(candidate) {
@@ -356,11 +380,17 @@ export function refreshQueueRecommendation(key, context = {}) {
     relevanceOverride: existingQueueItem?.relevance?.humanOverride || null,
   }));
   const recommendedPipeline = actionToPipeline(recommendation.action);
-  const routingDecision = existingQueueItem?.routingDecision?.accepted === true
+  const humanRoutingDecision = existingQueueItem?.routingDecision?.accepted === true
     && existingQueueItem.routingDecision.recommendedPipeline === recommendedPipeline
     && existingQueueItem.routingDecision.routingReason === recommendation.reason
     ? existingQueueItem.routingDecision
     : {};
+  const routingDecision = {
+    ...humanRoutingDecision,
+    ...(existingQueueItem?.routingDecision?.agentPriorityJudgment
+      ? { agentPriorityJudgment: existingQueueItem.routingDecision.agentPriorityJudgment }
+      : {}),
+  };
   const queueItem = saveQueueItem({
     candidateKey: key,
     reachPotential: scores.reachPotential,
@@ -660,15 +690,27 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
     if (TEXT_PIPELINES.has(pipeline) || pipeline === 'repost') {
       if (!existingEngagementReply && previousQueueItem.recommendedPipeline === 'ignore') {
         const routingDecision = previousQueueItem.routingDecision || {};
-        const currentOverride = routingDecision.accepted === true
+        const humanOverride = routingDecision.accepted === true
           && routingDecision.actor === 'human'
           && routingDecision.recommendedPipeline === previousQueueItem.recommendedPipeline
           && routingDecision.routingReason === previousQueueItem.routingReason;
-        if (!currentOverride) {
-          throw new Error('This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
+        const agentJudgment = actor === 'agent' ? getActiveAgentPriorityJudgment(previousQueueItem) : null;
+        if (!humanOverride && !agentJudgment) {
+          throw new Error(actor === 'agent'
+            ? 'This opportunity is currently recommended Ignore and has no active run-scoped agent priority judgment.'
+            : 'This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
         }
       }
-      const growthFit = assessStrategicRelevance(candidate, { humanOverride: previousQueueItem.relevance?.humanOverride || null });
+      const parentConversation = pipeline === 'reply' && previousQueueItem?.parentOurTweetId
+        ? listRecentOurConversationPosts({ limit: 100 }).find((item) => String(item.tweetId) === String(previousQueueItem.parentOurTweetId))
+        : null;
+      const growthFit = assessActionRelevance(candidate, {
+        humanOverride: previousQueueItem.relevance?.humanOverride || null,
+        pipeline,
+        behavior: previousQueueItem.behavior || routeContext.behavior || null,
+        relationship: relationshipContext(candidate),
+        conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
+      });
       if (growthFit.state === 'unknown') {
         throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
       }

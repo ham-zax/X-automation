@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { getAppState, setAppState } from './store.js';
 
 const OPERATOR_LEASE_STATE_KEY = 'chatgpt_operator_lease';
-const OPERATOR_LEASE_TTL_MS = 15 * 60_000;
+export const OPERATOR_LEASE_TTL_MS = 15 * 60_000;
 const OPERATOR_LEASE_TTL_MINUTES = OPERATOR_LEASE_TTL_MS / 60_000;
 
 function timestamp(value) {

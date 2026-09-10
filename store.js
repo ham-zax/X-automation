@@ -1623,6 +1623,56 @@ export function appendPublicationAttemptReconciliationEvidence(attemptId, eviden
   });
 }
 
+export function correctPublicationAttemptTerminalState(attemptId, {
+  state,
+  reconciliationEvidence = null,
+  executionEvidence = null,
+  outputTweetId = undefined,
+  outputUrl = undefined,
+  closureReason = '',
+  lastError = '',
+  now = Date.now(),
+} = {}) {
+  const nextState = String(state || '');
+  if (!['confirmed_published', 'closed_unresolved'].includes(nextState)) {
+    throw new Error(`Publication attempt terminal correction does not support ${nextState || 'missing'}.`);
+  }
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt terminal correction timestamp must be numeric.');
+  return runStoreTransaction(() => {
+    const current = getPublicationAttempt(attemptId);
+    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (current.state === nextState) return current;
+    const allowed = nextState === 'confirmed_published'
+      ? ['confirmed_not_sent', 'closed_unresolved']
+      : ['confirmed_not_sent'];
+    if (!allowed.includes(current.state)) {
+      throw new Error(`Publication attempt ${attemptId} cannot be corrected from ${current.state} to ${nextState}.`);
+    }
+    const correction = {
+      fromState: current.state,
+      previousReconciliationEvidence: current.reconciliationEvidence || {},
+      previousClosureReason: current.closureReason || '',
+      correctedAt: timestamp,
+    };
+    db.prepare(`UPDATE publication_attempts SET state = ?, reconciliation_evidence_json = ?, execution_evidence_json = ?,
+      output_tweet_id = ?, output_url = ?, reconciled_at = ?, closure_reason = ?, last_error = ?, updated_at = ?
+      WHERE attempt_id = ?`).run(
+      nextState,
+      JSON.stringify({ ...(reconciliationEvidence || {}), correction }),
+      JSON.stringify(executionEvidence || current.executionEvidence || {}),
+      outputTweetId === undefined ? current.outputTweetId : (outputTweetId || null),
+      outputUrl === undefined ? current.outputUrl : (outputUrl || null),
+      timestamp,
+      String(closureReason || ''),
+      String(lastError || ''),
+      timestamp,
+      current.attemptId,
+    );
+    return getPublicationAttempt(current.attemptId);
+  });
+}
+
 export function transitionPublicationAttempt(attemptId, {
   state,
   reconciliationEvidence = null,
