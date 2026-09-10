@@ -224,10 +224,19 @@ function nextOperation(run, readiness, now) {
     };
   }
   if (readiness.mainFeed?.blockingReason === 'approved_scheduler_work_available') {
+    const queueItemId = Number(readiness.mainFeed?.approvedQueueItemId || 0) || null;
     return {
       stage: 'acting',
       recommendedOperation: 'claim_action',
       permittedOperations: ['inspect_candidate', 'claim_action', 'finish'],
+      claim: queueItemId ? {
+        lane: 'main_feed',
+        command: 'browser-publish-claim',
+        queueItemId,
+        runId: run.runId,
+        sessionId: run.sessionId,
+        reason: 'An approved main-feed item is eligible now. The attached browser-agent lane owns the mutation even when the background daemon has no X API credentials.',
+      } : null,
       ceilings,
     };
   }

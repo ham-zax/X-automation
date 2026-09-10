@@ -909,6 +909,11 @@ function operatorStatus(payload = {}) {
     ? getXApiMainFeedCapability(nextScheduleDecision.item, { accessToken: xApiAccessToken })
     : null;
   const accountHealth = getAccountHealthSummary({ now });
+  const readiness = getOperatorReadiness({ now });
+  const browserAgentReady = readiness.transports.browserAgent.runtimeAttached
+    && readiness.transports.browserAgent.browserMutation
+    && readiness.transports.browserAgent.xAuthenticated
+    && readiness.transports.browserAgent.accountVerified;
   const currentPersonaVersion = getPersonaModelSummary().version;
   const integrityWarnings = [
     ...scheduleDecisions
@@ -951,20 +956,22 @@ function operatorStatus(payload = {}) {
       operatorLease: getOperatorLeaseStatus({ now }),
     },
     growthOperator: getGrowthOperatorMainFeedStatus({ now }),
-    readiness: getOperatorReadiness({ now }),
+    readiness,
     execution: {
       mainFeed: {
         autoPostEnabled,
         credentialsPresent: xApiAccessTokenPresent,
         browserReadCredentialsPresent,
-        configured: autoPostEnabled && xApiAccessTokenPresent,
-        mutationTransport: xApiAccessTokenPresent ? 'x_api_v2' : 'none',
+        configured: Boolean((autoPostEnabled && xApiAccessTokenPresent) || browserAgentReady),
+        mutationTransport: xApiAccessTokenPresent ? 'x_api_v2' : browserAgentReady ? 'browser_agent' : 'none',
         blockingReason: xApiAccessTokenPresent
           ? (nextTransportCapability?.supported === false ? nextTransportCapability.code : null)
-          : 'compliant_transport_unavailable',
+          : browserAgentReady ? null : 'compliant_transport_unavailable',
         preflight: xApiAccessTokenPresent
           ? 'X API v2 user access token is configured for the background daemon. Publication still remains queue/gate/capability checked; no test post is emitted for preflight.'
-          : 'No X API v2 user access token is configured for the background daemon. A persistent Growth Operator may still have a separately authorized browser-agent lane; verify that capability in its owning browser runtime before mutation.',
+          : browserAgentReady
+            ? `Attached browser-agent runtime is authenticated as @${readiness.transports.browserAgent.accountObserved || readiness.transports.browserAgent.accountExpected} and may claim eligible Growth Operator work through the canonical browser claim.`
+            : 'No X API v2 user access token is configured for the background daemon. Browser publication requires an attached authenticated Growth Operator runtime.',
         next: compactScheduleDecision(nextScheduleDecision),
         nextTransportCapability,
         blocked: scheduleDecisions.filter((decision) => !decision.eligible).slice(0, 5).map(compactScheduleDecision),
@@ -984,12 +991,20 @@ function operatorStatus(payload = {}) {
         fallbackRuntime: '/home/hamza/repo/webharness/node_modules/agent-browser/bin/agent-browser.js',
         secondaryFallback: 'global_agent-browser_cli',
         rawFallback: 'disabled_legacy_repository_browser_writer',
-        availability: 'not_observed_by_growth_os',
+        availability: browserAgentReady ? 'ready' : readiness.transports.browserAgent.runtimeAttached ? 'attached_limited' : 'not_attached',
+        accountExpected: readiness.transports.browserAgent.accountExpected,
+        accountObserved: readiness.transports.browserAgent.accountObserved,
+        accountVerified: readiness.transports.browserAgent.accountVerified,
+        browserRead: readiness.transports.browserAgent.browserRead,
+        browserMutation: readiness.transports.browserAgent.browserMutation,
+        xAuthenticated: readiness.transports.browserAgent.xAuthenticated,
         mainFeedClaimCommand: 'browser-publish-claim',
         replyClaimCommand: 'browser-reply-claim',
         eligibleLiveReplyCount: eligibleBrowserReplies.length,
       },
-      browserAndContentExtension: 'Not observed by Growth OS; verify browser-fast session/memory state, prefer the WebHarness-bundled Agent Browser CLI when MCP/Local is unavailable, use the global CLI only as a secondary fallback, and verify the enabled x-content extension in its owning runtime.',
+      browserAndContentExtension: browserAgentReady
+        ? 'Browser-agent execution is currently attached, authenticated, and account-verified. Continue to use browser-fast for routine X work and x-content judgment in the owning reasoning runtime.'
+        : 'No ready browser-agent runtime is attached right now. At the next Growth Agent wake, verify browser-fast authentication/account state before any mutation.',
     },
     measurements: {
       dueCount: dueMeasurements.length,

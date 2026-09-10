@@ -7,14 +7,15 @@ import { getGrowthOperatorDelegation, listGrowthRuns } from './store.js';
 const REPO = '/home/hamza/repo/x_test';
 const DEFAULT_RUNTIME = 'opencode';
 const DEFAULT_OPENCODE_BIN = '/home/hamza/.opencode/bin/opencode';
-const DEFAULT_CODEX_BIN = '/mnt/c/Users/Hamza/AppData/Roaming/npm/codex';
+const DEFAULT_OPENCODE_MODEL = 'opencode/muse-spark-1.3-contributor-free';
+const DEFAULT_CODEX_BIN = '/home/hamza/.nvm/versions/node/v24.19.0/bin/codex';
 
 function runtimeConfig() {
   const runtime = String(process.env.X_GROWTH_AGENT_RUNTIME || DEFAULT_RUNTIME).trim().toLowerCase();
-  const model = String(process.env.X_GROWTH_AGENT_MODEL || '').trim();
   if (!['opencode', 'codex'].includes(runtime)) {
     throw new Error(`Unsupported X_GROWTH_AGENT_RUNTIME=${runtime}. Expected opencode or codex.`);
   }
+  const model = String(process.env.X_GROWTH_AGENT_MODEL || (runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : '')).trim();
   return {
     runtime,
     model,
@@ -33,6 +34,7 @@ Hard boundaries:
 - Do not edit source files, docs, configuration, package files, Git state, systemd units, dependencies, or environment variables.
 - Do not run git commands.
 - The only local state mutations you may make are through the canonical \`npm run agent -- <command>\` Growth OS bridge from ${REPO}.
+- Do not inspect implementation source to reverse-engineer bridge behavior. Use the operational docs and bridge outputs as the public contract. Apart from canonical \`npm run agent -- ...\` invocations, do not run ad hoc shell/node/python commands.
 - Use browser-fast/WebHarness for routine X/Twitter reading and mutation. Use browser-devtools only for diagnostics when the routine browser path fails.
 - Never use a background Node daemon to mutate x.com.
 - Never blindly retry a consequential browser/API write after an ambiguous result.
@@ -45,9 +47,11 @@ Read these operational contracts before acting:
 - docs/GROWTH_RUN_PROTOCOL.md if present
 - docs/plans/XGROWTH_AUTONOMOUS_GROWTH_RUN_IMPLEMENTATION.md for the state-machine intent
 
+Before beginning the run, use browser-fast read-only observation of the existing Windows X tab to establish whether the intended account is @ham_zax. Do not claim x_authenticated=true until the account is positively observed.
+
 Begin/resume the canonical run with:
 \`npm run agent -- growth-run-begin\`
-using adapterType \`${runtime}_unattended\`, sessionId \`${sessionId}\`, and truthful capabilities for reasoning, browser_read, browser_mutation, x_authenticated, and primary_source_web_research.
+using adapterType \`${runtime}_unattended\`, sessionId \`${sessionId}\`, and truthful capabilities for reasoning, browser_read, browser_mutation, x_authenticated, and primary_source_web_research. If authentication changes after begin, update the same run through \`growth-run-resume\` rather than abandoning it.
 
 Then follow the run state rather than improvising a parallel workflow:
 1. If recovery is requested, inspect the exact publication attempt and reconcile only from evidence. If useful recovery is exhausted, close unresolved rather than calling it not-sent.
@@ -55,8 +59,8 @@ Then follow the run state rather than improvising a parallel workflow:
 3. Use \`growth-next\`, \`inspect\`, relationship/context commands, exact live-source inspection, and primary sources where claims are material. Do not act on a weak social paraphrase when verification matters.
 4. Supply purpose/behavior judgment through canonical bridge commands. Preserve Hamza's persona and the rule that not every useful social act needs a technical lesson.
 5. Choose Reply, Quote, Repost, Original, or silence dynamically. Likes are not part of the dependable-autonomy contract yet and must not be performed invisibly.
-6. For an eligible main-feed or Reply action, use the canonical browser claim with this runId and sessionId. The claim returns an attemptId. Re-observe the exact target immediately before mutation. Immediately before the consequential browser mutation call \`publication-attempt-send-start\` with that attemptId plus this runId and sessionId. Execute once. Verify the live result structurally. Then call \`record-action\` with the same attemptId and positive publicationVerification.
-7. Re-read \`growth-run-next\` after durable transitions. Continue only while another worthwhile eligible action exists and within the run ceilings.
+6. When \`growth-run-next\` recommends \`claim_action\` and includes a \`claim\` object, treat that object as the canonical next executable action. For \`lane=main_feed\`, call its \`browser-publish-claim\` with exactly the supplied queueItemId plus this runId/sessionId. Do not reject browser-owned work merely because the background daemon lacks X API credentials. For an eligible Reply, use \`browser-reply-claim\` with this runId/sessionId. A successful claim returns an attemptId. Re-observe the exact target immediately before mutation. Immediately before the consequential browser mutation call \`publication-attempt-send-start\` with that attemptId plus this runId and sessionId. Execute once. Verify the live result structurally. Then call \`record-action\` with the same attemptId and positive publicationVerification.
+7. Re-read \`growth-run-next\` after durable transitions. If it names an executable claim, either execute that claim or record the specific live/policy evidence that invalidated it; do not silently reinterpret it as daemon-owned work. Continue only while another worthwhile eligible action exists and within the run ceilings.
 8. Finish via \`growth-run-finish\` with an accurate structured outcome and stop reason. If a capability/auth/authority blocker prevents useful continuation, record that blocker rather than bypassing policy.
 
 Do not optimize for a fixed number of posts/replies. Optimize for useful, relevant growth and stop when marginal value is low.`;

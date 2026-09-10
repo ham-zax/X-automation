@@ -88,7 +88,9 @@ Finish:
 printf '%s\n' '{"runId":"<run-id>","status":"completed","stopReason":"no_worthwhile_eligible_work","stopDetail":"No additional worthwhile eligible action remained."}' | npm run agent -- growth-run-finish
 ```
 
-The run state returns `recommendedOperation` and `permittedOperations`. The deterministic layer coordinates what may happen next; the reasoning agent still owns opportunity judgment, exact-source inspection, verification, social purpose, route selection, and the decision to remain silent.
+The run state returns `recommendedOperation` and `permittedOperations`. When it returns `recommendedOperation: "claim_action"`, it may also return a concrete `claim` object naming the lane, command, queue item, run, and session that own the next executable action. The deterministic layer coordinates what may happen next; the reasoning agent still owns opportunity judgment, exact-source inspection, verification, social purpose, route selection, and the decision to remain silent when live evidence invalidates an otherwise eligible action.
+
+An unattended adapter should verify the existing Windows X session/account before beginning whenever practical. If authentication is established or changes after begin, resume the same run with updated truthful capabilities rather than starting a second run.
 
 ## Personalized For You sensing
 
@@ -127,6 +129,8 @@ Attempt states:
 ### Claim
 
 The canonical browser/API claim creates the immutable attempt and duplicate fence for the exact action fingerprint. A claim made inside a Growth Run must include both that `runId` and the current `sessionId`; the bridge requires the run to own the active operator lease and the session to match before it will reserve the action.
+
+When `growth-run-next` names a main-feed `claim`, the browser-capable reasoning agent owns that `browser-publish-claim` even when the background daemon has no X API credentials. Daemon transport readiness and browser-agent transport readiness are separate lanes; an unavailable daemon API is not a reason to abandon a due browser-owned claim.
 
 The fingerprint binds the route, candidate/source identity, target identity when applicable, and exact approved-content hash.
 
