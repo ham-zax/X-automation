@@ -80,7 +80,7 @@ export const NICHE_GROUPS = [
     role: 'core',
     targetShare: 9,
     researchTier: 2,
-    terms: ['docker', 'kubernetes', 'k8s', 'ci/cd', 'serverless', 'cloudflare', 'vercel', 'supabase', 'aws', 'azure', 'gcp', 'observability', 'linux', 'terraform', 'ansible', 'latency', 'cloud cost', 'distributed systems', 'software architecture'],
+    terms: ['docker', 'kubernetes', 'k8s', 'ci/cd', 'serverless', 'cloudflare', 'vercel', 'supabase', 'aws', 'azure', 'gcp', 'observability', 'linux', 'terraform', 'ansible', 'latency', 'cloud cost', 'distributed systems', 'software architecture', 'system design', 'api gateway', 'api gateways', 'reverse proxy', 'reverse proxies', 'rate limiting', 'rate limit', 'connection pooling', 'failover', 'server-sent events', 'sse'],
   },
   {
     tag: 'builders',
@@ -117,7 +117,7 @@ export const NICHE_GROUPS = [
 
 export const GROWTH_FOCUS_PROFILE_VERSION = 5;
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 9;
+export const CANDIDATE_CLASSIFIER_VERSION = 10;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
