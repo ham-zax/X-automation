@@ -4,7 +4,6 @@ import {
   behaviorDecisionSupportsSocialOnly,
   isGenericSocialPraise,
   normalizeBehaviorDecision,
-  socialActMatchesPurpose,
   socialPurposeContextAvailable,
   validateBehaviorDecision,
 } from './behavior.js';
@@ -340,6 +339,11 @@ function genericQuote(text) {
   return /^\s*(?:this is (?:huge|great|wild|massive)(?: for developers)?|huge for developers|game changer|big news|we are so back)[.!]?\s*$/i.test(String(text || ''));
 }
 
+function genericSocialFiller(text) {
+  return isGenericSocialPraise(text)
+    || /^\s*(?:nice|great|cool|awesome|amazing|solid)\s+(?:project|build|work|idea|tool)[.!]?\s*$/i.test(String(text || ''));
+}
+
 function normalizeOwnerClaimGrammar(text) {
   return String(text || '')
     .replace(/[’]/g, "'")
@@ -399,14 +403,10 @@ function behaviorContextSupported(behavior, { pipeline, candidate, relationship,
       && ownerEvidenceValid(draft, pipeline));
 }
 
-function socialActRealized(behavior, { pipeline, candidate, relationship, conversationRelevanceCandidate, draft } = {}) {
+function socialActRealized(behavior, { pipeline, draft } = {}) {
   if (!behaviorDecisionSupportsSocialOnly(behavior) || !['reply', 'quote'].includes(pipeline)) return true;
-  return socialActMatchesPurpose({
-    purpose: behavior.primaryPurpose,
-    text: draftEvidenceText(draft, pipeline),
-    sourceText: candidate?.text || '',
-    ...socialInteractionContext(behavior, { relationship, conversationRelevanceCandidate }),
-  });
+  const text = draftEvidenceText(draft, pipeline);
+  return Boolean(String(text || '').trim()) && !genericSocialFiller(text);
 }
 
 function blocks(text) {
@@ -829,8 +829,9 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   if (!behaviorValidation.valid) blockers.push({ code: 'BEHAVIOR_DECISION_INVALID', message: behaviorValidation.errors.join(' ') });
   else if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_PURPOSE_PAYOFF', message: 'The current draft does not visibly fulfill its selected purpose.' });
 
-  const resourcePromise = /\b(?:here(?:'s| is)|check out|try|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text)
-    || /(?:^|[^\w-])(?:re-?)?install\b(?!-)/i.test(text);
+  const resourcePromise = /\b(?:here(?:'s| is)\s+(?:a|the|this)\s+(?:repo(?:sitory)?|resource|tool|library|package|guide|docs?)|check out\s+(?:this|the|a)\s+(?:repo(?:sitory)?|resource|tool|library|project|package|guide|docs?)|try\s+this(?:\s+(?:tool|library|package|repo(?:sitory)?))?|use\s+this(?:\s+(?:tool|library|package|repo(?:sitory)?))?|tool you can\s+(?:try|use|install|download)|available at)\b/i.test(text)
+    || /(?:^|[.!?]\s+)(?:please\s+)?(?:re-?)?install\b/i.test(text)
+    || /\b(?:you\s+(?:should|need to|can|could)|i(?:'d| would)|we\s+(?:should|can|could))\s+(?:re-?)?install\b/i.test(text);
   const explicitUrl = /https?:\/\/\S+/i.test(text);
   const nativeSourcePath = pipeline === 'quote' && candidate?.source === 'x';
   const sourcePathReady = !resourcePromise || explicitUrl || nativeSourcePath;

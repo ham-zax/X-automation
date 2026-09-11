@@ -148,6 +148,8 @@ printf '%s\n' '{"attemptId":"<attempt-id>","preSendEvidence":{...}}' | npm run a
 
 This command revalidates the relevant standing authority and Account Health. For a run-bound attempt it derives immutable run/session provenance from the claim and requires that same Growth Run/session to still own the active operator lease. Callers do not repeat stored IDs. It does not prove that the mutation succeeded.
 
+For Browser Fast Reply execution, take one final fresh read-only snapshot after `send-start`, resolve the currently enabled semantic Reply control from that snapshot, and invoke that mutation exactly once. This ordering only reduces stale-ref exposure; it does not create retry authority or change reconciliation semantics.
+
 ### Reconciliation
 
 `confirmed_published` requires positive live/transport evidence and route-specific structure. Browser publication should normally reconcile through `record-action` with the same attempt ID plus structural `publicationVerification`.

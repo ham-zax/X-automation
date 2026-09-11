@@ -255,6 +255,8 @@ function socialSourceSignals(sourceText = '') {
   return {
     celebration: /(?:🚀|🔥|🎉|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(source),
     gratitude: /\b(?:thank(?:s| you)?|appreciate|credit|helped)\b/i.test(source),
+    showcase: /\b(?:i|we)\s+(?:(?:just|finally)\s+)?(?:built|made|created|shipped|released|launched|put together)\b/i.test(source),
+    participationRequest: /\b(?:feedback|ideas?|suggestions?|what features?|should (?:i|we) make more|what should (?:i|we) (?:add|build|change|make)|what would you (?:add|build|change|want)|what do you (?:want|think))\b/i.test(source),
     humor: /(?:😂|🤣|\blol\b|\bhaha\b|\brofl\b|\bmeme\b|\bworks on my machine\b|\byak shave\b)/i.test(source),
     hostile: /\b(?:idiot|stupid|dumb|fraud|liar|garbage|trash|hate|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(source),
   };
@@ -272,7 +274,7 @@ export function socialPurposeContextAvailable({
 
   if (selectedPurpose === 'relationship' || selectedPurpose === 'social_presence') return connected;
   if (selectedPurpose === 'celebration') return source.celebration || connected;
-  if (selectedPurpose === 'support') return source.celebration || source.gratitude || connected;
+  if (selectedPurpose === 'support') return source.celebration || source.gratitude || source.showcase || source.participationRequest || connected;
   if (selectedPurpose === 'humor') return source.humor || source.hostile || connected;
   if (selectedPurpose === 'de_escalation') return source.hostile || conversationContext === true;
   return true;

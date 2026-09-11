@@ -19,8 +19,10 @@ const reconciliation = await import(`${rootUrl}publication_reconciliation.js`);
 const growthRun = await import(`${rootUrl}growth_run.js`);
 const pipeline = await import(`${rootUrl}pipeline.js`);
 const drafting = await import(`${rootUrl}drafting.js`);
+const behavior = await import(`${rootUrl}behavior.js`);
 const strategy = await import(`${rootUrl}strategy.js`);
 const runtime = await import(`${rootUrl}growth_agent_runtime.js`);
+const operatorLease = await import(`${rootUrl}operator_lease.js`);
 
 function candidate(key, text = 'AI agent API runtime tooling for developers') {
   return {
@@ -373,6 +375,117 @@ await test('send-start needs only attemptId and validates the immutable run/sess
   });
 });
 
+await test('valid run-bound bridge activity renews only the matching operator lease', async () => {
+  store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
+  const delegation = store.getGrowthOperatorDelegation();
+  if (delegation.state !== 'running') store.startGrowthOperatorDelegation({ actor: 'human' });
+  store.saveAutonomousReplyGrantState(liveReplyGrant(41, 0));
+  const startedAt = Date.now();
+  const sessionId = 'lease-renew-session';
+  const run = growthRun.beginGrowthRun({
+    adapterType: 'test_adapter',
+    sessionId,
+    capabilities: { reasoning: true, browser_read: true, browser_mutation: true, x_authenticated: true },
+    ceilings: { maxDurationMinutes: 60, maxObservations: 50, maxPublicMutations: 10 },
+    now: startedAt,
+  }).run;
+  const key = 'https://x.com/builder/status/3002';
+  const { decision } = createAutonomousReply({ key, tweetId: '3002', exactReply: 'Lease renewal stays bound to the current run and session.', grantRevision: 41 });
+  const claimed = store.claimAutonomousReplyDecision(decision.id, {
+    grantRevision: 41,
+    runId: run.runId,
+    claimHolder: sessionId,
+    now: startedAt + 1_000,
+    transport: 'browser_agent',
+  });
+  const cleanupAt = startedAt + 50 * 60_000;
+
+  try {
+    const initialLease = operatorLease.getOperatorLeaseStatus({ now: startedAt + 1_000 });
+    assert.equal(initialLease.active, true);
+    assert.equal(initialLease.runId, run.runId);
+    assert.equal(initialLease.sessionId, sessionId);
+
+    assert.throws(() => runBridge('operator-priority-set', {
+      runId: run.runId,
+      sessionId: 'wrong-session',
+      key,
+      score: 60,
+      reason: 'Wrong session must not refresh this lease.',
+      now: startedAt + 13 * 60_000,
+    }), /leased to session/);
+    assert.throws(() => runBridge('operator-priority-set', {
+      runId: 'wrong-run',
+      sessionId,
+      key,
+      score: 60,
+      reason: 'Wrong run must not refresh this lease.',
+      now: startedAt + 13 * 60_000,
+    }), /does not own the active operator lease/);
+    assert.equal(operatorLease.getOperatorLeaseStatus({ now: startedAt + 13 * 60_000 }).expiresAt, initialLease.expiresAt);
+
+    const beforeActivity = operatorLease.getOperatorLeaseStatus({ now: startedAt + 14 * 60_000 });
+    const sendStarted = runBridge('publication-attempt-send-start', {
+      attemptId: claimed.attempt.attemptId,
+      now: startedAt + 14 * 60_000,
+    });
+    assert.equal(sendStarted.attempt.state, 'send_started');
+    const afterActivity = operatorLease.getOperatorLeaseStatus({ now: startedAt + 14 * 60_000 });
+    assert.equal(afterActivity.leaseId, initialLease.leaseId);
+    assert.equal(afterActivity.runId, run.runId);
+    assert.equal(afterActivity.sessionId, sessionId);
+    assert.ok(afterActivity.expiresAt > beforeActivity.expiresAt);
+
+    await growthRun.advanceGrowthRun(run.runId, { now: startedAt + 28 * 60_000 });
+    const afterGrowthNext = operatorLease.getOperatorLeaseStatus({ now: startedAt + 28 * 60_000 });
+    assert.equal(afterGrowthNext.leaseId, initialLease.leaseId);
+    assert.ok(afterGrowthNext.expiresAt > afterActivity.expiresAt);
+
+    reconciliation.confirmPublicationAttemptNotSent(claimed.attempt.attemptId, {
+      reason: 'Lease renewal test never invoked a transport mutation.',
+      evidence: {
+        sendBoundaryCrossed: false,
+        notSentProof: { kind: 'mutation_not_dispatched', detail: 'The deterministic test did not invoke a browser mutation.' },
+      },
+      now: startedAt + 28 * 60_000 + 1_000,
+    });
+
+    const otherAt = startedAt + 44 * 60_000;
+    assert.equal(operatorLease.getOperatorLeaseStatus({ now: otherAt }).active, false);
+    const otherLease = operatorLease.acquireOperatorLease({
+      now: otherAt,
+      holder: 'other_operator',
+      runId: 'other-run',
+      adapterType: 'other_adapter',
+      sessionId: 'other-session',
+    });
+    assert.throws(() => runBridge('operator-priority-set', {
+      runId: run.runId,
+      sessionId,
+      key,
+      score: 60,
+      reason: 'Expired run must not steal another operator lease.',
+      now: otherAt + 1,
+    }), /does not own the active operator lease/);
+    const stillOther = operatorLease.getOperatorLeaseStatus({ now: otherAt + 1 });
+    assert.equal(stillOther.leaseId, otherLease.leaseId);
+    assert.equal(stillOther.runId, 'other-run');
+    assert.equal(stillOther.sessionId, 'other-session');
+    operatorLease.releaseOperatorLease(otherLease.leaseId, { now: otherAt + 2 });
+  } finally {
+    const active = operatorLease.getOperatorLeaseStatus({ now: cleanupAt });
+    if (active.active) {
+      try { operatorLease.releaseOperatorLease(active.leaseId, { now: cleanupAt }); } catch {}
+    }
+    growthRun.finishGrowthRun(run.runId, {
+      status: 'completed',
+      stopReason: 'no_worthwhile_eligible_work',
+      stopDetail: 'Lease renewal test complete.',
+      now: cleanupAt,
+    });
+  }
+});
+
 await test('social and relationship reply relevance can come from a known builder relationship without technical keywords in the target sentence', () => {
   const key = 'https://x.com/socialbuilder/status/3501';
   store.upsertCandidates([candidate(key, 'Yep, exactly. That is the next test.')]);
@@ -414,7 +527,7 @@ await test('social-only autonomous reply above the priority floor no longer requ
   });
   const key = 'https://x.com/newbuilder/status/3601';
   store.upsertCandidates([candidate(key, 'AI agent developer tooling milestone shipped today')]);
-  const behavior = {
+  const selectedBehavior = {
     decision: 'ACT',
     pipeline: 'reply',
     primaryPurpose: 'celebration',
@@ -436,14 +549,14 @@ await test('social-only autonomous reply above the priority floor no longer requ
     priority: 35,
     replyArchetype: 'celebration',
     contributionSummary: 'Celebrate the milestone naturally.',
-    behavior,
+    behavior: selectedBehavior,
   });
   store.saveDraft({
     candidateKey: key,
     body: 'That AI agent tooling milestone is worth celebrating — congrats on shipping it.',
     status: 'draft',
     qualityScore: 0,
-    editor: { pipeline: 'reply', behavior },
+    editor: { pipeline: 'reply', behavior: selectedBehavior },
   });
   const queued = store.getQueueItem(item.id);
   const savedDraft = store.getDraftByCandidate(key);
@@ -463,6 +576,83 @@ await test('social-only autonomous reply above the priority floor no longer requ
   assert.equal(evaluation.decision, 'send', JSON.stringify({ reasons: evaluation.reasons, checks: evaluation.checks }));
   assert.equal(evaluation.intent, 'social_reaction');
   assert.equal(evaluation.exactReply, 'That AI agent tooling milestone is worth celebrating — congrats on shipping it.');
+});
+
+await test('support purpose accepts concrete participation in a creator showcase without making generic filler sufficient', async () => {
+  const sourceText = 'I built a physical Codex pet for OpenAI Dev Day! Should I make more to give away? And what features?';
+  const exactReply = 'Definitely make more. Feature request: it purrs when a PR merges and gives a quiet angry chirp every time CI fails.';
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText }), true);
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText: 'A database query planner chooses a join order.' }), false);
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText: 'I made a tiny hardware dashboard. Ideas for what I should add?' }), true);
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText: 'We shipped the release today.' }), true);
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText: 'Thanks to everyone who tested the beta.' }), true);
+  assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText: 'Ordinary update.', relationshipContext: true }), true);
+
+  store.saveAutonomousReplyGrantState({
+    ...liveReplyGrant(51, 0),
+    allowedIntents: ['social_reaction'],
+  });
+  const key = 'https://x.com/natalieyeo/status/2098195154549285240';
+  store.upsertCandidates([{ ...candidate(key, sourceText), title: '@natalieyeo' }]);
+  const selectedBehavior = {
+    decision: 'ACT',
+    pipeline: 'reply',
+    primaryPurpose: 'support',
+    secondaryPurposes: ['humor', 'relationship'],
+    socialMode: 'supporter',
+    affectStrategy: 'match',
+    affectProvenance: 'strategic',
+    informationDepth: 'social_only',
+    conversationStage: 'initial',
+    reasonToExist: 'Support a builder showcase and answer the explicit feature request with one playful, concrete suggestion.',
+    selectionSource: 'operator',
+  };
+  const item = store.ensureEngagementItem({
+    candidateKey: key,
+    targetTweetId: '2098195154549285240',
+    targetUsername: 'natalieyeo',
+    engagementKind: 'initial_reply',
+    status: 'drafting',
+    priority: 29.5,
+    replyArchetype: 'support',
+    contributionSummary: 'Answer the feature request with a concrete supportive suggestion.',
+    behavior: selectedBehavior,
+  });
+  store.saveDraft({
+    candidateKey: key,
+    body: exactReply,
+    status: 'draft',
+    qualityScore: 0,
+    editor: { pipeline: 'reply', behavior: selectedBehavior, finalText: exactReply },
+  });
+  const queued = store.getQueueItem(item.id);
+  const analysis = drafting.scoreDraft(store.getDraftByCandidate(key), store.getCandidate(key), {
+    pipeline: 'reply',
+    behavior: queued.behavior,
+    relationship: null,
+    recentPosts: [],
+    recentReplies: [],
+    recentReplyArchetypes: [],
+  });
+  assert.equal(analysis.gates.failures.some((failure) => failure.code === 'PURPOSE_CONTEXT_WEAK'), false, JSON.stringify(analysis.gates.failures));
+  assert.equal(analysis.gates.passed, true, JSON.stringify(analysis.gates.failures));
+  const generic = drafting.scoreDraft({
+    ...store.getDraftByCandidate(key),
+    body: 'Nice project!',
+    editor: { pipeline: 'reply', behavior: selectedBehavior, finalText: 'Nice project!' },
+  }, store.getCandidate(key), {
+    pipeline: 'reply',
+    behavior: queued.behavior,
+    relationship: null,
+    recentPosts: [],
+    recentReplies: [],
+    recentReplyArchetypes: [],
+  });
+  assert.equal(generic.publishable, false);
+  const live = await autonomous.ensureAutonomousReplyLiveDecision(queued, { grant: store.getAutonomousReplyGrantState() });
+  assert.equal(live.decision?.decision, 'eligible_live', JSON.stringify({ reason: live.reason, evaluation: live.evaluation }));
+  assert.equal(live.decision?.exactReply, exactReply);
+  assert.equal(live.evaluation?.checks?.reusedOperatorDraft, true);
 });
 
 await test('For You ingest immediately materializes only the observed candidates into engagement work', () => {
@@ -546,7 +736,7 @@ await test('Reply packaging distinguishes descriptive install wording from a pro
   const key = 'https://x.com/builder/status/4001';
   store.upsertCandidates([candidate(key, 'AI agents and developer tools compare install-time auditing with runtime capabilities.')]);
   const storedCandidate = store.getCandidate(key);
-  const behavior = {
+  const selectedBehavior = {
     decision: 'ACT',
     pipeline: 'reply',
     primaryPurpose: 'technical_value',
@@ -560,27 +750,89 @@ await test('Reply packaging distinguishes descriptive install wording from a pro
   };
   const context = {
     pipeline: 'reply',
-    behavior,
+    behavior: selectedBehavior,
     recentPosts: [],
     recentReplies: [],
     recentReplyArchetypes: [],
   };
-  const analysis = drafting.scoreDraft({
-    body: 'Pre-install auditing helps, but runtime capability scoping is the real boundary once the agent can invoke tools, network access, and filesystem paths.',
-    editor: { pipeline: 'reply', behavior },
-  }, storedCandidate, context);
-  assert.equal(analysis.gates.passed, true);
-  assert.equal(analysis.growthPackaging.ready, true);
-  assert.equal(analysis.growthPackaging.items.sourceActionPath.status, 'not_needed');
-  assert.equal(analysis.publishable, true);
+  for (const body of [
+    'Pre-install auditing helps, but runtime capability scoping is the real boundary once the agent can invoke tools, network access, and filesystem paths.',
+    'The install receipt should bind the audited revision and permission set so the trust boundary stays inspectable.',
+    'An install recommendation without revision identity is weaker evidence than a content-addressed audit record.',
+    'The install step is separate from the runtime permission boundary.',
+    'Does the installer pin the exact audited revision before execution?',
+  ]) {
+    const analysis = drafting.scoreDraft({ body, editor: { pipeline: 'reply', behavior: selectedBehavior } }, storedCandidate, context);
+    assert.equal(analysis.growthPackaging.blockers.some((blocker) => blocker.code === 'RESOURCE_ACTION_PATH_MISSING'), false, body);
+    assert.notEqual(analysis.growthPackaging.items.sourceActionPath.status, 'blocked', body);
+  }
 
   const missingPath = drafting.scoreDraft({
     body: 'Install this, it fixes the issue.',
-    editor: { pipeline: 'reply', behavior },
+    editor: { pipeline: 'reply', behavior: selectedBehavior },
   }, storedCandidate, context);
   assert.equal(missingPath.growthPackaging.ready, false);
   assert.equal(missingPath.growthPackaging.items.sourceActionPath.status, 'blocked');
   assert.equal(missingPath.growthPackaging.blockers.some((blocker) => blocker.code === 'RESOURCE_ACTION_PATH_MISSING'), true);
+});
+
+await test('Dan operator draft clears packaging and is reused by the live autonomous evaluator', async () => {
+  store.saveAutonomousReplyGrantState({
+    ...liveReplyGrant(52, 0),
+    allowedIntents: ['useful_question'],
+  });
+  const key = 'https://x.com/DanKornas/status/2098173164106727820';
+  const sourceText = 'Choosing an agent skill shouldn’t start with guessing which install command to trust. OpenAgentSkill is a GitHub project for agents and developers who need to find, compare, and audit reusable Agent Skills before installation.';
+  const exactReply = 'The install receipt is the bit I’d pressure-test. Does it pin the exact skill revision + permission set that was audited, so the agent can’t inspect one thing and execute a newer/different one?';
+  store.upsertCandidates([{ ...candidate(key, sourceText), title: '@DanKornas' }]);
+  const selectedBehavior = {
+    decision: 'ACT',
+    pipeline: 'reply',
+    primaryPurpose: 'technical_value',
+    secondaryPurposes: ['relationship'],
+    socialMode: 'curious_peer',
+    affectStrategy: 'match',
+    affectProvenance: 'strategic',
+    informationDepth: 'compact_reason',
+    conversationStage: 'initial',
+    reasonToExist: 'Ask whether the install receipt binds the recommendation to the exact skill revision and permission set that was audited.',
+    selectionSource: 'operator',
+  };
+  const item = store.ensureEngagementItem({
+    candidateKey: key,
+    targetTweetId: '2098173164106727820',
+    targetUsername: 'DanKornas',
+    engagementKind: 'initial_reply',
+    status: 'drafting',
+    priority: 43.4,
+    replyArchetype: 'informed_question',
+    contributionSummary: 'Ask about the audited artifact identity boundary.',
+    behavior: selectedBehavior,
+  });
+  store.saveDraft({
+    candidateKey: key,
+    body: exactReply,
+    status: 'draft',
+    qualityScore: 0,
+    editor: { pipeline: 'reply', behavior: selectedBehavior, finalText: exactReply },
+  });
+  const queued = store.getQueueItem(item.id);
+  const draft = store.getDraftByCandidate(key);
+  const analysis = drafting.scoreDraft(draft, store.getCandidate(key), {
+    pipeline: 'reply',
+    behavior: queued.behavior,
+    relationship: null,
+    recentPosts: [],
+    recentReplies: [],
+    recentReplyArchetypes: [],
+  });
+  assert.equal(analysis.gates.passed, true, JSON.stringify(analysis.gates.failures));
+  assert.equal(analysis.growthPackaging.ready, true, JSON.stringify(analysis.growthPackaging.blockers));
+  assert.equal(analysis.growthPackaging.items.sourceActionPath.status, 'not_needed');
+  const live = await autonomous.ensureAutonomousReplyLiveDecision(queued, { grant: store.getAutonomousReplyGrantState() });
+  assert.equal(live.decision?.decision, 'eligible_live', JSON.stringify({ reason: live.reason, evaluation: live.evaluation }));
+  assert.equal(live.decision?.exactReply, exactReply);
+  assert.equal(live.evaluation?.checks?.reusedOperatorDraft, true);
 });
 
 process.chdir(previousCwd);

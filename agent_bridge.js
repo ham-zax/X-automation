@@ -318,9 +318,10 @@ function requireGrowthRunLease(runId, sessionId = '', now = Date.now()) {
   if (!lease.active || String(lease.runId || '') !== expectedRunId) {
     throw new Error(`Growth Run ${expectedRunId} does not own the active operator lease.`);
   }
-  if (lease.sessionId && String(lease.sessionId) !== expectedSessionId) {
-    throw new Error(`Growth Run ${expectedRunId} is leased to session ${lease.sessionId}, not ${expectedSessionId}.`);
+  if (String(lease.sessionId || '') !== expectedSessionId) {
+    throw new Error(`Growth Run ${expectedRunId} is leased to session ${lease.sessionId || '(none)'}, not ${expectedSessionId}.`);
   }
+  const renewedLease = renewOperatorLease(lease.leaseId, { now });
   const runtime = getGrowthAgentRuntimeStatus({ now });
   if (runtime.adapterType
     && String(runtime.sessionId || '') === expectedSessionId
@@ -335,7 +336,7 @@ function requireGrowthRunLease(runId, sessionId = '', now = Date.now()) {
       now,
     });
   }
-  return lease;
+  return renewedLease;
 }
 
 const ACCOUNT_ANALYTICS_CONTENT_TYPES = new Set(['posts', 'replies', 'all']);
@@ -2568,7 +2569,7 @@ async function main() {
         sourceUrl: candidate.url || candidate.key,
         exactReply: claimed.exactReply,
         actionForReconciliation: 'reply',
-        executionRule: `Re-observe the exact target tweet/thread. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${claimedResult.attempt.attemptId}; the attempt already owns its run/session provenance. Execute this exact reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
+        executionRule: `Re-observe the exact target tweet/thread and confirm the exact composer text. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${claimedResult.attempt.attemptId}; the attempt already owns its run/session provenance. After send-start, take one final fresh read-only browser snapshot, resolve the currently enabled semantic Reply control from that snapshot, and execute that mutation exactly once. Then verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, and call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
       });
       return;
     }
@@ -2590,7 +2591,7 @@ async function main() {
       sourceUrl: candidate.url || candidate.key,
       exactReply: manual.exactReply,
       actionForReconciliation: 'reply',
-      executionRule: `Re-observe the exact target tweet/thread. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${manual.attempt.attemptId}; the attempt already owns its run/session provenance. Execute this exact approved reply once, verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, then call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
+      executionRule: `Re-observe the exact target tweet/thread and confirm the exact composer text. Immediately before the browser Reply mutation call publication-attempt-send-start with attemptId=${manual.attempt.attemptId}; the attempt already owns its run/session provenance. After send-start, take one final fresh read-only browser snapshot, resolve the currently enabled semantic Reply control from that snapshot, and execute that mutation exactly once. Then verify that the resulting post is a child of targetTweetId and the rendered text matches exactReply, and call record-action with the same attemptId plus publicationVerification.parentTweetId and outputText. Unknown results remain unresolved and must not be retried blindly.`,
     });
     return;
   }
