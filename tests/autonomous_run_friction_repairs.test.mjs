@@ -542,7 +542,7 @@ await test('AGY runtime resolution is independent of the service PATH', () => {
   assert.equal(availability.runtime, 'agy');
 });
 
-await test('Reply packaging treats the native parent/source as the resource path', () => {
+await test('Reply packaging distinguishes descriptive install wording from a promised resource path', () => {
   const key = 'https://x.com/builder/status/4001';
   store.upsertCandidates([candidate(key, 'AI agents and developer tools compare install-time auditing with runtime capabilities.')]);
   const storedCandidate = store.getCandidate(key);
@@ -558,20 +558,29 @@ await test('Reply packaging treats the native parent/source as the resource path
     conversationStage: 'initial',
     reasonToExist: 'Name the runtime constraint that changes the decision.',
   };
-  const draft = {
-    body: 'Pre-install auditing helps, but runtime capability scoping is the real boundary once the agent can invoke tools, network access, and filesystem paths.',
-    editor: { pipeline: 'reply', behavior },
-  };
-  const analysis = drafting.scoreDraft(draft, storedCandidate, {
+  const context = {
     pipeline: 'reply',
     behavior,
     recentPosts: [],
     recentReplies: [],
     recentReplyArchetypes: [],
-  });
+  };
+  const analysis = drafting.scoreDraft({
+    body: 'Pre-install auditing helps, but runtime capability scoping is the real boundary once the agent can invoke tools, network access, and filesystem paths.',
+    editor: { pipeline: 'reply', behavior },
+  }, storedCandidate, context);
   assert.equal(analysis.gates.passed, true);
   assert.equal(analysis.growthPackaging.ready, true);
+  assert.equal(analysis.growthPackaging.items.sourceActionPath.status, 'not_needed');
   assert.equal(analysis.publishable, true);
+
+  const missingPath = drafting.scoreDraft({
+    body: 'Install this, it fixes the issue.',
+    editor: { pipeline: 'reply', behavior },
+  }, storedCandidate, context);
+  assert.equal(missingPath.growthPackaging.ready, false);
+  assert.equal(missingPath.growthPackaging.items.sourceActionPath.status, 'blocked');
+  assert.equal(missingPath.growthPackaging.blockers.some((blocker) => blocker.code === 'RESOURCE_ACTION_PATH_MISSING'), true);
 });
 
 process.chdir(previousCwd);

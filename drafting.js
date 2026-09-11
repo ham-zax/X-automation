@@ -829,9 +829,10 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   if (!behaviorValidation.valid) blockers.push({ code: 'BEHAVIOR_DECISION_INVALID', message: behaviorValidation.errors.join(' ') });
   else if (!readerPayoffClear) blockers.push({ code: 'NO_CLEAR_PURPOSE_PAYOFF', message: 'The current draft does not visibly fulfill its selected purpose.' });
 
-  const resourcePromise = /\b(?:here(?:'s| is)|check out|try|install|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text);
+  const resourcePromise = /\b(?:here(?:'s| is)|check out|try|use this|repo(?:sitory)?|resource|open[- ]source (?:tool|library|project)|tool you can|available at)\b/i.test(text)
+    || /(?:^|[^\w-])(?:re-?)?install\b(?!-)/i.test(text);
   const explicitUrl = /https?:\/\/\S+/i.test(text);
-  const nativeSourcePath = ['quote', 'reply'].includes(pipeline) && candidate?.source === 'x';
+  const nativeSourcePath = pipeline === 'quote' && candidate?.source === 'x';
   const sourcePathReady = !resourcePromise || explicitUrl || nativeSourcePath;
   if (!sourcePathReady) blockers.push({ code: 'RESOURCE_ACTION_PATH_MISSING', message: 'The draft promises a resource/tool but gives the reader no usable source or action path.' });
   const generationStrategyStale = context.hasGenerationProvenance === true && (
