@@ -109,7 +109,7 @@ async function beforeDeadline(promise, deadline) {
   }
 }
 
-async function resolvePublicDestination(url, deadline) {
+export async function resolvePublicDestination(url, deadline) {
   if (!['http:', 'https:'].includes(url.protocol)) {
     throw new ResearchFetchError('unsupported_scheme', 'Research URLs must use http: or https:.');
   }

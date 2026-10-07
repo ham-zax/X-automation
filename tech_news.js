@@ -5,6 +5,21 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { classifyNiche, getActiveContentGroups, getActiveNicheProfile, getXSearchQueryGroups } from './strategy.js';
 
+// Bound both header and streamed-body reads. These callers use fixed public service URLs.
+async function boundedNewsFetch(url, options = {}, deadline = Date.now() + 10_000) {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) throw new Error('News fetch deadline exceeded.');
+  const response = await fetch(url, { ...options, redirect: 'error', signal: AbortSignal.timeout(remaining) });
+  const chunks = []; let bytes = 0;
+  for await (const chunk of response.body || []) {
+    bytes += chunk.length;
+    if (bytes > 2 * 1024 * 1024) throw new Error('News response exceeds 2 MiB limit.');
+    chunks.push(chunk);
+  }
+  const body = Buffer.concat(chunks).toString('utf8');
+  return { ok: response.ok, status: response.status, text: async () => body, json: async () => JSON.parse(body) };
+}
+
 // ============================================================================
 // ANSI Color Formatting
 // ============================================================================
@@ -25,8 +40,10 @@ const colors = {
 // 1. Hacker News Top Stories Fetcher
 // ============================================================================
 export async function fetchHackerNews(limit = 5) {
+  const deadline = Date.now() + 10_000;
+  limit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 5)));
   try {
-    const topIdsRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+    const topIdsRes = await boundedNewsFetch('https://hacker-news.firebaseio.com/v0/topstories.json', {}, deadline);
     if (!topIdsRes.ok) throw new Error(`HN API error: ${topIdsRes.status}`);
     const topIds = await topIdsRes.json();
     const idsToFetch = topIds.slice(0, limit);
@@ -34,7 +51,7 @@ export async function fetchHackerNews(limit = 5) {
     const stories = await Promise.all(
       idsToFetch.map(async (id) => {
         try {
-          const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`);
+          const itemRes = await boundedNewsFetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`, {}, deadline);
           return await itemRes.json();
         } catch {
           return null;
@@ -62,14 +79,16 @@ export async function fetchHackerNews(limit = 5) {
 // 2. GitHub Trending (Today) Fetcher
 // ============================================================================
 export async function fetchGitHubTrending(limit = 5) {
+  const deadline = Date.now() + 10_000;
+  limit = Math.max(1, Math.min(50, Math.floor(Number(limit) || 5)));
   try {
     const fetchedAt = Date.now();
-    const res = await fetch('https://github.com/trending?since=daily', {
+    const res = await boundedNewsFetch('https://github.com/trending?since=daily', {
       headers: {
         'User-Agent': 'xactions-tech-news/1.0',
         Accept: 'text/html',
       },
-    });
+    }, deadline);
 
     if (!res.ok) throw new Error(`GitHub Trending error: ${res.status}`);
     const html = await res.text();
@@ -109,7 +128,7 @@ export async function fetchGitHubTrending(limit = 5) {
         rank: index + 1,
         fetchedAt,
       };
-    }).filter((repo) => repo.name);
+    }).filter((repo) => /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo.name));
 
     const apiHeaders = {
       'User-Agent': 'xactions-tech-news/1.0',
@@ -119,7 +138,7 @@ export async function fetchGitHubTrending(limit = 5) {
     return Promise.all(repos.map(async (repo) => {
       if (repo.description && repo.stars && repo.forks && repo.language !== 'Code') return repo;
       try {
-        const metadataRes = await fetch(`https://api.github.com/repos/${repo.name}`, { headers: apiHeaders });
+        const metadataRes = await boundedNewsFetch(`https://api.github.com/repos/${repo.name}`, { headers: apiHeaders }, deadline);
         if (!metadataRes.ok) return repo;
         const metadata = await metadataRes.json();
         return {

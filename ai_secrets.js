@@ -1,3 +1,6 @@
+import { spawn } from 'node:child_process';
+import { open } from 'node:fs/promises';
+import { assertAiEnvCredential } from './ai_policy.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -11,7 +14,7 @@ export const AI_SECRETS_FILE = path.resolve(
 function parseSecretRef(secretRef) {
   const value = String(secretRef || '').trim();
   if (/^file:[A-Za-z0-9._-]+$/.test(value)) return { type: 'file', id: value.slice(5), secretRef: value };
-  if (/^env:[A-Za-z_][A-Za-z0-9_]*$/.test(value)) return { type: 'env', id: value.slice(4), secretRef: value };
+  if (/^env:[A-Za-z_][A-Za-z0-9_]*$/.test(value)) { assertAiEnvCredential(value.slice(4)); return { type: 'env', id: value.slice(4), secretRef: value }; }
   throw new Error('Invalid AI secret reference.');
 }
 
@@ -25,9 +28,9 @@ async function readSecretMap() {
   try {
     const parsed = JSON.parse(await readFile(AI_SECRETS_FILE, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
-    return parsed;
+    return Object.assign(Object.create(null), parsed);
   } catch (error) {
-    if (error?.code === 'ENOENT') return {};
+    if (error?.code === 'ENOENT') return Object.create(null);
     throw new Error('AI secrets file is invalid or unreadable.');
   }
 }
@@ -42,6 +45,24 @@ async function writeSecretMap(secrets) {
   } finally {
     await rm(temp, { force: true }).catch(() => {});
   }
+}
+
+// flock is kernel-owned: competing processes serialize and a dead owner releases automatically.
+async function withSecretLock(operation) {
+  await mkdir(path.dirname(AI_SECRETS_FILE), { recursive: true, mode: 0o700 });
+  const lockPath = `${AI_SECRETS_FILE}.lock`;
+  const handle = await open(lockPath, 'a', 0o600); await handle.close();
+  const holder = spawn('flock', ['-w', '10', lockPath, 'sh', '-c', 'printf locked; cat >/dev/null'], { stdio: ['pipe', 'pipe', 'ignore'] });
+  holder.stdin.on('error', () => {});
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { holder.kill('SIGKILL'); reject(new Error('AI secret lock timed out.')); }, 11_000);
+      const fail = () => { clearTimeout(timer); reject(new Error('AI secret lock unavailable.')); };
+      holder.once('error', fail); holder.once('exit', fail);
+      holder.stdout.once('data', () => { clearTimeout(timer); holder.removeListener('exit', fail); resolve(); });
+    });
+    return await operation();
+  } finally { holder.stdin.end(); }
 }
 
 export async function getAiSecretStatus(secretRef) {
@@ -72,9 +93,11 @@ export async function setAiSecret(secretRef, apiKey) {
   const parsed = secretRef ? parseSecretRef(secretRef) : { type: 'file', id: randomUUID(), secretRef: null };
   if (parsed.type !== 'file') throw new Error('Environment-backed AI secrets must be changed through the environment.');
   const ref = parsed.secretRef || `file:${parsed.id}`;
-  const secrets = await readSecretMap();
-  secrets[parsed.id] = { apiKey: value };
-  await writeSecretMap(secrets);
+  await withSecretLock(async () => {
+    const secrets = await readSecretMap();
+    secrets[parsed.id] = { apiKey: value };
+    await writeSecretMap(secrets);
+  });
   return { secretRef: ref, source: 'file', hasSecret: true };
 }
 
@@ -85,11 +108,11 @@ export async function removeAiSecret(secretRef, { excludeProfileId = null } = {}
   }
   const otherReferences = countAiProfilesUsingSecretRef(parsed.secretRef, { excludeProfileId });
   if (otherReferences > 0) throw new Error('AI secret reference is still used by another profile.');
-  const secrets = await readSecretMap();
-  const existed = Object.hasOwn(secrets, parsed.id);
-  if (existed) {
-    delete secrets[parsed.id];
-    await writeSecretMap(secrets);
-  }
+  const existed = await withSecretLock(async () => {
+    const secrets = await readSecretMap();
+    const present = Object.hasOwn(secrets, parsed.id);
+    if (present) { delete secrets[parsed.id]; await writeSecretMap(secrets); }
+    return present;
+  });
   return { secretRef: parsed.secretRef, source: 'file', hasSecret: false, removed: existed };
 }

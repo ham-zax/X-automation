@@ -1,3 +1,4 @@
+import { aiLimit } from './ai_policy.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -256,23 +257,34 @@ function repairPrompt(originalPrompt, schema, invalidText, validationErrors) {
   ].join('\n');
 }
 
-async function executeAdapter(profile, prompt, schema, timeoutMs) {
+async function executeAdapter(profile, prompt, schema, deadline) {
+  const timeoutMs = deadline - Date.now();
+  if (timeoutMs <= 0) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
+  const result = await executeAdapterUnchecked(profile, prompt, schema, deadline);
+  if (Date.now() >= deadline) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
+  if (Buffer.byteLength(String(result.text || '')) > aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024)) throw new AiRuntimeError('response_limit', 'AI output exceeds deployment limit.');
+  return result;
+}
+
+async function executeAdapterUnchecked(profile, prompt, schema, deadline) {
   if (profile.runtime === 'direct_api') {
     const apiKey = profile.secretRef ? await resolveAiSecret(profile.secretRef) : null;
     if (profile.secretRef && !apiKey) throw new AiRuntimeError('auth', 'Configured AI secret is unavailable.', { fallbackEligible: true });
     if (['openai', 'openrouter'].includes(profile.providerKind) && !apiKey) {
       throw new AiRuntimeError('auth', 'AI provider API key is unavailable.', { fallbackEligible: true });
     }
+    const timeoutMs = deadline - Date.now();
+    if (timeoutMs <= 0) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
     return runDirectStructuredAI(profile, { apiKey, prompt, schema, timeoutMs });
   }
-  return runCliStructuredAI(profile, { prompt, schema, timeoutMs });
+  return runCliStructuredAI(profile, { prompt, schema, timeoutMs: deadline - Date.now() });
 }
 
-async function executeValidated(profile, prompt, schema, timeoutMs) {
+async function executeValidated(profile, prompt, schema, deadline) {
   let requestCount = 0;
   let repairAttempted = false;
   try {
-    const first = await executeAdapter(profile, prompt, schema, timeoutMs);
+    const first = await executeAdapter(profile, prompt, schema, deadline);
     requestCount += 1;
     let parsed = parseStructuredText(first.text);
     let validation = parsed.parseError ? { valid: false, errors: [parsed.parseError] } : validateStructuredOutput(parsed.value, schema);
@@ -282,7 +294,7 @@ async function executeValidated(profile, prompt, schema, timeoutMs) {
     if (profile.runtime !== 'direct_api' || first.nativeStructuredOutput) throw invalidOutputError();
 
     repairAttempted = true;
-    const repaired = await executeAdapter(profile, repairPrompt(prompt, schema, first.text, validation.errors), schema, timeoutMs);
+    const repaired = await executeAdapter(profile, repairPrompt(prompt, schema, first.text, validation.errors), schema, deadline);
     requestCount += 1;
     parsed = parseStructuredText(repaired.text);
     validation = parsed.parseError ? { valid: false, errors: [parsed.parseError] } : validateStructuredOutput(parsed.value, schema);
@@ -317,7 +329,7 @@ async function runAttempt({
   fallbackUsed,
   prompt,
   schema,
-  timeoutMs,
+  deadline,
   metadata,
 }) {
   const startedAt = Date.now();
@@ -340,7 +352,7 @@ async function runAttempt({
   let repairAttempted = false;
   try {
     if (profile.enabled === false) throw new AiRuntimeError('profile_disabled', 'Selected AI profile is disabled.');
-    const result = await executeValidated(profile, prompt, schema, timeoutMs);
+    const result = await executeValidated(profile, prompt, schema, deadline);
     requestCount = result.requestCount;
     repairAttempted = result.repairAttempted;
     const completedAt = Date.now();
@@ -399,6 +411,7 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
   const timeout = Number(timeoutMs);
   if (!Number.isFinite(timeout) || timeout <= 0) throw new AiRuntimeError('invalid_request', 'runStructuredAI timeoutMs must be positive.');
   const invocationId = randomUUID();
+  const deadline = Date.now() + Math.min(timeout, aiLimit('AI_TOTAL_TIMEOUT_MS', 120_000));
   let resolution;
   try {
     resolution = resolveAiProfileForRole(role, profile);
@@ -422,7 +435,7 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
       fallbackUsed: false,
       prompt: taskPrompt,
       schema,
-      timeoutMs: timeout,
+      deadline,
       metadata,
     });
   } catch (error) {
@@ -447,7 +460,7 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
       fallbackUsed: true,
       prompt: taskPrompt,
       schema,
-      timeoutMs: timeout,
+      deadline,
       metadata,
     });
   } catch (error) {
