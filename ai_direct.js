@@ -54,6 +54,8 @@ async function fetchJson(url, options, timeoutMs) {
     if (remaining <= 0) throw new Error('AI request deadline exceeded.');
     response = await boundedAiRequest(url, options, remaining);
   } catch (error) {
+    if (error?.code === 'ai_input_limit') throw new AiDirectError('input_limit', error.message);
+    if (error?.code === 'ai_concurrency_limit') throw new AiDirectError('concurrency_limit', error.message);
     if (/deadline|timeout/i.test(error.message)) throw new AiDirectError('timeout', 'AI provider request timed out.', { fallbackEligible: true });
     if (['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN'].includes(error.code)) throw new AiDirectError('connection', 'AI provider connection failed.', { fallbackEligible: true });
     throw new AiDirectError('transport_policy', error.message);

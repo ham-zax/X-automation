@@ -1708,7 +1708,7 @@ export type AICapability = 'supported' | 'compatible_fallback' | 'unknown' | 'un
 export interface AIProfileView {
   id: number | null
   name: string
-  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy'
+  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy' | 'pi'
   providerKind: 'openai' | 'openrouter' | 'openai_compatible' | 'runtime_managed'
   baseUrl: string
   protocol: 'responses' | 'chat_completions' | 'runtime_native'
@@ -1743,7 +1743,7 @@ export interface AISettingsData {
 }
 
 export interface AIRuntimeAvailability {
-  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy'
+  runtime: 'direct_api' | 'codex' | 'opencode' | 'opencode2' | 'agy' | 'pi'
   installed: boolean
   version: string | null
   structuredOutput: AICapability

@@ -55,32 +55,42 @@ Caveats: this was **not reviewed or load-tested**. The watchdog runs on a free m
 
 Runs 36–38 on ARM ended with zero public actions because the default prompt tells the operator to stop rather than create filler. `X_GROWTH_AGENT_EXPERIMENT=1` (runner commit after `55eed51`; opt-in, default prompt unchanged, covered by a test in `tests/growth_agent_runner.test.mjs`) appends an `EXPERIMENT MODE` section to the prompt: the owner has granted full authority on this test account; aim for at least 2 public actions per pass (replies first, then an original or quote); review own drafts critically; write like a person (varied openers, specific details, no hashtag/emoji spam, no template phrasing); stale queue items may be expired. The bridge's hard gates (single publication claim, reconciliation, account health, duplicate fences, authentication) still apply. To tune posting volume or voice, edit the `experimentSection` text in `growth_agent_runner.js` `operatorPrompt`.
 
-## ARM application AI runtime repair — continuation on 2026-10-07
+## ARM application AI runtime repair — current state on 2026-10-07
 
-The app-level structured-AI path used by `browser-reply-claim`, Writer review, writing-strategy recommendation and editorial refresh was the blocker behind run 38's generic `AI execution failed`. This is separate from Pi's own `opencode2api` model connection.
+The app-level structured-AI path used by `browser-reply-claim`, Writer review, writing-strategy recommendation and editorial refresh was the blocker behind runs 38–39's generic `AI execution failed`. This is separate from the Growth Operator's own Pi process.
 
-Root cause and evidence:
+Verified root causes:
 
-- The persisted AI role bindings still pointed at workstation-era runtime-managed profiles (Codex, AGY and OpenCode). Those CLIs are not usable on ARM. `ai_runs` 570–573 show `editorial_scan` / `writer` failing essentially immediately on those profiles.
-- `ai_policy.reserveAiRequest()` reserves the request budget before a runtime-managed adapter discovers that its CLI is unavailable. The current editorial scan context is about 926 KB, so one dead Codex scan reserved about 947k against the default 1,000,000 daily token budget. The fallback then failed from budget exhaustion and the public bridge surfaced only the generic execution error.
-- The context is genuinely large: the dominant fields are measurement history, scan candidates and distribution-surface outcomes. Do not bind `editorial_scan` to `exo-free`: its configured 131k context window is too small for the current packet.
-- `testAiProfile()` also had an independent deadline bug: it passed a relative timeout where `executeValidated()` requires an absolute deadline. That made a healthy direct profile appear to time out immediately. The tracked fix is `Date.now() + timeoutMs`.
-- A raw local gateway probe and then x_test's own corrected structured-profile test both succeeded. The app-level direct adapter therefore works on ARM; the gateway itself was not the problem.
+- Persisted role bindings still pointed at workstation-era Codex/AGY/OpenCode profiles. Those runtimes are not usable on ARM; `ai_runs` 570–573 show the failures.
+- The deployment budget used to count UTF-8 bytes as if each byte were one token and reserved budget before discovering an unavailable CLI. A ~926 KB editorial context therefore consumed ~947k of the old 1M daily budget even when the runtime failed before inference.
+- The durable editorial context is legitimately large, with duplicated measurement, distribution and account-health diagnostics. Sending the entire durable object to a model is unnecessary.
+- Run 40 exposed a separate 24/7 recovery bug: Pi exited after malformed provider SSE, but `growth_agent_runner.js` rethrew without finishing the already-active Growth Run. That left run 40 and its operator lease orphaned and made the next timer wake coalesce.
 
-Current ARM AI configuration:
+Current AI architecture and configuration:
 
-- Local deployment env now allowlists `http://127.0.0.1:13339/v1` for the app's guarded direct-AI transport.
-- The ARM experiment's daily AI token-budget guard is 25,000,000 rather than the 1,000,000 default, because one editorial packet is close to 1 MB. The independent 200-request/day guard remains in place.
-- `writer`, `audience_review` and `continuous_scan`: primary `exo-free`, fallback `longcat-2.5-preview-free`.
-- `editorial_scan` and `editorial_final`: primary `longcat-2.5-preview-free`, fallback `space-bunny-free`.
-- All active role profiles are `direct_api` / OpenAI-compatible chat-completions profiles pointed at the loopback gateway. The secret value remains only in ARM's local secret store and was not printed.
-- x_test's corrected profile test passed for all three bound models before rebinding. A Nemotron profile was tested but returned a provider error through the app request shape and is not bound.
+- `pi` is now a first-class x_test AI runtime alongside Codex/OpenCode/AGY. Product-AI Pi calls are sessionless, tool-less, MCP-less, extension-less, skill-less and context-file-less; Pi's JSON event stream is parsed at `message_end` / `agent_settled` and x_test validates the result against its own schema.
+- **Exo-free is the default.** Global default profile and all five role primaries (`continuous_scan`, `editorial_scan`, `editorial_final`, `audience_review`, `writer`) are `ARM Pi exo-free` / `exo-free` (profile 13). The only role fallback is `ARM Pi big-pickle` (profile 12).
+- `space-bunny-free` remains as an enabled Pi profile for manual use but is not bound. The temporary direct-API profiles created during diagnosis (ids 6, 7, 8 and 10) are disabled and have no secret reference. The duplicate x_test-local gateway secret was removed; Pi owns the gateway credential path.
+- **Nemotron and Ling are prohibited.** x_test profile validation and Growth Operator runtime config reject them, Claive already rejects them, the diagnostic Nemotron profile was deleted, and the watchdog rotation contains neither model.
+- Local `.env` still allowlists `http://127.0.0.1:13339/v1` for guarded direct-AI diagnostics, but no active role uses the direct adapter.
+- There is **no application-level daily AI request/token budget**. AI safety is per request/concurrency only: `AI_MAX_INPUT_TOKENS=120000`, output/response limits, deadlines and `AI_MAX_CONCURRENCY`. CLI availability/profile preflight runs before a concurrency slot is reserved.
+- The full editorial context remains durable for observability, but `editorial_runtime.js` projects a bounded inference view. It records only size metadata (`inferencePacketBytes`, `requestEnvelopeBytes`), never prompt content.
 
-Live proof after rebinding: run 40 reached `browser-reply-claim` and `ai_runs` 574 and 575 completed through `direct_api / exo-free` in about 6 s and 15 s. The candidate was then skipped by the deterministic content gate (unsupported factual additions and 291/280 weighted characters), which is a legitimate quality rejection rather than an AI capability failure. As of 02:37 UTC there was still no new publication attempt after the 2026-10-02 posts.
+Production proof:
 
-There was also a discoverability gap in delegated main-feed approval. `agent_bridge.js` already exposed `mission-approve`, but the command was missing from the bridge usage string and the experiment prompt did not tell the operator to use it. Run 38 therefore incorrectly concluded there was no agent-lane approval primitive. The experiment prompt now tells the operator to establish the current deterministic writing strategy, regenerate/apply Writer output when necessary, and use `mission-approve` with the active run/grant and concrete verification provenance instead of waiting for the dashboard/human lane. `mission-approve` was also added to the bridge usage contract. The next fresh Pi pass will receive that prompt; run 40 began before the prompt edit, although it already uses the repaired live AI bindings.
+- A production Pi/Exo profile test completed in ~3.84 s. Earlier isolated Exo test was ~4.2 s; Space Bunny was ~9.4 s in the equivalent probe. Exo is therefore the preferred default for both latency and simplicity.
+- Replaying the last real editorial context (926,413 bytes) through the repaired production `runEditorialScan()` succeeded on the primary Exo profile with no fallback. The bounded inference packet was 135,987 bytes, the full request envelope 152,425 bytes, it returned 8 stories, and `ai_runs.id=576` completed in 43.7 s.
+- Before the daily quota was removed, the corrected accounting showed the earlier byte-counting bug clearly; the application now enforces no daily AI request/token allowance at all.
+- Run 40 was recovered through the canonical `growth-run-finish` path only after confirming it had zero publication attempts. The recovered terminal result records `runtimeFailure`, detaches the reasoning runtime and releases the lease.
+- New runner behavior automatically finishes an active run as `partial/capability_unavailable` with `result.runtimeFailure` when the reasoning child dies. The watchdog recognizes that marker as a provider/runtime failure instead of misclassifying it as an X-side blocker.
+- The watchdog's own model rotation is now `mimo-v2.6-flash-free`, `big-pickle`, `space-bunny-free`; the operator remains preferred on `exo-free`. Its tracked/live goal understands `runtimeFailure` and still only changes the operator model for a future pass.
+- Full repository test suite: **91/91 pass** after the final no-daily-quota and malformed-stream fallback changes. Production UI build succeeds.
 
-Verification performed for this continuation: direct gateway contract probes, x_test's own structured-profile tests, live `ai_runs` evidence from run 40, and `node --check` on the three changed JavaScript files. No automated test suite was run.
+Rollback snapshots for the role migrations are under `~/work/scratch/`, including `x-test-ai-role-migration-2026-10-07T02-55-00-241Z.json` and `x-test-ai-role-migration-exo-default-2026-10-07T02-59-14-959Z.json`.
+
+The delegated main-feed approval path remains as previously repaired: the experiment prompt explicitly tells the operator to establish the current writing strategy, regenerate/apply Writer output when needed, and use `mission-approve` with active run/grant plus concrete verification provenance instead of waiting for the dashboard/human lane. Hard publication/claim/reconciliation gates remain authoritative.
+
+Post-repair live evidence is now stronger than the initial run-41 check: publication attempts 35–40 include a confirmed repost, four confirmed replies and one confirmed original post. Run 60 later hit the now-removed daily AI quota; after removing that quota, run 61 immediately resumed Exo work and `ai_runs` 633–635 completed successfully while the run remained active. The old `ai_deployment_budget` state row was deleted; only per-request/concurrency controls remain.
 
 ## Closing the WSL session
 

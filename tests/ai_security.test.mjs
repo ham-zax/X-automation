@@ -42,7 +42,7 @@ after(async () => {
   process.chdir(originalCwd); await fs.rm(dir, { recursive: true, force: true });
 });
 
-function resetBudget() { store.setAppState('ai_deployment_budget', '{"day":"","requests":0,"tokens":0,"active":{}}'); }
+function resetAiConcurrency() { store.setAppState('ai_request_concurrency', '{"active":{}}'); }
 function child(code) {
   return new Promise((resolve, reject) => {
     const processChild = spawn(process.execPath, ['--input-type=module', '-e', code], { cwd: dir, env: process.env, stdio: ['ignore', 'ignore', 'pipe'] });
@@ -85,22 +85,28 @@ test('explicit local providers reject redirects, bound bodies, and bound incompl
   assert.ok(Date.now() - started < 1000);
 });
 
-test('daily and concurrency reservations are shared across processes and fail closed on invalid configuration', async () => {
-  resetBudget(); process.env.AI_MAX_CONCURRENCY = '1';
+test('AI reservations enforce concurrency and per-request size but no daily request/token quota', async () => {
+  resetAiConcurrency(); process.env.AI_MAX_CONCURRENCY = '1';
   const release = policy.reserveAiRequest('task', 1000);
-  assert.throws(() => policy.reserveAiRequest('task', 1000), /budget exhausted/);
+  assert.throws(() => policy.reserveAiRequest('task', 1000), /concurrency limit/);
   const moduleUrl = pathToFileURL(path.join(repo, 'ai_policy.js')).href;
-  await child(`import { reserveAiRequest } from ${JSON.stringify(moduleUrl)}; try { reserveAiRequest('task', 1000); process.exit(1); } catch (error) { if (!error.message.includes('budget exhausted')) throw error; }`);
+  await child(`import { reserveAiRequest } from ${JSON.stringify(moduleUrl)}; try { reserveAiRequest('task', 1000); process.exit(1); } catch (error) { if (!error.message.includes('concurrency limit')) throw error; }`);
   release(); delete process.env.AI_MAX_CONCURRENCY;
-  process.env.AI_DAILY_REQUEST_BUDGET = '1';
-  assert.throws(() => policy.reserveAiRequest('task', 1000), /budget exhausted/);
+
+  process.env.AI_DAILY_REQUEST_BUDGET = '0';
+  process.env.AI_DAILY_TOKEN_BUDGET = '0';
+  const dailyQuotaIgnored = policy.reserveAiRequest('task', 1000);
+  dailyQuotaIgnored();
   delete process.env.AI_DAILY_REQUEST_BUDGET;
-  resetBudget(); process.env.AI_DAILY_TOKEN_BUDGET = '100';
-  assert.throws(() => policy.reserveAiRequest('task', 1000), /budget exhausted/);
   delete process.env.AI_DAILY_TOKEN_BUDGET;
+
+  process.env.AI_MAX_INPUT_TOKENS = '1';
+  assert.throws(() => policy.reserveAiRequest('this prompt is deliberately larger than one estimated token', 1000), /input limit/);
+  delete process.env.AI_MAX_INPUT_TOKENS;
+
   process.env.AI_MAX_CONCURRENCY = 'NaN';
   assert.throws(() => policy.reserveAiRequest('task', 1000), /Invalid deployment/);
-  delete process.env.AI_MAX_CONCURRENCY; resetBudget();
+  delete process.env.AI_MAX_CONCURRENCY; resetAiConcurrency();
 });
 
 test('concurrent secret updates preserve every key across processes', async () => {
@@ -111,7 +117,7 @@ test('concurrent secret updates preserve every key across processes', async () =
 });
 
 test('an expired invocation cannot restart its deadline for repair and provider receives bounded output', async () => {
-  resetBudget(); process.env.AI_ALLOWED_LOCAL_PROVIDER_URLS = base;
+  resetAiConcurrency(); process.env.AI_ALLOWED_LOCAL_PROVIDER_URLS = base;
   const profile = store.createAiProfile({ name: 'deadline-test', runtime: 'direct_api', providerKind: 'openai_compatible', protocol: 'chat_completions', baseUrl: `${base}/repair`, model: 'test', settings: { structuredOutput: 'compatible_fallback' } });
   // Advance the invocation clock when the first response arrives instead of
   // relying on sub-200ms wall-clock scheduling under concurrent test load.
@@ -156,6 +162,12 @@ test('CLI oversized output is rejected rather than silently truncated', async ()
   await assert.rejects(cli.runProcess(process.execPath, ['-e', 'process.stdout.write("x".repeat(2048))'], { maxOutputChars: 100 }), error => error.code === 'response_limit');
 });
 
+test('malformed provider streams are fallback-eligible provider failures', async () => {
+  await assert.rejects(
+    cli.runProcess(process.execPath, ['-e', 'process.stderr.write("Error reading response: malformed server-sent event JSON"); process.exit(1)']),
+    error => error.code === 'provider_error' && error.fallbackEligible === true,
+  );
+});
 
 test('production runtime-managed execution is denied before subprocess launch without explicit opt-in', async () => {
   const old = process.env.NODE_ENV; process.env.NODE_ENV = 'production';

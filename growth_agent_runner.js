@@ -10,6 +10,7 @@ import {
   updateGrowthAgentSchedulerStatus,
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
+import { finishGrowthRun } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
 const HOME = homedir();
@@ -39,6 +40,10 @@ export function runtimeConfig(env = process.env) {
   }
   const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : '';
   const model = String(env.X_GROWTH_AGENT_MODEL || defaultModel).trim();
+  const loweredModel = model.toLowerCase();
+  if (loweredModel.includes('nemotron') || /(^|[\/_.:-])ling(?:$|[\/_.:-])/.test(loweredModel)) {
+    throw new Error('Nemotron and Ling models are not allowed for the growth operator.');
+  }
   // Pi is the headless-Linux runtime: its browser is the persistent CDP Chromium, not a Windows tab.
   const browserTarget = String(env.X_GROWTH_BROWSER_TARGET || (runtime === 'pi' ? 'linux' : 'windows')).trim().toLowerCase();
   if (!BROWSER_TARGETS.includes(browserTarget)) {
@@ -261,7 +266,7 @@ export async function main(overrides = {}) {
     delegation: getGrowthOperatorDelegation, runs: listGrowthRuns,
     lease: getOperatorLeaseStatus, health: getAccountHealthSummary,
     attempts: listPublicationAttempts, child: runChild,
-    heartbeat: startRuntimeHeartbeatPump, ...overrides,
+    heartbeat: startRuntimeHeartbeatPump, finishRun: finishGrowthRun, ...overrides,
   };
   const startedAt = now();
   const deadline = startedAt + config.windowMinutes * 60_000;
@@ -312,10 +317,44 @@ export async function main(overrides = {}) {
       run?.status === 'active' ? run.runId : '');
     } catch (error) {
       const run = deps.runs({ sessionId, limit: 1 })[0] || null;
-      sessions.push({ sessionId, runId: run?.runId || '', status: 'runtime_error' });
-      record({ lastError: String(error?.message || error) });
-      finish({ status: 'runtime_error', reason: String(error?.message || error) },
-        run?.status === 'active' ? run.runId : '');
+      const message = String(error?.message || error);
+      record({ lastError: message });
+      if (run?.status === 'active') {
+        try {
+          const closed = deps.finishRun(run.runId, {
+            status: 'partial',
+            stopReason: 'capability_unavailable',
+            stopDetail: `Reasoning runtime exited before the Growth Run could finish: ${message}`,
+            result: {
+              runtimeFailure: {
+                runtime: config.runtime,
+                model: config.model,
+                error: message,
+              },
+            },
+            now: now(),
+          });
+          sessions.push({
+            sessionId,
+            runId: run.runId,
+            status: closed?.status || 'partial',
+            stopReason: closed?.stopReason || 'capability_unavailable',
+            finishedAt: closed?.finishedAt || now(),
+          });
+          return finish({
+            status: closed?.status || 'partial',
+            runId: run.runId,
+            stopReason: closed?.stopReason || 'capability_unavailable',
+            reason: 'runtime_provider_failure',
+          });
+        } catch (recoveryError) {
+          sessions.push({ sessionId, runId: run.runId, status: 'runtime_error_recovery_failed' });
+          record({ lastError: `${message}; recovery failed: ${String(recoveryError?.message || recoveryError)}` });
+          throw error;
+        }
+      }
+      sessions.push({ sessionId, runId: '', status: 'runtime_error' });
+      finish({ status: 'runtime_error', reason: message });
       throw error;
     } finally {
       stopHeartbeatPump();

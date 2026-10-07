@@ -291,7 +291,7 @@ async function executeValidated(profile, prompt, schema, deadline) {
     if (validation.valid) {
       return { output: parsed.value, adapter: first, requestCount, repairAttempted };
     }
-    if (profile.runtime !== 'direct_api' || first.nativeStructuredOutput) throw invalidOutputError();
+    if (first.nativeStructuredOutput) throw invalidOutputError();
 
     repairAttempted = true;
     const repaired = await executeAdapter(profile, repairPrompt(prompt, schema, first.text, validation.errors), schema, deadline);

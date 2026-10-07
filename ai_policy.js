@@ -65,24 +65,41 @@ export async function boundedAiRequest(input, options = {}, timeoutMs = 15_000) 
   });
 }
 
+function aiPolicyError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function estimateAiInputTokens(prompt) {
+  // JSON/editorial prompts are predominantly ASCII. Three UTF-8 bytes per token is
+  // deliberately conservative versus the usual ~4 chars/token while avoiding the
+  // previous 1-byte=1-token overcount.
+  return Math.max(1, Math.ceil(Buffer.byteLength(String(prompt)) / 3));
+}
+
 export function reserveAiRequest(prompt, timeoutMs) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('Invalid AI request timeout.');
   timeoutMs = Math.min(timeoutMs, aiLimit('AI_TOTAL_TIMEOUT_MS', 120_000));
   const id = randomUUID(); const now = Date.now();
-  const tokens = Buffer.byteLength(String(prompt)) + aiLimit('AI_MAX_OUTPUT_TOKENS', 4096);
+  const inputTokens = estimateAiInputTokens(prompt);
+  const maxInputTokens = aiLimit('AI_MAX_INPUT_TOKENS', 120_000);
+  if (inputTokens > maxInputTokens) {
+    throw aiPolicyError('ai_input_limit', `AI prompt exceeds deployment input limit: ~${inputTokens} tokens > ${maxInputTokens}.`);
+  }
   return runStoreTransaction(() => {
-    const key = 'ai_deployment_budget';
-    const state = JSON.parse(getAppState(key, '{"day":"","requests":0,"tokens":0,"active":{}}'));
-    const day = new Date(now).toISOString().slice(0, 10);
+    const key = 'ai_request_concurrency';
+    const state = JSON.parse(getAppState(key, '{"active":{}}'));
     const active = Object.fromEntries(Object.entries(state.active || {}).filter(([, value]) => value > now));
-    const requests = state.day === day ? Number(state.requests) : 0;
-    const used = state.day === day ? Number(state.tokens) : 0;
-    if (!Number.isFinite(requests) || !Number.isFinite(used)) throw new Error('Invalid AI budget state.');
-    if (Object.keys(active).length >= aiLimit('AI_MAX_CONCURRENCY', 2) || requests >= aiLimit('AI_DAILY_REQUEST_BUDGET', 200) || used + tokens > aiLimit('AI_DAILY_TOKEN_BUDGET', 1_000_000)) throw new Error('Deployment AI budget exhausted.');
+    if (Object.keys(active).length >= aiLimit('AI_MAX_CONCURRENCY', 2)) {
+      throw aiPolicyError('ai_concurrency_limit', 'Deployment AI concurrency limit reached.');
+    }
     active[id] = now + timeoutMs + 5_000;
-    setAppState(key, JSON.stringify({ day, requests: requests + 1, tokens: used + tokens, active }));
+    setAppState(key, JSON.stringify({ active }));
     return () => runStoreTransaction(() => {
-      const latest = JSON.parse(getAppState(key)); delete latest.active[id]; setAppState(key, JSON.stringify(latest));
+      const latest = JSON.parse(getAppState(key, '{"active":{}}'));
+      delete latest.active[id];
+      setAppState(key, JSON.stringify({ active: latest.active || {} }));
     });
   });
 }

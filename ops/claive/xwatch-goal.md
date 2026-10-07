@@ -9,13 +9,13 @@ Files and units:
 Step 1 - observe (read-only):
 - `systemctl --user is-active x-test-growth-agent.service x-test-growth-agent.timer`
 - `journalctl --user -u x-test-growth-agent.service --since "3 hours ago" --no-pager | tail -80`
-- sqlite3 -readonly -header -column <db> "select status,stop_reason,adapter_type,datetime(updated_at/1000,'unixepoch') upd from growth_runs order by id desc limit 10"
+- sqlite3 -readonly -header -column <db> "select status,stop_reason,adapter_type,substr(stop_detail,1,240) stop_detail,json_extract(result_json,'$.runtimeFailure.error') runtime_error,datetime(updated_at/1000,'unixepoch') upd from growth_runs order by id desc limit 10"
 - sqlite3 -readonly -header -column <db> "select a.action_type,a.state,count(*) n from publication_attempts a where a.claimed_at > (strftime('%s','now')-86400)*1000 group by 1,2"
 - Current model: the drop-in file above.
 
 Step 2 - classify any failure:
-- MODEL/PROVIDER failure = the last 2 passes ended with the runtime exiting non-zero, a quota/429/5xx/unauthorized/"model not found"/timeout error, or "runtime_completed_without_growth_run", AND no Growth Run was created for those passes.
-- X-SIDE blocker = authentication/login, 423, rate limit, capability_unavailable, delegation_not_live_or_revised, account_health_constrained, reconciliation required. These are NOT model problems: do not switch model; write one line to ALERTS.md (timestamp + what + which run) and stop.
+- MODEL/PROVIDER failure = either (a) the last 2 service passes ended with the runtime exiting non-zero, quota/429/5xx/unauthorized/"model not found"/timeout/malformed-stream errors or `runtime_completed_without_growth_run` and created no Growth Run, OR (b) the latest 2 Growth Runs both ended `partial/capability_unavailable` with `result.runtimeFailure` / a `Reasoning runtime exited` stop detail. A Growth Run explicitly marked with `runtimeFailure` is a model/provider failure, not an X-side capability blocker.
+- X-SIDE blocker = authentication/login, X-side 423/rate limit, `capability_unavailable` without `runtimeFailure`, delegation_not_live_or_revised, account_health_constrained, or reconciliation required. These are NOT model problems: do not switch model; write one line to ALERTS.md (timestamp + what + which run) and stop.
 - Healthy = runs completing (including no_worthwhile_eligible_work). Do nothing but log.
 
 Step 3 - model switching (only on a MODEL/PROVIDER failure):

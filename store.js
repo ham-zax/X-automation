@@ -57,7 +57,7 @@ export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
   'platform_restriction_observed',
   'operator_note',
 ];
-export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy']);
+export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy', 'pi']);
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
 export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer']);
@@ -6200,6 +6200,11 @@ function validateAiBaseUrl(baseUrl, { required = false } = {}) {
   return value;
 }
 
+function isDisallowedAiModel(model) {
+  const value = String(model || '').trim().toLowerCase();
+  return value.includes('nemotron') || /(^|[\/_.:-])ling(?:$|[\/_.:-])/.test(value);
+}
+
 function normalizeAiProfileInput(input = {}, current = null) {
   const merged = { ...(current || {}), ...(input || {}) };
   const name = String(merged.name || '').trim();
@@ -6214,6 +6219,7 @@ function normalizeAiProfileInput(input = {}, current = null) {
   if (!isDirect && protocol !== 'runtime_native') throw new DomainValidationError(`${runtime} profiles must use protocol=runtime_native.`);
   const model = String(merged.model || '').trim();
   if (!model) throw new DomainValidationError('AI profile model is required; use "inherit" explicitly for runtime-managed inheritance.');
+  if (isDisallowedAiModel(model)) throw new DomainValidationError('Nemotron and Ling models are not allowed in this deployment.');
   if (isDirect && model === 'inherit') throw new DomainValidationError('Direct API profiles require an explicit model ID.');
   const baseUrl = validateAiBaseUrl(merged.baseUrl, { required: isDirect && providerKind === 'openai_compatible' });
   const secretRef = validateAiSecretRef(merged.secretRef);

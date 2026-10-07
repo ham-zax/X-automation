@@ -71,6 +71,8 @@ try {
     assert.equal(command.args[command.args.indexOf('--tools') + 1], 'read,bash');
     assert.equal(command.args[command.args.indexOf('--thinking') + 1], 'high');
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_THINKING: 'turbo' }), /X_GROWTH_PI_THINKING/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_AGENT_MODEL: 'opencode2api/nemotron-3-ultra-free' }), /Nemotron and Ling/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_AGENT_MODEL: 'opencode2api/ling-3.1-flash' }), /Nemotron and Ling/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_TARGET: 'mars' }), /X_GROWTH_BROWSER_TARGET/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_CDP_PORT: '9222; rm' }), /CDP_PORT/);
   });
@@ -140,6 +142,35 @@ try {
     failure.dependencies.child = async () => { throw new Error('fixture failure'); };
     await assert.rejects(runner.main(failure.dependencies), /fixture failure/);
     assert.equal(failure.heartbeatStops(), 1);
+  });
+  await test('runtime failure after a durable run starts closes the run and releases recovery responsibility', async () => {
+    const state = harness();
+    let activeRun = null;
+    let finished = null;
+    state.dependencies.runs = ({ status, sessionId }) => {
+      if (status) return [];
+      return activeRun && activeRun.sessionId === sessionId ? [activeRun] : [];
+    };
+    state.dependencies.child = async (command) => {
+      const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
+      activeRun = { runId: 'run-active', sessionId, status: 'active', stopReason: '' };
+      throw new Error('malformed server-sent event JSON');
+    };
+    state.dependencies.finishRun = (runId, payload) => {
+      finished = { runId, payload };
+      activeRun = { ...activeRun, status: payload.status, stopReason: payload.stopReason, finishedAt: 123456 };
+      return activeRun;
+    };
+    const result = await runner.main(state.dependencies);
+    assert.equal(finished.runId, 'run-active');
+    assert.equal(finished.payload.status, 'partial');
+    assert.equal(finished.payload.stopReason, 'capability_unavailable');
+    assert.match(finished.payload.stopDetail, /malformed server-sent event JSON/);
+    assert.equal(finished.payload.result.runtimeFailure.runtime, 'claude');
+    assert.equal(result.status, 'partial');
+    assert.equal(result.reason, 'runtime_provider_failure');
+    assert.equal(result.stopReason, 'capability_unavailable');
+    assert.equal(state.heartbeatStops(), 1);
   });
   await test('deadline kills a runtime that ignores SIGTERM and cleans up signal listeners', async () => {
     const pidFile = path.join(scratch, 'runtime.pid');

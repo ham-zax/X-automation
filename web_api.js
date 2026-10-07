@@ -180,7 +180,7 @@ const DISCOVER_SOURCE_KINDS = Object.freeze({
 const AUDIENCE_UNFOLLOW_JOBS = new Map();
 const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
 const VIRAL_RESEARCH_WINDOWS = new Set([14, 21, 30]);
-const VIRAL_RESEARCH_RUNTIME_TYPES = new Set(['codex', 'opencode', 'agy']);
+const VIRAL_RESEARCH_RUNTIME_TYPES = new Set(['codex', 'opencode', 'agy', 'pi']);
 let VIRAL_RESEARCH_JOB = null;
 const WEB_JOB_STATE_KEY = 'web_jobs_v1';
 function persistWebJobs() {
@@ -1411,6 +1411,7 @@ function formatLearnedRule(rule) {
 function aiProfileCapability(profile) {
   if (!profile) return 'unsupported';
   if (profile.runtime === 'codex' || profile.runtime === 'opencode' || profile.runtime === 'agy') return 'supported';
+  if (profile.runtime === 'pi') return 'compatible_fallback';
   if (profile.runtime !== 'direct_api') return 'unsupported';
   const configured = profile.settings?.structuredOutput;
   if (['supported', 'compatible_fallback', 'unknown', 'unsupported'].includes(configured)) return configured;
@@ -1998,8 +1999,8 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 2 && segments[0] === 'ai' && segments[1] === 'catalog-preview') {
       const payload = await readBody();
       const runtime = String(payload.runtime || '').trim();
-      if (!['codex', 'opencode', 'agy'].includes(runtime)) {
-        throw validationError('Catalog preview before saving is supported for Codex, OpenCode, and AGY runtime profiles.');
+      if (!['codex', 'opencode', 'agy', 'pi'].includes(runtime)) {
+        throw validationError('Catalog preview before saving is supported for Codex, OpenCode, AGY, and Pi runtime profiles.');
       }
       const profile = {
         id: null,

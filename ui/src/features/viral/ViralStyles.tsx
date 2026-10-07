@@ -226,7 +226,9 @@ export function ViralStyles({ embedded = false }: { embedded?: boolean } = {}) {
     ? selectedModel.reasoningLevels
     : runtime === 'agy'
       ? ['low', 'medium', 'high']
-      : []
+      : runtime === 'pi'
+        ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+        : []
 
   const searchJobs = niches.length * Math.ceil(days / 7) * thresholds.length
   const maxSeeds = searchJobs * limitPerQuery

@@ -263,7 +263,9 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
   }).slice(0, 40)
   const reasoningOptions = runtime === 'agy'
     ? ['low', 'medium', 'high']
-    : selectedCatalogModel?.reasoningLevels?.length
+    : runtime === 'pi'
+      ? ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+      : selectedCatalogModel?.reasoningLevels?.length
       ? selectedCatalogModel.reasoningLevels
       : runtime === 'codex' && model === 'inherit'
         ? Array.from(new Set((catalogData?.models || []).flatMap((entry) => entry.reasoningLevels || [])))
@@ -283,7 +285,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       setProviderKind('runtime_managed')
       setProtocol('runtime_native')
       setModel(next === 'codex' ? 'inherit' : '')
-      if (next === 'agy' || next === 'opencode') setRuntimeProfile('')
+      if (next === 'agy' || next === 'opencode' || next === 'pi') setRuntimeProfile('')
     }
   }
 
@@ -301,7 +303,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
       protocol: direct ? protocol : 'runtime_native',
       model,
       reasoning,
-      runtimeProfile: direct || runtime === 'agy' || runtime === 'opencode' ? '' : runtimeProfile,
+      runtimeProfile: direct || runtime === 'agy' || runtime === 'opencode' || runtime === 'pi' ? '' : runtimeProfile,
       settings,
       enabled: profile?.enabled ?? true,
     }
@@ -340,6 +342,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
             <option value="codex">Codex</option>
             <option value="opencode">OpenCode</option>
             <option value="agy">AGY</option>
+            <option value="pi">Pi</option>
           </select>
         </label>
         {direct ? (
@@ -368,7 +371,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
               <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder={providerKind === 'openrouter' ? 'https://openrouter.ai/api/v1' : providerKind === 'openai' ? 'https://api.openai.com/v1' : 'http://localhost:11434/v1'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
             </label>
           </>
-        ) : runtime !== 'agy' && runtime !== 'opencode' ? (
+        ) : runtime !== 'agy' && runtime !== 'opencode' && runtime !== 'pi' ? (
           <label className="text-sm text-slate-700 md:col-span-2">
             Runtime profile (optional)
             <input value={runtimeProfile} onChange={(event) => setRuntimeProfile(event.target.value)} placeholder="Use the runtime's default configuration" className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm" />
@@ -376,7 +379,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         ) : null}
         <label className="text-sm text-slate-700">
           Model ID
-          <input required list={`ai-model-catalog-${profile?.id ?? 'new'}`} value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or choose a Codex model' : runtime === 'opencode' ? 'Choose provider/model from the catalog' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
+          <input required list={`ai-model-catalog-${profile?.id ?? 'new'}`} value={model} onChange={(event) => setModel(event.target.value)} placeholder={runtime === 'codex' ? 'inherit or choose a Codex model' : runtime === 'opencode' ? 'Choose provider/model from the catalog' : runtime === 'pi' ? 'Choose a Pi opencode2api model' : 'Exact upstream model ID'} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-2 text-sm font-mono" />
           <datalist id={`ai-model-catalog-${profile?.id ?? 'new'}`}>
             {(catalogData?.models || []).map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </datalist>
@@ -451,7 +454,7 @@ function ProfileEditor({ profile, onSaved, onDeleted }: { profile: AIProfileView
         </div>
       )}
 
-      {!profile && !direct && ['codex', 'opencode', 'agy'].includes(runtime) && (
+      {!profile && !direct && ['codex', 'opencode', 'agy', 'pi'].includes(runtime) && (
         <div className="mt-5 border-t border-slate-200 pt-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
