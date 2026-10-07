@@ -4,7 +4,7 @@ Written for the next agent (any model) to take over. This file lives in a public
 
 ## Goal
 
-Hamza wants `@ham_zax` operated continuously by an unattended reasoning agent on a small always-on server (the **ARM** host, Oracle Cloud, Ubuntu 24.04 aarch64, **Pi runtime; Exo-free is the preferred/default model, with provider-failure failover allowed**). The WSL workstation is **not** the operator host any more: Hamza said it will not run the operator. Never start a second operator elsewhere against another copy of the database (duplicate posts).
+Hamza wants `@ham_zax` operated continuously by an unattended reasoning agent on a small always-on server (the **ARM** host, Oracle Cloud, Ubuntu 24.04 aarch64, **Pi runtime; Muse 1.3 Contributor is the preferred operator model**). The WSL workstation is **not** the operator host any more: Hamza said it will not run the operator. Never start a second operator elsewhere against another copy of the database (duplicate posts).
 
 Hamza asked that no extra code or review effort be spent on the supervision layer for now; the watchdog below is deliberately a hack made of existing parts.
 
@@ -16,7 +16,7 @@ Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config
 | --- | --- |
 | `x-test-dashboard.service` | Dashboard on 127.0.0.1:3030 (owner auth). |
 | `x-test-growth-agent.timer` / `.service` | Every ~15 min runs `node growth_agent_runner.js` (oneshot, 9 h timeout). Env: `X_GROWTH_AGENT_RUNTIME=pi`, `X_GROWTH_BROWSER_TARGET=linux`, `X_GROWTH_BROWSER_CDP_PORT=9222`, `X_GROWTH_AGENT_WINDOW_MINUTES=480`, `AI_ALLOW_RUNTIME_MANAGED=true`. An active service coalesces timer wakes. |
-| `x-test-growth-agent.service.d/model.conf` | Drop-in setting `X_GROWTH_AGENT_MODEL` (tracked default `opencode2api/exo-free`). The watchdog may rewrite the installed live copy temporarily to fail over during a provider outage. |
+| `x-test-growth-agent.service.d/model.conf` | Drop-in setting `X_GROWTH_AGENT_MODEL` (currently `opencode2api/muse-spark-1.3-contributor-free`). The watchdog rewrites this file to switch models. |
 | `x-test-growth-agent.service.d/experiment.conf` | Drop-in setting `X_GROWTH_AGENT_EXPERIMENT=1`: adds the **experiment-mode** section to the operator prompt (see below). Delete the file and `daemon-reload` to return to the cautious default prompt. |
 | `x-test-watch.timer` / `.service` | Every 30 min queues the **watchdog goal** into claive if the queue is empty. |
 | `claive-serve.service` | claive supervisor; works the goal queue (config `~/.config/claive/config.json`, default engine `pi`, worker model `exo-free`). |
@@ -36,7 +36,7 @@ ARM's Chromium was signed in by setting the `auth_token` and `ct0` cookies (valu
 
 ## Models and the watchdog hack
 
-Preferred order for the operator: `exo-free` → `muse-spark-1.3-contributor-free` → `mimo-v2.6-flash-free` → `big-pickle` → `space-bunny-free` (all under provider `opencode2api`). Pi's own default model, Pi subagent default and claive's worker role on ARM are `exo-free` (backups of the old config are next to the files as `*.bak-<timestamp>`). The runner has **no** built-in fallback and claive serve only backs off on provider errors; it never switches models.
+Preferred order for the operator: `muse-spark-1.3-contributor-free` → `mimo-v2.6-flash-free` → `big-pickle` → `space-bunny-free` (all under provider `opencode2api`). Pi's own default model, Pi subagent default and claive's worker role on ARM are `exo-free` (backups of the old config are next to the files as `*.bak-<timestamp>`). The runner has **no** built-in fallback and claive serve only backs off on provider errors; it never switches models.
 
 The substitute is the **watchdog goal** (`ops/claive/xwatch-goal.md`, installed at `~/work/scratch/xwatch/goal.md` on ARM). `x-test-watch.timer` queues it every 30 min (`--write --budget 25m --max-attempts 1 --engine pi --model mimo-v2.6-flash-free`). One cycle: read-only checks of the service, journal and database; classify model/provider failure versus X-side blockers (login, 423, rate limit, capability, delegation, health, reconciliation); on a model failure with no active Growth Run, move `model.conf` to the next model and `daemon-reload`; append a JSON line to `~/work/scratch/xwatch/stats.jsonl`; write X-side blockers to `~/work/scratch/xwatch/ALERTS.md`. It may not touch the repo, `.env`, the database (read-only), claive, git, the browser, or the services.
 
@@ -69,7 +69,7 @@ Verified root causes:
 Current AI architecture and configuration:
 
 - `pi` is now a first-class x_test AI runtime alongside Codex/OpenCode/AGY. Product-AI Pi calls are sessionless, tool-less, MCP-less, extension-less, skill-less and context-file-less; Pi's JSON event stream is parsed at `message_end` / `agent_settled` and x_test validates the result against its own schema.
-- **Exo-free is the default.** Global default profile and all five role primaries (`continuous_scan`, `editorial_scan`, `editorial_final`, `audience_review`, `writer`) are `ARM Pi exo-free` / `exo-free` (profile 13). The role fallback is `ARM Pi big-pickle` (profile 12).
+- **Muse 1.3 Contributor is the default.** Global default profile and all five role primaries (`continuous_scan`, `editorial_scan`, `editorial_final`, `audience_review`, `writer`) are `ARM Pi Muse 1.3 Contributor` / `muse-spark-1.3-contributor-free` (profile 14). The role fallback is `ARM Pi big-pickle` (profile 12).
 - `space-bunny-free` remains as an enabled Pi profile for manual use but is not bound. The temporary direct-API profiles created during diagnosis (ids 6, 7, 8 and 10) are disabled and have no secret reference. The duplicate x_test-local gateway secret was removed; Pi owns the gateway credential path.
 - **Nemotron and Ling are prohibited.** x_test profile validation and Growth Operator runtime config reject them, Claive already rejects them, the diagnostic Nemotron profile was deleted, and the watchdog rotation contains neither model.
 - Local `.env` still allowlists `http://127.0.0.1:13339/v1` for guarded direct-AI diagnostics, but no active role uses the direct adapter.
@@ -83,7 +83,7 @@ Production proof:
 - Before the daily quota was removed, the corrected accounting showed the earlier byte-counting bug clearly; the application now enforces no daily AI request/token allowance at all.
 - Run 40 was recovered through the canonical `growth-run-finish` path only after confirming it had zero publication attempts. The recovered terminal result records `runtimeFailure`, detaches the reasoning runtime and releases the lease.
 - New runner behavior automatically finishes an active run as `partial/capability_unavailable` with `result.runtimeFailure` when the reasoning child dies. The watchdog recognizes that marker as a provider/runtime failure instead of misclassifying it as an X-side blocker.
-- The watchdog may temporarily fail the operator over through `muse-spark-1.3-contributor-free`, `mimo-v2.6-flash-free`, `big-pickle`, and `space-bunny-free`, but `exo-free` remains the preferred model and healthy passes return to it. Its tracked/live goal understands `runtimeFailure` and still only changes the operator model for a future pass.
+- The watchdog's own model rotation is now `mimo-v2.6-flash-free`, `big-pickle`, `space-bunny-free`; the operator is preferred on `muse-spark-1.3-contributor-free`. Its tracked/live goal understands `runtimeFailure` and still only changes the operator model for a future pass.
 - Full repository test suite: **91/91 pass** after the final no-daily-quota and malformed-stream fallback changes. Production UI build succeeds.
 
 Rollback snapshots for the role migrations are under `~/work/scratch/`, including `x-test-ai-role-migration-2026-10-07T02-55-00-241Z.json` and `x-test-ai-role-migration-exo-default-2026-10-07T02-59-14-959Z.json`.

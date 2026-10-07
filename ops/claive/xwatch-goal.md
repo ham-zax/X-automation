@@ -19,9 +19,9 @@ Step 2 - classify any failure:
 - Healthy = runs completing (including no_worthwhile_eligible_work). Do nothing but log.
 
 Step 3 - model switching (only on a MODEL/PROVIDER failure):
-- Order of preference: opencode2api/exo-free, opencode2api/muse-spark-1.3-contributor-free, opencode2api/mimo-v2.6-flash-free, opencode2api/big-pickle, opencode2api/space-bunny-free.
+- Order of preference: opencode2api/muse-spark-1.3-contributor-free, opencode2api/mimo-v2.6-flash-free, opencode2api/big-pickle, opencode2api/space-bunny-free.
 - Move the drop-in to the next model after the current one (wrap to the first after the last). Write it with: printf '[Service]\nEnvironment=X_GROWTH_AGENT_MODEL=%s\n' "<model>" > <drop-in>; then `systemctl --user daemon-reload`. Record {switchedAt, from, to, reason} in state.json.
-- If the current model is not exo-free and the last switch was more than 3 hours ago and passes are healthy, move back to exo-free to retry the preferred model (one switch per cycle).
+- If the current model is not muse-spark-1.3-contributor-free and the last switch was more than 3 hours ago and passes are healthy, move back to muse-spark-1.3-contributor-free to retry the preferred model (one switch per cycle).
 - Never switch while a Growth Run is `active`; just note it and exit. Never restart, stop, or kill x-test-growth-agent.service/timer or any process.
 
 Step 4 - stats: append exactly one JSON line to stats.jsonl: {"ts": ISO time, "model": current, "service": active state, "recentRuns": [status counts from the last 10 runs], "attempts24h": [action_type/state counts], "verdict": "healthy|model_failure|x_blocker|unknown", "action": "none|switched|alert"}.
