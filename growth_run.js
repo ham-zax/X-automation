@@ -247,14 +247,14 @@ function nextOperation(run, readiness, now) {
     return {
       stage: 'selection',
       recommendedOperation: 'inspect_candidate',
-      permittedOperations: ['inspect_candidate', 'select_behavior', 'prepare_main_feed', 'finish'],
+      permittedOperations: ['collect_for_you', 'inspect_candidate', 'select_behavior', 'prepare_main_feed', 'finish'],
       ceilings,
     };
   }
   return {
     stage: 'selection',
     recommendedOperation: 'inspect_candidate',
-    permittedOperations: ['inspect_candidate', 'select_behavior', 'finish'],
+    permittedOperations: ['collect_for_you', 'inspect_candidate', 'select_behavior', 'finish'],
     ceilings,
   };
 }

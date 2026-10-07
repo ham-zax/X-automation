@@ -499,7 +499,7 @@ export function proposeEngagementContribution(candidate = {}, {
   if (/(?:github\.com|\b(?:repository|repo|resource|guide|bookmark|list of|websites?)\b)/i.test(text)) {
     add('learning', 'informed_question', 'Ask what concrete task made the resource useful or name the use case the source makes visible; do not repeat the recommendation.');
   }
-  const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent|model|codex|claude|cursor)\b/i.test(text);
+  const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent\w*|model|codex|claude|cursor)\b/i.test(text);
   const workflowAction = /\b(?:use|using|used|run|running|setup|workflow|integrat\w*|ship\w*|build\w*|adopt\w*|migrat\w*|release\w*|launch\w*)\b/i.test(text);
   if (workflowTool && workflowAction) {
     add('technical', 'independent_judgment', 'State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.');

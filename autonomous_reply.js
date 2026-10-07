@@ -316,13 +316,16 @@ function preGenerationDecision(item, candidate, profile, grant, sourceClass, int
   }
   if (item.engagement?.expiry?.effectiveExpired === true) return { decision: 'skipped', reason: boundedReason('EXPIRED', 'The opportunity expired without an active-conversation override.') };
   const draft = getDraftByCandidate(item.candidateKey);
+  const draftBehaviorSources = [
+    String(item.behavior?.selectionSource || '').trim(),
+    String(draft?.editor?.behavior?.selectionSource || '').trim(),
+  ].filter(Boolean);
+  const machineDraftSources = new Set(['operator', 'engagement_heuristic', 'persona_model']);
   const operatorDraftEligible = Boolean(allowOperatorDraft
     && !item.humanApprovedAt
     && String(draft?.body || '').trim()
-    && (
-      String(item.behavior?.selectionSource || '') === 'operator'
-      || String(draft?.editor?.behavior?.selectionSource || '') === 'operator'
-    ));
+    && !draftBehaviorSources.includes('human')
+    && draftBehaviorSources.some((source) => machineDraftSources.has(source)));
   if (['approved', 'publishing', 'failed'].includes(item.status) || item.humanApprovedAt || (item.status === 'needs_review' && !operatorDraftEligible)) {
     return { decision: 'skipped', reason: boundedReason('HUMAN_WORKFLOW_ACTIVE', 'An existing human review/send state is already active for this reply.') };
   }
