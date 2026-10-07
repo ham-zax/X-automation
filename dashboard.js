@@ -7,6 +7,7 @@ import { RELATIONSHIP_STAGES, TARGET_CLASSES } from './relationship.js';
 import { rankMainFeedItems } from './scheduler.js';
 import { getNicheLabels } from './strategy.js';
 import { handleApi, schedulerContext } from './web_api.js';
+import { initializeWebAuth, protectWebRequest, releaseWebRequest, logWebError } from './web_security.js';
 import {
   ACCOUNT_HEALTH_OBSERVATION_TYPES,
   getAccountHealthSummary,
@@ -19,7 +20,7 @@ import {
 } from './store.js';
 
 const PORT = Number(process.env.WEB_PORT || 3030);
-const HOST = String(process.env.WEB_HOST || '0.0.0.0');
+const HOST = String(process.env.WEB_HOST || '127.0.0.1');
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 const UI_DIST = path.resolve('ui/dist');
 
@@ -241,7 +242,7 @@ async function serveUiAsset(res, relativePath) {
     const file = await fs.readFile(target);
     res.writeHead(200, {
       'content-type': MIME_TYPES[path.extname(target).toLowerCase()] || 'application/octet-stream',
-      'cache-control': path.extname(target) === '.html' ? 'no-store' : 'public, max-age=3600',
+      'cache-control': 'no-store',
     });
     res.end(file);
   } catch {
@@ -249,12 +250,15 @@ async function serveUiAsset(res, relativePath) {
   }
 }
 
+initializeWebAuth(HOST);
+
 const server = http.createServer(async (req, res) => {
-  if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
   try {
     const requestUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (!protectWebRequest(req, res, requestUrl)) return;
+    if (req.url === '/favicon.ico') { res.writeHead(204); res.end(); return; }
     if (requestUrl.pathname.startsWith('/api/')) {
-      return handleApi(req, res, requestUrl);
+      return await handleApi(req, res, requestUrl);
     }
     if (req.method === 'GET' && requestUrl.pathname === '/assets/bootstrap.min.css') {
       res.writeHead(200, { 'content-type': 'text/css; charset=utf-8' });
@@ -341,8 +345,14 @@ const server = http.createServer(async (req, res) => {
     res.end('Not found');
   } catch (error) {
     res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
-    res.end(`Dashboard failed: ${error.message}`);
+    logWebError(error, req);
+    res.end('Dashboard request failed.');
+  } finally {
+    releaseWebRequest(req);
   }
 });
 
+server.requestTimeout = 30_000;
+server.headersTimeout = 15_000;
+server.maxHeadersCount = 100;
 server.listen(PORT, HOST, () => console.log(`[web] X research system: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));

@@ -1,5 +1,7 @@
 import fs from 'fs/promises';
+import { protectWebRequest, releaseWebRequest, logWebError } from './web_security.js';
 import path from 'path';
+import { inflateSync } from 'node:zlib';
 import { createHash, randomUUID } from 'node:crypto';
 import { ACCOUNT_PERFORMANCE_CAPABILITIES, fetchAccountPerformance } from './tech_news.js';
 import {
@@ -64,6 +66,9 @@ import {
   countAiProfilesUsingSecretRef,
   deleteAiProfile,
   getAiProfile,
+  getAppState,
+  getStoreHealth,
+  setAppState,
   getAiRuntimeSettings,
   getAiRoleBinding,
   getCandidate,
@@ -117,6 +122,7 @@ import {
   refreshLearnedRuleSuggestion,
   resetNicheProfile,
   retireLearnedRule,
+  runStoreTransaction,
   saveDraft,
   saveGrowthFocusObjective,
   saveNicheProfile,
@@ -176,6 +182,31 @@ const AUDIENCE_UNFOLLOW_JOB_TTL_MS = 10 * 60_000;
 const VIRAL_RESEARCH_WINDOWS = new Set([14, 21, 30]);
 const VIRAL_RESEARCH_RUNTIME_TYPES = new Set(['codex', 'opencode', 'agy']);
 let VIRAL_RESEARCH_JOB = null;
+const WEB_JOB_STATE_KEY = 'web_jobs_v1';
+function persistWebJobs() {
+  const retained = [...AUDIENCE_UNFOLLOW_JOBS.values()].filter((job) => ['pending', 'uncertain'].includes(job.status) || Date.now() - (job.completedAt || job.startedAt) < AUDIENCE_UNFOLLOW_JOB_TTL_MS).slice(-100);
+  AUDIENCE_UNFOLLOW_JOBS.clear();
+  for (const job of retained) AUDIENCE_UNFOLLOW_JOBS.set(job.id, job);
+  setAppState(WEB_JOB_STATE_KEY, JSON.stringify({ viral: VIRAL_RESEARCH_JOB, unfollows: retained }));
+}
+try {
+  const stored = JSON.parse(getAppState(WEB_JOB_STATE_KEY, '{}'));
+  VIRAL_RESEARCH_JOB = stored.viral || null;
+  if (VIRAL_RESEARCH_JOB && ['running', 'stopping'].includes(VIRAL_RESEARCH_JOB.status)) {
+    VIRAL_RESEARCH_JOB.status = 'interrupted';
+    VIRAL_RESEARCH_JOB.error = 'Server restarted; research was not resumed.';
+  }
+  for (const job of (stored.unfollows || []).slice(-100)) {
+    if (job.status === 'pending') {
+      job.status = 'uncertain';
+      job.error = 'Server restarted; inspect live follow state before further action.';
+    }
+    AUDIENCE_UNFOLLOW_JOBS.set(job.id, job);
+  }
+  persistWebJobs();
+} catch (error) {
+  throw validationError('Persisted web job state could not be loaded.', { cause: error });
+}
 
 function setViralResearchCheckpoint(job, checkpoint, message, details = {}, progressPercent = null) {
   job.checkpoint = checkpoint;
@@ -192,6 +223,7 @@ function setViralResearchCheckpoint(job, checkpoint, message, details = {}, prog
   if (!previous || previous.checkpoint !== event.checkpoint || previous.message !== event.message) {
     job.events = [...(job.events || []), event].slice(-60);
   }
+  if (VIRAL_RESEARCH_JOB === job) persistWebJobs();
 }
 
 function viralCollectionProgressPercent(progress = {}) {
@@ -213,18 +245,18 @@ function formatViralResearchJob() {
 
 function normalizeViralResearchConfig(payload = {}) {
   const days = Number(payload.days || 21);
-  if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw new Error('Viral research window must be 14, 21, or 30 days.');
+  if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw validationError('Viral research window must be 14, 21, or 30 days.');
 
   const contentGroups = getActiveContentGroups();
   const validNiches = new Set(contentGroups.map((group) => group.tag));
   const niches = [...new Set((Array.isArray(payload.niches) ? payload.niches : contentGroups.map((group) => group.tag)).map(String))]
     .filter((tag) => validNiches.has(tag));
-  if (!niches.length) throw new Error('Select at least one viral research niche.');
+  if (!niches.length) throw validationError('Select at least one viral research niche.');
 
   const thresholdNames = Object.keys(VIRAL_SWEEP_THRESHOLDS);
   const thresholds = [...new Set((Array.isArray(payload.thresholds) ? payload.thresholds : ['strong']).map(String))]
     .filter((name) => thresholdNames.includes(name));
-  if (!thresholds.length) throw new Error('Select at least one viral research discovery floor.');
+  if (!thresholds.length) throw validationError('Select at least one viral research discovery floor.');
 
   const limitPerQuery = Math.max(1, Math.min(20, Number(payload.limitPerQuery || 5)));
   const controlsPerSeed = Math.max(0, Math.min(4, Number(payload.controlsPerSeed || 0)));
@@ -243,11 +275,11 @@ function normalizeViralResearchConfig(payload = {}) {
     const runtime = String(rawIntent.runtime || '').trim();
     const model = String(rawIntent.model || '').trim();
     const reasoning = String(rawIntent.reasoning || '').trim();
-    if (!VIRAL_RESEARCH_RUNTIME_TYPES.has(runtime)) throw new Error('Select a supported structured runtime for viral intent analysis.');
-    if (!model) throw new Error('Select an exact model for viral intent analysis.');
+    if (!VIRAL_RESEARCH_RUNTIME_TYPES.has(runtime)) throw validationError('Select a supported structured runtime for viral intent analysis.');
+    if (!model) throw validationError('Select an exact model for viral intent analysis.');
     Object.assign(intent, { runtime, model, reasoning });
   } else if (intent.enabled) {
-    throw new Error('Viral intent mode must be profile or runtime.');
+    throw validationError('Viral intent mode must be profile or runtime.');
   }
 
   return { days, niches, thresholds, limitPerQuery, controlsPerSeed, threads, intent };
@@ -273,7 +305,7 @@ function viralIntentProfile(config) {
 
 function startViralResearchJob(config) {
   if (VIRAL_RESEARCH_JOB && ['running', 'stopping'].includes(VIRAL_RESEARCH_JOB.status)) {
-    throw new Error('A viral research run is already active.');
+    throw validationError('A viral research run is already active.');
   }
   const job = {
     id: randomUUID(),
@@ -293,6 +325,7 @@ function startViralResearchJob(config) {
   };
   setViralResearchCheckpoint(job, 'queued', 'Research run queued. Preparing read-only X discovery.', {}, 0);
   VIRAL_RESEARCH_JOB = job;
+  persistWebJobs();
 
   void (async () => {
     try {
@@ -402,6 +435,8 @@ function startViralResearchJob(config) {
       job.completedAt = Date.now();
       job.error = String(error?.message || error || 'Viral research failed.');
       setViralResearchCheckpoint(job, 'failed', job.error);
+    } finally {
+      persistWebJobs();
     }
   })();
 
@@ -429,7 +464,7 @@ async function viralResearchView(days = 21, postLimit = 200) {
 
 function findPendingAudienceUnfollowJob(username) {
   for (const job of AUDIENCE_UNFOLLOW_JOBS.values()) {
-    if (job.username === username && job.status === 'pending') return job;
+    if (job.username === username && ['pending', 'uncertain'].includes(job.status)) return job;
   }
   return null;
 }
@@ -439,6 +474,8 @@ function startAudienceUnfollowJob(username) {
   const existing = findPendingAudienceUnfollowJob(normalized);
   if (existing) return existing;
 
+  persistWebJobs();
+  if (AUDIENCE_UNFOLLOW_JOBS.size >= 100) throw validationError('Unfollow job history limit reached; unresolved actions require inspection.');
   const job = {
     id: randomUUID(),
     username: normalized,
@@ -449,6 +486,7 @@ function startAudienceUnfollowJob(username) {
     error: null,
   };
   AUDIENCE_UNFOLLOW_JOBS.set(job.id, job);
+  persistWebJobs();
 
   void unfollowAudienceUser(normalized)
     .then((updated) => {
@@ -457,12 +495,13 @@ function startAudienceUnfollowJob(username) {
       job.profile = formatAudienceProfile(updated);
     })
     .catch((error) => {
-      job.status = 'failed';
+      job.status = 'uncertain';
       job.completedAt = Date.now();
-      job.error = String(error?.message || error || 'Unfollow failed.');
+      job.error = 'Unfollow result could not be confirmed; inspect live follow state.';
     })
     .finally(() => {
-      const timer = setTimeout(() => AUDIENCE_UNFOLLOW_JOBS.delete(job.id), AUDIENCE_UNFOLLOW_JOB_TTL_MS);
+      persistWebJobs();
+      const timer = setTimeout(() => persistWebJobs(), AUDIENCE_UNFOLLOW_JOB_TTL_MS + 1);
       timer.unref?.();
     });
 
@@ -632,7 +671,7 @@ function writerEditorialContext(candidate, queueItem) {
   const selection = queueItem ? getLatestEditorialSelectionForQueueItem(queueItem.id) : null;
   if (selection) {
     const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
-    if (!recommendation) throw new Error(`Editorial selection ${selection.id} references missing recommendation ${selection.editorialRecommendationId}.`);
+    if (!recommendation) throw validationError(`Editorial selection ${selection.id} references missing recommendation ${selection.editorialRecommendationId}.`);
     const storyEvidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
     const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
     return {
@@ -658,17 +697,17 @@ function writerEditorialContext(candidate, queueItem) {
 
 export async function generateDraftCandidate(current) {
   const candidate = getCandidate(current.candidateKey);
-  if (!candidate) throw new Error('Draft source candidate not found.');
+  if (!candidate) throw validationError('Draft source candidate not found.');
   const queueItem = getQueueItemByCandidate(candidate.key) || ensureCandidateWorkflow(candidate.key).queueItem;
   if (current.status === 'published' || queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw new Error('Published text is historical record and cannot be regenerated.');
+    throw validationError('Published text is historical record and cannot be regenerated.');
   }
   const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
   const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
   const editorialContext = writerEditorialContext(candidate, queueItem);
   const strategyGeneration = getWritingStrategyGenerationContext(queueItem.id);
   if (pipeline !== 'reply' && (!strategyGeneration.selectionId || !strategyGeneration.mode)) {
-    throw new Error('Choose and save No influence, Advice only, or Use for this draft before generating.');
+    throw validationError('Choose and save No influence, Advice only, or Use for this draft before generating.');
   }
   const packet = buildWriterPacket({
     candidate,
@@ -685,7 +724,12 @@ export async function generateDraftCandidate(current) {
   });
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
   const output = await generateWriterOutput(packet, promptDocumentText);
-  if (output.pipeline !== pipeline) throw new Error(`AI returned ${output.pipeline}; expected ${pipeline}.`);
+  const latestDraft = getDraft(current.id);
+  const latestQueue = getQueueItem(queueItem.id);
+  if (!latestDraft || latestDraft.updatedAt !== current.updatedAt || latestDraft.status !== current.status || !latestQueue || latestQueue.status !== queueItem.status || latestQueue.pipeline !== queueItem.pipeline) {
+    throw Object.assign(validationError('Draft changed during generation; generated output was not saved.'), { code: 'DRAFT_CONFLICT', status: 409 });
+  }
+  if (output.pipeline !== pipeline) throw validationError(`AI returned ${output.pipeline}; expected ${pipeline}.`);
   const validatedStrategyGeneration = validateWritingStrategyGenerationContext(queueItem.id, strategyGeneration);
   const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
     ? { ...current, editor: Array.isArray(current.editor?.generationHistory) ? { generationHistory: [...current.editor.generationHistory] } : {} }
@@ -698,7 +742,7 @@ export async function generateDraftCandidate(current) {
   const analysis = evaluateDraftQuality(candidate, next, pipeline, {
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });
-  const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
+  const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' }, { expectedUpdatedAt: current.updatedAt });
   if (queueItem.status !== 'drafting' || queueItem.pipeline !== pipeline) {
     routeCandidate(candidate.key, pipeline, { actor: 'agent' });
   }
@@ -707,7 +751,7 @@ export async function generateDraftCandidate(current) {
 
 function editorialObjective(value = null) {
   const objective = String(value || getNicheProfile().profile.defaultObjective || 'qualified_growth');
-  if (!EDITORIAL_OBJECTIVES.includes(objective)) throw new Error(`Unsupported editorial objective: ${objective}.`);
+  if (!EDITORIAL_OBJECTIVES.includes(objective)) throw validationError(`Unsupported editorial objective: ${objective}.`);
   return objective;
 }
 
@@ -833,7 +877,7 @@ export function requireEngagementSendAllowed() {
   const summary = getAccountHealthSummary();
   if (summary.health.state !== 'constrained') return summary;
   const reason = summary.health.reasons.find((item) => item.level === 'constrained');
-  throw new Error(`Engagement send blocked by supported observed constraint: ${reason?.message || 'account health constrained'}`);
+  throw validationError(`Engagement send blocked by supported observed constraint: ${reason?.message || 'account health constrained'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -988,6 +1032,7 @@ function formatDraft(draft, { analysis = null } = {}) {
   const payload = {
     id: draft.id,
     candidateKey: draft.candidateKey,
+    updatedAt: draft.updatedAt,
     hook: draft.hook || '',
     insight: draft.insight || '',
     evidence: draft.evidence || '',
@@ -1431,16 +1476,16 @@ async function aiSettingsView() {
 
 function requireAiProfile(id) {
   const profile = getAiProfile(Number(id));
-  if (!profile) throw new Error(`AI profile not found: ${id}`);
+  if (!profile) throw validationError(`AI profile not found: ${id}`);
   return profile;
 }
 
 function assertAssignableAiProfile(profile, { confirmUnknownCapability = false } = {}) {
-  if (!profile.enabled) throw new Error(`AI profile is disabled: ${profile.id}`);
+  if (!profile.enabled) throw validationError(`AI profile is disabled: ${profile.id}`);
   const capability = aiProfileCapability(profile);
-  if (capability === 'unsupported') throw new Error(`${profile.name} does not support the structured-output path required by AI roles.`);
+  if (capability === 'unsupported') throw validationError(`${profile.name} does not support the structured-output path required by AI roles.`);
   if (capability === 'unknown' && confirmUnknownCapability !== true) {
-    throw new Error(`${profile.name} has unknown structured-output capability. Confirm the advanced assignment explicitly.`);
+    throw validationError(`${profile.name} has unknown structured-output capability. Confirm the advanced assignment explicitly.`);
   }
   return profile;
 }
@@ -1455,9 +1500,9 @@ async function createAiProfileFromPayload(payload) {
   const input = aiProfileInput(payload);
   const apiKey = String(payload.apiKey || '').trim();
   const secretEnv = String(payload.secretEnv || '').trim();
-  if (apiKey && secretEnv) throw new Error('Choose either a local API key or an environment-variable secret, not both.');
+  if (apiKey && secretEnv) throw validationError('Choose either a local API key or an environment-variable secret, not both.');
   if (input.runtime !== 'direct_api' && (apiKey || secretEnv)) {
-    throw new Error('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
+    throw validationError('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
   }
 
   let createdSecretRef = '';
@@ -1483,9 +1528,9 @@ async function updateAiProfileFromPayload(id, payload) {
   const nextRuntime = String(input.runtime ?? current.runtime);
   const apiKey = String(payload.apiKey || '').trim();
   const secretEnv = String(payload.secretEnv || '').trim();
-  if (apiKey && secretEnv) throw new Error('Choose either a local API key or an environment-variable secret, not both.');
+  if (apiKey && secretEnv) throw validationError('Choose either a local API key or an environment-variable secret, not both.');
   if (nextRuntime !== 'direct_api' && (apiKey || secretEnv)) {
-    throw new Error('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
+    throw validationError('Runtime-managed profiles use runtime-managed credentials, not product API keys.');
   }
 
   let nextSecretRef = current.secretRef;
@@ -1547,15 +1592,21 @@ function formatAiRun(run) {
 // Request helpers
 // ---------------------------------------------------------------------------
 
+function validationError(message, options) {
+  return Object.assign(new Error(message, options), { code: 'WEB_VALIDATION' });
+}
+
 async function readJson(req) {
   let body = '';
+  let bytes = 0;
   for await (const chunk of req) {
+    bytes += Buffer.byteLength(chunk);
     body += chunk;
-    if (body.length > 128_000) throw new Error('Request too large.');
+    if (bytes > 128_000) throw validationError('Request too large.');
   }
   if (!body.trim()) return {};
   const parsed = JSON.parse(body);
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Request body must be a JSON object.');
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw validationError('Request body must be a JSON object.');
   return parsed;
 }
 
@@ -1564,10 +1615,10 @@ async function readBinary(req, maxBytes = MAX_DRAFT_MEDIA_BYTES) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > maxBytes) throw new Error(`Image exceeds ${Math.round(maxBytes / 1024 / 1024)} MB limit.`);
+    if (size > maxBytes) throw validationError(`Image exceeds ${Math.round(maxBytes / 1024 / 1024)} MB limit.`);
     chunks.push(chunk);
   }
-  if (!size) throw new Error('Image upload is empty.');
+  if (!size) throw validationError('Image upload is empty.');
   return Buffer.concat(chunks, size);
 }
 
@@ -1579,18 +1630,106 @@ function draftMediaAttachment(draft) {
   return { ...attachment, localPath };
 }
 
+// Container validation bounds image dimensions before storage. Browser decoders own pixel decoding.
+function pngCrc(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+export function validateImage(buffer, mimeType) {
+  let width = 0, height = 0;
+  const bad = () => { throw validationError('Invalid or unsupported image data.'); };
+  if (mimeType === 'image/png') {
+    if (buffer.length < 45 || !buffer.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) bad();
+    let offset = 8, seenData = false, ended = false;
+    const data = [];
+    while (offset + 12 <= buffer.length) {
+      const size = buffer.readUInt32BE(offset);
+      if (size > buffer.length - offset - 12) bad();
+      if (pngCrc(buffer.subarray(offset + 4, offset + 8 + size)) !== buffer.readUInt32BE(offset + 8 + size)) bad();
+      const type = buffer.toString('ascii', offset + 4, offset + 8);
+      if (offset === 8) {
+        if (type !== 'IHDR' || size !== 13) bad();
+        width = buffer.readUInt32BE(offset + 8); height = buffer.readUInt32BE(offset + 12);
+      }
+      if (type === 'IDAT' && size) { seenData = true; data.push(buffer.subarray(offset + 8, offset + 8 + size)); }
+      offset += size + 12;
+      if (type === 'IEND') { if (size || offset !== buffer.length) bad(); ended = true; break; }
+    }
+    if (!ended || !seenData || !width || !height || width * height > 40_000_000) bad();
+    try { if (!inflateSync(Buffer.concat(data), { maxOutputLength: Math.min(64 * 1024 * 1024, height * (width * 8 + 16)) }).length) bad(); } catch { bad(); }
+  } else if (mimeType === 'image/jpeg') {
+    if (buffer.length < 12 || buffer.readUInt16BE(0) !== 0xffd8 || buffer.readUInt16BE(buffer.length - 2) !== 0xffd9) bad();
+    let offset = 2, scan = false;
+    while (offset + 4 <= buffer.length) {
+      if (buffer[offset++] !== 0xff) bad();
+      while (buffer[offset] === 0xff) offset++;
+      const marker = buffer[offset++];
+      if (marker === 0xda) { scan = true; break; }
+      const size = buffer.readUInt16BE(offset);
+      if (size < 2 || offset + size > buffer.length) bad();
+      if ([0xc0, 0xc1, 0xc2].includes(marker)) {
+        if (size < 8) bad();
+        height = buffer.readUInt16BE(offset + 3); width = buffer.readUInt16BE(offset + 5);
+      }
+      offset += size;
+    }
+    if (!scan) bad();
+  } else if (mimeType === 'image/gif') {
+    if (buffer.length < 14 || !['GIF87a', 'GIF89a'].includes(buffer.toString('ascii', 0, 6)) || buffer.at(-1) !== 0x3b) bad();
+    width = buffer.readUInt16LE(6); height = buffer.readUInt16LE(8);
+    if (!buffer.includes(0x2c, 13)) bad();
+  } else if (mimeType === 'image/webp') {
+    if (buffer.length < 30 || buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WEBP' || buffer.readUInt32LE(4) + 8 !== buffer.length) bad();
+    let offset = 12, seenPixels = false;
+    while (offset + 8 <= buffer.length) {
+      const type = buffer.toString('ascii', offset, offset + 4), size = buffer.readUInt32LE(offset + 4), start = offset + 8;
+      if (start + size > buffer.length) bad();
+      if (type === 'VP8X' && size >= 10) { width = 1 + buffer.readUIntLE(start + 4, 3); height = 1 + buffer.readUIntLE(start + 7, 3); }
+      if (type === 'VP8 ' && size >= 10) {
+        if (!buffer.subarray(start + 3, start + 6).equals(Buffer.from([0x9d, 0x01, 0x2a]))) bad();
+        width ||= buffer.readUInt16LE(start + 6) & 0x3fff; height ||= buffer.readUInt16LE(start + 8) & 0x3fff; seenPixels = true;
+      }
+      if (type === 'VP8L' && size >= 5 && buffer[start] === 0x2f) {
+        const bits = buffer.readUInt32LE(start + 1); width ||= (bits & 0x3fff) + 1; height ||= ((bits >>> 14) & 0x3fff) + 1; seenPixels = true;
+      }
+      if (type === 'ANMF' && size >= 16) seenPixels = true;
+      offset = start + size + (size % 2);
+    }
+    if (offset !== buffer.length || !seenPixels) bad();
+  } else bad();
+  if (!width || !height || width > 16384 || height > 16384 || width * height > 40_000_000) bad();
+  return { width, height };
+}
+
+let mediaUploadBusy = false;
 async function persistDraftMedia(draft, req) {
+  if (mediaUploadBusy) throw validationError('Another media upload is in progress.');
+  mediaUploadBusy = true;
+  try { return await persistDraftMediaUnlocked(draft, req); }
+  finally { mediaUploadBusy = false; }
+}
+async function persistDraftMediaUnlocked(draft, req) {
   const mimeType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
   const extension = DRAFT_MEDIA_MIME[mimeType];
-  if (!extension) throw new Error('Attach a JPEG, PNG, WebP, or GIF image.');
+  if (!extension) throw validationError('Attach a JPEG, PNG, WebP, or GIF image.');
   const buffer = await readBinary(req);
+  validateImage(buffer, mimeType);
   await fs.mkdir(DRAFT_MEDIA_DIR, { recursive: true, mode: 0o700 });
+  const entries = await fs.readdir(DRAFT_MEDIA_DIR, { withFileTypes: true });
+  let totalBytes = 0;
+  let files = 0;
+  for (const entry of entries) if (entry.isFile()) { files++; totalBytes += (await fs.stat(path.join(DRAFT_MEDIA_DIR, entry.name))).size; }
+  if (files >= 100 || totalBytes + buffer.length > 200 * 1024 * 1024) throw validationError('Media storage limit reached; remove unused attachments.');
   const rawName = String(req.headers['x-file-name'] || 'image');
   let fileName = rawName;
   try { fileName = decodeURIComponent(rawName); } catch {}
   fileName = path.basename(fileName).slice(0, 180) || `draft-${draft.id}.${extension}`;
-  const localPath = path.join(DRAFT_MEDIA_DIR, `draft-${draft.id}-${Date.now()}.${extension}`);
-  await fs.writeFile(localPath, buffer, { mode: 0o600 });
+  const localPath = path.join(DRAFT_MEDIA_DIR, `draft-${draft.id}-${randomUUID()}.${extension}`);
+  await fs.writeFile(localPath, buffer, { mode: 0o600, flag: 'wx' });
   const sha256 = createHash('sha256').update(buffer).digest('hex');
 
   const previous = draftMediaAttachment(draft);
@@ -1608,7 +1747,7 @@ async function persistDraftMedia(draft, req) {
     },
   };
   try {
-    const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+    const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' }, { expectedUpdatedAt: draft.updatedAt });
     if (previous?.localPath && previous.localPath !== localPath) await fs.rm(previous.localPath, { force: true }).catch(() => {});
     return saved;
   } catch (error) {
@@ -1630,6 +1769,7 @@ function growthOperatorView() {
 // ---------------------------------------------------------------------------
 
 export async function handleApi(req, res, requestUrl) {
+  if (!protectWebRequest(req, res, requestUrl)) return;
   const sendJson = (status, payload) => {
     res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(payload));
@@ -1643,6 +1783,16 @@ export async function handleApi(req, res, requestUrl) {
     const query = requestUrl.searchParams;
     let body = null;
     const readBody = async () => (body ??= await readJson(req));
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'health') {
+      try {
+        const storage = getStoreHealth();
+        return sendJson(storage.ready ? 200 : 503, { state: storage.ready ? 'success' : 'error', data: { ready: storage.ready, storage } });
+      } catch (error) {
+        logWebError(error, req);
+        return sendJson(503, { state: 'error', data: { ready: false }, message: 'Storage health check failed.', requestId: req.webRequestId });
+      }
+    }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'session') {
       const now = Date.now();
@@ -1688,7 +1838,7 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'GET' && segments.length === 1 && segments[0] === 'persona') {
       const consumer = String(query.get('consumer') || '').trim();
       if (consumer && !['editorial', 'engagement', 'writer'].includes(consumer)) {
-        throw new Error('Persona consumer must be editorial, engagement, or writer.');
+        throw validationError('Persona consumer must be editorial, engagement, or writer.');
       }
       return sendSuccess({
         model: getPersonaModelSummary(),
@@ -1709,7 +1859,7 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'persona' && segments[1] === 'stances') {
       const payload = await readBody();
-      if (payload.confirmRecord !== true) throw new Error('Recording a persona stance requires confirmRecord=true.');
+      if (payload.confirmRecord !== true) throw validationError('Recording a persona stance requires confirmRecord=true.');
       const stance = recordPersonaStanceEvent({
         subject: payload.subject,
         position: payload.position,
@@ -1730,7 +1880,7 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 2 && segments[0] === 'behavior' && segments[1] === 'select') {
       const payload = await readBody();
       const key = String(payload.key || '').trim();
-      if (!key) throw new Error('Behavior selection requires candidate key.');
+      if (!key) throw validationError('Behavior selection requires candidate key.');
       const selected = setBehaviorDecision(key, payload.behavior || {}, { actor: 'human' });
       return sendSuccess({
         behavior: selected.behavior,
@@ -1769,17 +1919,17 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'delete') {
       const deleted = deleteAiProfile(Number(segments[2]));
-      if (!deleted) throw new Error(`AI profile not found: ${segments[2]}`);
+      if (!deleted) throw validationError(`AI profile not found: ${segments[2]}`);
       if (deleted.profile.secretRef && !deleted.secretRefStillUsed) await cleanupUnreferencedAiSecret(deleted.profile.secretRef);
       return sendSuccess({ deletedProfileId: deleted.profile.id });
     }
 
     if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'profiles' && segments[3] === 'secret') {
       const current = requireAiProfile(segments[2]);
-      if (current.runtime !== 'direct_api') throw new Error('Runtime-managed profiles do not use product-managed API keys.');
+      if (current.runtime !== 'direct_api') throw validationError('Runtime-managed profiles do not use product-managed API keys.');
       const payload = await readBody();
       const apiKey = String(payload.apiKey || '').trim();
-      if (!apiKey) throw new Error('Replace key requires a non-empty API key.');
+      if (!apiKey) throw validationError('Replace key requires a non-empty API key.');
       const existingFileRef = String(current.secretRef || '').startsWith('file:') ? current.secretRef : null;
       const secret = await setAiSecret(existingFileRef, apiKey);
       const profile = secret.secretRef === current.secretRef ? current : updateAiProfile(current.id, { secretRef: secret.secretRef });
@@ -1823,7 +1973,7 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'POST' && segments.length === 3 && segments[0] === 'ai' && segments[1] === 'roles') {
       const role = segments[2];
-      if (!AI_ROLES.includes(role)) throw new Error(`Invalid AI role: ${role}`);
+      if (!AI_ROLES.includes(role)) throw validationError(`Invalid AI role: ${role}`);
       const payload = await readBody();
       const confirmUnknownCapability = payload.confirmUnknownCapability === true;
       const primaryProfileId = payload.primaryProfileId == null || payload.primaryProfileId === '' ? null : Number(payload.primaryProfileId);
@@ -1836,7 +1986,7 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'POST' && segments.length === 4 && segments[0] === 'ai' && segments[1] === 'roles' && segments[3] === 'clear') {
       const role = segments[2];
-      if (!AI_ROLES.includes(role)) throw new Error(`Invalid AI role: ${role}`);
+      if (!AI_ROLES.includes(role)) throw validationError(`Invalid AI role: ${role}`);
       clearAiRoleBinding(role);
       return sendSuccess({ role: await formatAiRole(role) });
     }
@@ -1849,7 +1999,7 @@ export async function handleApi(req, res, requestUrl) {
       const payload = await readBody();
       const runtime = String(payload.runtime || '').trim();
       if (!['codex', 'opencode', 'agy'].includes(runtime)) {
-        throw new Error('Catalog preview before saving is supported for Codex, OpenCode, and AGY runtime profiles.');
+        throw validationError('Catalog preview before saving is supported for Codex, OpenCode, and AGY runtime profiles.');
       }
       const profile = {
         id: null,
@@ -1899,7 +2049,7 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'viral-research') {
       const days = Number(query.get('days') || 21);
-      if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw new Error('Viral research window must be 14, 21, or 30 days.');
+      if (!VIRAL_RESEARCH_WINDOWS.has(days)) throw validationError('Viral research window must be 14, 21, or 30 days.');
       const postLimit = Math.max(20, Math.min(500, Number(query.get('limit') || 200)));
       return sendSuccess(await viralResearchView(days, postLimit));
     }
@@ -1916,6 +2066,7 @@ export async function handleApi(req, res, requestUrl) {
     if (method === 'POST' && segments.length === 2 && segments[0] === 'viral-research' && segments[1] === 'stop') {
       if (VIRAL_RESEARCH_JOB && ['running', 'stopping'].includes(VIRAL_RESEARCH_JOB.status)) {
         VIRAL_RESEARCH_JOB.stopRequested = true;
+        persistWebJobs();
         VIRAL_RESEARCH_JOB.status = 'stopping';
       }
       return sendSuccess({ job: formatViralResearchJob() });
@@ -1923,14 +2074,14 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'writing-strategy') {
       const queueItemId = Number(query.get('queueItemId'));
-      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy requires queueItemId.');
+      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw validationError('writing-strategy requires queueItemId.');
       return sendSuccess(await getWritingStrategyPreview(queueItemId));
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'writing-strategy' && segments[1] === 'recommend') {
       const payload = await readBody();
       const queueItemId = Number(payload.queueItemId);
-      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw new Error('writing-strategy recommend requires queueItemId.');
+      if (!Number.isInteger(queueItemId) || queueItemId < 1) throw validationError('writing-strategy recommend requires queueItemId.');
       return sendSuccess(await recommendWritingStrategy(queueItemId, { profile: payload.profileId ?? null }));
     }
 
@@ -2240,7 +2391,7 @@ export async function handleApi(req, res, requestUrl) {
       const key = String(payload.key || '');
       const action = String(payload.action || '');
       const candidate = getCandidate(key);
-      if (!candidate) throw new Error('Candidate not found. Refresh research first.');
+      if (!candidate) throw validationError('Candidate not found. Refresh research first.');
 
       if (action === 'save') {
         const candidate = markCandidateSaved(key, true);
@@ -2255,7 +2406,7 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ action, queueItem: formatQueueItem(queueItem), draftId: null });
       }
       if (['original', 'quote', 'thread', 'repost', 'research', 'watch'].includes(action)) {
-        if (action === 'quote' && candidate.source !== 'x') throw new Error('Quote posts require an X source.');
+        if (action === 'quote' && candidate.source !== 'x') throw validationError('Quote posts require an X source.');
         ensureCandidateWorkflow(key);
         routeCandidate(key, action, { actor: 'human' });
         const draft = getDraftByCandidate(key);
@@ -2277,7 +2428,7 @@ export async function handleApi(req, res, requestUrl) {
         const queueItem = routeCandidate(key, 'ignore', { actor: 'human', reason: 'Operator ignored this candidate from Discover.' });
         return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
       }
-      throw new Error(`Unknown triage action: ${action || '(missing)'}`);
+      throw validationError(`Unknown triage action: ${action || '(missing)'}`);
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'growth-operator') {
@@ -2291,7 +2442,7 @@ export async function handleApi(req, res, requestUrl) {
       else if (action === 'start') startGrowthOperatorDelegation({ actor: 'human' });
       else if (action === 'pause') pauseGrowthOperatorDelegation({ actor: 'human' });
       else if (action === 'stop') stopGrowthOperatorDelegation({ actor: 'human' });
-      else throw new Error(`Unknown Growth Operator action: ${action}.`);
+      else throw validationError(`Unknown Growth Operator action: ${action}.`);
       return sendSuccess(growthOperatorView());
     }
 
@@ -2306,7 +2457,7 @@ export async function handleApi(req, res, requestUrl) {
       else if (action === 'start') startAutonomousReplies({ actor: 'human' });
       else if (action === 'pause') pauseAutonomousReplies({ actor: 'human' });
       else if (action === 'stop') stopAutonomousReplies({ actor: 'human' });
-      else throw new Error(`Unknown autonomous reply action: ${action}.`);
+      else throw validationError(`Unknown autonomous reply action: ${action}.`);
       return sendSuccess(getAutonomousReplyReadModel({ limit: 100 }));
     }
 
@@ -2387,7 +2538,7 @@ export async function handleApi(req, res, requestUrl) {
         routeCandidate(key, 'reply', { actor: 'human' });
         draft = getDraftByCandidate(key);
         if (needsInitialGeneration && draft) draft = (await generateDraftCandidate(draft)).saved;
-        if (!draft) throw new Error('Reply draft could not be created.');
+        if (!draft) throw validationError('Reply draft could not be created.');
         return sendSuccess({ draftId: draft.id, editor: draftEditorPayload(draft.id) });
       }
 
@@ -2410,12 +2561,12 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'approve-send' || action === 'send') {
-        throw new Error(`Conversation action ${action} is retired. The web server does not mutate X; approve the exact reply with /approve, then use the persistent Growth Operator browser-reply-claim lane.`);
+        throw validationError(`Conversation action ${action} is retired. The web server does not mutate X; approve the exact reply with /approve, then use the persistent Growth Operator browser-reply-claim lane.`);
       }
 
       if (action === 'resolve') {
         const resolution = String(payload.action || '');
-        if (!['ignore', 'expire'].includes(resolution)) throw new Error(`Invalid resolution: ${resolution || '(missing)'}`);
+        if (!['ignore', 'expire'].includes(resolution)) throw validationError(`Invalid resolution: ${resolution || '(missing)'}`);
         const queueItem = resolveEngagementItem(key, resolution, String(payload.reason || ''));
         return sendSuccess({ queueItem: formatQueueItem(queueItem) });
       }
@@ -2426,7 +2577,7 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ draftId: draft?.id ?? null, queueItem: formatQueueItem(getQueueItemByCandidate(key)) });
       }
 
-      throw new Error(`Unknown conversation action: ${action}`);
+      throw validationError(`Unknown conversation action: ${action}`);
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'create') {
@@ -2490,7 +2641,7 @@ export async function handleApi(req, res, requestUrl) {
     if (segments.length === 3 && segments[0] === 'drafts' && segments[2] === 'media') {
       const draftId = Number(segments[1]);
       const draft = getDraft(draftId);
-      if (!draft) throw new Error(`Draft not found: ${draftId}`);
+      if (!draft) throw validationError(`Draft not found: ${draftId}`);
       const queueItem = getQueueItemByCandidate(draft.candidateKey);
       const readOnly = draft.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
 
@@ -2510,17 +2661,17 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (method === 'POST') {
-        if (readOnly) throw new Error('Published text is historical record and cannot accept a new attachment.');
+        if (readOnly) throw validationError('Published text is historical record and cannot accept a new attachment.');
         const saved = await persistDraftMedia(draft, req);
         return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
       }
 
       if (method === 'DELETE') {
-        if (readOnly) throw new Error('Published text is historical record and cannot remove its attachment.');
+        if (readOnly) throw validationError('Published text is historical record and cannot remove its attachment.');
         const attachment = draftMediaAttachment(draft);
         const media = { ...(draft.editor?.media || {}) };
         delete media.attachment;
-        const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' });
+        const saved = saveDraft({ ...draft, editor: { ...(draft.editor || {}), media }, gates: {}, status: 'draft' }, { expectedUpdatedAt: draft.updatedAt });
         if (attachment?.localPath) await fs.rm(attachment.localPath, { force: true }).catch(() => {});
         return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
       }
@@ -2531,14 +2682,17 @@ export async function handleApi(req, res, requestUrl) {
       const action = segments[2];
       const payload = await readBody();
       const current = getDraft(draftId);
-      if (!current) throw new Error(`Draft not found: ${draftId}`);
+      if (!current) throw validationError(`Draft not found: ${draftId}`);
+      if (['save', 'generate', 'thread-parts'].includes(action) && payload.expectedUpdatedAt !== undefined && (!Number.isSafeInteger(payload.expectedUpdatedAt) || payload.expectedUpdatedAt !== current.updatedAt)) {
+        throw Object.assign(validationError('Draft changed since it was loaded; reload before saving or generating.'), { code: 'DRAFT_CONFLICT', status: 409 });
+      }
       const candidate = getCandidate(current.candidateKey);
-      if (!candidate) throw new Error('Draft source candidate not found.');
+      if (!candidate) throw validationError('Draft source candidate not found.');
       const queueItem = getQueueItemByCandidate(candidate.key);
       const pipeline = CONTENT_PIPELINES.has(queueItem?.pipeline) ? queueItem.pipeline : 'original';
       const readOnly = current.status === 'published' || queueItem?.status === 'published' || Boolean(queueItem?.publishedAt || queueItem?.outputTweetId);
       if (readOnly && ['save', 'generate', 'thread-parts'].includes(action)) {
-        throw new Error('Published text is historical record and cannot be edited.');
+        throw Object.assign(validationError('Published text is historical record and cannot be edited.'), { code: 'DRAFT_CONFLICT', status: 409 });
       }
 
       if (action === 'preview') {
@@ -2557,22 +2711,26 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'save') {
-        let queue = queueItem || ensureCandidateWorkflow(candidate.key).queueItem;
-        const updated = applyEditorPayload(current, payload);
-        const scheduledRaw = payload.scheduledAt;
-        const scheduledAt = scheduledRaw === undefined ? current.scheduledAt : (scheduledRaw === null ? null : Number(scheduledRaw));
-        if (scheduledRaw != null && !Number.isFinite(scheduledAt)) throw new Error('Invalid schedule time.');
-        updated.scheduledAt = scheduledAt;
-        const analysis = evaluateDraftQuality(candidate, updated, CONTENT_PIPELINES.has(queue.pipeline) ? queue.pipeline : 'original', {
-          relevanceOverride: queue.relevance?.humanOverride || null,
+        const result = runStoreTransaction(() => {
+          let queue = queueItem || ensureCandidateWorkflow(candidate.key).queueItem;
+          const updated = applyEditorPayload(current, payload);
+          const scheduledRaw = payload.scheduledAt;
+          const scheduledAt = scheduledRaw === undefined ? current.scheduledAt : (scheduledRaw === null ? null : Number(scheduledRaw));
+          if (scheduledRaw != null && !Number.isFinite(scheduledAt)) throw validationError('Invalid schedule time.');
+          updated.scheduledAt = scheduledAt;
+          const analysis = evaluateDraftQuality(candidate, updated, CONTENT_PIPELINES.has(queue.pipeline) ? queue.pipeline : 'original', {
+            relevanceOverride: queue.relevance?.humanOverride || null,
+          });
+          updated.gates = analysis.gates;
+          updated.qualityScore = analysis.score;
+          updated.status = current.status === 'published' ? 'published' : 'draft';
+          saveDraft(updated, { expectedUpdatedAt: current.updatedAt });
+          if (current.status !== 'published') routeCandidate(candidate.key, queue.pipeline, { actor: 'human' });
+          queue = getQueueItemByCandidate(candidate.key);
+          const saved = getDraft(current.id);
+          return { draft: formatDraft(saved), queueItem: formatQueueItem(queue), editor: draftEditorPayload(saved.id) };
         });
-        updated.gates = analysis.gates;
-        updated.qualityScore = analysis.score;
-        updated.status = current.status === 'published' ? 'published' : 'draft';
-        const saved = saveDraft(updated);
-        if (current.status !== 'published') routeCandidate(candidate.key, queue.pipeline, { actor: 'human' });
-        queue = getQueueItemByCandidate(candidate.key);
-        return sendSuccess({ draft: formatDraft(saved), queueItem: formatQueueItem(queue), editor: draftEditorPayload(saved.id) });
+        return sendSuccess(result);
       }
 
       if (action === 'generate') {
@@ -2581,32 +2739,36 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'thread-parts') {
-        if (queueItem?.pipeline !== 'thread') throw new Error('Thread controls require the thread pipeline.');
+        if (queueItem?.pipeline !== 'thread') throw validationError('Thread controls require the thread pipeline.');
         const parts = current.threadParts?.length ? [...current.threadParts] : ['', ''];
         while (parts.length < 2) parts.push('');
         const op = String(payload.op || '');
         if (op === 'add' && parts.length < 6) parts.push('');
         if (op === 'remove' && parts.length > 2) parts.pop();
-        if (!['add', 'remove'].includes(op)) throw new Error(`Unknown thread operation: ${op || '(missing)'}`);
-        const saved = saveDraft({
-          ...current,
-          threadParts: parts,
-          editor: { ...(current.editor || {}), pipeline: 'thread', threadParts: [...parts] },
-          gates: {},
-          status: 'draft',
+        if (!['add', 'remove'].includes(op)) throw validationError(`Unknown thread operation: ${op || '(missing)'}`);
+        const result = runStoreTransaction(() => {
+          saveDraft({
+            ...current,
+            threadParts: parts,
+            editor: { ...(current.editor || {}), pipeline: 'thread', threadParts: [...parts] },
+            gates: {},
+            status: 'draft',
+          }, { expectedUpdatedAt: current.updatedAt });
+          routeCandidate(current.candidateKey, 'thread', { actor: 'human' });
+          const saved = getDraft(current.id);
+          return { draft: formatDraft(saved), editor: draftEditorPayload(saved.id) };
         });
-        routeCandidate(current.candidateKey, 'thread', { actor: 'human' });
-        return sendSuccess({ draft: formatDraft(saved), editor: draftEditorPayload(saved.id) });
+        return sendSuccess(result);
       }
 
-      throw new Error(`Unknown draft action: ${action}`);
+      throw validationError(`Unknown draft action: ${action}`);
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'work' && segments[1] === 'relevance-decision') {
       const payload = await readBody();
       const queueItem = payload.queueItemId == null ? null : getQueueItem(Number(payload.queueItemId));
       const key = queueItem?.candidateKey || String(payload.key || '');
-      if (!key) throw new Error('Growth Focus decision requires queueItemId or candidate key.');
+      if (!key) throw validationError('Growth Focus decision requires queueItemId or candidate key.');
       const result = setRelevanceDecision(key, {
         decision: String(payload.decision || ''),
         reason: String(payload.reason || ''),
@@ -2622,7 +2784,7 @@ export async function handleApi(req, res, requestUrl) {
       const payload = await readBody();
       const queueItem = payload.queueItemId == null ? null : getQueueItem(Number(payload.queueItemId));
       const key = queueItem?.candidateKey || String(payload.key || '');
-      if (!key) throw new Error('Routing decision requires queueItemId or candidate key.');
+      if (!key) throw validationError('Routing decision requires queueItemId or candidate key.');
       const saved = setRoutingDecision(key, {
         decision: String(payload.decision || ''),
         reason: String(payload.reason || ''),
@@ -2639,10 +2801,10 @@ export async function handleApi(req, res, requestUrl) {
       if (action === 'route') {
         const pipeline = String(payload.pipeline || '');
         if (!['original', 'quote', 'thread', 'reply', 'repost', 'research', 'watch', 'ignore'].includes(pipeline)) {
-          throw new Error(`Invalid pipeline: ${pipeline || '(missing)'}`);
+          throw validationError(`Invalid pipeline: ${pipeline || '(missing)'}`);
         }
         const candidate = getCandidate(key);
-        if (!candidate) throw new Error('Candidate not found.');
+        if (!candidate) throw validationError('Candidate not found.');
         const queueItem = routeCandidate(key, pipeline, { actor: 'human' });
         return sendSuccess({ queueItem: formatQueueItem(queueItem), draftId: queueItem.draftId ?? null });
       }
@@ -2658,7 +2820,7 @@ export async function handleApi(req, res, requestUrl) {
       }
 
       if (action === 'complete-repost') {
-        if (payload.confirmCompleted !== true) throw new Error('Confirm that you already reposted this source on X.');
+        if (payload.confirmCompleted !== true) throw validationError('Confirm that you already reposted this source on X.');
         const result = recordManualRepost(key, { actor: 'human' });
         return sendSuccess({ queueItem: formatQueueItem(result.queueItem), action: result.action });
       }
@@ -2666,8 +2828,8 @@ export async function handleApi(req, res, requestUrl) {
       if (action === 'schedule') {
         const scheduledAt = payload.scheduledAt === undefined ? undefined : (payload.scheduledAt === null ? null : Number(payload.scheduledAt));
         const expiresAt = payload.expiresAt === undefined ? undefined : (payload.expiresAt === null ? null : Number(payload.expiresAt));
-        if (scheduledAt != null && !Number.isFinite(scheduledAt)) throw new Error('Invalid main-feed schedule override.');
-        if (expiresAt != null && !Number.isFinite(expiresAt)) throw new Error('Invalid main-feed expiry.');
+        if (scheduledAt != null && !Number.isFinite(scheduledAt)) throw validationError('Invalid main-feed schedule override.');
+        if (expiresAt != null && !Number.isFinite(expiresAt)) throw validationError('Invalid main-feed expiry.');
         const queueItem = setMainFeedSchedule(key, {
           scheduledAt,
           expiresAt,
@@ -2688,7 +2850,7 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ queueItem: formatQueueItem(queueItem), draftId: null });
       }
 
-      throw new Error(`Unknown queue action: ${action}`);
+      throw validationError(`Unknown queue action: ${action}`);
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'results') {
@@ -2847,9 +3009,9 @@ export async function handleApi(req, res, requestUrl) {
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'audience' && segments[1] === 'unfollow') {
       const payload = await readBody();
-      if (payload.confirmUnfollow !== true) throw new Error('Explicit unfollow confirmation is required.');
+      if (payload.confirmUnfollow !== true) throw validationError('Explicit unfollow confirmation is required.');
       const username = String(payload.username || '').replace(/^@/, '').trim().toLowerCase();
-      if (!username) throw new Error('Username is required.');
+      if (!username) throw validationError('Username is required.');
       const job = startAudienceUnfollowJob(username);
       return sendJson(202, { state: 'success', data: { jobId: job.id, username: job.username, status: job.status } });
     }
@@ -2925,7 +3087,7 @@ export async function handleApi(req, res, requestUrl) {
         });
         return sendSuccess({ assignment: { candidateKey: assignment.queueItem?.candidateKey, variantLabel: assignment.variantLabel ?? payload.variant } });
       }
-      throw new Error(`Unknown test action: ${action}`);
+      throw validationError(`Unknown test action: ${action}`);
     }
 
     if (method === 'POST' && segments.length === 2 && segments[0] === 'learning') {
@@ -2952,7 +3114,7 @@ export async function handleApi(req, res, requestUrl) {
         const rule = retireLearnedRule(Number(payload.id), { reason: String(payload.reason || '').trim() });
         return sendSuccess({ rule: formatLearnedRule(rule) });
       }
-      throw new Error(`Unknown learning action: ${action}`);
+      throw validationError(`Unknown learning action: ${action}`);
     }
 
     return sendNotFound();
@@ -2960,12 +3122,17 @@ export async function handleApi(req, res, requestUrl) {
     if (err instanceof SyntaxError) {
       return sendJson(400, { state: 'error', code: 'BAD_REQUEST', message: 'Invalid JSON body.' });
     }
-    const status = err?.code === 'NOT_FOUND_ERROR' ? 404 : 400;
+    const actionable = ['WEB_VALIDATION', 'NOT_FOUND_ERROR', 'DOMAIN_VALIDATION', 'DRAFT_CONFLICT'].includes(err?.code);
+    if (!actionable) logWebError(err, req);
+    const status = err?.code === 'NOT_FOUND_ERROR' ? 404 : err?.code === 'DRAFT_CONFLICT' ? 409 : actionable ? (err.status === 409 ? 409 : 400) : 500;
     return sendJson(status, {
       state: 'error',
-      code: 'ACTION_REJECTED',
-      message: err.message || 'Unknown error',
+      code: err?.code === 'DRAFT_CONFLICT' ? 'DRAFT_CONFLICT' : actionable ? 'ACTION_REJECTED' : 'INTERNAL_ERROR',
+      message: actionable ? err.message : 'Request failed; inspect server diagnostics using the request ID.',
+      requestId: req.webRequestId,
     });
+  } finally {
+    releaseWebRequest(req);
   }
 }
 
@@ -3001,7 +3168,7 @@ function applyEditorPayload(current, payload) {
   }
   if (payload.mediaType !== undefined) {
     const mediaType = String(payload.mediaType || 'none');
-    if (!MEDIA_TYPES.includes(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
+    if (!MEDIA_TYPES.includes(mediaType)) throw validationError(`Invalid media type: ${mediaType}`);
     const media = {
       ...(updated.editor?.media || {}),
       type: mediaType,
@@ -3015,9 +3182,9 @@ function applyEditorPayload(current, payload) {
 
   if (payload.confirmOwnerEvidence === true) {
     const claimSummary = String(payload.ownerEvidenceNote || '').trim().slice(0, 1_000);
-    if (!claimSummary) throw new Error('Owner evidence confirmation requires a short factual/experience note.');
+    if (!claimSummary) throw validationError('Owner evidence confirmation requires a short factual/experience note.');
     const exactText = draftOwnerEvidenceText(updated);
-    if (!exactText) throw new Error('Owner evidence confirmation requires non-empty draft text.');
+    if (!exactText) throw validationError('Owner evidence confirmation requires non-empty draft text.');
     updated.editor = {
       ...(updated.editor || {}),
       ownerEvidence: {
