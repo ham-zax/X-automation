@@ -17,18 +17,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, init)
-  let json: ApiResponse<T>
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const timeout = AbortSignal.timeout(120_000)
+  const signal = init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout
   try {
-    json = await res.json()
-  } catch {
-    throw new ApiError(`The server returned an unreadable response (${res.status}).`)
+    const res = await fetch(`${API_BASE}${path}`, { ...init, signal })
+    let json: ApiResponse<T>
+    try {
+      json = await res.json()
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw new ApiError(`The server returned an unreadable response (${res.status}).`)
+    }
+    if (json.state === 'error' || !res.ok) {
+      throw new ApiError(json.message || `Request failed (${res.status}).`, json.code)
+    }
+    return json.data as T
+  } catch (error) {
+    if (timeout.aborted) {
+      throw new ApiError('The request timed out. It may have completed on the server; inspect its state before trying again.', 'REQUEST_TIMEOUT')
+    }
+    throw error
   }
-  if (json.state === 'error' || !res.ok) {
-    throw new ApiError(json.message || `Request failed (${res.status}).`, json.code)
-  }
-  return json.data as T
 }
 
 async function fetchApi<T>(path: string): Promise<T> {
@@ -141,6 +151,7 @@ export interface PersonaStanceEvent {
 
 export interface DraftView {
   id: number
+  updatedAt: number
   candidateKey: string
   hook: string
   insight: string
@@ -1039,12 +1050,12 @@ export function useBehaviorSelect() {
     draft: DraftEditorData | null
   }, Error, { key: string; behavior: Partial<BehaviorDecision> }>({
     mutationFn: (payload) => postApi('/behavior/select', payload),
-    onSuccess: () => {
+    onSuccess: async () => {
       void queryClient.invalidateQueries({ queryKey: ['create'] })
-      void queryClient.invalidateQueries({ queryKey: ['draft'] })
+      await queryClient.invalidateQueries({ queryKey: ['draft'] })
       void queryClient.invalidateQueries({ queryKey: ['discover'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
-      void queryClient.invalidateQueries({ queryKey: ['conversation'] })
+      await queryClient.invalidateQueries({ queryKey: ['conversation'] })
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
     },
   })
@@ -1107,6 +1118,7 @@ export function useDraftMediaRemove(id: number | null) {
 }
 
 export interface DraftActionPayload {
+  expectedUpdatedAt?: number
   body?: string
   threadParts?: string[]
   operatorContext?: string
@@ -1125,9 +1137,12 @@ export function useDraftAction(id: number | null, action: string) {
   const queryClient = useQueryClient()
   return useMutation<unknown, Error, DraftActionPayload>({
     mutationFn: (payload) => postApi(`/drafts/${id}/${action}`, payload),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['draft', id] })
+    onSuccess: async (result) => {
+      const editor = (result as { editor?: DraftEditorData }).editor
+      if (editor) queryClient.setQueryData(['draft', id], editor)
+      await queryClient.invalidateQueries({ queryKey: ['draft', id] })
       void queryClient.invalidateQueries({ queryKey: ['create'] })
+      await queryClient.invalidateQueries({ queryKey: ['conversation'] })
       void queryClient.invalidateQueries({ queryKey: ['conversations'] })
       void queryClient.invalidateQueries({ queryKey: ['today'] })
     },
@@ -1982,6 +1997,7 @@ export interface WritingStrategyProvenance {
   taxonomyVersion: number
   external?: {
     generatedAt?: number
+    freshness?: { state: 'empty' | 'stale' | 'pending' | 'available'; latestPostAt: number | null; latestObservedAt: number | null; windowDays: number; eligiblePosts: number; reason: string }
     windowDays: number
     maturityHours: number
     confidence: number

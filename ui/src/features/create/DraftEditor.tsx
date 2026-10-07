@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   useBehaviorSelect,
   useDraftAction,
@@ -19,6 +19,7 @@ import {
   TechnicalDetails,
   useDebounced,
 } from '../../components/primitives'
+import { useUnsavedChanges } from '../../router'
 import { WritingApproachPanel } from './WritingApproachPanel'
 
 const MEDIA_TYPE_OPTIONS = [
@@ -92,7 +93,7 @@ function humanizeBehaviorValue(value: string | null | undefined): string {
   return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: boolean }) {
+function BehaviorPanel({ data, readOnly, onStateChange }: { data: DraftEditorData; readOnly: boolean; onStateChange: (dirty: boolean, pending: boolean) => void }) {
   const session = useSession()
   const selectBehavior = useBehaviorSelect()
   const current = useMemo<BehaviorDecision | null>(() => {
@@ -118,8 +119,11 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
   const [conversationStage, setConversationStage] = useState(current?.conversationStage || 'initial')
   const [reasonToExist, setReasonToExist] = useState(current?.reasonToExist || data.queueItem?.routingReason || '')
   const [saved, setSaved] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  useEffect(() => { onStateChange(dirty, selectBehavior.isPending) }, [dirty, selectBehavior.isPending, onStateChange])
 
   useEffect(() => {
+    if (dirty || selectBehavior.isPending) return
     setPrimaryPurpose(current?.primaryPurpose || 'technical_value')
     setSecondaryPurposes(current?.secondaryPurposes || [])
     setSocialMode(current?.socialMode || 'explainer')
@@ -129,10 +133,12 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
     setConversationStage(current?.conversationStage || 'initial')
     setReasonToExist(current?.reasonToExist || data.queueItem?.routingReason || '')
     setSaved(false)
+    // Preserve local behavior edits until the next authoritative response.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, data.queueItem?.routingReason])
 
   const toggleSecondary = (purpose: string) => {
-    setSaved(false)
+    setSaved(false); setDirty(true)
     setSecondaryPurposes((values) => values.includes(purpose)
       ? values.filter((value) => value !== purpose)
       : [...values, purpose])
@@ -160,12 +166,12 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
           : {},
         selectedAt: Date.now(),
       },
-    }, { onSuccess: () => setSaved(true) })
+    }, { onSuccess: () => { setSaved(true); setDirty(false) } })
   }
 
   if (readOnly) {
     return (
-      <Disclosure defaultOpen summary={`Behavior & persona · ${humanizeBehaviorValue(current?.primaryPurpose)} · ${humanizeBehaviorValue(current?.socialMode)} · ${humanizeBehaviorValue(current?.informationDepth)}`}>
+      <Disclosure summary={`Purpose & voice · ${humanizeBehaviorValue(current?.primaryPurpose)} · ${humanizeBehaviorValue(current?.socialMode)} · ${humanizeBehaviorValue(current?.informationDepth)}`}>
         <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Purpose</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.primaryPurpose)}</dd></div>
           <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-400">Mode</dt><dd className="mt-1 text-slate-800">{humanizeBehaviorValue(current?.socialMode)}</dd></div>
@@ -180,23 +186,24 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
   }
 
   return (
-    <Disclosure defaultOpen summary={`Behavior & persona · ${humanizeBehaviorValue(primaryPurpose)} · ${humanizeBehaviorValue(socialMode)} · ${humanizeBehaviorValue(informationDepth)}`}>
+    <fieldset disabled={selectBehavior.isPending} className="min-w-0">
+    <Disclosure summary={`Purpose & voice · ${humanizeBehaviorValue(primaryPurpose)} · ${humanizeBehaviorValue(socialMode)} · ${humanizeBehaviorValue(informationDepth)}`}>
       <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
         <div className="text-sm font-semibold text-slate-900">Choose the act before editing the prose</div>
         <p className="mt-1 text-sm leading-6 text-slate-600">Every action needs a purpose. A social-only reply may be complete; a technical correction still needs evidence. Saving a change invalidates stale review gates but does not approve or publish.</p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           <label className="text-sm font-medium text-slate-700">Primary purpose
-            <select value={primaryPurpose} onChange={(event) => { setPrimaryPurpose(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <select value={primaryPurpose} onChange={(event) => { setPrimaryPurpose(event.target.value); setSaved(false); setDirty(true) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {purposes.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
           <label className="text-sm font-medium text-slate-700">Social mode
-            <select value={socialMode} onChange={(event) => { setSocialMode(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <select value={socialMode} onChange={(event) => { setSocialMode(event.target.value); setSaved(false); setDirty(true) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {modes.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
           <label className="text-sm font-medium text-slate-700">Information depth
-            <select value={informationDepth} onChange={(event) => { setInformationDepth(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <select value={informationDepth} onChange={(event) => { setInformationDepth(event.target.value); setSaved(false); setDirty(true) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {depths.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
@@ -206,24 +213,24 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
               setAffectStrategy(value)
               if (value !== 'neutral' && affectProvenance === 'none') setAffectProvenance('strategic')
               if (value === 'neutral' && affectProvenance === 'strategic') setAffectProvenance('none')
-              setSaved(false)
+              setSaved(false); setDirty(true)
             }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {affects.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
           <label className="text-sm font-medium text-slate-700">Affect provenance
-            <select value={affectProvenance} onChange={(event) => { setAffectProvenance(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <select value={affectProvenance} onChange={(event) => { setAffectProvenance(event.target.value); setSaved(false); setDirty(true) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {affectSources.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
           <label className="text-sm font-medium text-slate-700">Conversation stage
-            <select value={conversationStage} onChange={(event) => { setConversationStage(event.target.value); setSaved(false) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <select value={conversationStage} onChange={(event) => { setConversationStage(event.target.value); setSaved(false); setDirty(true) }} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               {stages.map((value) => <option key={value} value={value}>{humanizeBehaviorValue(value)}</option>)}
             </select>
           </label>
         </div>
         <label className="mt-4 block text-sm font-medium text-slate-700">Reason to exist
-          <textarea value={reasonToExist} onChange={(event) => { setReasonToExist(event.target.value); setSaved(false) }} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Why this exact action belongs in this exact context" />
+          <textarea value={reasonToExist} onChange={(event) => { setReasonToExist(event.target.value); setSaved(false); setDirty(true) }} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" placeholder="Why this exact action belongs in this exact context" />
         </label>
         <div className="mt-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Secondary purposes</div>
@@ -248,10 +255,11 @@ function BehaviorPanel({ data, readOnly }: { data: DraftEditorData; readOnly: bo
         </div>
       </div>
     </Disclosure>
+    </fieldset>
   )
 }
 
-export function DraftEditor({ data }: { data: DraftEditorData }) {
+export function DraftEditor({ data, blocked = false, onStateChange }: { data: DraftEditorData; blocked?: boolean; onStateChange?: (blocked: boolean) => void }) {
   const { draft, pipeline, flags } = data
   const isThread = pipeline === 'thread'
   const readOnly = flags.readOnly
@@ -279,6 +287,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     }
   }
 
+  const editRevision = useRef(draft.updatedAt)
   const [body, setBody] = useState(draft.body)
   const [threadParts, setThreadParts] = useState<string[]>(draft.threadParts?.length ? draft.threadParts : ['', ''])
   const [operatorContext, setOperatorContext] = useState(editorMeta.operatorContext || '')
@@ -293,9 +302,16 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const [dirty, setDirty] = useState(false)
   const [generationOutcome, setGenerationOutcome] = useState<{ decision: string; riskFlags: string[] } | null>(null)
 
-  const [confirmReset, setConfirmReset] = useState(0)
+  const [behaviorDirty, setBehaviorDirty] = useState(false)
+  const [behaviorPending, setBehaviorPending] = useState(false)
+  const handleBehaviorState = useCallback((dirty: boolean, pending: boolean) => {
+    setBehaviorDirty(dirty)
+    setBehaviorPending(pending)
+  }, [])
+  const [generating, setGenerating] = useState(false)
   useEffect(() => {
     if (dirty || contextDirty) return
+    editRevision.current = draft.updatedAt
     setBody(draft.body)
     setThreadParts(draft.threadParts?.length ? draft.threadParts : ['', ''])
     setOperatorContext(editorMeta.operatorContext || '')
@@ -307,7 +323,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
     setMediaSource(editorMeta.media?.source || '')
     setMediaAltText(editorMeta.media?.altText || '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, confirmReset])
+  }, [data, dirty, contextDirty])
 
   const previewPayload = useMemo(() => ({
     ...(isThread ? { threadParts } : { body }),
@@ -329,6 +345,11 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const mediaUpload = useDraftMediaUpload(draft.id)
   const mediaRemove = useDraftMediaRemove(draft.id)
   const previewMutation = useDraftAction(draft.id, 'preview')
+
+  const pending = behaviorPending || generating || save.isPending || generate.isPending || mediaUpload.isPending || mediaRemove.isPending
+  const unsaved = dirty || contextDirty || behaviorDirty
+  useUnsavedChanges(unsaved || pending)
+  useEffect(() => { onStateChange?.(unsaved || pending) }, [unsaved, pending, onStateChange])
 
   useEffect(() => {
     if (!dirty) {
@@ -355,7 +376,16 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   const score = dirty && preview ? preview.score : data.draft.qualityScore
   const breakdown = dirty && preview ? preview.breakdown : data.analysis.breakdown
   const growthPackaging = dirty && preview ? preview.growthPackaging : (data.analysis.growthPackaging ?? data.draft.growthPackaging)
-  const qualityClass = score >= 40 ? 'bg-emerald-100 text-emerald-800' : score >= 30 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+  const reviewFailures = [
+    ...(gatesView?.approvalFailures || []),
+    ...(score < 40 ? [{ message: `Improve the draft before review. Writing quality is ${score}/50; approval requires at least 40/50.` }] : []),
+    ...(growthPackaging?.blockers || []),
+  ]
+  const reviewGates = {
+    passed: gatesView?.passed === true && reviewFailures.length === 0,
+    approvalFailures: reviewFailures.filter((failure, index) => reviewFailures.findIndex((item) => item.message === failure.message) === index),
+    warnings: gatesView?.warnings || [],
+  }
 
   const hasDraftContent = isThread
     ? threadParts.some((part) => String(part || '').trim())
@@ -368,27 +398,33 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
   }
 
   const handleSave = () => {
-    save.mutate({ ...previewPayload, operatorContext } as never, {
+    if (pending || blocked) return
+    save.mutate({ ...previewPayload, operatorContext, expectedUpdatedAt: editRevision.current }, {
       onSuccess: () => {
         setDirty(false)
         setContextDirty(false)
-        setConfirmReset((value) => value + 1)
       },
     })
   }
 
   const handleGenerate = async () => {
+    if (pending || blocked || behaviorDirty) return
     if (dirty && !window.confirm('Regenerate with AI? Your unsaved edits will be replaced by a new generated draft.')) return
+    let expectedUpdatedAt = editRevision.current
+    setGenerating(true)
     setGenerationOutcome(null)
     if (contextDirty) {
       try {
-        await save.mutateAsync({ operatorContext })
+        const saved = await save.mutateAsync({ operatorContext, expectedUpdatedAt }) as { editor: DraftEditorData }
+        expectedUpdatedAt = saved.editor.draft.updatedAt
         setContextDirty(false)
       } catch {
+        setGenerating(false)
         return
       }
     }
-    generate.mutate({} as never, {
+    generate.mutate({ expectedUpdatedAt }, {
+      onSettled: () => setGenerating(false),
       onSuccess: (result) => {
         const generated = result as {
           output?: { decision?: string; riskFlags?: string[] }
@@ -413,19 +449,19 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           riskFlags: generated.output?.riskFlags || [],
         })
         setDirty(false)
-        setConfirmReset((value) => value + 1)
       },
     })
   }
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={pending || blocked} className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {readOnly ? (flags.engagementReply ? 'Sent reply' : 'Published post') : flags.engagementReply ? 'Reply draft' : 'Post draft'}
           </div>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-900">{data.candidate.title}</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-900">{readOnly ? (flags.engagementReply ? 'Sent reply' : 'Published post') : flags.engagementReply ? 'Edit reply' : isThread ? 'Edit thread' : 'Edit post'}</h1>
+          <p className="mt-1 line-clamp-2 text-sm text-slate-500">{data.candidate.title}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             <span>{data.pipelineLabel}</span>
             <span>·</span>
@@ -433,9 +469,6 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className={`rounded-full px-3 py-1 text-sm font-semibold ${qualityClass}`}>
-            {readOnly ? 'Recorded writing quality' : 'Writing quality / structure'} {score}/50 {!readOnly && <>· approval threshold 40 {previewPending && dirty ? '· checking…' : ''}</>}
-          </span>
           {data.candidate.url && (
             <a
               href={data.candidate.url}
@@ -509,220 +542,7 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           />
         )}
       </div>
-      {!readOnly && <div><div className="mb-2 text-sm font-semibold text-slate-700">Approval readiness</div><GatePanel gates={gatesView} /></div>}
-
-      <BehaviorPanel data={data} readOnly={readOnly} />
-
-      <Disclosure
-        summary={`AI context · ${operatorContext.trim() ? 'added' : 'optional'}`}
-        className="operator-surface compact-disclosure p-4"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-3xl text-sm text-slate-600">Optional thread details, documentation, corrections, or facts for Writer. Human-supplied; not independently verified.</p>
-          <span className="text-xs text-slate-400">{operatorContext.length}/12,000</span>
-        </div>
-        <textarea
-          rows={4}
-          value={operatorContext}
-          readOnly={readOnly}
-          maxLength={12000}
-          onChange={(event) => {
-            setOperatorContext(event.target.value)
-            setContextDirty(true)
-          }}
-          placeholder="Add missing context before generating…"
-          className={`mt-3 w-full px-3 py-2 text-sm ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
-        />
-        {!readOnly && contextDirty && <div className="mt-2 text-xs text-amber-700">Saved automatically before the next Generate/Regenerate action.</div>}
-      </Disclosure>
-
-      <WritingApproachPanel
-        data={data}
-        hasDraftContent={hasDraftContent}
-        generating={generate.isPending}
-        onGenerate={handleGenerate}
-      />
-
-      {!readOnly && (
-        <>
-          {generate.isPending && (
-            <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
-              <Pending label="Generating a draft with AI…" />
-            </div>
-          )}
-
-          {generationOutcome && !generate.isPending && (
-            generationOutcome.decision === 'DO_NOT_POST' ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <strong>AI caution: review this draft.</strong>
-                <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
-                <strong>Generation completed.</strong> The editor below has been updated with the new AI draft.
-              </div>
-            )
-          )}
-
-          {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <strong>AI caution: review this draft.</strong>
-              <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
-            </div>
-          ) : (editorMeta.decision || body) ? (
-            <div className="text-sm text-slate-500">
-              AI prepared this candidate. Review the exact text and complete the confirmations that apply before approval.
-            </div>
-          ) : null)}
-
-        </>
-      )}
-
-      <Disclosure summary={`Owner facts / experience · ${editorMeta.ownerEvidence?.experienceConfirmed && readOnly ? 'confirmed' : ownerEvidenceConfirmed ? 'confirm on save' : 'not confirmed'}`}>
-        {readOnly ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            {editorMeta.ownerEvidence?.experienceConfirmed ? (
-              <>
-                <strong>Human-attested for this exact published text.</strong>
-                <div className="mt-1">{editorMeta.ownerEvidence.claimSummary || 'No note recorded.'}</div>
-              </>
-            ) : (
-              <span>No owner factual/experience attestation was recorded for this text.</span>
-            )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <label className="flex items-start gap-3 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={ownerEvidenceConfirmed}
-                onChange={(event) => { setOwnerEvidenceConfirmed(event.target.checked); markDirty() }}
-                className="mt-1"
-              />
-              <span>
-                <strong>I confirm that any first-person factual or experience claims in this exact draft are mine and true.</strong>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">Behavior selection cannot grant this authority. Editing the post text clears the confirmation until you attest the new exact text again.</span>
-              </span>
-            </label>
-            <label className="mt-3 block text-sm text-slate-600">
-              What owner fact or experience is being confirmed?
-              <input
-                value={ownerEvidenceNote}
-                onChange={(event) => { setOwnerEvidenceNote(event.target.value); markDirty() }}
-                maxLength={1000}
-                placeholder="Example: I have used this SDK in my project for two weeks."
-                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-              />
-            </label>
-            {ownerEvidenceConfirmed && !ownerEvidenceNote.trim() && (
-              <div className="mt-2 text-xs font-medium text-amber-700">Add a short factual note before saving the attestation.</div>
-            )}
-          </div>
-        )}
-      </Disclosure>
-
-      <Disclosure
-        summary={`Writing quality · ${score}/50`}
-        className="operator-surface compact-disclosure p-4"
-      >
-        {readOnly ? (
-          <div className="text-sm text-slate-600">
-            Recorded at completion: <strong>{draft.qualityScore}/50</strong>. This was never a growth or virality prediction.
-          </div>
-        ) : hasDraftContent
-          ? <QualityBreakdown breakdown={breakdown} />
-          : <div className="text-sm text-slate-600">Quality feedback appears after AI writes a draft or you start typing.</div>}
-        {!readOnly && <div className="mt-2 text-xs text-slate-500">Writing dimensions are normalized to 50. Growth Packaging and Growth fit are separate checks.</div>}
-      </Disclosure>
-
-      {!readOnly && <GrowthPackagingPanel review={growthPackaging} />}
-
-      {!readOnly && !flags.engagementReply && (
-        <Disclosure summary="Visual plan">
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input type="checkbox" checked={mediaRequired} onChange={(event) => { markDirty(); setMediaRequired(event.target.checked) }} />
-            This post needs a visual before publishing
-          </label>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            <label className="text-sm text-slate-600">
-              Visual type
-              <select value={mediaType} onChange={(event) => { markDirty(); setMediaType(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
-                {MEDIA_TYPE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-            </label>
-            <label className="text-sm text-slate-600">
-              Why add it?
-              <input value={mediaReason} onChange={(event) => { markDirty(); setMediaReason(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-            </label>
-            <label className="text-sm text-slate-600">
-              Source or file reference
-              <input value={mediaSource} onChange={(event) => { markDirty(); setMediaSource(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-            </label>
-            <label className="text-sm text-slate-600">
-              Description for accessibility
-              <input value={mediaAltText} onChange={(event) => { markDirty(); setMediaAltText(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-            </label>
-          </div>
-          <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
-            <div className="text-sm font-semibold text-slate-800">Attached image</div>
-            <div className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP, or GIF up to 5 MB. The attachment stays local and previewable here. When browser publication is atomically claimed, Growth OS temporarily registers only this file in browser-fast’s approved-artifact allowlist; verified reconciliation removes that entry. The background X API path still rejects local media.</div>
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              disabled={mediaUpload.isPending}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) mediaUpload.mutate(file)
-                event.currentTarget.value = ''
-              }}
-              className="mt-3 block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700"
-            />
-            {mediaUpload.isPending && <div className="mt-2"><Pending label="Attaching image…" /></div>}
-            {mediaUpload.error && <div className="mt-2 text-xs text-red-700">{mediaUpload.error.message}</div>}
-            {editorMeta.media?.attachment && (
-              <div className="mt-3">
-                <img
-                  src={`/api/drafts/${draft.id}/media?v=${editorMeta.media.attachment.attachedAt || 0}`}
-                  alt={mediaAltText || 'Attached draft media preview'}
-                  className="max-h-72 rounded-lg border border-slate-200 object-contain"
-                />
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                  <span>
-                    {editorMeta.media.attachment.fileName || 'Attached image'}
-                    {editorMeta.media.attachment.size ? ` · ${(editorMeta.media.attachment.size / 1024).toFixed(0)} KB` : ''}
-                    {' · operator upload'}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={mediaRemove.isPending}
-                    onClick={() => mediaRemove.mutate()}
-                    className="font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
-                  >
-                    {mediaRemove.isPending ? 'Removing…' : 'Remove image'}
-                  </button>
-                </div>
-                {mediaRemove.error && <div className="mt-1 text-xs text-red-700">{mediaRemove.error.message}</div>}
-              </div>
-            )}
-            {mediaRequired && !editorMeta.media?.attachment && (
-              <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                This visual is required, so approval remains blocked until an image is attached and the visual plan is complete.
-              </div>
-            )}
-          </div>
-        </Disclosure>
-      )}
-
-      <Disclosure summary="AI draft details">
-        <TechnicalDetails>
-          <div><strong>How AI built this draft</strong></div>
-          <div className="mt-1"><strong>Key topics:</strong> {(editorMeta.semanticAnchors || []).join(', ') || 'None recorded'}</div>
-          <div><strong>Source material used:</strong> {(editorMeta.evidenceUsed || []).join('; ') || 'None recorded'}</div>
-          <div><strong>AI decision:</strong> {editorMeta.decision || 'n/a'}</div>
-        </TechnicalDetails>
-      </Disclosure>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
         <div className="max-w-2xl text-sm text-slate-500">
           {readOnly
             ? 'Completed text is preserved as a read-only historical snapshot.'
@@ -732,11 +552,11 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
         </div>
         {!readOnly && (
           <div className="flex items-center gap-3">
-            {(dirty || contextDirty) && <span className="text-xs text-amber-600">Unsaved changes</span>}
+            {(dirty || contextDirty) ? <span role="status" className="text-xs text-amber-600">Unsaved changes</span> : save.isSuccess && <span role="status" className="text-xs text-emerald-700">Saved</span>}
             <button
               onClick={handleSave}
-              disabled={save.isPending}
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              disabled={save.isPending || (!dirty && !contextDirty)}
+              className="action-button" data-variant="primary"
             >
               {save.isPending ? 'Saving…' : 'Save changes'}
             </button>
@@ -745,11 +565,242 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
       </div>
 
       {save.isError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{save.error.message}</div>
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{save.error.message}</div>
       )}
       {generate.isError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{generate.error.message}</div>
+        <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{generate.error.message}</div>
       )}
+
+      {!readOnly && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-700">Ready for review?</span>
+            <Badge tone={reviewGates?.passed ? 'success' : 'warning'}>{dirty && previewPending ? 'Checking…' : reviewGates?.passed ? 'Checks passed' : 'Needs attention'}</Badge>
+          </div>
+          {reviewGates?.approvalFailures[0] && <p className="text-sm text-slate-600">{reviewGates.approvalFailures[0].message}</p>}
+          <Disclosure summary={`Review checks${reviewGates?.approvalFailures.length ? ` · ${reviewGates.approvalFailures.length} to resolve` : ''}`}>
+            <GatePanel gates={reviewGates} />
+          </Disclosure>
+        </div>
+      )}
+
+      <WritingApproachPanel
+        data={data}
+        hasDraftContent={hasDraftContent}
+        generating={generate.isPending}
+        onGenerate={handleGenerate}
+      />
+
+      <Disclosure summary="More options & details" className="operator-surface p-4">
+        <div className="space-y-4">
+          <BehaviorPanel data={data} readOnly={readOnly} onStateChange={handleBehaviorState} />
+
+          <Disclosure
+            summary={`AI context · ${operatorContext.trim() ? 'added' : 'optional'}`}
+            className="operator-surface compact-disclosure p-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="max-w-3xl text-sm text-slate-600">Optional thread details, documentation, corrections, or facts for Writer. Human-supplied; not independently verified.</p>
+              <span className="text-xs text-slate-400">{operatorContext.length}/12,000</span>
+            </div>
+            <textarea
+              rows={4}
+              value={operatorContext}
+              readOnly={readOnly}
+              maxLength={12000}
+              onChange={(event) => {
+                setOperatorContext(event.target.value)
+                setContextDirty(true)
+              }}
+              placeholder="Add missing context before generating…"
+              className={`mt-3 w-full px-3 py-2 text-sm ${readOnly ? 'bg-slate-50' : 'bg-white'}`}
+            />
+            {!readOnly && contextDirty && <div className="mt-2 text-xs text-amber-700">Saved automatically before the next Generate/Regenerate action.</div>}
+          </Disclosure>
+
+
+
+          {!readOnly && (
+            <>
+              {generate.isPending && (
+                <div className="rounded-lg border border-violet-200 bg-violet-50 p-4">
+                  <Pending label="Generating a draft with AI…" />
+                </div>
+              )}
+
+              {generationOutcome && !generate.isPending && (
+                generationOutcome.decision === 'DO_NOT_POST' ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <strong>AI caution: review this draft.</strong>
+                    <div className="mt-1">{displayRiskFlags(generationOutcome.riskFlags, data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                    <strong>Generation completed.</strong> The post text has been updated. Review it before approval.
+                  </div>
+                )
+              )}
+
+              {!generationOutcome && (editorMeta.decision === 'DO_NOT_POST' ? (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <strong>AI caution: review this draft.</strong>
+                  <div className="mt-1">{displayRiskFlags(editorMeta.riskFlags || [], data.growthFit.allowed) || 'The Writer could not find a useful thesis from the current context.'}</div>
+                </div>
+              ) : (editorMeta.decision || body) ? (
+                <div className="text-sm text-slate-500">
+                  AI prepared this candidate. Review the exact text and complete the confirmations that apply before approval.
+                </div>
+              ) : null)}
+
+            </>
+          )}
+
+          <Disclosure summary={`Owner facts / experience · ${editorMeta.ownerEvidence?.experienceConfirmed && readOnly ? 'confirmed' : ownerEvidenceConfirmed ? 'confirm on save' : 'not confirmed'}`}>
+            {readOnly ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                {editorMeta.ownerEvidence?.experienceConfirmed ? (
+                  <>
+                    <strong>Human-attested for this exact published text.</strong>
+                    <div className="mt-1">{editorMeta.ownerEvidence.claimSummary || 'No note recorded.'}</div>
+                  </>
+                ) : (
+                  <span>No owner factual/experience attestation was recorded for this text.</span>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <label className="flex items-start gap-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={ownerEvidenceConfirmed}
+                    onChange={(event) => { setOwnerEvidenceConfirmed(event.target.checked); markDirty() }}
+                    className="mt-1"
+                  />
+                  <span>
+                    <strong>I confirm that any first-person factual or experience claims in this exact draft are mine and true.</strong>
+                    <span className="mt-1 block text-xs leading-5 text-slate-500">Behavior selection cannot grant this authority. Editing the post text clears the confirmation until you attest the new exact text again.</span>
+                  </span>
+                </label>
+                <label className="mt-3 block text-sm text-slate-600">
+                  What owner fact or experience is being confirmed?
+                  <input
+                    value={ownerEvidenceNote}
+                    onChange={(event) => { setOwnerEvidenceNote(event.target.value); markDirty() }}
+                    maxLength={1000}
+                    placeholder="Example: I have used this SDK in my project for two weeks."
+                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </label>
+                {ownerEvidenceConfirmed && !ownerEvidenceNote.trim() && (
+                  <div className="mt-2 text-xs font-medium text-amber-700">Add a short factual note before saving the attestation.</div>
+                )}
+              </div>
+            )}
+          </Disclosure>
+
+          <Disclosure
+            summary={`Writing quality · ${score}/50`}
+            className="operator-surface compact-disclosure p-4"
+          >
+            {readOnly ? (
+              <div className="text-sm text-slate-600">
+                Recorded at completion: <strong>{draft.qualityScore}/50</strong>. This was never a growth or virality prediction.
+              </div>
+            ) : hasDraftContent
+              ? <QualityBreakdown breakdown={breakdown} />
+              : <div className="text-sm text-slate-600">Quality feedback appears after AI writes a draft or you start typing.</div>}
+            {!readOnly && <div className="mt-2 text-xs text-slate-500">Writing dimensions are normalized to 50. Growth Packaging and Growth fit are separate checks.</div>}
+          </Disclosure>
+
+          {!readOnly && <GrowthPackagingPanel review={growthPackaging} />}
+
+          {!readOnly && !flags.engagementReply && (
+            <Disclosure summary="Visual plan">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={mediaRequired} onChange={(event) => { markDirty(); setMediaRequired(event.target.checked) }} />
+                This post needs a visual before publishing
+              </label>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <label className="text-sm text-slate-600">
+                  Visual type
+                  <select value={mediaType} onChange={(event) => { markDirty(); setMediaType(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+                    {MEDIA_TYPE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <label className="text-sm text-slate-600">
+                  Why add it?
+                  <input value={mediaReason} onChange={(event) => { markDirty(); setMediaReason(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                </label>
+                <label className="text-sm text-slate-600">
+                  Source or file reference
+                  <input value={mediaSource} onChange={(event) => { markDirty(); setMediaSource(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                </label>
+                <label className="text-sm text-slate-600">
+                  Description for accessibility
+                  <input value={mediaAltText} onChange={(event) => { markDirty(); setMediaAltText(event.target.value) }} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
+                </label>
+              </div>
+              <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-sm font-semibold text-slate-800">Attached image</div>
+                <div className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP, or GIF up to 5 MB. The attachment stays local and previewable here. The agent can attach this exact image when publishing through the browser. API publishing does not support images yet.</div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={mediaUpload.isPending}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) mediaUpload.mutate(file)
+                    event.currentTarget.value = ''
+                  }}
+                  className="mt-3 block w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700"
+                />
+                {mediaUpload.isPending && <div className="mt-2"><Pending label="Attaching image…" /></div>}
+                {mediaUpload.error && <div className="mt-2 text-xs text-red-700">{mediaUpload.error.message}</div>}
+                {editorMeta.media?.attachment && (
+                  <div className="mt-3">
+                    <img
+                      src={`/api/drafts/${draft.id}/media?v=${editorMeta.media.attachment.attachedAt || 0}`}
+                      alt={mediaAltText || 'Attached draft media preview'}
+                      className="max-h-72 rounded-lg border border-slate-200 object-contain"
+                    />
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                      <span>
+                        {editorMeta.media.attachment.fileName || 'Attached image'}
+                        {editorMeta.media.attachment.size ? ` · ${(editorMeta.media.attachment.size / 1024).toFixed(0)} KB` : ''}
+                        {' · operator upload'}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={mediaRemove.isPending}
+                        onClick={() => mediaRemove.mutate()}
+                        className="font-semibold text-red-600 hover:text-red-700 disabled:opacity-50"
+                      >
+                        {mediaRemove.isPending ? 'Removing…' : 'Remove image'}
+                      </button>
+                    </div>
+                    {mediaRemove.error && <div className="mt-1 text-xs text-red-700">{mediaRemove.error.message}</div>}
+                  </div>
+                )}
+                {mediaRequired && !editorMeta.media?.attachment && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    This visual is required, so approval remains blocked until an image is attached and the visual plan is complete.
+                  </div>
+                )}
+              </div>
+            </Disclosure>
+          )}
+
+          <Disclosure summary="AI draft details">
+            <TechnicalDetails>
+              <div><strong>How AI built this draft</strong></div>
+              <div className="mt-1"><strong>Key topics:</strong> {(editorMeta.semanticAnchors || []).join(', ') || 'None recorded'}</div>
+              <div><strong>Source material used:</strong> {(editorMeta.evidenceUsed || []).join('; ') || 'None recorded'}</div>
+              <div><strong>AI decision:</strong> {editorMeta.decision || 'n/a'}</div>
+            </TechnicalDetails>
+          </Disclosure>
+
+        </div>
+      </Disclosure>
 
       {data.relationship && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
@@ -757,6 +808,6 @@ export function DraftEditor({ data }: { data: DraftEditorData }) {
           {' '}{data.relationship.theirRepliesToUs} prior replies · {data.relationship.meaningfulInteractions} useful interactions
         </div>
       )}
-    </div>
+    </fieldset>
   )
 }

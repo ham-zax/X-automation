@@ -1,10 +1,10 @@
 const SETTINGS_ITEMS = [
-  ['#/settings/growth-focus', 'Growth focus', 'Default growth objective, topic roles, classification terms, and target-audience signals.'],
-  ['#/settings/persona', 'Persona & stances', 'Inspect the active Hamza model, its known unknowns, and append grounded belief or tool-stance changes.'],
-  ['#/settings/growth-operator', 'Growth Operator', 'Start, pause, stop, or configure the owner delegation that lets the agent execute bounded growth work without per-action approval ceremonies.'],
-  ['#/settings/ai', 'AI', 'Runtime, provider, model, role assignments, connection checks, and recent AI usage.'],
-  ['#/settings/autonomous-replies', 'Autonomous replies', 'Start, pause, stop, dry-run/live authority, source/intent/tone policy, safety budget, cadence, and decision history.'],
-  ['#/settings/advanced', 'Advanced / diagnostics', 'Relationship detail, account-health evidence, and system-level diagnostic views.'],
+  ['#/settings/growth-focus', 'Topics & audience', 'Choose the topics to focus on and the people you want to reach.'],
+  ['#/settings/persona', 'Voice & preferences', 'Review Hamza’s voice, interests, and recorded opinions.'],
+  ['#/settings/growth-operator', 'Agent control', 'Set what the agent may do, then start, pause, or stop its access.'],
+  ['#/settings/ai', 'AI connection', 'Connect a provider, choose models, and check usage.'],
+  ['#/settings/autonomous-replies', 'Reply automation', 'Choose when the agent may reply and review its decisions.'],
+  ['#/settings/advanced', 'Diagnostics', 'Check account health, connection problems, and system details.'],
 ] as const
 
 export function Settings() {
@@ -12,7 +12,7 @@ export function Settings() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold text-slate-900">Settings</h2>
-        <p className="mt-1 max-w-3xl text-sm text-slate-600">Configure growth focus, persona/stance state, delegated authority, AI, and autonomous replies, or inspect advanced diagnostic detail. Daily work remains in the primary navigation.</p>
+        <p className="mt-1 max-w-3xl text-sm text-slate-600">Manage your voice, audience, and agent access. Open Diagnostics when something needs troubleshooting.</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

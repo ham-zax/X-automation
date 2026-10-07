@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useDraftEditor, useQueueAction } from '../../api/client'
 import {
   Badge,
@@ -12,6 +13,7 @@ import { DraftEditor } from './DraftEditor'
 import { GrowthFitPanel } from './GrowthFitPanel'
 
 export function DraftPage({ draftId }: { draftId: number }) {
+  const [editorBlocked, setEditorBlocked] = useState(false)
   const { data, isLoading, error, refetch } = useDraftEditor(Number.isFinite(draftId) ? draftId : null)
   const review = useQueueAction('review')
   const approve = useQueueAction('approve')
@@ -41,14 +43,17 @@ export function DraftPage({ draftId }: { draftId: number }) {
       </div>
 
       <div className="operator-surface p-5 sm:p-6" data-tone="ai">
-        <GrowthFitPanel
-          growthFit={data.growthFit}
-          queueItemId={queueItem?.id ?? null}
-          readOnly={flags.readOnly || Boolean(queueItem?.humanApprovedAt)}
-        />
-        <div className="mt-5"><DraftEditor data={data} /></div>
+        <Disclosure summary={`Audience fit · ${data.growthFit.allowed ? 'within your topics' : 'needs attention'}`} defaultOpen={!data.growthFit.allowed}>
+          <GrowthFitPanel
+            growthFit={data.growthFit}
+            queueItemId={queueItem?.id ?? null}
+            readOnly={flags.readOnly || Boolean(queueItem?.humanApprovedAt)}
+          />
+        </Disclosure>
+        <div className="mt-5"><DraftEditor key={data.draft.id} data={data} blocked={review.isPending || approve.isPending} onStateChange={setEditorBlocked} /></div>
 
         <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+          {editorBlocked && <Notice tone="warning" title="Save changes before review">Finish saving the editor changes before checking readiness or approving the saved text.</Notice>}
           {flags.canApproveReply && (
             <Notice tone="success" title="Ready for exact-reply approval">
               Use the conversation view to freeze this text for the browser-agent execution lane.
@@ -71,7 +76,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
             <div>
               <button
                 onClick={() => review.mutate({ key: data.candidate.key })}
-                disabled={review.isPending}
+                disabled={editorBlocked || review.isPending || approve.isPending}
                 className="action-button" data-variant="secondary"
               >
                 {review.isPending ? 'Checking…' : queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
@@ -86,6 +91,7 @@ export function DraftPage({ draftId }: { draftId: number }) {
                 <Pending label="Approving…" />
               ) : (
                 <button
+                  disabled={editorBlocked || review.isPending}
                   onClick={() => approve.mutate({ key: data.candidate.key })}
                   className="action-button" data-variant="success"
                 >

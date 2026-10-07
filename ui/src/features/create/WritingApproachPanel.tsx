@@ -168,6 +168,7 @@ export function WritingApproachPanel({
   const generation = data.draft.editor?.generation
   const readOnly = data.flags.readOnly
 
+  const [optionsOpen, setOptionsOpen] = useState(false)
   const [source, setSource] = useState<ApproachSource>('deterministic')
   const [mode, setMode] = useState<BehaviorMode>(null)
   const [optionIndex, setOptionIndex] = useState<number | null>(null)
@@ -316,9 +317,20 @@ export function WritingApproachPanel({
         )}
       </div>
       {!readOnly && generationBlockedByChoice && (
-        <div className="mt-2 text-xs text-amber-700">Save the writing choice before generating.</div>
+        <div className="mt-2 flex items-center gap-2 text-xs text-slate-600">
+          <span>{localTouched ? 'Save your writing choice to continue.' : 'Choose how AI should write before generating.'}</span>
+          <button type="button" onClick={() => setOptionsOpen(true)} className="font-semibold text-violet-700 underline">{localTouched ? 'Review writing choice' : 'Choose writing options'}</button>
+        </div>
       )}
-      <Disclosure summary="Writing guidance & evidence" defaultOpen>
+      <details open={optionsOpen} onToggle={(event) => setOptionsOpen(event.currentTarget.open)} className="mt-3">
+      <summary className="cursor-pointer font-medium text-slate-500 hover:text-slate-700">Writing options</summary>
+      <div className="mt-2">
+      {preview?.provenance.external?.freshness && preview.provenance.external.freshness.state !== 'available' && (
+        <p className="mb-3 text-xs text-slate-600">
+          No recent pattern evidence is ready.
+          {preview.provenance.external.freshness.latestPostAt ? ` Last collected post: ${new Date(preview.provenance.external.freshness.latestPostAt).toLocaleDateString()}.` : ' Collect posts and update their metrics first.'}
+        </p>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-sm text-slate-600">Optional guidance for the next Writer generation. It never approves or publishes.</div>
@@ -362,7 +374,7 @@ export function WritingApproachPanel({
         <>
           <div className="mt-5 border-t border-violet-100 pt-4">
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">AI recommendation</div>
-            <div className="mt-1 text-xs text-slate-500">Optional token-spending action. AI can only choose and explain one current deterministic option; it cannot save a human choice or generate text.</div>
+            <div className="mt-1 text-xs text-slate-500">Ask AI to suggest an approach. This uses your connected AI provider and may incur a charge. Review and save the choice yourself.</div>
 
             {!recommend.data && !recommend.isPending && !recommend.error && (
               <div className="mt-2 text-sm text-slate-600">No AI recommendation requested.</div>
@@ -507,9 +519,9 @@ export function WritingApproachPanel({
             <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Behavior for the next generation</div>
             <div className="mt-2 grid gap-2 md:grid-cols-3">
               {([
-                ['off', 'No influence', 'Persist Off. No writing strategy enters Writer.'],
-                ['suggest', 'Advice only', 'Keep the selected approach visible, but do not pass it to Writer.'],
-                ['apply', 'Use for this draft', 'Pass the saved selected approach to Writer for the next generation.'],
+                ['off', 'No influence', 'Generate without extra writing guidance.'],
+                ['suggest', 'Advice only', 'Keep the approach as a reference; AI will not use it.'],
+                ['apply', 'Use for this draft', 'Use this approach when AI generates the draft.'],
               ] as const).map(([value, label, note]) => (
                 <label key={value} className={`cursor-pointer rounded-lg border px-3 py-2 text-sm ${mode === value ? 'border-violet-400 bg-white text-slate-900' : 'border-slate-200 bg-white/70 text-slate-700'}`}>
                   <div className="flex items-start gap-2">
@@ -519,7 +531,7 @@ export function WritingApproachPanel({
                 </label>
               ))}
             </div>
-            {mode == null && <div className="mt-2 text-xs text-slate-500">No behavior is preselected when no human selection exists.</div>}
+            {mode == null && <div className="mt-2 text-xs text-slate-500">Choose an option, then save your writing choice.</div>}
             {mode !== 'off' && mode != null && !selectedApproachAvailable && <div className="mt-2 text-xs font-medium text-amber-700">Choose an evidence-backed or manual approach before saving Advice only or Use for this draft.</div>}
 
             <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -552,7 +564,8 @@ export function WritingApproachPanel({
               ? 'Writing-strategy influence is off.'
               : 'No writing-strategy selection is in force.'}
       </div>
-      </Disclosure>
+      </div>
+      </details>
     </div>
   )
 }

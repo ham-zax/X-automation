@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useConversationAction, useConversationDetail } from '../../api/client'
 import {
   Badge,
@@ -15,6 +16,7 @@ import { GrowthFitPanel } from '../create/GrowthFitPanel'
 import { autonomousLabel, autonomousTone } from './autonomousView'
 
 export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
+  const [editorBlocked, setEditorBlocked] = useState(false)
   const { data, isLoading, error, refetch } = useConversationDetail(candidateKey)
   const draftAction = useConversationAction('draft', candidateKey)
   const reviewAction = useConversationAction('review', candidateKey)
@@ -159,14 +161,15 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
             candidateKey={editor.candidate.key}
             readOnly={editor.flags.readOnly || Boolean(editor.queueItem?.humanApprovedAt)}
           />
-          <div className="mt-5"><DraftEditor data={editor} /></div>
+          <div className="mt-5"><DraftEditor key={editor.draft.id} data={editor} blocked={reviewAction.isPending || approveAction.isPending} onStateChange={setEditorBlocked} /></div>
 
           <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+          {editorBlocked && <Notice tone="warning" title="Save changes before review">Finish saving the editor changes before checking readiness or approving the saved text.</Notice>}
             {editor.flags.canReview && (
               <div>
                 <button
                   onClick={() => reviewAction.mutate({})}
-                  disabled={reviewAction.isPending}
+                  disabled={editorBlocked || reviewAction.isPending || approveAction.isPending}
                   className="action-button" data-variant="secondary"
                 >
                   {reviewAction.isPending ? 'Checking…' : editor.queueItem?.status === 'needs_review' ? 'Recheck readiness' : 'Check readiness'}
@@ -181,7 +184,8 @@ export function ConversationDetail({ candidateKey }: { candidateKey: string }) {
                   <Pending label="Approving the exact reply…" />
                 ) : (
                   <button
-                    onClick={() => approveAction.mutate({})}
+                    disabled={editorBlocked || reviewAction.isPending}
+                  onClick={() => approveAction.mutate({})}
                     className="action-button" data-variant="success"
                   >
                     Approve exact reply

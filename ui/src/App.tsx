@@ -1,23 +1,25 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useHashRoute } from './router'
-import { Today } from './features/today/Today'
-import { Discover } from './features/discover/Discover'
-import { Conversations } from './features/conversations/Conversations'
-import { ConversationDetail } from './features/conversations/ConversationDetail'
-import { Create } from './features/create/Create'
-import { DraftPage } from './features/create/DraftPage'
-import { Results } from './features/results/Results'
-import { Audience } from './features/results/Audience'
-import { Learn } from './features/learn/Learn'
-import { Advanced } from './features/advanced/Advanced'
-import { AISettings } from './features/settings/AISettings'
-import { AutonomousRepliesSettings } from './features/settings/AutonomousRepliesSettings'
-import { GrowthOperatorSettings } from './features/settings/GrowthOperatorSettings'
-import { NicheSettings } from './features/settings/NicheSettings'
-import { PersonaSettings } from './features/settings/PersonaSettings'
-import { Settings } from './features/settings/Settings'
 import { WorkspaceNav } from './components/workspace'
+import { Loading } from './components/primitives'
+
+const Today = lazy(() => import('./features/today/Today').then((module) => ({ default: module.Today })))
+const Discover = lazy(() => import('./features/discover/Discover').then((module) => ({ default: module.Discover })))
+const Conversations = lazy(() => import('./features/conversations/Conversations').then((module) => ({ default: module.Conversations })))
+const ConversationDetail = lazy(() => import('./features/conversations/ConversationDetail').then((module) => ({ default: module.ConversationDetail })))
+const Create = lazy(() => import('./features/create/Create').then((module) => ({ default: module.Create })))
+const DraftPage = lazy(() => import('./features/create/DraftPage').then((module) => ({ default: module.DraftPage })))
+const Results = lazy(() => import('./features/results/Results').then((module) => ({ default: module.Results })))
+const Audience = lazy(() => import('./features/results/Audience').then((module) => ({ default: module.Audience })))
+const Learn = lazy(() => import('./features/learn/Learn').then((module) => ({ default: module.Learn })))
+const Advanced = lazy(() => import('./features/advanced/Advanced').then((module) => ({ default: module.Advanced })))
+const AISettings = lazy(() => import('./features/settings/AISettings').then((module) => ({ default: module.AISettings })))
+const AutonomousRepliesSettings = lazy(() => import('./features/settings/AutonomousRepliesSettings').then((module) => ({ default: module.AutonomousRepliesSettings })))
+const GrowthOperatorSettings = lazy(() => import('./features/settings/GrowthOperatorSettings').then((module) => ({ default: module.GrowthOperatorSettings })))
+const NicheSettings = lazy(() => import('./features/settings/NicheSettings').then((module) => ({ default: module.NicheSettings })))
+const PersonaSettings = lazy(() => import('./features/settings/PersonaSettings').then((module) => ({ default: module.PersonaSettings })))
+const Settings = lazy(() => import('./features/settings/Settings').then((module) => ({ default: module.Settings })))
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,10 +50,10 @@ function RouteContent() {
 
   if (!first || first === 'today') return <Today />
   if (first === 'discover') return <Discover />
-  if (first === 'conversations' && second) return <ConversationDetail candidateKey={second} />
+  if (first === 'conversations' && second) return <ConversationDetail key={second} candidateKey={second} />
   if (first === 'conversations') return <Conversations />
   if (first === 'create') return <Create />
-  if (first === 'draft' && second) return <DraftPage draftId={Number(second)} />
+  if (first === 'draft' && second) return <DraftPage key={second} draftId={Number(second)} />
   if (first === 'results' && second === 'audience') return <Audience />
   if (first === 'results') return <Results />
   if (first === 'learn') return <Learn section={second} />
@@ -125,7 +127,7 @@ function Shell() {
         </div>
       </header>
       <main id="workspace-main" tabIndex={-1} className="app-main">
-        <RouteContent />
+        <Suspense fallback={<Loading message="Loading workspace…" />}><RouteContent /></Suspense>
       </main>
     </div>
   )
