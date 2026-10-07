@@ -547,7 +547,7 @@ export async function testAiProfile(profileOrId, { timeoutMs = 30_000 } = {}) {
     profile,
     'Return one JSON object with exactly {"ok": true}. This is a configuration test; do not call tools or add other content.',
     schema,
-    timeoutMs,
+    Date.now() + timeoutMs,
   );
   if (result.output?.ok !== true) throw new AiRuntimeError('test_failed', 'AI profile test returned an unexpected structured result.');
   return {

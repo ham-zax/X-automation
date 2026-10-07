@@ -55,6 +55,33 @@ Caveats: this was **not reviewed or load-tested**. The watchdog runs on a free m
 
 Runs 36–38 on ARM ended with zero public actions because the default prompt tells the operator to stop rather than create filler. `X_GROWTH_AGENT_EXPERIMENT=1` (runner commit after `55eed51`; opt-in, default prompt unchanged, covered by a test in `tests/growth_agent_runner.test.mjs`) appends an `EXPERIMENT MODE` section to the prompt: the owner has granted full authority on this test account; aim for at least 2 public actions per pass (replies first, then an original or quote); review own drafts critically; write like a person (varied openers, specific details, no hashtag/emoji spam, no template phrasing); stale queue items may be expired. The bridge's hard gates (single publication claim, reconciliation, account health, duplicate fences, authentication) still apply. To tune posting volume or voice, edit the `experimentSection` text in `growth_agent_runner.js` `operatorPrompt`.
 
+## ARM application AI runtime repair — continuation on 2026-10-07
+
+The app-level structured-AI path used by `browser-reply-claim`, Writer review, writing-strategy recommendation and editorial refresh was the blocker behind run 38's generic `AI execution failed`. This is separate from Pi's own `opencode2api` model connection.
+
+Root cause and evidence:
+
+- The persisted AI role bindings still pointed at workstation-era runtime-managed profiles (Codex, AGY and OpenCode). Those CLIs are not usable on ARM. `ai_runs` 570–573 show `editorial_scan` / `writer` failing essentially immediately on those profiles.
+- `ai_policy.reserveAiRequest()` reserves the request budget before a runtime-managed adapter discovers that its CLI is unavailable. The current editorial scan context is about 926 KB, so one dead Codex scan reserved about 947k against the default 1,000,000 daily token budget. The fallback then failed from budget exhaustion and the public bridge surfaced only the generic execution error.
+- The context is genuinely large: the dominant fields are measurement history, scan candidates and distribution-surface outcomes. Do not bind `editorial_scan` to `exo-free`: its configured 131k context window is too small for the current packet.
+- `testAiProfile()` also had an independent deadline bug: it passed a relative timeout where `executeValidated()` requires an absolute deadline. That made a healthy direct profile appear to time out immediately. The tracked fix is `Date.now() + timeoutMs`.
+- A raw local gateway probe and then x_test's own corrected structured-profile test both succeeded. The app-level direct adapter therefore works on ARM; the gateway itself was not the problem.
+
+Current ARM AI configuration:
+
+- Local deployment env now allowlists `http://127.0.0.1:13339/v1` for the app's guarded direct-AI transport.
+- The ARM experiment's daily AI token-budget guard is 25,000,000 rather than the 1,000,000 default, because one editorial packet is close to 1 MB. The independent 200-request/day guard remains in place.
+- `writer`, `audience_review` and `continuous_scan`: primary `exo-free`, fallback `longcat-2.5-preview-free`.
+- `editorial_scan` and `editorial_final`: primary `longcat-2.5-preview-free`, fallback `space-bunny-free`.
+- All active role profiles are `direct_api` / OpenAI-compatible chat-completions profiles pointed at the loopback gateway. The secret value remains only in ARM's local secret store and was not printed.
+- x_test's corrected profile test passed for all three bound models before rebinding. A Nemotron profile was tested but returned a provider error through the app request shape and is not bound.
+
+Live proof after rebinding: run 40 reached `browser-reply-claim` and `ai_runs` 574 and 575 completed through `direct_api / exo-free` in about 6 s and 15 s. The candidate was then skipped by the deterministic content gate (unsupported factual additions and 291/280 weighted characters), which is a legitimate quality rejection rather than an AI capability failure. As of 02:37 UTC there was still no new publication attempt after the 2026-10-02 posts.
+
+There was also a discoverability gap in delegated main-feed approval. `agent_bridge.js` already exposed `mission-approve`, but the command was missing from the bridge usage string and the experiment prompt did not tell the operator to use it. Run 38 therefore incorrectly concluded there was no agent-lane approval primitive. The experiment prompt now tells the operator to establish the current deterministic writing strategy, regenerate/apply Writer output when necessary, and use `mission-approve` with the active run/grant and concrete verification provenance instead of waiting for the dashboard/human lane. `mission-approve` was also added to the bridge usage contract. The next fresh Pi pass will receive that prompt; run 40 began before the prompt edit, although it already uses the repaired live AI bindings.
+
+Verification performed for this continuation: direct gateway contract probes, x_test's own structured-profile tests, live `ai_runs` evidence from run 40, and `node --check` on the three changed JavaScript files. No automated test suite was run.
+
 ## Closing the WSL session
 
 Nothing runs from WSL. Every moving part is on ARM under user systemd with linger (timers survive logouts and reboots of the workstation): operator timer and service, watchdog timer, `claive-serve`, dashboard, `opencode2api`, Chromium/Xvfb. Closing the Claude/WSL session stops nothing. Do **not** start the operator or a second copy of the database on WSL.
@@ -63,7 +90,7 @@ Nothing runs from WSL. Every moving part is on ARM under user systemd with linge
 
 Already recorded in the database: every attempt in `publication_attempts` (action type, lane, state `confirmed_published` / `confirmed_not_sent` / `closed_unresolved`, evidence, errors, `run_id`), every run in `growth_runs` (status, stop reason, `adapter_type`, session), and engagement in `post_metrics` / `publication_measurements`. Joining attempts to runs by `run_id` gives per-runtime success counts. Not recorded: model, tokens and duration per run, and blocked-pass reasons only exist in the scheduler status and the journal. There is no stats command yet; the watchdog's `stats.jsonl` is the stopgap.
 
-## State when this was written
+## Earlier state snapshot (superseded by the continuation update above)
 
 - Timer started 2026-10-07 around 01:27 UTC. First Growth Run (id 36, `pi_unattended`, 01:28–01:35 UTC, model Muse, not exo-free) ended `completed` / `no_worthwhile_eligible_work` with **0 public actions**. It logged in as `@ham_zax`, ingested 4 For You observations, wrote reply draft 152 (Mistral cyber claim) for the human lane, and found nothing it could execute: queue item 59983 is blocked because its approval was granted under persona `hamza-v1-alpha-2026-09-05` while the current one is `...-10-02` (needs owner re-review), and the autonomous `browser-reply-claim` refused the draft (contribution intent outside the grant allowlist). `exo-free` has **not** yet run a pass.
 - The ARM database is a copy taken from the WSL machine. It carries a live operator delegation and WSL history; treat it as the one authoritative database from now on.
@@ -83,7 +110,7 @@ Already recorded in the database: every attempt in `publication_attempts` (actio
 2. Runtime-level model fallback chain inside the runner (not built; the watchdog is the stand-in).
 3. Optional quality gate: a separate reviewer model checks drafts before `publication-attempt-send-start`.
 4. Optional `claive` runtime in the runner (queue a one-attempt goal per pass). Evaluated and deferred: a goal worker is the same Pi model with the same prompt, so it adds claive's backoff, inbox and goal list but no new judgment; goals need `--write` and `--max-attempts 1` to be safe here.
-5. Verify the first full supervised outcome (what the operator posted, whether `exo-free` handles the browser tool loop) before trusting 24/7.
+5. Verify the first public mutation after the ARM AI-runtime repair. `exo-free` is now proven through the live Writer generation/review path; publication is still subject to the deterministic quality, claim, browser-verification and reconciliation gates.
 6. A recurring-blocker maintainer goal (writes a proposed fix on a branch in a scratch copy for human review) — idea only. The live operator must never edit production code.
 
 Preserve the existing delegation, relationship and publication data in the database; do not reset it or run destructive tests against it.
