@@ -11,7 +11,7 @@ import {
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { finishGrowthRun } from './growth_run.js';
-import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
+import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns } from './store.js';
 
 const HOME = homedir();
 const REPO = path.resolve(process.env.X_GROWTH_REPO || path.dirname(fileURLToPath(import.meta.url)));
@@ -266,7 +266,7 @@ export async function main(overrides = {}) {
   const deps = {
     delegation: getGrowthOperatorDelegation, runs: listGrowthRuns,
     lease: getOperatorLeaseStatus, health: getAccountHealthSummary,
-    attempts: listPublicationAttempts, child: runChild,
+    child: runChild,
     heartbeat: startRuntimeHeartbeatPump, finishRun: finishGrowthRun, ...overrides,
   };
   const startedAt = now();
@@ -296,9 +296,13 @@ export async function main(overrides = {}) {
     if (deps.health({ now: now() }).health.state === 'constrained') {
       return finish({ status: 'blocked', reason: 'account_health_constrained' });
     }
-    if (deps.attempts({ states: ['claimed', 'send_started', 'investigating'], limit: 1 }).length) {
-      return finish({ status: 'blocked', reason: 'publication_reconciliation_required' });
-    }
+    // Do not block the launcher on an unresolved publication attempt. The
+    // Growth Run state machine already exposes stage=recovery and
+    // recommendedOperation=recover_attempt when reconciliation is pending.
+    // Launching the reasoning runtime is what gives that recovery path access
+    // to the authenticated browser and the exact attempt evidence. Blocking
+    // here made every later timer wake return publication_reconciliation_required
+    // forever after an interrupted send.
     const active = deps.runs({ status: 'active', limit: 1 })[0];
     if (active) return finish({ status: 'blocked', reason: 'active_run_requires_recovery' }, active.runId);
     const sessionId = `${config.runtime}-${randomUUID()}`;
