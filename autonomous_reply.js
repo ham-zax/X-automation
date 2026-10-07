@@ -262,7 +262,9 @@ function chooseIntent(item, candidate, grant) {
   if (/\b(?:feedback|what would you change|what should we improve)\b/i.test(text) && allowed.has('constructive_feedback')) return 'constructive_feedback';
   if (item.engagementKind !== 'initial_reply' && /\b(?:shipped|launched|released|milestone|finally live)\b/i.test(text) && allowed.has('social_reaction')) return 'social_reaction';
   const mapped = ARCHETYPE_TO_INTENT[String(item.replyArchetype || '')] || null;
-  return mapped && allowed.has(mapped) ? mapped : null;
+  if (mapped) return allowed.has(mapped) ? mapped : null;
+  // Operator-created items can arrive without a reply archetype; fall back to an intent the grant allows.
+  return ['technical_insight', 'constructive_feedback', 'social_reaction'].find((intent) => allowed.has(intent)) || null;
 }
 
 function chooseTone(intent, candidate, grant, behavior = {}) {

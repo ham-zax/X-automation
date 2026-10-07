@@ -1,0 +1,7 @@
+[Unit]
+Description=Queue the XGrowth ops watchdog goal if none is pending
+
+[Service]
+Type=oneshot
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ubuntu/work/scratch/xwatch/queue.sh

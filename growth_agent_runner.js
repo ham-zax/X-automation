@@ -64,6 +64,7 @@ export function runtimeConfig(env = process.env) {
     cdpPort,
     agentBrowserCli,
     thinking,
+    experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     executable: runtime === 'opencode'
       ? String(env.X_GROWTH_OPENCODE_BIN || DEFAULT_OPENCODE_BIN)
       : runtime === 'codex'
@@ -92,8 +93,16 @@ function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) 
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
-  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT }) {
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
   const browser = browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId });
+  const experimentSection = experiment ? `
+EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
+- Each pass should complete at least 2 public actions when any eligible candidate exists. Prefer well-grounded replies to fresh For You posts first; if replies are dry, write and publish one original post or quote grounded in what you just observed. Do not stop after a thin feed: re-collect, use the editorial plan, or advance existing drafts and approved queue items.
+- Review your own drafts critically before sending: factual grounding, fit with the persona, and no repetition of recent posts. Revise instead of dropping when a draft is close.
+- Write like a person, not a bot: varied length and openers, specific details from the source, plain words, no hashtags, no emoji spam, no template phrasing, no "Great point" filler, no restating the source. Reply to what was actually said.
+- Expired or stale queue items may be expired through the bridge rather than left blocking the queue.
+- The bridge's hard gates (single publication claim, reconciliation, account health, duplicate fences, authentication) still apply; never bypass them and never invent a publication.
+` : '';
   return `You are the unattended reasoning operator for XGrowth in ${REPO}.
 
 This is an OPERATIONAL growth session, not a software-engineering task.
@@ -135,7 +144,8 @@ Then follow the run state rather than improvising a parallel workflow:
 7. Re-read \`growth-run-next\` after durable transitions. If it names an executable claim, either execute that claim or record the specific live/policy evidence that invalidated it; do not silently reinterpret it as daemon-owned work. Continue only while another worthwhile eligible action exists and within the run ceilings.
 8. Finish via \`growth-run-finish\` with an accurate structured outcome and stop reason. If a capability/auth/authority blocker prevents useful continuation, record that blocker rather than bypassing policy.
 
-Do not optimize for a fixed number of posts/replies. Optimize for useful, relevant growth and stop when marginal value is low.`;
+Do not optimize for a fixed number of posts/replies. Optimize for useful, relevant growth and stop when marginal value is low.
+${experimentSection}`;
 }
 
 export function commandFor(config, prompt) {
@@ -287,7 +297,7 @@ export async function main(overrides = {}) {
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = operatorPrompt({ runtime: config.runtime, sessionId, maxDurationMinutes,
-      browserTarget: config.browserTarget, agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort });
+      browserTarget: config.browserTarget, agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment });
     const command = commandFor(config, prompt);
     const stopHeartbeatPump = deps.heartbeat(`${config.runtime}_unattended`, sessionId);
     try {

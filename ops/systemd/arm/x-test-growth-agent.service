@@ -1,0 +1,20 @@
+[Unit]
+Description=XGrowth unattended reasoning operator (Pi)
+After=network-online.target x-test-dashboard.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/repo/x_test
+Environment=X_GROWTH_AGENT_SCHEDULED=1
+Environment=X_GROWTH_AGENT_RUNTIME=pi
+Environment=X_GROWTH_BROWSER_TARGET=linux
+Environment=X_GROWTH_BROWSER_CDP_PORT=9222
+Environment=X_GROWTH_AGENT_WINDOW_MINUTES=480
+Environment=AI_ALLOW_RUNTIME_MANAGED=true
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/node growth_agent_runner.js
+TimeoutStartSec=9h
+TimeoutStopSec=15s
+KillMode=control-group
+Restart=no

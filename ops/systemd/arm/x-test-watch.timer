@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the XGrowth ops watchdog every 30 minutes
+
+[Timer]
+OnActiveSec=1min
+OnUnitActiveSec=30min
+Unit=x-test-watch.service
+
+[Install]
+WantedBy=timers.target

@@ -156,3 +156,11 @@ try {
   process.chdir(previousCwd);
   await rm(scratch, { recursive: true, force: true });
 }
+
+test('experiment mode is opt-in and only adds the experiment section to the prompt', () => {
+  const base = { runtime: 'pi', sessionId: 's', browserTarget: 'linux', agentBrowserCli: '/bin/agent-browser' };
+  assert.equal(runner.operatorPrompt(base).includes('EXPERIMENT MODE'), false);
+  assert.equal(runner.operatorPrompt({ ...base, experiment: true }).includes('EXPERIMENT MODE'), true);
+  assert.equal(runner.runtimeConfig({}).experiment, false);
+  assert.equal(runner.runtimeConfig({ X_GROWTH_AGENT_EXPERIMENT: 'true' }).experiment, true);
+});

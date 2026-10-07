@@ -1,5 +1,7 @@
 # Growth OS handoff — 2026-10-02
 
+> **Update 2026-10-07:** the 24/7 operator now runs on the ARM server. Read [docs/ARM_24X7_HANDOFF.md](docs/ARM_24X7_HANDOFF.md) first; the "24/7 not deployed" statements below are historical.
+
 ## Intended outcome and current status
 
 Hamza wants an agent to operate `@ham_zax` continuously: discover relevant technical conversations and viral sources, write posts/replies/Quotes, maintain relationships, and use previous results to improve later decisions without routine human intervention. The dashboard is an oversight and intervention interface.
