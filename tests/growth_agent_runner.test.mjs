@@ -57,6 +57,37 @@ try {
     assert.ok(openCode.args.includes('--standalone'));
     assert.equal(openCode.args.includes('--pure'), false);
   });
+  await test('Pi runtime targets the headless Linux browser and passes the prompt after --', () => {
+    const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_BIN: '/opt/pi', HOME: '/h' });
+    assert.equal(config.executable, '/opt/pi');
+    assert.equal(config.browserTarget, 'linux');
+    assert.equal(config.model, 'opencode2api/muse-spark-1.3-contributor-free');
+    const command = runner.commandFor(config, 'work');
+    assert.equal(command.stdinPrompt, undefined);
+    assert.deepEqual(command.args.slice(-2), ['--', 'work']);
+    for (const flag of ['--print', '--no-session', '--offline', '--no-extensions', '--no-approve']) assert.ok(command.args.includes(flag), flag);
+    assert.equal(command.args[command.args.indexOf('--provider') + 1], 'opencode2api');
+    assert.equal(command.args[command.args.indexOf('--model') + 1], 'muse-spark-1.3-contributor-free');
+    assert.equal(command.args[command.args.indexOf('--tools') + 1], 'read,bash');
+    assert.equal(command.args[command.args.indexOf('--thinking') + 1], 'high');
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_THINKING: 'turbo' }), /X_GROWTH_PI_THINKING/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_TARGET: 'mars' }), /X_GROWTH_BROWSER_TARGET/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_CDP_PORT: '9222; rm' }), /CDP_PORT/);
+  });
+  await test('prompt follows the browser target and no longer hardcodes the WebHarness path', () => {
+    const base = { runtime: 'pi', sessionId: 'pi-1', maxDurationMinutes: 20 };
+    const linux = runner.operatorPrompt({ ...base, browserTarget: 'linux', agentBrowserCli: '/bin/ab', cdpPort: '9333' });
+    assert.match(linux, /\/bin\/ab --cdp 9333 --session pi-1/);
+    assert.match(linux, /browserTarget=linux/);
+    assert.match(linux, /do not log in/);
+    assert.doesNotMatch(linux, /Windows X/);
+    const windows = runner.operatorPrompt(base);
+    assert.match(windows, /Windows X tab/);
+    assert.match(windows, /browserTarget=windows/);
+    assert.doesNotMatch(linux, /webharness\/node_modules/);
+    assert.match(runner.operatorPrompt({ ...base, agentBrowserCli: '/x/ab.js' }), /CLI at \/x\/ab\.js/);
+    assert.match(windows, /adapterType `pi_unattended`/);
+  });
   await test('two-hour window creates sequential fresh sessions with bounded passes and deadlines', async () => {
     const state = harness();
     const outcome = await runner.main(state.dependencies);
