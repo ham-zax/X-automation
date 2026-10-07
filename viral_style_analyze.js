@@ -32,9 +32,10 @@ function finite(value) {
 }
 
 function boundedNumber(value, fallback, min, max) {
+  if (value == null) return fallback;
   const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(min, Math.min(max, number));
+  if (!Number.isFinite(number) || number < min || number > max) throw new Error(`Expected a number between ${min} and ${max}.`);
+  return number;
 }
 
 function median(values) {
@@ -191,14 +192,16 @@ function makeEligibleRows(posts, snapshots, threads, {
 }) {
   const postById = new Map(posts.map((post) => [String(post.id || ''), post]));
   const cutoff = analysisNow - days * 86_400_000;
-  return buildViralStyleReportRows(posts, snapshots, threads)
+  return buildViralStyleReportRows(posts,
+    snapshots.filter(snapshot => Number(snapshot.observedAt) > 0 && Number(snapshot.observedAt) <= analysisNow),
+    threads.filter(thread => Number(thread.observedAt) > 0 && Number(thread.observedAt) <= analysisNow))
     .map((row) => currentTaxonomyRow(
       row,
       postById.get(String(row.tweetId || '')),
       intentByTweet.get(String(row.tweetId || '')) || null,
     ))
-    .filter((row) => row.createdAt != null && row.createdAt >= cutoff)
-    .filter((row) => row.observedAt != null)
+    .filter((row) => row.createdAt != null && row.createdAt >= cutoff && row.createdAt <= analysisNow)
+    .filter((row) => row.observedAt != null && row.observedAt <= analysisNow)
     .filter((row) => finite(row.postAgeMinutes) != null && Number(row.postAgeMinutes) >= matureHours * 60)
     .filter((row) => !row.isRetweet && !row.isReply)
     .filter((row) => finite(row.viewsPerFollower) != null);
@@ -431,6 +434,12 @@ function analyzeWindow(posts, snapshots, threads, {
   analysisNow,
   intentRows = [],
 }) {
+  if (!Number.isInteger(days) || days < 1 || days > 365
+      || !Number.isFinite(matureHours) || matureHours < 0 || matureHours > 8760
+      || !Number.isFinite(confidence) || confidence <= 0 || confidence >= 1
+      || !Number.isFinite(analysisNow) || analysisNow <= 0) {
+    throw new Error('Analysis requires days 1-365, a finite maturity age, confidence between 0 and 1 and a positive timestamp.');
+  }
   const intentByTweet = latestIntentByTweet(intentRows);
   const eligible = addComparisons(makeEligibleRows(posts, snapshots, threads, {
     days,
@@ -489,8 +498,14 @@ function analyzeWindow(posts, snapshots, threads, {
       aiIntentConfidence: row.aiIntentConfidence,
     }));
 
+  const postDates = posts.map(post => Number(post.createdAt)).filter(value => Number.isFinite(value) && value > 0 && value <= analysisNow);
+  const latestPostAt = postDates.length ? Math.max(...postDates) : null;
+  const latestObservedAt = snapshots.reduce((latest, snapshot) => Math.max(latest, Number(snapshot.observedAt) <= analysisNow ? Number(snapshot.observedAt) || 0 : 0), 0) || null;
   return {
     generatedAt: analysisNow,
+    freshness: { state: !latestPostAt ? 'empty' : latestPostAt < analysisNow - days * 86_400_000 ? 'stale' : eligible.length ? 'available' : 'pending',
+      latestPostAt, latestObservedAt, windowDays: days, eligiblePosts: eligible.length,
+      reason: eligible.length ? 'Mature observations exist; association confidence still controls use.' : 'No eligible mature observations in this window. Collect fresh posts and snapshot their outcomes before treating patterns as current evidence.' },
     windowDays: days,
     maturityHours: matureHours,
     confidence,
@@ -740,10 +755,10 @@ async function loadDataset() {
 export async function analyzeStoredDataset(options = {}) {
   const dataset = await loadDataset();
   return analyzeWindow(dataset.posts, dataset.snapshots, dataset.threads, {
-    days: Number(options.days || 30),
-    matureHours: Number(options.matureHours || 24),
-    confidence: Number(options.confidence || 0.90),
-    analysisNow: Number(options.analysisNow || Date.now()),
+    days: Number(options.days ?? 30),
+    matureHours: Number(options.matureHours ?? 24),
+    confidence: Number(options.confidence ?? 0.90),
+    analysisNow: Number(options.analysisNow ?? Date.now()),
     intentRows: dataset.intents,
   });
 }
@@ -765,6 +780,7 @@ async function analyzeAndWrite(dataset, options) {
   return {
     windowDays: report.windowDays,
     maturityHours: report.maturityHours,
+    freshness: report.freshness,
     eligiblePosts: report.dataset.eligiblePosts,
     eligibleAuthors: report.dataset.eligibleAuthors,
     supportedGroups: report.supportedGroups.map((group) => ({

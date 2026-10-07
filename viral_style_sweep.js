@@ -16,6 +16,9 @@ function ymd(timestamp) {
 }
 
 function historicalWindows(days, windowDays, analysisNow = Date.now()) {
+  if (!Number.isInteger(days) || days < 1 || days > 365) throw new Error('days must be an integer from 1 to 365.');
+  if (!Number.isInteger(windowDays) || windowDays < 1 || windowDays > 31) throw new Error('windowDays must be an integer from 1 to 31.');
+  if (!Number.isFinite(analysisNow) || analysisNow <= 0) throw new Error('analysisNow must be a positive timestamp.');
   const tomorrow = utcDayStart(analysisNow) + 86_400_000;
   const result = [];
   for (let offset = 0; offset < days; offset += windowDays) {
@@ -40,7 +43,11 @@ export function buildViralSweepJobs({
   thresholds = ['strong'],
   analysisNow = Date.now(),
 } = {}) {
+  if (!Array.isArray(niches) || !niches.length || !Array.isArray(thresholds) || !thresholds.length
+      || thresholds.some(name => !VIRAL_SWEEP_THRESHOLDS[name])) throw new Error('Select at least one niche and a known threshold.');
   const selectedNiches = new Set(niches);
+  const configuredTags = new Set([...getActiveContentGroups().map(group => group.tag), '__explore__']);
+  if (niches.some(tag => !configuredTags.has(tag))) throw new Error('Select configured niche tags for this sweep.');
   const selectedThresholds = thresholds.map((name) => VIRAL_SWEEP_THRESHOLDS[name]).filter(Boolean);
   const windows = historicalWindows(days, windowDays, analysisNow);
   const jobs = [];
@@ -59,6 +66,7 @@ export function buildViralSweepJobs({
       }
     }
   }
+  if (jobs.length > 128) throw new Error('Sweep exceeds 128 queries; narrow the topic or date range.');
   return jobs;
 }
 
@@ -73,6 +81,10 @@ export async function runViralSweep({
   onProgress = null,
   shouldStop = null,
 } = {}) {
+  if (!Number.isInteger(limitPerQuery) || limitPerQuery < 1 || limitPerQuery > 50
+      || !Number.isInteger(controlsPerSeed) || controlsPerSeed < 0 || controlsPerSeed > 10) {
+    throw new Error('Sweep limits require 1-50 seeds and 0-10 controls per query.');
+  }
   const jobs = buildViralSweepJobs({ days, windowDays, niches, thresholds });
   const results = [];
   let totalSeeds = 0;

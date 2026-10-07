@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { Scraper } from 'xactions/client';
 import { scrapeTweets, searchTweets } from 'xactions';
 import { createBrowser, createPage } from './x_browser.js';
@@ -40,9 +41,16 @@ function parseArgs(argv = process.argv.slice(2)) {
 }
 
 function boundedInteger(value, fallback, max) {
+  if (value == null) return fallback;
   const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(0, Math.min(max, Math.floor(number)));
+  if (!Number.isInteger(number) || number < 0 || number > max) throw new Error(`Expected an integer between 0 and ${max}.`);
+  return number;
+}
+
+function observedNumber(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
 function boolOption(value, fallback = false) {
@@ -93,6 +101,25 @@ async function ensureDataDir() {
   await fs.mkdir(DATA_DIR, { recursive: true, mode: 0o700 });
 }
 
+async function withDatasetLock(work) {
+  await ensureDataDir();
+  const lockFile = path.join(DATA_DIR, '.collection.lock');
+  let lock;
+  try { lock = await fs.open(lockFile, 'wx', 0o600); }
+  catch (error) {
+    if (error.code === 'EEXIST') throw new Error('Another viral collection is active. Retry after it finishes; inspect the lock before removing it after a crash.');
+    throw error;
+  }
+  try { await lock.writeFile(JSON.stringify({ pid: process.pid, startedAt: Date.now() })); return await work(); }
+  finally { await lock.close(); await fs.unlink(lockFile); }
+}
+
+async function writeReportAtomically(file, text) {
+  const temporary = `${file}.${randomUUID()}.tmp`;
+  try { await fs.writeFile(temporary, text, { encoding: 'utf8', mode: 0o600, flag: 'wx' }); await fs.rename(temporary, file); }
+  finally { await fs.rm(temporary, { force: true }); }
+}
+
 async function readJsonl(file) {
   try {
     const raw = await fs.readFile(file, 'utf8');
@@ -111,7 +138,10 @@ async function appendJsonl(file, values) {
 }
 
 async function createReadOnlyScraper() {
-  const scraper = new Scraper();
+  if (!process.env.AUTH_TOKEN) throw new Error('Read-only X collection requires AUTH_TOKEN. An attached browser agent may instead supply observed posts with ingest --file.');
+  const scraper = new Scraper({ fetch: (url, options = {}) => fetch(url, {
+    ...options, signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000),
+  }) });
   const cookies = [];
   if (process.env.AUTH_TOKEN) cookies.push({ name: 'auth_token', value: process.env.AUTH_TOKEN });
   if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0 });
@@ -121,12 +151,17 @@ async function createReadOnlyScraper() {
 
 async function createReadOnlyBrowser() {
   const browser = await createBrowser({ headless: true });
-  const page = await createPage(browser);
-  const cookies = [];
-  if (process.env.AUTH_TOKEN) cookies.push({ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true });
-  if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
-  if (cookies.length) await page.setCookie(...cookies);
-  return { browser, page };
+  try {
+    const page = await createPage(browser);
+    const cookies = [];
+    if (process.env.AUTH_TOKEN) cookies.push({ name: 'auth_token', value: process.env.AUTH_TOKEN, domain: '.x.com', path: '/', secure: true, httpOnly: true });
+    if (process.env.CT0) cookies.push({ name: 'ct0', value: process.env.CT0, domain: '.x.com', path: '/', secure: true });
+    if (cookies.length) await page.setCookie(...cookies);
+    return { browser, page };
+  } catch (error) {
+    await browser.close().catch(() => {});
+    throw error;
+  }
 }
 
 function postRecord(tweet, { sampleKind, sourceQuery, observedAt }) {
@@ -164,16 +199,16 @@ function snapshotRecord(tweet, profile, observedAt) {
     tweetId: String(tweet?.id || ''),
     observedAt,
     postAgeMinutes,
-    views: Number.isFinite(Number(tweet?.views)) ? Number(tweet.views) : null,
-    likes: Number.isFinite(Number(tweet?.likes)) ? Number(tweet.likes) : null,
-    reposts: Number.isFinite(Number(tweet?.retweets)) ? Number(tweet.retweets) : null,
-    replies: Number.isFinite(Number(tweet?.replies)) ? Number(tweet.replies) : null,
-    bookmarks: Number.isFinite(Number(tweet?.bookmarkCount)) ? Number(tweet.bookmarkCount) : null,
-    authorFollowers: Number.isFinite(Number(profile?.followersCount)) ? Number(profile.followersCount) : null,
-    authorFollowing: Number.isFinite(Number(profile?.followingCount)) ? Number(profile.followingCount) : null,
-    authorTweetCount: Number.isFinite(Number(profile?.tweetCount)) ? Number(profile.tweetCount) : null,
-    authorListedCount: Number.isFinite(Number(profile?.listedCount)) ? Number(profile.listedCount) : null,
-    authorBlueVerified: Boolean(profile?.isBlueVerified || profile?.verified),
+    views: observedNumber(tweet?.views),
+    likes: observedNumber(tweet?.likes),
+    reposts: observedNumber(tweet?.retweets),
+    replies: observedNumber(tweet?.replies),
+    bookmarks: observedNumber(tweet?.bookmarkCount),
+    authorFollowers: observedNumber(profile?.followersCount),
+    authorFollowing: observedNumber(profile?.followingCount),
+    authorTweetCount: observedNumber(profile?.tweetCount),
+    authorListedCount: observedNumber(profile?.listedCount),
+    authorBlueVerified: profile?.isBlueVerified ?? profile?.verified ?? null,
     authorAccountAgeDays: accountAgeDays(profile, observedAt),
   };
   return { ...base, ...deriveViralPerformance(base) };
@@ -182,6 +217,7 @@ function snapshotRecord(tweet, profile, observedAt) {
 async function enrichTweet(scraper, id, profileCache, { observedAt = Date.now() } = {}) {
   const tweet = await scraper.getTweet(String(id));
   if (!tweet?.id) throw new Error(`X post not observable: ${id}`);
+  if (String(tweet.id) !== String(id)) throw new Error('X returned a different post than the requested ID.');
   const username = cleanUsername(tweet.username);
   let profile = profileCache.get(username);
   if (!profile) {
@@ -366,6 +402,7 @@ async function collect({
 } = {}) {
   const seedLimit = boundedInteger(limit, DEFAULT_SEED_LIMIT, MAX_SEED_LIMIT);
   const controlLimit = boundedInteger(controls, DEFAULT_CONTROL_LIMIT, MAX_CONTROL_LIMIT);
+  if (seedLimit === 0) return { seeds: 0, controlsRequestedPerSeed: controlLimit, errors: [], dataDir: DATA_DIR, stopped: false };
   const state = await loadState();
   const scraper = await createReadOnlyScraper();
   const profileCache = new Map();
@@ -446,6 +483,7 @@ async function collect({
 async function inspectTweet(url, { controls = 0, threads = true } = {}) {
   const target = statusIdFromUrl(url);
   if (!target) throw new Error('inspect requires a valid x.com/<user>/status/<id> URL.');
+  const controlLimit = boundedInteger(controls, 0, MAX_CONTROL_LIMIT);
   const state = await loadState();
   const scraper = await createReadOnlyScraper();
   const profileCache = new Map();
@@ -453,8 +491,8 @@ async function inspectTweet(url, { controls = 0, threads = true } = {}) {
   const persisted = await persistObservation({ ...enriched, sampleKind: 'targeted', sourceQuery: 'explicit_url' }, state);
   let browserContext = null;
   try {
-    if (controls > 0 || threads) browserContext = await createReadOnlyBrowser();
-    if (controls > 0 && browserContext) await collectAuthorControls(browserContext.page, scraper, profileCache, state, { ...enriched, ...persisted }, boundedInteger(controls, 0, MAX_CONTROL_LIMIT));
+    if (controlLimit > 0 || threads) browserContext = await createReadOnlyBrowser();
+    if (controlLimit > 0 && browserContext) await collectAuthorControls(browserContext.page, scraper, profileCache, state, { ...enriched, ...persisted }, controlLimit);
     if (threads && browserContext) await reconstructThread(browserContext.page, scraper, profileCache, state, { ...enriched, ...persisted });
   } finally {
     if (browserContext) await browserContext.browser.close().catch(() => {});
@@ -463,13 +501,21 @@ async function inspectTweet(url, { controls = 0, threads = true } = {}) {
   return { tweetId: target.id, username: cleanUsername(enriched.tweet.username), dataDir: DATA_DIR };
 }
 
-async function snapshotTracked() {
+async function snapshotTracked({ limit = 200, days = 21, shouldStop = null } = {}) {
+  const maximum = boundedInteger(limit, 200, 1000);
+  const windowDays = boundedInteger(days, 21, 365);
+  if (windowDays < 1) throw new Error('Snapshot days must be positive.');
   const state = await loadState();
+  const recent = state.posts.filter(post => post.createdAt >= Date.now() - windowDays * 86_400_000 && post.createdAt <= Date.now())
+    .sort((a, b) => b.createdAt - a.createdAt).slice(0, maximum);
+  if (!recent.length) return { observed: 0, errors: [], skipped: state.posts.length, dataDir: DATA_DIR, reason: 'No tracked posts in this window; collect or ingest current observations first.' };
   const scraper = await createReadOnlyScraper();
   const profileCache = new Map();
   let observed = 0;
   const errors = [];
-  for (const post of state.posts) {
+  let stopped = false;
+  for (const post of recent) {
+    if (shouldStop?.()) { stopped = true; break; }
     try {
       const enriched = await enrichTweet(scraper, post.id, profileCache);
       await appendJsonl(SNAPSHOTS_FILE, snapshotRecord(enriched.tweet, enriched.profile, enriched.observedAt));
@@ -479,7 +525,30 @@ async function snapshotTracked() {
     }
   }
   await exportData();
-  return { observed, errors, dataDir: DATA_DIR };
+  return { observed, errors, dataDir: DATA_DIR, stopped, trackedInWindow: recent.length };
+}
+
+async function ingestObservations(observations) {
+  if (!Array.isArray(observations) || !observations.length || observations.length > 200) throw new Error('Supply 1-200 explicit browser observations.');
+  const validated = observations.map(observation => {
+    const target = statusIdFromUrl(observation.sourceUrl);
+    const observedAt = Number(observation.observedAt);
+    const createdAt = createdTimestamp(observation.tweet);
+    if (!['wh-browser', 'browser-fast', 'agent-browser'].includes(observation.transport)
+        || !target || target.id !== String(observation.tweet?.id)
+        || target.username !== cleanUsername(observation.tweet?.username)
+        || !String(observation.tweet?.text || '').trim()
+        || !Number.isFinite(observedAt) || observedAt <= 0 || observedAt > Date.now()
+        || createdAt == null || createdAt <= 0 || createdAt > observedAt
+        || !['viral_seed', 'author_control', 'targeted'].includes(observation.sampleKind)) {
+      throw new Error('Observation requires an exact matching source/author, text, valid capture/publication timestamps, browser transport and sample kind.');
+    }
+    return { ...observation, observedAt, sourceQuery: `browser_observed:${observation.transport}:${String(observation.sourceQuery || 'explicit_observation')}` };
+  });
+  const state = await loadState();
+  for (const observation of validated) await persistObservation(observation, state);
+  await exportData();
+  return { observed: validated.length, dataDir: DATA_DIR, provenance: 'explicit_browser_observations' };
 }
 
 function csvCell(value) {
@@ -577,30 +646,38 @@ async function exportData() {
   const csv = `${headers.map(csvCell).join(',')}\n${rows.map((row) => headers.map((header) => csvCell(row[header])).join(',')).join('\n')}${rows.length ? '\n' : ''}`;
   const summary = summarizeViralStyleDataset(posts, snapshots, threads);
   await ensureDataDir();
-  await fs.writeFile(REPORT_FILE, csv, { encoding: 'utf8', mode: 0o600 });
-  await fs.writeFile(SUMMARY_FILE, `${JSON.stringify(summary, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await writeReportAtomically(REPORT_FILE, csv);
+  await writeReportAtomically(SUMMARY_FILE, `${JSON.stringify(summary, null, 2)}\n`);
   return { rows: rows.length, reportFile: REPORT_FILE, summaryFile: SUMMARY_FILE, summary };
 }
 
 function usage() {
-  return `Usage:\n  node viral_style_research.js collect [--limit 10] [--controls 3] [--threads true] [--full] [--query "..."]\n  node viral_style_research.js snapshot\n  node viral_style_research.js export\n  node viral_style_research.js inspect --url https://x.com/user/status/123 [--controls 3] [--threads true]\n\nData is written only under ${DATA_DIR}.`;
+  return `Usage:\n  node viral_style_research.js collect [--limit 10] [--controls 3] [--threads true] [--full] [--query "..."]\n  node viral_style_research.js snapshot [--limit 200] [--days 21]\n  node viral_style_research.js ingest --file observations.json\n  node viral_style_research.js export\n  node viral_style_research.js inspect --url https://x.com/user/status/123 [--controls 3] [--threads true]\n\nData is written only under ${DATA_DIR}.`;
 }
 
 async function main() {
   const { command, options } = parseArgs();
   if (command === 'collect') {
-    const result = await collect({
+    const result = await withDatasetLock(() => collect({
       query: String(options.query || ''),
       limit: options.limit,
       controls: options.controls,
       threads: boolOption(options.threads, true),
       full: boolOption(options.full, false),
-    });
+    }));
     console.log(JSON.stringify(result, null, 2));
     return;
   }
   if (command === 'snapshot') {
-    console.log(JSON.stringify(await snapshotTracked(), null, 2));
+    console.log(JSON.stringify(await withDatasetLock(() => snapshotTracked({ limit: options.limit, days: options.days })), null, 2));
+    return;
+  }
+  if (command === 'ingest') {
+    if (!options.file) throw new Error('ingest requires --file with a JSON array of explicit browser observations.');
+    const stat = await fs.stat(String(options.file));
+    if (stat.size > 2 * 1024 * 1024) throw new Error('Observation file exceeds 2 MB.');
+    const observations = JSON.parse(await fs.readFile(String(options.file), 'utf8'));
+    console.log(JSON.stringify(await withDatasetLock(() => ingestObservations(observations)), null, 2));
     return;
   }
   if (command === 'export') {
@@ -610,10 +687,10 @@ async function main() {
   }
   if (command === 'inspect') {
     if (!options.url) throw new Error(`Missing --url.\n${usage()}`);
-    console.log(JSON.stringify(await inspectTweet(String(options.url), {
+    console.log(JSON.stringify(await withDatasetLock(() => inspectTweet(String(options.url), {
       controls: boundedInteger(options.controls, 0, MAX_CONTROL_LIMIT),
       threads: boolOption(options.threads, true),
-    }), null, 2));
+    })), null, 2));
     return;
   }
   if (command === 'help' || command === '--help' || command === '-h') {
@@ -630,4 +707,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-export const viralStyleResearch = Object.freeze({ collect, inspectTweet, snapshotTracked, exportData });
+export const viralStyleResearch = Object.freeze({
+  collect: options => withDatasetLock(() => collect(options)),
+  inspectTweet: (url, options) => withDatasetLock(() => inspectTweet(url, options)),
+  snapshotTracked: options => withDatasetLock(() => snapshotTracked(options)),
+  ingestObservations: observations => withDatasetLock(() => ingestObservations(observations)),
+  exportData, snapshotRecord,
+});

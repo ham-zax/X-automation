@@ -188,7 +188,7 @@ export function deriveViralPerformance(snapshot = {}) {
   const bookmarks = finite(snapshot.bookmarks);
   const followers = finite(snapshot.authorFollowers);
   const ageMinutes = finite(snapshot.postAgeMinutes);
-  const engagements = [likes, reposts, replies].every((value) => value == null)
+  const engagements = [likes, reposts, replies].some((value) => value == null)
     ? null
     : (likes || 0) + (reposts || 0) + (replies || 0);
   const ageHours = ageMinutes != null && ageMinutes > 0 ? ageMinutes / 60 : null;
