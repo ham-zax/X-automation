@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -19,6 +19,7 @@ const reconciliation = await import(`${rootUrl}publication_reconciliation.js`);
 const growthRun = await import(`${rootUrl}growth_run.js`);
 const pipeline = await import(`${rootUrl}pipeline.js`);
 const drafting = await import(`${rootUrl}drafting.js`);
+const contentReview = await import(`${rootUrl}content_review.js`);
 const behavior = await import(`${rootUrl}behavior.js`);
 const strategy = await import(`${rootUrl}strategy.js`);
 const runtime = await import(`${rootUrl}growth_agent_runtime.js`);
@@ -52,8 +53,18 @@ function liveReplyGrant(revision = 7, budgetUsed = 0) {
   };
 }
 
-function createAutonomousReply({ key, tweetId, exactReply, grantRevision = 7 }) {
+function saveReviewedOperatorDraft(draft) {
+  const reviewed = { ...draft, editor: { ...draft.editor } };
+  reviewed.editor.contentReview = contentReview.bindContentReview({ passed: true, factualClaims: [], ownerClaims: [], voiceIssues: [], issues: [] },
+    drafting.draftReviewContext(reviewed, store.getCandidate(draft.candidateKey)));
+  return store.saveDraft(reviewed);
+}
+
+function createAutonomousReply({ key, tweetId, exactReply, grantRevision = 7, reviewed = false }) {
   store.upsertCandidates([candidate(key)]);
+  const selected = { decision: 'ACT', primaryPurpose: 'technical_value', socialMode: 'explainer',
+    informationDepth: 'compact_reason', affectStrategy: 'neutral', affectProvenance: 'none', reasonToExist: 'Explain session-bound agent retries.' };
+  const draft = reviewed ? saveReviewedOperatorDraft({ candidateKey: key, body: exactReply, editor: { pipeline: 'reply', behavior: selected } }) : null;
   const item = store.ensureEngagementItem({
     candidateKey: key,
     targetTweetId: tweetId,
@@ -62,6 +73,7 @@ function createAutonomousReply({ key, tweetId, exactReply, grantRevision = 7 }) 
     status: 'drafting',
     priority: 60,
     contributionSummary: 'Add one useful implementation constraint.',
+    ...(reviewed ? { behavior: selected } : {}),
   });
   const decision = store.recordAutonomousReplyDecision({
     queueItemId: item.id,
@@ -75,6 +87,7 @@ function createAutonomousReply({ key, tweetId, exactReply, grantRevision = 7 }) 
     grantRevision,
     mode: 'live',
     decision: 'eligible_live',
+    ...(reviewed ? { selection: { behavior: selected }, checks: { contentReview: draft.editor.contentReview } } : {}),
   });
   return { item, decision };
 }
@@ -347,7 +360,7 @@ await test('send-start needs only attemptId and validates the immutable run/sess
     now: Date.now(),
   }).run;
   const key = 'https://x.com/builder/status/3001';
-  const { decision } = createAutonomousReply({ key, tweetId: '3001', exactReply: 'The claim already knows its session.', grantRevision: 40 });
+  const { decision } = createAutonomousReply({ key, tweetId: '3001', exactReply: 'Keep agent retries bounded. Use the claimed session when recording each API attempt.', grantRevision: 40, reviewed: true });
   const claimed = store.claimAutonomousReplyDecision(decision.id, {
     grantRevision: 40,
     runId: run.runId,
@@ -355,6 +368,8 @@ await test('send-start needs only attemptId and validates the immutable run/sess
     now: Date.now(),
     transport: 'browser_agent',
   });
+  const content = autonomous.inspectAutonomousReplyContent(store.getQueueItem(claimed.queueItem.id), claimed.decision);
+  assert.equal(content.passed, true, JSON.stringify(content.deterministicFailures));
   const result = runBridge('publication-attempt-send-start', { attemptId: claimed.attempt.attemptId });
   assert.equal(result.attempt.state, 'send_started');
   assert.equal(result.attempt.runId, run.runId);
@@ -380,7 +395,7 @@ await test('valid run-bound bridge activity renews only the matching operator le
   const delegation = store.getGrowthOperatorDelegation();
   if (delegation.state !== 'running') store.startGrowthOperatorDelegation({ actor: 'human' });
   store.saveAutonomousReplyGrantState(liveReplyGrant(41, 0));
-  const startedAt = Date.now();
+  const startedAt = Date.now() - 14 * 60_000;
   const sessionId = 'lease-renew-session';
   const run = growthRun.beginGrowthRun({
     adapterType: 'test_adapter',
@@ -390,7 +405,7 @@ await test('valid run-bound bridge activity renews only the matching operator le
     now: startedAt,
   }).run;
   const key = 'https://x.com/builder/status/3002';
-  const { decision } = createAutonomousReply({ key, tweetId: '3002', exactReply: 'Lease renewal stays bound to the current run and session.', grantRevision: 41 });
+  const { decision } = createAutonomousReply({ key, tweetId: '3002', exactReply: 'Use a matching operator lease before retrying an agent API call. Record the current run and session with its result.', grantRevision: 41, reviewed: true });
   const claimed = store.claimAutonomousReplyDecision(decision.id, {
     grantRevision: 41,
     runId: run.runId,
@@ -551,7 +566,7 @@ await test('social-only autonomous reply above the priority floor no longer requ
     contributionSummary: 'Celebrate the milestone naturally.',
     behavior: selectedBehavior,
   });
-  store.saveDraft({
+  saveReviewedOperatorDraft({
     candidateKey: key,
     body: 'That AI agent tooling milestone is worth celebrating — congrats on shipping it.',
     status: 'draft',
@@ -618,7 +633,7 @@ await test('support purpose accepts concrete participation in a creator showcase
     contributionSummary: 'Answer the feature request with a concrete supportive suggestion.',
     behavior: selectedBehavior,
   });
-  store.saveDraft({
+  saveReviewedOperatorDraft({
     candidateKey: key,
     body: exactReply,
     status: 'draft',
@@ -656,7 +671,7 @@ await test('support purpose accepts concrete participation in a creator showcase
 });
 
 await test('For You ingest immediately materializes only the observed candidates into engagement work', () => {
-  const tweetId = '2098179923215339940';
+  const tweetId = ((BigInt(Date.now()) - 1288834974657n) << 22n).toString();
   const key = `https://x.com/testbuilder/status/${tweetId}`;
   const result = runBridge('x-for-you-ingest', {
     kind: 'x_for_you',
@@ -715,14 +730,17 @@ await test('reasoning heartbeat stays attached for the operator-lease lifetime a
   assert.equal(runtime.getGrowthAgentRuntimeStatus({ now: now + 30 * 60_000 }).attached, false);
 });
 
-await test('AGY runtime resolution is independent of the service PATH', () => {
+await test('configured AGY runtime resolution is independent of the service PATH', async () => {
   const node = process.execPath;
+  const agyFixture = path.join(tempDir, 'agy-fixture');
+  await writeFile(agyFixture, '#!/bin/sh\nprintf \'agy fixture\\n--print --output-format --json-schema --sandbox --mode --model --effort --disable-slash-commands\\n\'\n', { mode: 0o700 });
   const script = `import {getAiCliAvailability} from ${JSON.stringify(`${rootUrl}ai_cli.js`)}; console.log(JSON.stringify(await getAiCliAvailability('agy',{timeoutMs:5000})));`;
   const output = execFileSync(node, ['--input-type=module', '-e', script], {
-    cwd: repoRoot,
+    cwd: tempDir,
     encoding: 'utf8',
     env: {
       HOME: os.homedir(),
+      AGY_BIN: agyFixture,
       PATH: '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
       X_ACCOUNT: 'ham_zax',
     },
@@ -809,7 +827,7 @@ await test('Dan operator draft clears packaging and is reused by the live autono
     contributionSummary: 'Ask about the audited artifact identity boundary.',
     behavior: selectedBehavior,
   });
-  store.saveDraft({
+  saveReviewedOperatorDraft({
     candidateKey: key,
     body: exactReply,
     status: 'draft',

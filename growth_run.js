@@ -16,6 +16,8 @@ import {
   createGrowthRun,
   getGrowthRun,
   getGrowthOperatorDelegation,
+  getPublicationAttemptCounts,
+  runStoreTransaction,
   listGrowthRuns,
   listPublicationAttempts,
   updateGrowthRun,
@@ -40,7 +42,7 @@ function normalizedCeilings(input = {}) {
     if (value == null) return fallback;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-    return Math.min(max, parsed);
+    return Math.max(1, Math.min(max, parsed));
   };
   return {
     maxDurationMinutes: boundedPositive(ceiling.maxDurationMinutes, 20, 60),
@@ -87,6 +89,7 @@ function runtimeHeartbeat(run, capabilities = null, now = Date.now()) {
 function ensureRunLease(run, { adapterType = null, sessionId = null, now = Date.now() } = {}) {
   const current = getOperatorLeaseStatus({ now });
   if (current.active && current.leaseId === run.leaseId) {
+    if (sessionId != null && String(sessionId) !== current.sessionId) throw new Error('An active Growth Run session must release its lease before ownership can change.');
     const nextAdapterType = adapterType == null ? run.adapterType : String(adapterType || '');
     const nextSessionId = sessionId == null ? run.sessionId : String(sessionId || '');
     const renewed = renewOperatorLease(run.leaseId, {
@@ -129,8 +132,8 @@ function ensureRunLease(run, { adapterType = null, sessionId = null, now = Date.
 }
 
 function mutationCount(runId) {
-  return listPublicationAttempts({ runId, limit: 500 })
-    .filter((attempt) => ['send_started', 'investigating', 'confirmed_published', 'closed_unresolved'].includes(attempt.state)).length;
+  const counts = getPublicationAttemptCounts({ runId });
+  return counts.claimed + counts.send_started + counts.investigating + counts.confirmed_published + counts.closed_unresolved;
 }
 
 function ceilingState(run, now, readiness = null) {
@@ -277,41 +280,43 @@ export function beginGrowthRun({
   ceilings = {},
   now = Date.now(),
 } = {}) {
-  const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Growth Run begin requires numeric now.');
-  const active = listGrowthRuns({ status: 'active', limit: 20 })[0] || null;
-  if (active) return resumeGrowthRun(active.runId, { adapterType, sessionId, capabilities, now: timestamp });
-  const grant = getGrowthOperatorDelegation();
-  if (grant.state !== 'running' || grant.mode !== 'live') {
-    throw new Error(`Growth Operator delegation must be running/live to begin a Growth Run; current state is ${grant.state}/${grant.mode}.`);
-  }
-  const runId = randomUUID();
-  const lease = acquireOperatorLease({
-    now: timestamp,
-    holder: 'growth_run',
-    runId,
-    adapterType,
-    sessionId,
-  });
-  let run;
-  try {
-    run = createGrowthRun({
+  return runStoreTransaction(() => {
+    const timestamp = Number(now);
+    if (!Number.isFinite(timestamp)) throw new Error('Growth Run begin requires numeric now.');
+    const active = listGrowthRuns({ status: 'active', limit: 20 })[0] || null;
+    if (active) return resumeGrowthRun(active.runId, { adapterType, sessionId, capabilities, now: timestamp });
+    const grant = getGrowthOperatorDelegation();
+    if (grant.state !== 'running' || grant.mode !== 'live') {
+      throw new Error(`Growth Operator delegation must be running/live to begin a Growth Run; current state is ${grant.state}/${grant.mode}.`);
+    }
+    const runId = randomUUID();
+    const lease = acquireOperatorLease({
+      now: timestamp,
+      holder: 'growth_run',
       runId,
-      delegationRevision: grant.revision,
       adapterType,
       sessionId,
-      leaseId: lease.leaseId,
-      ceilings: normalizedCeilings(ceilings),
-      now: timestamp,
     });
-  } catch (error) {
-    try { releaseOperatorLease(lease.leaseId, { now: timestamp }); } catch {}
-    throw error;
-  }
-  runtimeHeartbeat(run, capabilities, timestamp);
-  const status = getGrowthRunStatus(run.runId, { now: timestamp });
-  const staged = updateGrowthRun(run.runId, { stage: status.next?.stage || 'startup', now: timestamp });
-  return getGrowthRunStatus(staged.runId, { now: timestamp });
+    let run;
+    try {
+      run = createGrowthRun({
+        runId,
+        delegationRevision: grant.revision,
+        adapterType,
+        sessionId,
+        leaseId: lease.leaseId,
+        ceilings: normalizedCeilings(ceilings),
+        now: timestamp,
+      });
+    } catch (error) {
+      try { releaseOperatorLease(lease.leaseId, { now: timestamp }); } catch {}
+      throw error;
+    }
+    runtimeHeartbeat(run, capabilities, timestamp);
+    const status = getGrowthRunStatus(run.runId, { now: timestamp });
+    const staged = updateGrowthRun(run.runId, { stage: status.next?.stage || 'startup', now: timestamp });
+    return getGrowthRunStatus(staged.runId, { now: timestamp });
+  });
 }
 
 export function resumeGrowthRun(runId, {
@@ -320,29 +325,31 @@ export function resumeGrowthRun(runId, {
   capabilities = null,
   now = Date.now(),
 } = {}) {
-  const timestamp = Number(now);
-  let run = requireRun(runId);
-  if (run.status !== 'active') return getGrowthRunStatus(run.runId, { now: timestamp });
-  const delegation = currentDelegationForRun(run);
-  if (!delegation.allowed) {
-    const terminal = updateGrowthRun(run.runId, {
-      status: 'blocked',
-      stage: 'finishing',
-      stopReason: delegation.reason,
-      stopDetail: `Growth Operator delegation is ${delegation.grant.state}/${delegation.grant.mode} at revision ${delegation.grant.revision}; run is bound to revision ${run.delegationRevision}.`,
-      now: timestamp,
-    });
-    const lease = getOperatorLeaseStatus({ now: timestamp });
-    if (lease.active && lease.leaseId === run.leaseId) {
-      try { releaseOperatorLease(run.leaseId, { now: timestamp }); } catch {}
+  return runStoreTransaction(() => {
+    const timestamp = Number(now);
+    let run = requireRun(runId);
+    if (run.status !== 'active') return getGrowthRunStatus(run.runId, { now: timestamp });
+    const delegation = currentDelegationForRun(run);
+    if (!delegation.allowed) {
+      const terminal = updateGrowthRun(run.runId, {
+        status: 'blocked',
+        stage: 'finishing',
+        stopReason: delegation.reason,
+        stopDetail: `Growth Operator delegation is ${delegation.grant.state}/${delegation.grant.mode} at revision ${delegation.grant.revision}; run is bound to revision ${run.delegationRevision}.`,
+        now: timestamp,
+      });
+      const lease = getOperatorLeaseStatus({ now: timestamp });
+      if (lease.active && lease.leaseId === run.leaseId) {
+        try { releaseOperatorLease(run.leaseId, { now: timestamp }); } catch {}
+      }
+      return getGrowthRunStatus(terminal.runId, { now: timestamp });
     }
-    return getGrowthRunStatus(terminal.runId, { now: timestamp });
-  }
-  run = ensureRunLease(run, { adapterType, sessionId, now: timestamp }).run;
-  runtimeHeartbeat(run, capabilities, timestamp);
-  const status = getGrowthRunStatus(run.runId, { now: timestamp });
-  updateGrowthRun(run.runId, { stage: status.next?.stage || run.stage, lastResumedAt: timestamp, now: timestamp });
-  return getGrowthRunStatus(run.runId, { now: timestamp });
+    run = ensureRunLease(run, { adapterType, sessionId, now: timestamp }).run;
+    runtimeHeartbeat(run, capabilities, timestamp);
+    const status = getGrowthRunStatus(run.runId, { now: timestamp });
+    updateGrowthRun(run.runId, { stage: status.next?.stage || run.stage, lastResumedAt: timestamp, now: timestamp });
+    return getGrowthRunStatus(run.runId, { now: timestamp });
+  });
 }
 
 export async function advanceGrowthRun(runId, {
@@ -403,13 +410,13 @@ export function finishGrowthRun(runId, {
   const reason = String(stopReason || '');
   if (!TERMINAL_RESULTS.has(terminalStatus)) throw new Error(`Invalid Growth Run terminal result: ${terminalStatus}.`);
   if (!STOP_REASONS.has(reason)) throw new Error(`Invalid Growth Run stop reason: ${reason}.`);
-  const attempts = listPublicationAttempts({ runId: run.runId, limit: 500 });
+  const counts = getPublicationAttemptCounts({ runId: run.runId });
   const summary = {
     ...result,
-    publicationAttempts: attempts.length,
-    confirmedPublished: attempts.filter((attempt) => attempt.state === 'confirmed_published').length,
-    closedUnresolved: attempts.filter((attempt) => attempt.state === 'closed_unresolved').length,
-    investigating: attempts.filter((attempt) => ['claimed', 'send_started', 'investigating'].includes(attempt.state)).length,
+    publicationAttempts: Object.values(counts).reduce((sum, value) => sum + value, 0),
+    confirmedPublished: counts.confirmed_published,
+    closedUnresolved: counts.closed_unresolved,
+    investigating: counts.claimed + counts.send_started + counts.investigating,
   };
   const terminal = updateGrowthRun(run.runId, {
     status: terminalStatus,

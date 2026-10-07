@@ -1,3 +1,4 @@
+import { DomainValidationError } from './errors.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { normalizeBehaviorDecision } from './behavior.js';
@@ -106,11 +107,11 @@ function defaultRuntime() {
 
 function enumList(value, allowed, fallback) {
   const input = value === undefined ? fallback : value;
-  if (!Array.isArray(input)) throw new Error('Autonomous reply selections must be arrays.');
+  if (!Array.isArray(input)) throw new DomainValidationError('Autonomous reply selections must be arrays.');
   const selected = [...new Set(input.map((item) => String(item)))];
   const invalid = selected.filter((item) => !allowed.includes(item));
-  if (invalid.length) throw new Error(`Unsupported autonomous reply selection: ${invalid.join(', ')}.`);
-  if (!selected.length) throw new Error('Choose at least one autonomous reply option in each enabled category.');
+  if (invalid.length) throw new DomainValidationError(`Unsupported autonomous reply selection: ${invalid.join(', ')}.`);
+  if (!selected.length) throw new DomainValidationError('Choose at least one autonomous reply option in each enabled category.');
   return selected;
 }
 
@@ -118,7 +119,7 @@ function integerBudget(value, fallback = null) {
   if (value === undefined) return fallback;
   if (value === null || value === '') return null;
   const number = Number(value);
-  if (!Number.isInteger(number) || number <= 0) throw new Error('Live autonomous reply budget must be a positive whole number.');
+  if (!Number.isInteger(number) || number <= 0) throw new DomainValidationError('Live autonomous reply budget must be a positive whole number.');
   return number;
 }
 
@@ -131,15 +132,15 @@ export function getAutonomousReplyRuntime() {
 }
 
 export function configureAutonomousReplyGrant(input = {}, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Autonomous reply configuration requires an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Autonomous reply configuration requires an explicit human action.');
   const current = getAutonomousReplyGrant();
   const refreshMinutes = input.refreshMinutes === undefined ? current.refreshMinutes : Number(input.refreshMinutes);
   if (!Number.isInteger(refreshMinutes) || refreshMinutes < AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES) {
-    throw new Error(`Autonomous reply refresh cadence must be at least ${AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES} minutes for the current daemon poll policy.`);
+    throw new DomainValidationError(`Autonomous reply refresh cadence must be at least ${AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES} minutes for the current daemon poll policy.`);
   }
   const nextMode = input.mode === undefined ? current.mode : String(input.mode);
   if (current.state === 'running' && nextMode !== current.mode) {
-    throw new Error('Pause autonomous replies before changing Dry run / Live mode.');
+    throw new DomainValidationError('Pause autonomous replies before changing Dry run / Live mode.');
   }
   const next = {
     ...current,
@@ -153,20 +154,20 @@ export function configureAutonomousReplyGrant(input = {}, { actor = 'human' } = 
     revision: current.revision + 1,
     updatedAt: Date.now(),
   };
-  if (!['dry_run', 'live'].includes(next.mode)) throw new Error(`Unsupported autonomous reply mode: ${next.mode}.`);
+  if (!['dry_run', 'live'].includes(next.mode)) throw new DomainValidationError(`Unsupported autonomous reply mode: ${next.mode}.`);
   if (!next.humorAllowed) next.allowedTones = next.allowedTones.filter((tone) => !HUMOR_TONES.has(tone));
-  if (!next.allowedTones.length) throw new Error('Choose a non-humor tone when humor is disabled.');
+  if (!next.allowedTones.length) throw new DomainValidationError('Choose a non-humor tone when humor is disabled.');
   return saveAutonomousReplyGrantState(next);
 }
 
 function transitionGrant(action, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Autonomous reply Start/Pause/Stop requires an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Autonomous reply Start/Pause/Stop requires an explicit human action.');
   const current = getAutonomousReplyGrant();
   const now = Date.now();
   if (action === 'start') {
     if (current.mode === 'live') {
       if (!Number.isInteger(Number(current.liveBudget)) || Number(current.liveBudget) <= 0) {
-        throw new Error('Set an explicit positive live safety budget before starting live autonomous replies.');
+        throw new DomainValidationError('Set an explicit positive live safety budget before starting live autonomous replies.');
       }
     }
     const fromStopped = current.state === 'stopped';
@@ -188,7 +189,7 @@ function transitionGrant(action, { actor = 'human' } = {}) {
   if (action === 'stop') {
     return saveAutonomousReplyGrantState({ ...current, state: 'stopped', stoppedAt: now, pausedAt: null, revision: current.revision + 1, updatedAt: now });
   }
-  throw new Error(`Unsupported autonomous reply transition: ${action}.`);
+  throw new DomainValidationError(`Unsupported autonomous reply transition: ${action}.`);
 }
 
 export function startAutonomousReplies(options = {}) {
@@ -242,10 +243,11 @@ function replySimilarity(left, right) {
   return intersection / (a.size + b.size - intersection);
 }
 
-function priorAutonomousDuplicate(text) {
+function priorAutonomousDuplicate(text, excludeDecisionId = null) {
   const normalized = String(text || '').trim().toLowerCase().replace(/\s+/g, ' ');
   let best = 0;
   for (const decision of listAutonomousReplyDecisions({ limit: 100 })) {
+    if (excludeDecisionId != null && Number(decision.id) === Number(excludeDecisionId)) continue;
     const prior = String(decision.exactReply || '').trim();
     if (!prior) continue;
     if (normalized && normalized === prior.toLowerCase().replace(/\s+/g, ' ')) return { duplicate: true, similarity: 1 };
@@ -374,7 +376,7 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
   };
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
   const output = await generateWriterOutput(packet, promptDocumentText);
-  if (output.pipeline !== 'reply') throw new Error(`Writer returned ${output.pipeline}; expected reply.`);
+  if (output.pipeline !== 'reply') throw new DomainValidationError(`Writer returned ${output.pipeline}; expected reply.`);
   const base = { ...createDraftScaffold(candidate, { pipeline: 'reply' }), editor: { pipeline: 'reply' } };
   const generated = applyWriterOutput(base, output, {
     writerPacket: packet,
@@ -398,12 +400,13 @@ async function generateExactReply(item, candidate, profile, grant, strategy) {
   return { output, draft: generated, recentReplies, recentReplyArchetypes };
 }
 
-function autonomousGateResult(item, candidate, generated, recentReplies, recentReplyArchetypes, relationship = null) {
+function autonomousGateResult(item, candidate, generated, recentReplies, recentReplyArchetypes, relationship = null, excludeDecisionId = null) {
   const parentConversation = item.parentOurTweetId
     ? listRecentOurConversationPosts({ limit: 100 }).find((entry) => String(entry.tweetId) === String(item.parentOurTweetId))
     : null;
   const analysis = scoreDraft(generated, candidate, {
     pipeline: 'reply',
+    requireContentReview: true,
     behavior: item.behavior || generated?.editor?.behavior || null,
     relationship,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
@@ -415,7 +418,7 @@ function autonomousGateResult(item, candidate, generated, recentReplies, recentR
   });
   const failures = analysis.gates?.failures || [];
   const deterministicFailures = [...failures];
-  const duplicate = priorAutonomousDuplicate(generated.body || '');
+  const duplicate = priorAutonomousDuplicate(generated.body || '', excludeDecisionId);
   if (duplicate.duplicate) {
     deterministicFailures.push({ code: 'AUTONOMOUS_REPLY_DUPLICATE', message: `Generated reply is exact/near-duplicate autonomous text (${duplicate.similarity.toFixed(2)} similarity).` });
   }
@@ -480,6 +483,8 @@ export async function evaluateAutonomousReplyItem(item, {
     };
     const checks = {
       ...base.checks,
+      contentReview: pre.operatorDraft.editor?.contentReview || null,
+      ownerEvidence: pre.operatorDraft.editor?.ownerEvidence || null,
       writingScore: gates.analysis.score,
       growthPackagingReady: gates.analysis.growthPackaging?.ready === true,
       deterministicFailures: gates.deterministicFailures,
@@ -523,6 +528,8 @@ export async function evaluateAutonomousReplyItem(item, {
   };
   const checks = {
     ...base.checks,
+    contentReview: generated.draft.editor?.contentReview || null,
+    ownerEvidence: generated.draft.editor?.ownerEvidence || null,
     writingScore: gates.analysis.score,
     growthPackagingReady: gates.analysis.growthPackaging?.ready === true,
     deterministicFailures: gates.deterministicFailures,
@@ -567,6 +574,17 @@ function persistDecision(item, grant, evaluation, decision) {
   });
 }
 
+export function inspectAutonomousReplyContent(item, decision) {
+  const candidate = getCandidate(item.candidateKey);
+  if (!candidate) return { passed: false, deterministicFailures: [{ code: 'SOURCE_MISSING', message: 'Reply source is unavailable.' }] };
+  const draft = { body: decision.exactReply, editor: { pipeline: 'reply', decision: 'POST',
+    behavior: decision.selection?.behavior || item.behavior,
+    contentReview: decision.checks?.contentReview || null, ownerEvidence: decision.checks?.ownerEvidence || null } };
+  return autonomousGateResult(item, candidate, draft,
+    listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }), [],
+    item.targetUsername ? getRelationshipProfile(item.targetUsername) : null, decision.id);
+}
+
 export async function ensureAutonomousReplyLiveDecision(item, { grant = getAutonomousReplyGrant() } = {}) {
   if (grant.state !== 'running' || grant.mode !== 'live') {
     return { decision: null, evaluation: null, reason: boundedReason('LIVE_AUTHORITY_UNAVAILABLE', 'Autonomous reply grant is not running in live mode.') };
@@ -586,7 +604,8 @@ export async function ensureAutonomousReplyLiveDecision(item, { grant = getAuton
     && Number(decision.grantRevision || 0) === Number(grant.revision || 0)
     && String(decision.decision || '') === 'eligible_live'
     && decision.claimedAt == null
-    && Number(decision.updatedAt || 0) >= evidenceUpdatedAt);
+    && Number(decision.updatedAt || 0) >= evidenceUpdatedAt
+    && inspectAutonomousReplyContent(item, decision).passed);
 
   const existing = getAutonomousReplyDecisionForTarget(item.targetTweetId);
   if (nonReevaluatable(existing) || isCurrentEligible(existing)) {

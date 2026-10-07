@@ -99,6 +99,24 @@ X discovery is generated from the persisted Growth Focus topic groups. The defau
 
 Research candidates are persisted in `.x-research.sqlite`, but live source snapshots are distinct from workflow history. **To review** contains unresolved persisted candidates; **Bookmarks** means explicit reference state; **Handled** is derived from real publication/quote/reply/repost history; **All sources** is persisted history rather than a live upstream feed. Starting a draft does not implicitly bookmark its source.
 
+Viral pattern research has separate, read-only collection and analysis scripts:
+
+```bash
+# Discover a bounded set of posts and same-author comparison posts (requires AUTH_TOKEN).
+npm run viral:collect -- --limit 10 --controls 3
+
+# Refresh outcomes for recently tracked posts, then analyze mature observations.
+npm run viral:snapshot -- --days 21 --limit 200
+npm run viral:analyze
+
+# Import exact observations collected through wh-browser/browser-fast/agent-browser.
+npm run viral:ingest -- --file /absolute/path/observations.json
+```
+
+The ingest file is a JSON array. Each item supplies `transport`, `observedAt` (milliseconds), `sourceUrl`, `sampleKind` (`viral_seed`, `author_control`, or `targeted`), `tweet` (`id`, `username`, `text`, `timestamp` in milliseconds, and only observed metrics), and `profile` (only observed counts). Missing metrics stay unknown. Collection writes to the gitignored `.viral-style-research` directory and does not publish or approve content.
+
+Analysis defaults to a 24-hour maturity age and reports empty, stale, pending, or available evidence. A recent post alone does not establish a supported pattern. Historical writer examples are bounded, topic/route matched presentation references supplied only when a saved strategy uses Apply; they are not factual evidence or proof that a format causes reach.
+
 ## Publishing
 
 ```bash
@@ -117,9 +135,11 @@ The background Node daemon does not script the x.com UI; its main-feed write pat
 # One research + queue cycle. AUTO_POST=false previews the scheduler recommendation only.
 npm run automation:once
 
-# Keep polling while this process/PC environment is running.
-npm run automation
+# Resume an attached reasoning-agent session through the Growth Run protocol.
+npm run agent -- growth-run-status
 ```
+
+Continuous `npm run automation` is disabled. Hours-long operation requires an attached reasoning agent following `docs/GROWTH_RUN_PROTOCOL.md`; the Node maintenance cycle does not inherit live browser authority.
 
 Key settings:
 

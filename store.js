@@ -1,3 +1,4 @@
+import { DomainValidationError } from './errors.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import { legacyBehaviorDecision, normalizeBehaviorDecision } from './behavior.js';
@@ -99,16 +100,35 @@ const GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS = new Set(['browser_updated', 'x_con
 const LEGACY_DISCOVER_KIND = Object.freeze({ x_latest: 'x', x_momentum: 'viral', github_trending: 'github', hn_top: 'hn' });
 
 const db = new DatabaseSync(DB_FILE);
-db.exec('PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 3000;');
+db.exec('PRAGMA busy_timeout = 3000; PRAGMA journal_mode = WAL;');
+
+export function getStoreHealth() {
+  const accessible = db.prepare('SELECT 1 AS ready').get().ready === 1;
+  const journalMode = db.prepare('PRAGMA journal_mode').get().journal_mode;
+  const foreignKeys = db.prepare('PRAGMA foreign_keys').get().foreign_keys === 1;
+  return { ready: accessible && foreignKeys && journalMode === 'wal', journalMode, foreignKeys };
+}
+
+export function recordOwnerRequestAudit({ requestId, actor, method, route, status, durationMs }) {
+  if (!requestId || !actor || !method || !route) throw new DomainValidationError('Owner request audit identity is required.');
+  db.prepare(`INSERT INTO owner_request_audit(request_id, actor, method, route, status, duration_ms, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`).run(String(requestId), String(actor), String(method), String(route).slice(0, 250), Number(status), Math.max(0, Number(durationMs) || 0), Date.now());
+}
+
+export function listOwnerRequestAudit({ limit = 100 } = {}) {
+  const count = Number(limit);
+  if (!Number.isSafeInteger(count) || count < 1 || count > 500) throw new DomainValidationError('Invalid owner audit query limit.');
+  return db.prepare('SELECT * FROM owner_request_audit ORDER BY id DESC LIMIT ?').all(count);
+}
 
 export function runStoreTransaction(operation) {
-  if (typeof operation !== 'function') throw new Error('runStoreTransaction requires a function.');
+  if (typeof operation !== 'function') throw new DomainValidationError('runStoreTransaction requires a function.');
   const ownsTransaction = !db.isTransaction;
   if (ownsTransaction) db.exec('BEGIN IMMEDIATE');
   try {
     const result = operation();
     if (result && typeof result.then === 'function') {
-      throw new Error('runStoreTransaction supports synchronous store operations only.');
+      throw new DomainValidationError('runStoreTransaction supports synchronous store operations only.');
     }
     if (ownsTransaction) db.exec('COMMIT');
     return result;
@@ -120,7 +140,21 @@ export function runStoreTransaction(operation) {
   }
 }
 
+// Serialize and atomically apply startup migrations across bridge/server processes.
+db.exec('BEGIN IMMEDIATE');
+try {
 db.exec(`
+  CREATE TABLE IF NOT EXISTS owner_request_audit (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_id TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    method TEXT NOT NULL,
+    route TEXT NOT NULL,
+    status INTEGER NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_owner_request_audit_time ON owner_request_audit(created_at);
   CREATE TABLE IF NOT EXISTS candidates (
     key TEXT PRIMARY KEY,
     source TEXT NOT NULL,
@@ -737,6 +771,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_publication_attempts_queue_state ON publication_attempts(queue_item_id, state, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_publication_attempts_fingerprint_state ON publication_attempts(action_fingerprint, state, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_publication_attempts_run_time ON publication_attempts(run_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_publication_attempts_state_id ON publication_attempts(state, id);
+  CREATE INDEX IF NOT EXISTS idx_growth_runs_session_time ON growth_runs(session_id, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_growth_runs_status_time ON growth_runs(status, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_time ON autonomous_reply_decisions(created_at DESC, id DESC);
   CREATE INDEX IF NOT EXISTS idx_autonomous_reply_decisions_status ON autonomous_reply_decisions(decision, updated_at DESC);
@@ -883,6 +919,12 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_main_schedule ON queue_items(lane, status, scheduled_at, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_experiment_variant ON queue_items(experiment_variant_id, updated_at DESC);
 `);
+
+  db.exec('COMMIT');
+} catch (error) {
+  if (db.isTransaction) db.exec('ROLLBACK');
+  throw error;
+}
 
 const NICHE_PROFILE_STATE_KEY = 'niche_profile:v1';
 const NICHE_PROFILE_REVISION_STATE_KEY = 'niche_profile_revision:v1';
@@ -1271,7 +1313,7 @@ export function listQueueItems({ status, pipeline, lane, limit = 100 } = {}) {
 
 export function saveQueueItem(item) {
   const current = item?.id ? getQueueItem(item.id) : getQueueItemByCandidate(item?.candidateKey);
-  if (!current) throw new Error(`Queue item not found: ${item?.candidateKey || item?.id || 'unknown'}`);
+  if (!current) throw new DomainValidationError(`Queue item not found: ${item?.candidateKey || item?.id || 'unknown'}`);
   const next = { ...current, ...item };
   db.prepare(`UPDATE queue_items SET
     lane = ?, pipeline = ?, status = ?,
@@ -1430,7 +1472,7 @@ function publicationApprovedContent(queueItem, draft = null, candidate = null) {
 }
 
 export function computePublicationActionFingerprint(queueItem, { draft = null, candidate = null, approvedContentHash = '' } = {}) {
-  if (!queueItem) throw new Error('Publication action fingerprint requires a queue item.');
+  if (!queueItem) throw new DomainValidationError('Publication action fingerprint requires a queue item.');
   const resolvedCandidate = candidate || getCandidate(queueItem.candidateKey);
   const resolvedDraft = draft || (queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey));
   const contentHash = String(approvedContentHash || queueItem.approvalSnapshot?.contentHash || '').trim()
@@ -1490,23 +1532,77 @@ export function getLatestPublicationAttemptForQueueItem(queueItemId) {
     WHERE queue_item_id = ? ORDER BY created_at DESC, id DESC LIMIT 1`).get(Number(queueItemId)));
 }
 
-export function listPublicationAttempts({ state = null, queueItemId = null, runId = null, limit = 100 } = {}) {
+export function listPublicationAttempts({ state = null, states = null, queueItemId = null, runId = null, beforeId = null, oldestFirst = false, limit = 100 } = {}) {
   const where = [];
   const params = [];
   if (state) { where.push('state = ?'); params.push(String(state)); }
+  if (states) {
+    if (!Array.isArray(states) || !states.length || states.some((value) => !PUBLICATION_ATTEMPT_STATE_SET.has(value))) throw new DomainValidationError('Invalid publication attempt states.');
+    where.push(`state IN (${states.map(() => '?').join(',')})`); params.push(...states);
+  }
+  if (beforeId != null) { where.push('id < ?'); params.push(Number(beforeId)); }
   if (queueItemId != null) { where.push('queue_item_id = ?'); params.push(Number(queueItemId)); }
   if (runId) { where.push('run_id = ?'); params.push(String(runId)); }
   params.push(Math.max(1, Math.min(500, Number(limit || 100))));
   return db.prepare(`SELECT * FROM publication_attempts ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-    ORDER BY created_at DESC, id DESC LIMIT ?`).all(...params).map(decodePublicationAttempt);
+    ORDER BY created_at ${oldestFirst ? 'ASC' : 'DESC'}, id ${oldestFirst ? 'ASC' : 'DESC'} LIMIT ?`).all(...params).map(decodePublicationAttempt);
+}
+
+export function listLegacyUnprovenNotSentAttempts({ limit = 100 } = {}) {
+  return db.prepare(`SELECT * FROM publication_attempts WHERE state = 'confirmed_not_sent'
+    AND NOT (COALESCE(json_extract(reconciliation_evidence_json, '$.notSentProof.kind'), '') IN ('mutation_not_dispatched', 'transport_rejected')
+      AND LENGTH(TRIM(COALESCE(json_extract(reconciliation_evidence_json, '$.notSentProof.detail'), ''))) > 0)
+    ORDER BY id ASC LIMIT ?`).all(Math.max(1, Math.min(500, Number(limit || 100)))).map(decodePublicationAttempt);
+}
+
+export function getBlockingMainFeedPublicationAttempt() {
+  return decodePublicationAttempt(db.prepare(`SELECT * FROM publication_attempts
+    WHERE state IN ('claimed', 'send_started', 'investigating') AND pipeline IN ('original', 'quote', 'thread', 'repost')
+      AND lane IN ('main', 'main_feed') ORDER BY id ASC LIMIT 1`).get());
+}
+
+export function getPublicationAttemptCounts({ runId = null } = {}) {
+  const rows = runId
+    ? db.prepare('SELECT state, COUNT(*) AS count FROM publication_attempts WHERE run_id = ? GROUP BY state').all(String(runId))
+    : db.prepare('SELECT state, COUNT(*) AS count FROM publication_attempts GROUP BY state').all();
+  const counts = Object.fromEntries(PUBLICATION_ATTEMPT_STATES.map((state) => [state, 0]));
+  for (const row of rows) counts[row.state] = Number(row.count);
+  return counts;
 }
 
 export function getDuplicateFencedPublicationAttempt(actionFingerprint) {
   const fingerprint = String(actionFingerprint || '').trim();
   if (!fingerprint) return null;
-  const attempts = db.prepare(`SELECT * FROM publication_attempts
-    WHERE action_fingerprint = ? ORDER BY created_at DESC, id DESC`).all(fingerprint).map(decodePublicationAttempt);
-  return attempts.find((attempt) => PUBLICATION_ATTEMPT_DUPLICATE_FENCE_STATES.has(attempt.state)) || null;
+  return decodePublicationAttempt(db.prepare(`SELECT * FROM publication_attempts
+    WHERE action_fingerprint = ? AND state IN ('claimed', 'send_started', 'confirmed_published', 'investigating', 'closed_unresolved')
+    ORDER BY id DESC LIMIT 1`).get(fingerprint));
+}
+
+// Called inside the same write transaction as claim/send so parallel sessions cannot overspend.
+function assertPublicationRunCapacity(runId, claimHolder, now, { sending = false } = {}) {
+  if (!runId) {
+    const lease = json(getAppState('chatgpt_operator_lease', null), {}) || {};
+    if (lease.runId && Number(lease.expiresAt) > now) throw new DomainValidationError('Active Growth Run publication requires runId and session provenance.');
+    return;
+  }
+  const run = getGrowthRun(runId);
+  if (!run || run.status !== 'active') throw new DomainValidationError('Publication requires an active Growth Run.');
+  if (!claimHolder || run.sessionId !== String(claimHolder)) throw new DomainValidationError('Publication session does not own the Growth Run.');
+  const lease = json(getAppState('chatgpt_operator_lease', null), {}) || {};
+  if (lease.leaseId !== run.leaseId || lease.runId !== run.runId || lease.sessionId !== run.sessionId || Number(lease.expiresAt) <= now) {
+    throw new DomainValidationError('Publication requires the current Growth Run operator lease.');
+  }
+  const grant = getGrowthOperatorDelegation();
+  if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== run.delegationRevision) throw new DomainValidationError('Growth Run delegation is no longer current.');
+  const duration = Number(run.ceilings.maxDurationMinutes);
+  const limit = Number(run.ceilings.maxPublicMutations);
+  if (!Number.isFinite(duration) || duration <= 0 || now < run.startedAt || now >= run.startedAt + duration * 60_000) {
+    throw new DomainValidationError('Growth Run duration ceiling reached.');
+  }
+  if (!Number.isInteger(limit) || limit < 1) throw new DomainValidationError('Growth Run mutation ceiling is invalid.');
+  const counts = getPublicationAttemptCounts({ runId });
+  const reserved = counts.claimed + counts.send_started + counts.investigating + counts.confirmed_published + counts.closed_unresolved;
+  if (sending ? reserved > limit : reserved >= limit) throw new DomainValidationError('Growth Run public mutation ceiling reached.');
 }
 
 function insertPublicationAttempt(queueItem, {
@@ -1524,8 +1620,9 @@ function insertPublicationAttempt(queueItem, {
   approvedContentHash = null,
 } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt timestamp must be numeric.');
-  if (!PUBLICATION_ATTEMPT_STATE_SET.has(state)) throw new Error(`Invalid publication attempt state: ${state}.`);
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication attempt timestamp must be numeric.');
+  if (!PUBLICATION_ATTEMPT_STATE_SET.has(state)) throw new DomainValidationError(`Invalid publication attempt state: ${state}.`);
+  assertPublicationRunCapacity(runId, claimHolder, timestamp);
   const candidate = getCandidate(queueItem.candidateKey);
   const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey);
   const resolvedApprovedContent = approvedContent == null
@@ -1579,12 +1676,13 @@ function insertPublicationAttempt(queueItem, {
 
 export function markPublicationAttemptSendStarted(attemptId, { preSendEvidence = null, now = Date.now() } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Publication send-start timestamp must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication send-start timestamp must be numeric.');
   return runStoreTransaction(() => {
     const attempt = getPublicationAttempt(attemptId);
-    if (!attempt) throw new Error(`Publication attempt not found: ${attemptId}`);
-    if (attempt.state === 'send_started') return attempt;
-    if (attempt.state !== 'claimed') throw new Error(`Publication attempt ${attemptId} cannot start send from ${attempt.state}.`);
+    if (!attempt) throw new DomainValidationError(`Publication attempt not found: ${attemptId}`);
+    if (attempt.state === 'send_started') throw new DomainValidationError('Publication send already started; execution authorization cannot be replayed.');
+    if (attempt.state !== 'claimed') throw new DomainValidationError(`Publication attempt ${attemptId} cannot start send from ${attempt.state}.`);
+    assertPublicationRunCapacity(attempt.runId, attempt.claimHolder, timestamp, { sending: true });
     db.prepare(`UPDATE publication_attempts SET state = 'send_started', send_started_at = ?,
       pre_send_evidence_json = ?, updated_at = ? WHERE attempt_id = ? AND state = 'claimed'`).run(
       timestamp,
@@ -1598,13 +1696,13 @@ export function markPublicationAttemptSendStarted(attemptId, { preSendEvidence =
 
 export function appendPublicationAttemptReconciliationEvidence(attemptId, evidence, { now = Date.now() } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt evidence timestamp must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication attempt evidence timestamp must be numeric.');
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence) || Object.keys(evidence).length === 0) {
-    throw new Error('Publication attempt evidence must be a non-empty object.');
+    throw new DomainValidationError('Publication attempt evidence must be a non-empty object.');
   }
   return runStoreTransaction(() => {
     const current = getPublicationAttempt(attemptId);
-    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (!current) throw new DomainValidationError(`Publication attempt not found: ${attemptId}`);
     const existing = current.reconciliationEvidence && typeof current.reconciliationEvidence === 'object'
       && !Array.isArray(current.reconciliationEvidence)
       ? current.reconciliationEvidence
@@ -1635,19 +1733,19 @@ export function correctPublicationAttemptTerminalState(attemptId, {
 } = {}) {
   const nextState = String(state || '');
   if (!['confirmed_published', 'closed_unresolved'].includes(nextState)) {
-    throw new Error(`Publication attempt terminal correction does not support ${nextState || 'missing'}.`);
+    throw new DomainValidationError(`Publication attempt terminal correction does not support ${nextState || 'missing'}.`);
   }
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt terminal correction timestamp must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication attempt terminal correction timestamp must be numeric.');
   return runStoreTransaction(() => {
     const current = getPublicationAttempt(attemptId);
-    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (!current) throw new DomainValidationError(`Publication attempt not found: ${attemptId}`);
     if (current.state === nextState) return current;
     const allowed = nextState === 'confirmed_published'
       ? ['confirmed_not_sent', 'closed_unresolved']
       : ['confirmed_not_sent'];
     if (!allowed.includes(current.state)) {
-      throw new Error(`Publication attempt ${attemptId} cannot be corrected from ${current.state} to ${nextState}.`);
+      throw new DomainValidationError(`Publication attempt ${attemptId} cannot be corrected from ${current.state} to ${nextState}.`);
     }
     const correction = {
       fromState: current.state,
@@ -1684,14 +1782,14 @@ export function transitionPublicationAttempt(attemptId, {
   now = Date.now(),
 } = {}) {
   const nextState = String(state || '');
-  if (!PUBLICATION_ATTEMPT_STATE_SET.has(nextState)) throw new Error(`Invalid publication attempt state: ${nextState || 'missing'}.`);
+  if (!PUBLICATION_ATTEMPT_STATE_SET.has(nextState)) throw new DomainValidationError(`Invalid publication attempt state: ${nextState || 'missing'}.`);
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Publication attempt transition timestamp must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication attempt transition timestamp must be numeric.');
   return runStoreTransaction(() => {
     const current = getPublicationAttempt(attemptId);
-    if (!current) throw new Error(`Publication attempt not found: ${attemptId}`);
+    if (!current) throw new DomainValidationError(`Publication attempt not found: ${attemptId}`);
     if (PUBLICATION_ATTEMPT_TERMINAL_STATES.has(current.state)) {
-      if (current.state !== nextState) throw new Error(`Publication attempt ${attemptId} is already terminal as ${current.state}.`);
+      if (current.state !== nextState) throw new DomainValidationError(`Publication attempt ${attemptId} is already terminal as ${current.state}.`);
       return current;
     }
     const allowed = current.state === 'claimed'
@@ -1701,7 +1799,7 @@ export function transitionPublicationAttempt(attemptId, {
         : current.state === 'investigating'
           ? new Set(['confirmed_published', 'confirmed_not_sent', 'closed_unresolved'])
           : new Set();
-    if (!allowed.has(nextState)) throw new Error(`Publication attempt ${attemptId} cannot transition from ${current.state} to ${nextState}.`);
+    if (!allowed.has(nextState)) throw new DomainValidationError(`Publication attempt ${attemptId} cannot transition from ${current.state} to ${nextState}.`);
     const reconciledAt = PUBLICATION_ATTEMPT_TERMINAL_STATES.has(nextState) ? timestamp : current.reconciledAt;
     db.prepare(`UPDATE publication_attempts SET state = ?, reconciliation_evidence_json = ?, execution_evidence_json = ?,
       output_tweet_id = ?, output_url = ?, reconciled_at = ?, closure_reason = ?, last_error = ?, updated_at = ?
@@ -1768,10 +1866,10 @@ export function createGrowthRun({
 } = {}) {
   const revision = Number(delegationRevision);
   const timestamp = Number(now);
-  if (!Number.isInteger(revision) || revision < 0) throw new Error('Growth Run requires a delegation revision.');
-  if (!Number.isFinite(timestamp)) throw new Error('Growth Run timestamp must be numeric.');
+  if (!Number.isInteger(revision) || revision < 0) throw new DomainValidationError('Growth Run requires a delegation revision.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Growth Run timestamp must be numeric.');
   const id = String(runId || '').trim();
-  if (!id) throw new Error('Growth Run requires runId.');
+  if (!id) throw new DomainValidationError('Growth Run requires runId.');
   db.prepare(`INSERT INTO growth_runs(
     run_id, delegation_revision, status, stage, adapter_type, session_id, lease_id, ceilings_json,
     started_at, last_resumed_at, updated_at, result_json
@@ -1795,26 +1893,27 @@ export function getGrowthRun(runId) {
   return decodeGrowthRun(db.prepare('SELECT * FROM growth_runs WHERE run_id = ?').get(id));
 }
 
-export function listGrowthRuns({ status = null, limit = 20 } = {}) {
+export function listGrowthRuns({ status = null, sessionId = null, limit = 20 } = {}) {
   const bounded = Math.max(1, Math.min(200, Number(limit || 20)));
-  const rows = status
-    ? db.prepare('SELECT * FROM growth_runs WHERE status = ? ORDER BY updated_at DESC, id DESC LIMIT ?').all(String(status), bounded)
-    : db.prepare('SELECT * FROM growth_runs ORDER BY updated_at DESC, id DESC LIMIT ?').all(bounded);
-  return rows.map(decodeGrowthRun);
+  const where = [], params = [];
+  if (status) { where.push('status = ?'); params.push(String(status)); }
+  if (sessionId != null) { where.push('session_id = ?'); params.push(String(sessionId)); }
+  return db.prepare(`SELECT * FROM growth_runs ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    ORDER BY updated_at DESC, id DESC LIMIT ?`).all(...params, bounded).map(decodeGrowthRun);
 }
 
 export function updateGrowthRun(runId, patch = {}) {
   const current = getGrowthRun(runId);
-  if (!current) throw new Error(`Growth Run not found: ${runId}`);
+  if (!current) throw new DomainValidationError(`Growth Run not found: ${runId}`);
   const status = patch.status == null ? current.status : String(patch.status);
   const stage = patch.stage == null ? current.stage : String(patch.stage);
-  if (!GROWTH_RUN_STATUS_SET.has(status)) throw new Error(`Invalid Growth Run status: ${status}.`);
-  if (!GROWTH_RUN_STAGE_SET.has(stage)) throw new Error(`Invalid Growth Run stage: ${stage}.`);
+  if (!GROWTH_RUN_STATUS_SET.has(status)) throw new DomainValidationError(`Invalid Growth Run status: ${status}.`);
+  if (!GROWTH_RUN_STAGE_SET.has(stage)) throw new DomainValidationError(`Invalid Growth Run stage: ${stage}.`);
   if (current.status !== 'active' && status !== current.status) {
-    throw new Error(`Growth Run ${runId} is already terminal as ${current.status}.`);
+    throw new DomainValidationError(`Growth Run ${runId} is already terminal as ${current.status}.`);
   }
   const now = Number(patch.now || Date.now());
-  if (!Number.isFinite(now)) throw new Error('Growth Run update timestamp must be numeric.');
+  if (!Number.isFinite(now)) throw new DomainValidationError('Growth Run update timestamp must be numeric.');
   const terminal = status !== 'active';
   db.prepare(`UPDATE growth_runs SET status = ?, stage = ?, adapter_type = ?, session_id = ?, lease_id = ?,
     ceilings_json = ?, last_resumed_at = ?, updated_at = ?, finished_at = ?, stop_reason = ?, stop_detail = ?, result_json = ?
@@ -1960,7 +2059,7 @@ function recordQueueApprovalEvent(queueItemId, candidateKey, eventType, snapshot
 export function invalidateQueueApproval(candidateKey, { actor = 'system', reason = 'content changed after approval' } = {}) {
   return runStoreTransaction(() => {
     const queueItem = getQueueItemByCandidate(String(candidateKey));
-    if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+    if (!queueItem) throw new DomainValidationError(`Queue item not found: ${candidateKey}`);
     const isApproved = getQueueApprovalAuthority(queueItem) != null;
     if (!isApproved) return queueItem;
     const snapshot = queueItem.approvalSnapshot && Object.keys(queueItem.approvalSnapshot).length ? queueItem.approvalSnapshot : {};
@@ -1986,7 +2085,7 @@ export function captureQueueApproval(candidateKey, {
 } = {}) {
   return runStoreTransaction(() => {
     const queueItem = getQueueItemByCandidate(String(candidateKey));
-    if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+    if (!queueItem) throw new DomainValidationError(`Queue item not found: ${candidateKey}`);
     const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(candidateKey);
     const candidate = getCandidate(candidateKey);
     const snapshot = buildApprovalSnapshot(queueItem, draft, candidate, { authority, verificationProvenance });
@@ -2248,7 +2347,7 @@ export function listContentStyleLabels({ queueItemId = null, taxonomyVersion = n
 
 export function saveContentStyleLabel(input = {}) {
   const queueItem = getQueueItem(Number(input.queueItemId));
-  if (!queueItem) throw new Error(`Queue item not found: ${input.queueItemId}`);
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${input.queueItemId}`);
   const contentHash = String(input.contentHash || '').trim();
   const taxonomyVersion = Number(input.taxonomyVersion);
   const primaryIntent = String(input.primaryIntent || '').trim();
@@ -2257,11 +2356,11 @@ export function saveContentStyleLabel(input = {}) {
   const readerAction = String(input.readerAction || '').trim();
   const confidence = Number(input.confidence);
   const classifiedAt = Number(input.classifiedAt || Date.now());
-  if (!contentHash) throw new Error('Content style label requires contentHash.');
-  if (!Number.isInteger(taxonomyVersion) || taxonomyVersion < 1) throw new Error('Content style label requires a positive taxonomyVersion.');
-  if (!primaryIntent || !semanticStyle || !audienceGoal || !readerAction) throw new Error('Content style label requires canonical intent/style/audience/action labels.');
-  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new Error('Content style label confidence must be between 0 and 1.');
-  if (!Number.isFinite(classifiedAt) || classifiedAt <= 0) throw new Error('Content style label classifiedAt must be a positive timestamp.');
+  if (!contentHash) throw new DomainValidationError('Content style label requires contentHash.');
+  if (!Number.isInteger(taxonomyVersion) || taxonomyVersion < 1) throw new DomainValidationError('Content style label requires a positive taxonomyVersion.');
+  if (!primaryIntent || !semanticStyle || !audienceGoal || !readerAction) throw new DomainValidationError('Content style label requires canonical intent/style/audience/action labels.');
+  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) throw new DomainValidationError('Content style label confidence must be between 0 and 1.');
+  if (!Number.isFinite(classifiedAt) || classifiedAt <= 0) throw new DomainValidationError('Content style label classifiedAt must be a positive timestamp.');
   db.prepare(`INSERT INTO content_style_labels(
     queue_item_id, content_hash, taxonomy_version, primary_intent, semantic_style,
     audience_goal, reader_action, confidence, evidence_spans_json, ai_execution_json, classified_at
@@ -2305,40 +2404,40 @@ export function getLatestWritingStrategySelectionForQueueItem(queueItemId) {
 
 export function getWritingStrategySelectionForQueueItemAt(queueItemId, selectedAt) {
   const timestamp = Number(selectedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Writing strategy selection lookup requires a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Writing strategy selection lookup requires a positive timestamp.');
   return decodeWritingStrategySelection(db.prepare(`SELECT * FROM writing_strategy_selections
     WHERE queue_item_id = ? AND selected_by IN ('human', 'mission_agent') AND selected_at <= ? ORDER BY selected_at DESC, id DESC LIMIT 1`).get(Number(queueItemId), timestamp));
 }
 
 export function recordWritingStrategySelection(input = {}) {
   const queueItem = getQueueItem(Number(input.queueItemId));
-  if (!queueItem) throw new Error(`Queue item not found: ${input.queueItemId}`);
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${input.queueItemId}`);
   const draftId = input.draftId == null ? null : Number(input.draftId);
   if (draftId != null) {
     const draft = getDraft(draftId);
-    if (!draft || draft.candidateKey !== queueItem.candidateKey) throw new Error('Writing strategy draftId must belong to the queue item candidate.');
+    if (!draft || draft.candidateKey !== queueItem.candidateKey) throw new DomainValidationError('Writing strategy draftId must belong to the queue item candidate.');
   }
   const mode = String(input.mode || '');
   const selectionSource = String(input.selectionSource || '');
   const selectedBy = String(input.selectedBy || '');
   const selectedAt = Number(input.selectedAt || Date.now());
-  if (!WRITING_STRATEGY_MODES.has(mode)) throw new Error(`Unsupported writing strategy mode: ${mode || 'missing'}.`);
-  if (!WRITING_STRATEGY_SOURCES.has(selectionSource)) throw new Error(`Unsupported writing strategy selection source: ${selectionSource || 'missing'}.`);
-  if (!WRITING_STRATEGY_ACTORS.has(selectedBy)) throw new Error(`Unsupported writing strategy actor: ${selectedBy || 'missing'}.`);
-  if (selectedBy === 'human' && selectionSource === 'mission_agent') throw new Error('Human writing strategy selection cannot use mission_agent provenance.');
-  if (selectedBy === 'mission_agent' && selectionSource === 'manual') throw new Error('Mission-agent writing strategy selection cannot claim manual human provenance.');
+  if (!WRITING_STRATEGY_MODES.has(mode)) throw new DomainValidationError(`Unsupported writing strategy mode: ${mode || 'missing'}.`);
+  if (!WRITING_STRATEGY_SOURCES.has(selectionSource)) throw new DomainValidationError(`Unsupported writing strategy selection source: ${selectionSource || 'missing'}.`);
+  if (!WRITING_STRATEGY_ACTORS.has(selectedBy)) throw new DomainValidationError(`Unsupported writing strategy actor: ${selectedBy || 'missing'}.`);
+  if (selectedBy === 'human' && selectionSource === 'mission_agent') throw new DomainValidationError('Human writing strategy selection cannot use mission_agent provenance.');
+  if (selectedBy === 'mission_agent' && selectionSource === 'manual') throw new DomainValidationError('Mission-agent writing strategy selection cannot claim manual human provenance.');
   if (selectedBy === 'mission_agent') {
     const authority = input.guidance?.selectionAuthority || {};
     const revision = Number(authority.grantRevision);
     const grant = getGrowthOperatorDelegation();
     if (authority.type !== 'mission_agent' || authority.mission !== 'growth_operator' || !Number.isInteger(revision) || revision < 1) {
-      throw new Error('Mission-agent writing strategy selection requires inspectable Growth Operator delegation provenance.');
+      throw new DomainValidationError('Mission-agent writing strategy selection requires inspectable Growth Operator delegation provenance.');
     }
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-      throw new Error('Mission-agent writing strategy selection requires the exact current live Growth Operator delegation revision.');
+      throw new DomainValidationError('Mission-agent writing strategy selection requires the exact current live Growth Operator delegation revision.');
     }
   }
-  if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new Error('Writing strategy selectedAt must be a positive timestamp.');
+  if (!Number.isFinite(selectedAt) || selectedAt <= 0) throw new DomainValidationError('Writing strategy selectedAt must be a positive timestamp.');
   return runStoreTransaction(() => {
     const inserted = db.prepare(`INSERT INTO writing_strategy_selections(
       queue_item_id, draft_id, mode, intent, style, opening_features_json,
@@ -2365,24 +2464,24 @@ export function recordWritingStrategySelection(input = {}) {
 }
 
 export function setMainFeedSchedule(candidateKey, changes = {}, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Main-feed schedule overrides require an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Main-feed schedule overrides require an explicit human action.');
   const current = getQueueItemByCandidate(candidateKey);
   if (!current || !['main', 'main_feed'].includes(current.lane) || !MAIN_FEED_PIPELINES.has(current.pipeline)) {
-    throw new Error(`Main-feed queue item not found: ${candidateKey}`);
+    throw new DomainValidationError(`Main-feed queue item not found: ${candidateKey}`);
   }
-  if (current.status !== 'approved') throw new Error('Main-feed scheduling controls are available only after the item has valid approval authority.');
+  if (current.status !== 'approved') throw new DomainValidationError('Main-feed scheduling controls are available only after the item has valid approval authority.');
   const urgency = changes.scheduleUrgency == null ? current.scheduleUrgency : String(changes.scheduleUrgency);
-  if (!SCHEDULE_URGENCIES.has(urgency)) throw new Error(`Invalid schedule urgency: ${urgency}`);
+  if (!SCHEDULE_URGENCIES.has(urgency)) throw new DomainValidationError(`Invalid schedule urgency: ${urgency}`);
   const scheduledAt = changes.scheduledAt === undefined || changes.scheduledAt === current.scheduledAt
     ? current.scheduledAt
     : (changes.scheduledAt == null ? null : Number(changes.scheduledAt));
   const expiresAt = changes.expiresAt === undefined || changes.expiresAt === current.expiresAt
     ? current.expiresAt
     : (changes.expiresAt == null ? null : Number(changes.expiresAt));
-  if (scheduledAt != null && !Number.isFinite(scheduledAt)) throw new Error('Invalid main-feed schedule override time.');
-  if (expiresAt != null && !Number.isFinite(expiresAt)) throw new Error('Invalid main-feed expiry time.');
+  if (scheduledAt != null && !Number.isFinite(scheduledAt)) throw new DomainValidationError('Invalid main-feed schedule override time.');
+  if (expiresAt != null && !Number.isFinite(expiresAt)) throw new DomainValidationError('Invalid main-feed expiry time.');
   if (scheduledAt != null && expiresAt != null && scheduledAt >= expiresAt) {
-    throw new Error('Main-feed schedule override must be before expiry.');
+    throw new DomainValidationError('Main-feed schedule override must be before expiry.');
   }
   return saveQueueItem({
     ...current,
@@ -2401,7 +2500,7 @@ export function claimApprovedEngagementReplyForPublication(id, {
   claimHolder = '',
 } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('claimApprovedEngagementReplyForPublication requires a numeric now timestamp.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('claimApprovedEngagementReplyForPublication requires a numeric now timestamp.');
   return runStoreTransaction(() => {
     const preItem = getQueueItem(Number(id));
     if (!preItem || preItem.lane !== 'engagement' || preItem.pipeline !== 'reply' || preItem.status !== 'approved') return null;
@@ -2409,7 +2508,7 @@ export function claimApprovedEngagementReplyForPublication(id, {
     if (preItem.publishedAt || preItem.outputTweetId) return null;
     const fingerprint = computePublicationActionFingerprint(preItem);
     const fenced = getDuplicateFencedPublicationAttempt(fingerprint);
-    if (fenced) throw new Error(`Reply action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
+    if (fenced) throw new DomainValidationError(`Reply action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
 
     const params = [timestamp, timestamp, Number(id)];
     let sql = `UPDATE queue_items SET status = 'publishing', publish_started_at = ?, publish_error = NULL, updated_at = ?
@@ -2444,7 +2543,7 @@ export function claimQueueItemForPublication(id, {
   claimHolder = '',
 } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('claimQueueItemForPublication requires a numeric now timestamp.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('claimQueueItemForPublication requires a numeric now timestamp.');
   return runStoreTransaction(() => {
     const preItem = getQueueItem(Number(id));
     if (!preItem || preItem.status !== 'approved') return null;
@@ -2475,7 +2574,7 @@ export function claimQueueItemForPublication(id, {
     const fingerprint = computePublicationActionFingerprint(preItem);
     const fenced = getDuplicateFencedPublicationAttempt(fingerprint);
     if (fenced) {
-      throw new Error(`Publication action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
+      throw new DomainValidationError(`Publication action is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
     }
 
     const params = [timestamp, timestamp, Number(id), timestamp];
@@ -2506,13 +2605,13 @@ export function claimQueueItemForPublication(id, {
 
 export function markQueuePublished(id, tweetId, outputUrl = null, { publishedAt = Date.now() } = {}) {
   const normalizedTweetId = String(tweetId || '').trim();
-  if (!normalizedTweetId) throw new Error('markQueuePublished requires tweetId.');
+  if (!normalizedTweetId) throw new DomainValidationError('markQueuePublished requires tweetId.');
   const timestamp = Number(publishedAt);
-  if (!Number.isFinite(timestamp)) throw new Error('markQueuePublished requires a numeric publishedAt timestamp.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('markQueuePublished requires a numeric publishedAt timestamp.');
   const result = db.prepare(`UPDATE queue_items SET status = 'published', output_tweet_id = ?, output_url = ?,
       published_at = ?, publish_error = NULL, updated_at = ? WHERE id = ? AND status = 'publishing'`)
     .run(normalizedTweetId, outputUrl || null, timestamp, timestamp, Number(id));
-  if (Number(result.changes || 0) !== 1) throw new Error(`Queue item ${id} is not in publishing state.`);
+  if (Number(result.changes || 0) !== 1) throw new DomainValidationError(`Queue item ${id} is not in publishing state.`);
   return getQueueItem(Number(id));
 }
 
@@ -2522,7 +2621,7 @@ export function ensureEngagementItem(item = {}) {
   const candidateKey = String(item.candidateKey || '');
   const targetTweetId = String(item.targetTweetId || '');
   const engagementKind = String(item.engagementKind || 'initial_reply');
-  if (!candidateKey || !targetTweetId) throw new Error('candidateKey and targetTweetId are required for engagement items.');
+  if (!candidateKey || !targetTweetId) throw new DomainValidationError('candidateKey and targetTweetId are required for engagement items.');
 
   const existingBySource = decodeQueueItem(db.prepare(`SELECT * FROM queue_items
     WHERE lane = 'engagement' AND target_tweet_id = ? AND engagement_kind = ?
@@ -2634,7 +2733,7 @@ export function recordAutonomousReplyDecision(input = {}) {
   const decision = String(input.decision || '');
   const grantRevision = Number(input.grantRevision);
   if (!candidateKey || !targetTweetId || !sourceClass || !mode || !decision || !Number.isInteger(grantRevision)) {
-    throw new Error('Autonomous reply decisions require candidate, target, source class, mode, decision, and grant revision.');
+    throw new DomainValidationError('Autonomous reply decisions require candidate, target, source class, mode, decision, and grant revision.');
   }
   const now = Number(input.createdAt || Date.now());
   const result = db.prepare(`INSERT OR IGNORE INTO autonomous_reply_decisions(
@@ -2668,7 +2767,7 @@ export function recordAutonomousReplyDecision(input = {}) {
 
 export function updateAutonomousReplyDecision(id, patch = {}) {
   const current = getAutonomousReplyDecision(id);
-  if (!current) throw new Error(`Autonomous reply decision not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Autonomous reply decision not found: ${id}`);
   const next = { ...current, ...patch };
   const updatedAt = Number(patch.updatedAt || Date.now());
   db.prepare(`UPDATE autonomous_reply_decisions SET
@@ -2709,7 +2808,7 @@ export function claimAutonomousReplyDecision(id, {
 } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp) || !Number.isInteger(Number(grantRevision))) {
-    throw new Error('Autonomous reply claim requires numeric time and grant revision.');
+    throw new DomainValidationError('Autonomous reply claim requires numeric time and grant revision.');
   }
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -2719,29 +2818,29 @@ export function claimAutonomousReplyDecision(id, {
       return null;
     }
     const exactReply = String(decision.exactReply || '').trim();
-    if (!exactReply) throw new Error('Autonomous reply decision has no exact text for live send.');
+    if (!exactReply) throw new DomainValidationError('Autonomous reply decision has no exact text for live send.');
     const queueItem = decision.queueItemId == null ? getQueueItemByCandidate(decision.candidateKey) : getQueueItem(decision.queueItemId);
     if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply'
       || String(queueItem.targetTweetId || '') !== String(decision.targetTweetId || '')) {
-      throw new Error('Autonomous reply decision no longer matches its engagement queue item.');
+      throw new DomainValidationError('Autonomous reply decision no longer matches its engagement queue item.');
     }
     if (queueItem.humanApprovedAt || queueItem.approvedText || ['publishing', 'published', 'unresolved'].includes(queueItem.status)
       || queueItem.outputTweetId || queueItem.publishedAt) {
-      throw new Error('Autonomous reply queue state is no longer eligible for a delegated send claim.');
+      throw new DomainValidationError('Autonomous reply queue state is no longer eligible for a delegated send claim.');
     }
     const approvedContentHash = hashCanonical(exactReply);
     const actionFingerprint = computePublicationActionFingerprint(queueItem, { approvedContentHash });
     const fenced = getDuplicateFencedPublicationAttempt(actionFingerprint);
-    if (fenced) throw new Error(`Autonomous Reply is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
+    if (fenced) throw new DomainValidationError(`Autonomous Reply is duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
     const storedGrant = db.prepare('SELECT value FROM app_state WHERE key = ?').get(AUTONOMOUS_REPLY_GRANT_STATE_KEY)?.value;
     const grant = json(storedGrant, {});
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== Number(grantRevision)) {
-      throw new Error('Autonomous reply authority changed before claim.');
+      throw new DomainValidationError('Autonomous reply authority changed before claim.');
     }
     const liveBudget = Number(grant.liveBudget);
     const budgetUsed = Number(grant.budgetUsed || 0);
     if (!Number.isInteger(liveBudget) || liveBudget <= 0 || budgetUsed >= liveBudget) {
-      throw new Error('Autonomous reply live budget has no remaining capacity.');
+      throw new DomainValidationError('Autonomous reply live budget has no remaining capacity.');
     }
     const changed = db.prepare(`UPDATE autonomous_reply_decisions
       SET decision = 'sending', claimed_at = ?, updated_at = ?
@@ -2756,7 +2855,7 @@ export function claimAutonomousReplyDecision(id, {
         AND status NOT IN ('publishing', 'published', 'unresolved')
         AND human_approved_at IS NULL AND approved_text IS NULL
         AND published_at IS NULL AND output_tweet_id IS NULL`).run(timestamp, timestamp, queueItem.id);
-    if (Number(queueChange.changes || 0) !== 1) throw new Error('Autonomous reply queue claim lost before publication attempt creation.');
+    if (Number(queueChange.changes || 0) !== 1) throw new DomainValidationError('Autonomous reply queue claim lost before publication attempt creation.');
     const claimedQueueItem = getQueueItem(queueItem.id);
     const attempt = insertPublicationAttempt(claimedQueueItem, {
       runId,
@@ -2868,19 +2967,19 @@ export function getGrowthOperatorDelegation() {
 
 export function requireGrowthOperatorDelegation({ actor = 'agent', requireLive = true } = {}) {
   if (actor === 'human') return { actor, delegated: false, grant: getGrowthOperatorDelegation() };
-  if (actor !== 'agent') throw new Error(`Unsupported Growth Operator actor: ${actor || 'missing'}.`);
+  if (actor !== 'agent') throw new DomainValidationError(`Unsupported Growth Operator actor: ${actor || 'missing'}.`);
   const grant = getGrowthOperatorDelegation();
-  if (grant.state !== 'running') throw new Error(`Growth Operator delegation is ${grant.state}; agent mutation authority is unavailable.`);
-  if (requireLive && grant.mode !== 'live') throw new Error(`Growth Operator delegation is ${grant.mode}; live agent mutation authority is unavailable.`);
+  if (grant.state !== 'running') throw new DomainValidationError(`Growth Operator delegation is ${grant.state}; agent mutation authority is unavailable.`);
+  if (requireLive && grant.mode !== 'live') throw new DomainValidationError(`Growth Operator delegation is ${grant.mode}; live agent mutation authority is unavailable.`);
   return { actor, delegated: true, grant };
 }
 
 export function configureGrowthOperatorDelegation(input = {}, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Growth Operator delegation configuration belongs to the owner.');
+  if (actor !== 'human') throw new DomainValidationError('Growth Operator delegation configuration belongs to the owner.');
   const current = getGrowthOperatorDelegation();
   const mode = input.mode === undefined ? current.mode : String(input.mode);
   const milestones = input.milestones === undefined ? current.milestones : normalizeGrowthOperatorMilestones(input.milestones);
-  if (!GROWTH_OPERATOR_DELEGATION_MODES.has(mode)) throw new Error(`Unsupported Growth Operator delegation mode: ${mode}.`);
+  if (!GROWTH_OPERATOR_DELEGATION_MODES.has(mode)) throw new DomainValidationError(`Unsupported Growth Operator delegation mode: ${mode}.`);
   if (mode === current.mode && JSON.stringify(milestones) === JSON.stringify(current.milestones)) return current;
   return saveGrowthOperatorDelegation({
     ...current,
@@ -2893,13 +2992,13 @@ export function configureGrowthOperatorDelegation(input = {}, { actor = 'human' 
 
 function transitionGrowthOperatorDelegation(action, { actor = 'human' } = {}) {
   if (['start', 'pause', 'stop', 'complete'].includes(action) && actor !== 'human') {
-    throw new Error(`Growth Operator delegation ${action} belongs to the owner; the agent cannot grant, revoke, restore, or terminate its own authority.`);
+    throw new DomainValidationError(`Growth Operator delegation ${action} belongs to the owner; the agent cannot grant, revoke, restore, or terminate its own authority.`);
   }
   const current = getGrowthOperatorDelegation();
   const nextState = action === 'start' ? 'running' : action === 'pause' ? 'paused' : action === 'stop' ? 'stopped' : action === 'complete' ? 'completed' : '';
-  if (!GROWTH_OPERATOR_DELEGATION_STATES.has(nextState)) throw new Error(`Unsupported Growth Operator delegation transition: ${action}.`);
+  if (!GROWTH_OPERATOR_DELEGATION_STATES.has(nextState)) throw new DomainValidationError(`Unsupported Growth Operator delegation transition: ${action}.`);
   if (current.state === nextState) return current;
-  if (action === 'pause' && current.state !== 'running') throw new Error('Only a running Growth Operator delegation can be paused.');
+  if (action === 'pause' && current.state !== 'running') throw new DomainValidationError('Only a running Growth Operator delegation can be paused.');
   const now = Date.now();
   return saveGrowthOperatorDelegation({
     ...current,
@@ -3019,7 +3118,7 @@ function latestSourceObservationForCandidate(key) {
 
 function candidateActionSourceContext(key, action, sourceContext, actionAt) {
   const candidate = getCandidate(key);
-  if (!candidate) throw new Error(`Candidate not found: ${key}`);
+  if (!candidate) throw new DomainValidationError(`Candidate not found: ${key}`);
   const supplied = sourceContext && typeof sourceContext === 'object' && !Array.isArray(sourceContext) ? sourceContext : null;
   const latestObservation = latestSourceObservationForCandidate(key);
   const sourceKinds = Array.isArray(supplied?.sourceKinds)
@@ -3125,22 +3224,22 @@ export function recordCandidateAction({
   sourceContext = null,
   createdAt = Date.now(),
 }) {
-  if (!key || !action) throw new Error('candidateKey and action are required.');
-  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  if (!key || !action) throw new DomainValidationError('candidateKey and action are required.');
+  if (!getCandidate(key)) throw new DomainValidationError(`Candidate not found: ${key}`);
   const existing = db.prepare('SELECT * FROM candidate_actions WHERE candidate_key = ? AND action = ?').get(key, action);
   const nextTweetId = outputTweetId == null || outputTweetId === '' ? null : String(outputTweetId);
   const nextUrl = outputUrl == null || outputUrl === '' ? null : String(outputUrl);
   if (action !== 'repost' && !nextTweetId && !nextUrl && !existing?.output_tweet_id && !existing?.output_url) {
-    throw new Error(`Successful ${action} recording requires the confirmed live output tweet ID or URL.`);
+    throw new DomainValidationError(`Successful ${action} recording requires the confirmed live output tweet ID or URL.`);
   }
   if (existing?.output_tweet_id && nextTweetId && String(existing.output_tweet_id) !== nextTweetId) {
-    throw new Error(`Candidate action ${key} / ${action} is already recorded with a different output tweet ID.`);
+    throw new DomainValidationError(`Candidate action ${key} / ${action} is already recorded with a different output tweet ID.`);
   }
   if (!existing?.output_tweet_id && existing?.output_url && nextUrl && String(existing.output_url) !== nextUrl) {
-    throw new Error(`Candidate action ${key} / ${action} is already recorded with a different output URL.`);
+    throw new DomainValidationError(`Candidate action ${key} / ${action} is already recorded with a different output URL.`);
   }
   const timestamp = Number(existing?.created_at || createdAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Candidate action createdAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Candidate action createdAt must be a positive timestamp.');
   const shouldCaptureContext = !existing || sourceContext != null;
   const sourceContextJson = shouldCaptureContext
     ? JSON.stringify(candidateActionSourceContext(key, action, sourceContext, timestamp))
@@ -3195,17 +3294,17 @@ export function getCandidateDisposition(key, { now = Date.now() } = {}) {
 }
 
 export function recordCandidateDisposition({ candidateKey: key, state, reason = '', expiresAt = null }) {
-  if (!key) throw new Error('candidateKey is required.');
-  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  if (!key) throw new DomainValidationError('candidateKey is required.');
+  if (!getCandidate(key)) throw new DomainValidationError(`Candidate not found: ${key}`);
   const normalizedState = String(state || '').trim().toLowerCase() === 'clear'
     ? 'cleared'
     : String(state || '').trim().toLowerCase();
-  if (!['skip', 'defer', 'cleared'].includes(normalizedState)) throw new Error(`Invalid candidate disposition: ${state || 'missing'}`);
+  if (!['skip', 'defer', 'cleared'].includes(normalizedState)) throw new DomainValidationError(`Invalid candidate disposition: ${state || 'missing'}`);
   const normalizedReason = String(reason || '').trim();
-  if (normalizedState !== 'cleared' && !normalizedReason) throw new Error('Candidate skip/defer requires a reason.');
+  if (normalizedState !== 'cleared' && !normalizedReason) throw new DomainValidationError('Candidate skip/defer requires a reason.');
   const normalizedExpiresAt = expiresAt == null || expiresAt === '' ? null : Number(expiresAt);
   if (normalizedExpiresAt != null && (!Number.isFinite(normalizedExpiresAt) || normalizedExpiresAt <= 0)) {
-    throw new Error('Candidate disposition expiresAt must be a positive timestamp when supplied.');
+    throw new DomainValidationError('Candidate disposition expiresAt must be a positive timestamp when supplied.');
   }
   const now = Date.now();
   db.prepare(`INSERT INTO candidate_dispositions(candidate_key, state, reason, expires_at, created_at, updated_at)
@@ -3238,8 +3337,9 @@ export function replaceAudienceSnapshot({
   followersComplete = false,
   followingComplete = false,
 } = {}) {
+  ensureAudienceClassification();
   const now = Number(observedAt);
-  if (!Number.isFinite(now) || now <= 0) throw new Error('Audience snapshot observedAt must be a positive timestamp.');
+  if (!Number.isFinite(now) || now <= 0) throw new DomainValidationError('Audience snapshot observedAt must be a positive timestamp.');
   const merged = new Map();
   for (const profile of followers) merged.set(profile.username, { ...profile, followsYou: true, youFollow: false });
   for (const profile of following) {
@@ -3271,9 +3371,9 @@ export function replaceAudienceSnapshot({
         profile.bio || '',
         profile.followsYou ? 1 : 0,
         profile.youFollow ? 1 : 0,
-        Number(profile.relevanceScore || 0),
-        JSON.stringify(profile.nicheTags || []),
-        JSON.stringify(profile.matchedKeywords || []),
+        Number(classifyAudienceProfile(profile).relevanceScore || 0),
+        JSON.stringify(classifyAudienceProfile(profile).nicheTags || []),
+        JSON.stringify(classifyAudienceProfile(profile).matchedKeywords || []),
         now,
         now,
       );
@@ -3286,9 +3386,27 @@ export function replaceAudienceSnapshot({
   return getAudienceSummary();
 }
 
+function ensureAudienceClassification() {
+  return runStoreTransaction(() => {
+    const stored = getAppState(NICHE_PROFILE_STATE_KEY, null);
+    const profile = stored ? json(stored, {}).profile || json(stored, {}) : getDefaultNicheProfile();
+    const fingerprint = hashCanonical({ profile, classifierVersion: CANDIDATE_CLASSIFIER_VERSION });
+    if (hashCanonical(getActiveNicheProfile()) !== hashCanonical(profile)) setActiveNicheProfile(profile);
+    // Persisted scores share the current Growth Focus; only a focus/classifier change scans the audience.
+    if (getAppState('audience_classification_fingerprint', '') === fingerprint) return;
+    setActiveNicheProfile(profile);
+    const update = db.prepare('UPDATE audience_profiles SET relevance_score = ?, niche_tags = ?, matched_keywords = ? WHERE username = ?');
+    for (const row of db.prepare('SELECT username, display_name, bio FROM audience_profiles').iterate()) {
+      const classified = classifyAudienceProfile({ username: row.username, displayName: row.display_name, bio: row.bio });
+      update.run(classified.relevanceScore, JSON.stringify(classified.nicheTags || []), JSON.stringify(classified.matchedKeywords || []), row.username);
+    }
+    setAppState('audience_classification_fingerprint', fingerprint);
+  });
+}
+
 function decodeAudience(row) {
   if (!row) return null;
-  // ponytail: Reclassify on read; persist fit buckets if full audience scans become a measured bottleneck.
+  // Detailed fit reasons are classified only for rows selected by SQL.
   const classification = classifyAudienceProfile({
     username: row.username,
     displayName: row.display_name,
@@ -3304,50 +3422,52 @@ function decodeAudience(row) {
 }
 
 export function getAudienceProfile(username) {
+  ensureAudienceClassification();
   return decodeAudience(db.prepare('SELECT * FROM audience_profiles WHERE username = ? COLLATE NOCASE').get(String(username || '').replace(/^@/, '').toLowerCase()));
 }
 
 export function setAudienceFollowState(username, { youFollow } = {}) {
   const normalized = String(username || '').replace(/^@/, '').trim().toLowerCase();
-  if (!normalized) throw new Error('Audience username is required.');
-  if (typeof youFollow !== 'boolean') throw new Error('Audience youFollow state must be boolean.');
+  if (!normalized) throw new DomainValidationError('Audience username is required.');
+  if (typeof youFollow !== 'boolean') throw new DomainValidationError('Audience youFollow state must be boolean.');
   const result = db.prepare('UPDATE audience_profiles SET you_follow = ?, last_seen_at = ? WHERE username = ? COLLATE NOCASE')
     .run(youFollow ? 1 : 0, Date.now(), normalized);
-  if (!result.changes) throw new Error(`Audience profile not found: @${normalized}`);
+  if (!result.changes) throw new DomainValidationError(`Audience profile not found: @${normalized}`);
   return getAudienceProfile(normalized);
 }
 
 export function listAudienceProfiles({ followsYou, youFollow, minScore = 0, limit = 100 } = {}) {
-  const where = [];
-  const params = [];
+  ensureAudienceClassification();
+  const score = Number(minScore), count = Number(limit);
+  if (!Number.isFinite(score) || !Number.isSafeInteger(count) || count < 1) throw new DomainValidationError('Invalid audience query bounds.');
+  const where = ['relevance_score >= ?'];
+  const params = [score];
   if (followsYou != null) { where.push('follows_you = ?'); params.push(followsYou ? 1 : 0); }
   if (youFollow != null) { where.push('you_follow = ?'); params.push(youFollow ? 1 : 0); }
-  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  return db.prepare(`SELECT * FROM audience_profiles ${clause}`).all(...params)
-    .map(decodeAudience)
-    .filter((profile) => profile.relevanceScore >= Number(minScore || 0))
-    .sort((left, right) => right.relevanceScore - left.relevanceScore || right.lastSeenAt - left.lastSeenAt || left.username.localeCompare(right.username))
-    .slice(0, Number(limit || 100));
+  return db.prepare(`SELECT * FROM audience_profiles WHERE ${where.join(' AND ')}
+    ORDER BY relevance_score DESC, last_seen_at DESC, username ASC LIMIT ?`).all(...params, count).map(decodeAudience);
 }
 
 export function getAudienceSummary() {
-  const profiles = db.prepare('SELECT * FROM audience_profiles').all().map(decodeAudience);
-  return {
-    followers: profiles.filter((profile) => profile.followsYou).length,
-    following: profiles.filter((profile) => profile.youFollow).length,
-    mutuals: profiles.filter((profile) => profile.followsYou && profile.youFollow).length,
-    relevant_followers: profiles.filter((profile) => profile.followsYou && profile.relevanceScore >= 12).length,
-    relevant_following: profiles.filter((profile) => profile.youFollow && profile.relevanceScore >= 12).length,
-    target_accounts: profiles.filter((profile) => profile.youFollow && !profile.followsYou && profile.relevanceScore >= 12).length,
-  };
+  ensureAudienceClassification();
+  const row = db.prepare(`SELECT
+    COALESCE(SUM(follows_you = 1), 0) AS followers,
+    COALESCE(SUM(you_follow = 1), 0) AS following,
+    COALESCE(SUM(follows_you = 1 AND you_follow = 1), 0) AS mutuals,
+    COALESCE(SUM(follows_you = 1 AND relevance_score >= 12), 0) AS relevant_followers,
+    COALESCE(SUM(you_follow = 1 AND relevance_score >= 12), 0) AS relevant_following,
+    COALESCE(SUM(you_follow = 1 AND follows_you = 0 AND relevance_score >= 12), 0) AS target_accounts
+    FROM audience_profiles`).get();
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value)]));
 }
 
 export function getNewFollowerQuality({ since = 0, until = Date.now(), minScore = 12 } = {}) {
+  ensureAudienceClassification();
   const from = Number(since || 0);
   const to = Number(until);
   const threshold = Number(minScore);
-  if (!Number.isFinite(from) || from < 0 || !Number.isFinite(to) || to < from) throw new Error('Invalid new-follower observation window.');
-  if (!Number.isFinite(threshold)) throw new Error('New-follower minScore must be numeric.');
+  if (!Number.isFinite(from) || from < 0 || !Number.isFinite(to) || to < from) throw new DomainValidationError('Invalid new-follower observation window.');
+  if (!Number.isFinite(threshold)) throw new DomainValidationError('New-follower minScore must be numeric.');
   const profiles = db.prepare(`SELECT * FROM audience_profiles
     WHERE follows_you = 1 AND first_seen_at > ? AND first_seen_at <= ?
     ORDER BY first_seen_at ASC, username ASC`).all(from, to).map(decodeAudience);
@@ -3480,8 +3600,8 @@ export function getRelationshipProfile(username) {
 }
 
 export function listRelationshipProfiles({ className, stage, minTargetScore = 0, limit = 100 } = {}) {
-  if (className && !TARGET_CLASSES.includes(className)) throw new Error(`Invalid relationship class: ${className}`);
-  if (stage && !RELATIONSHIP_STAGES.includes(stage)) throw new Error(`Invalid relationship stage: ${stage}`);
+  if (className && !TARGET_CLASSES.includes(className)) throw new DomainValidationError(`Invalid relationship class: ${className}`);
+  if (stage && !RELATIONSHIP_STAGES.includes(stage)) throw new DomainValidationError(`Invalid relationship stage: ${stage}`);
   const minScore = Number(minTargetScore || 0);
   const maxRows = Math.max(1, Math.min(1000, Number(limit || 100)));
   return db.prepare('SELECT username FROM relationship_profiles').all()
@@ -3513,7 +3633,7 @@ export function getRelationshipSummary() {
 
 export function upsertRelationshipProfile(profile) {
   const username = normalizeRelationshipUsername(profile?.username);
-  if (!username) throw new Error('relationship profile username is required.');
+  if (!username) throw new DomainValidationError('relationship profile username is required.');
   const now = Date.now();
   const classes = [...new Set((profile.classes || []).filter((value) => TARGET_CLASSES.includes(value)))];
   const stage = RELATIONSHIP_STAGES.includes(profile.relationshipStage) ? profile.relationshipStage : 'observed';
@@ -3577,14 +3697,14 @@ function allRelationshipEvents(username) {
 
 export function listRelationshipEvents(username, { limit = 100 } = {}) {
   const normalized = normalizeRelationshipUsername(username);
-  if (!normalized) throw new Error('relationship event username is required.');
+  if (!normalized) throw new DomainValidationError('relationship event username is required.');
   return db.prepare('SELECT * FROM relationship_events WHERE username = ? ORDER BY occurred_at DESC, id DESC LIMIT ?')
     .all(normalized, Math.max(1, Math.min(1000, Number(limit || 100)))).map(decodeRelationshipEvent);
 }
 
 export function applyRelationshipEvent(username) {
   const normalized = normalizeRelationshipUsername(username);
-  if (!normalized) throw new Error('relationship event username is required.');
+  if (!normalized) throw new DomainValidationError('relationship event username is required.');
   const events = allRelationshipEvents(normalized);
   if (!events.length) return getRelationshipProfile(normalized);
   const current = getRelationshipProfile(normalized) || {
@@ -3609,7 +3729,7 @@ export function applyRelationshipEvent(username) {
 
 export function refreshRelationshipFromAudience(audienceProfile) {
   const username = normalizeRelationshipUsername(audienceProfile?.username);
-  if (!username) throw new Error('audience relationship username is required.');
+  if (!username) throw new DomainValidationError('audience relationship username is required.');
   const current = getStoredRelationshipProfile(username) || {};
   const events = allRelationshipEvents(username);
   const input = {
@@ -3638,7 +3758,7 @@ export function invalidateRelationshipReply({ candidateKey, ourTweetId, reason, 
   const explanation = String(reason || '').trim();
   const timestamp = Number(observedAt);
   if (!key || !tweetId || !explanation || !Number.isFinite(timestamp)) {
-    throw new Error('Relationship reply invalidation requires candidateKey, ourTweetId, reason, and numeric observedAt.');
+    throw new DomainValidationError('Relationship reply invalidation requires candidateKey, ourTweetId, reason, and numeric observedAt.');
   }
   const rows = db.prepare(`SELECT * FROM relationship_events
     WHERE event_type = 'our_reply' AND candidate_key = ? AND our_tweet_id = ?
@@ -3674,8 +3794,8 @@ export function invalidateRelationshipReply({ candidateKey, ourTweetId, reason, 
 export function recordRelationshipEvent(event) {
   const username = normalizeRelationshipUsername(event?.username);
   const type = String(event?.eventType || event?.event_type || '');
-  if (!username) throw new Error('relationship event username is required.');
-  if (!RELATIONSHIP_EVENT_TYPES.includes(type)) throw new Error(`Invalid relationship event type: ${type}`);
+  if (!username) throw new DomainValidationError('relationship event username is required.');
+  if (!RELATIONSHIP_EVENT_TYPES.includes(type)) throw new DomainValidationError(`Invalid relationship event type: ${type}`);
   const occurredAt = Number(event?.occurredAt || event?.occurred_at || Date.now());
   db.exec('BEGIN');
   try {
@@ -3758,13 +3878,13 @@ export function recordPersonaStanceEvent(input = {}) {
     ? input.provenance
     : {};
 
-  if (!subject) throw new Error('Persona stance subject is required.');
-  if (!position) throw new Error('Persona stance position is required.');
-  if (!PERSONA_STANCE_CONFIDENCE_SET.has(confidence)) throw new Error(`Unsupported persona stance confidence: ${confidence}.`);
-  if (!PERSONA_STANCE_STATUS_SET.has(status)) throw new Error(`Unsupported persona stance status: ${status}.`);
-  if (!basis) throw new Error('Persona stance basis is required.');
-  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Persona stance observedAt must be a positive timestamp.');
-  if (supersedesId != null && !getPersonaStanceEvent(supersedesId)) throw new Error(`Superseded persona stance not found: ${supersedesId}.`);
+  if (!subject) throw new DomainValidationError('Persona stance subject is required.');
+  if (!position) throw new DomainValidationError('Persona stance position is required.');
+  if (!PERSONA_STANCE_CONFIDENCE_SET.has(confidence)) throw new DomainValidationError(`Unsupported persona stance confidence: ${confidence}.`);
+  if (!PERSONA_STANCE_STATUS_SET.has(status)) throw new DomainValidationError(`Unsupported persona stance status: ${status}.`);
+  if (!basis) throw new DomainValidationError('Persona stance basis is required.');
+  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new DomainValidationError('Persona stance observedAt must be a positive timestamp.');
+  if (supersedesId != null && !getPersonaStanceEvent(supersedesId)) throw new DomainValidationError(`Superseded persona stance not found: ${supersedesId}.`);
 
   const inserted = db.prepare(`INSERT INTO persona_stance_events(
     subject, position, confidence, status, basis, source_ref, provenance_json, supersedes_id, observed_at, created_at
@@ -3799,15 +3919,15 @@ function decodeAccountHealthObservation(row) {
 
 export function recordAccountHealthObservation(observation = {}) {
   const type = String(observation.type || '');
-  if (!ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type || 'missing'}.`);
+  if (!ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new DomainValidationError(`Unsupported account health observation type: ${type || 'missing'}.`);
   const source = String(observation.source || '').trim();
-  if (!source) throw new Error('Account health observation source is required.');
+  if (!source) throw new DomainValidationError('Account health observation source is required.');
   const sourceRef = String(observation.sourceRef ?? observation.source_ref ?? '').trim();
   if (['visibility_label_observed', 'visibility_label_cleared', 'platform_challenge_observed', 'platform_restriction_observed'].includes(type) && !sourceRef) {
-    throw new Error(`${type} requires sourceRef provenance.`);
+    throw new DomainValidationError(`${type} requires sourceRef provenance.`);
   }
   const observedAt = Number(observation.observedAt ?? observation.observed_at ?? Date.now());
-  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new Error('Account health observation observedAt must be a positive timestamp.');
+  if (!Number.isFinite(observedAt) || observedAt <= 0) throw new DomainValidationError('Account health observation observedAt must be a positive timestamp.');
   const metadata = observation.metadata && typeof observation.metadata === 'object' && !Array.isArray(observation.metadata)
     ? observation.metadata
     : {};
@@ -3826,7 +3946,7 @@ export function recordAccountHealthObservation(observation = {}) {
 }
 
 export function listAccountHealthObservations({ type, limit = 100 } = {}) {
-  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type}.`);
+  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new DomainValidationError(`Unsupported account health observation type: ${type}.`);
   const bounded = Math.max(1, Math.min(1000, Number(limit || 100)));
   const rows = type
     ? db.prepare('SELECT * FROM account_health_observations WHERE type = ? ORDER BY observed_at DESC, id DESC LIMIT ?').all(type, bounded)
@@ -3835,7 +3955,7 @@ export function listAccountHealthObservations({ type, limit = 100 } = {}) {
 }
 
 export function getLatestHealthObservation(type = null) {
-  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new Error(`Unsupported account health observation type: ${type}.`);
+  if (type && !ACCOUNT_HEALTH_OBSERVATION_TYPES.includes(type)) throw new DomainValidationError(`Unsupported account health observation type: ${type}.`);
   const row = type
     ? db.prepare('SELECT * FROM account_health_observations WHERE type = ? ORDER BY observed_at DESC, id DESC LIMIT 1').get(type)
     : db.prepare('SELECT * FROM account_health_observations ORDER BY observed_at DESC, id DESC LIMIT 1').get();
@@ -3868,7 +3988,7 @@ export function recordUnderTheHoodSnapshot(report) {
 export function listRecentPublishedReplies({ targetUsername = null, topic = null, since = null, limit = 30 } = {}) {
   const bounded = Math.max(1, Math.min(200, Number(limit || 30)));
   const sinceTimestamp = since == null ? 0 : Number(since);
-  if (!Number.isFinite(sinceTimestamp) || sinceTimestamp < 0) throw new Error('Recent reply since must be a non-negative timestamp.');
+  if (!Number.isFinite(sinceTimestamp) || sinceTimestamp < 0) throw new DomainValidationError('Recent reply since must be a non-negative timestamp.');
   const rows = db.prepare(`SELECT a.commentary AS text, a.created_at,
       q.target_username, q.reply_archetype,
       (SELECT r.topic FROM relationship_events r
@@ -3950,7 +4070,7 @@ function countRecentRecurringTransitions(since) {
 
 export function getAccountHealthSummary({ now = Date.now() } = {}) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Account health summary now must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Account health summary now must be numeric.');
   const sevenDaysAgo = timestamp - 7 * 24 * 3_600_000;
   const thirtyDaysAgo = timestamp - 30 * 24 * 3_600_000;
   const observations = listAccountHealthObservations({ limit: 200 });
@@ -4369,7 +4489,7 @@ export function getPublicationWritingStrategyProvenance(queueItemId) {
 export function listPublicationMeasurements({ windowMinutes = null, limit = 200 } = {}) {
   const bounded = Math.max(1, Math.min(2000, Number(limit || 200)));
   if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
-    throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+    throw new DomainValidationError(`Unsupported publication measurement window: ${windowMinutes}.`);
   }
   const rows = windowMinutes == null
     ? db.prepare('SELECT * FROM publication_measurements ORDER BY captured_at DESC, id DESC LIMIT ?').all(bounded)
@@ -4379,7 +4499,7 @@ export function listPublicationMeasurements({ windowMinutes = null, limit = 200 
 
 export function countPublicationMeasurements({ windowMinutes = null } = {}) {
   if (windowMinutes != null && !PUBLICATION_MEASUREMENT_WINDOWS.includes(Number(windowMinutes))) {
-    throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+    throw new DomainValidationError(`Unsupported publication measurement window: ${windowMinutes}.`);
   }
   const row = windowMinutes == null
     ? db.prepare('SELECT COUNT(*) AS count FROM publication_measurements').get()
@@ -4396,20 +4516,20 @@ function countOverlappingMainFeedPublications(queueItemId, baselineAt, capturedA
 export function recordPublicationFollowerBaseline(queueItemId, { followers, capturedAt = Date.now() } = {}) {
   const queueItem = getQueueItem(Number(queueItemId));
   if (!queueItem || !['main', 'main_feed'].includes(queueItem.lane) || queueItem.status !== 'published' || !queueItem.publishedAt) {
-    throw new Error('Publication follower baseline requires a published main-feed queue item.');
+    throw new DomainValidationError('Publication follower baseline requires a published main-feed queue item.');
   }
   if (queueItem.measurementBaselineAt != null && queueItem.measurementBaselineFollowers != null) return queueItem;
   const timestamp = Number(capturedAt);
   const count = Number(followers);
   if (!Number.isFinite(timestamp) || timestamp <= 0 || !Number.isFinite(count) || count < 0) {
-    throw new Error('Publication follower baseline requires a positive capture timestamp and non-negative follower count.');
+    throw new DomainValidationError('Publication follower baseline requires a positive capture timestamp and non-negative follower count.');
   }
   return saveQueueItem({ ...queueItem, measurementBaselineAt: timestamp, measurementBaselineFollowers: count });
 }
 
 export function getPublicationFollowerBaseline(queueItemId, { fallbackFollowers = null, fallbackAt = null } = {}) {
   const queueItem = getQueueItem(Number(queueItemId));
-  if (!queueItem?.publishedAt) throw new Error(`Published queue item not found: ${queueItemId}`);
+  if (!queueItem?.publishedAt) throw new DomainValidationError(`Published queue item not found: ${queueItemId}`);
   if (queueItem.measurementBaselineAt != null && queueItem.measurementBaselineFollowers != null) {
     return {
       capturedAt: queueItem.measurementBaselineAt,
@@ -4443,7 +4563,7 @@ export function getPublicationFollowerBaseline(queueItemId, { fallbackFollowers 
   }
   const followers = Number(fallbackFollowers);
   const capturedAt = Number(fallbackAt);
-  if (!Number.isFinite(followers) || !Number.isFinite(capturedAt)) throw new Error(`Follower baseline unavailable for queue item ${queueItemId}.`);
+  if (!Number.isFinite(followers) || !Number.isFinite(capturedAt)) throw new DomainValidationError(`Follower baseline unavailable for queue item ${queueItemId}.`);
   return {
     capturedAt,
     followers,
@@ -4455,21 +4575,21 @@ export function getPublicationFollowerBaseline(queueItemId, { fallbackFollowers 
 export function recordPublicationMeasurement(measurement = {}) {
   const queueItem = getQueueItem(Number(measurement.queueItemId));
   if (!queueItem || !['main', 'main_feed'].includes(queueItem.lane) || queueItem.status !== 'published' || !queueItem.publishedAt) {
-    throw new Error('Publication measurements require a published main-feed queue item.');
+    throw new DomainValidationError('Publication measurements require a published main-feed queue item.');
   }
   const windowMinutes = Number(measurement.windowMinutes);
-  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(windowMinutes)) throw new Error(`Unsupported publication measurement window: ${windowMinutes}.`);
+  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(windowMinutes)) throw new DomainValidationError(`Unsupported publication measurement window: ${windowMinutes}.`);
   const capturedAt = Number(measurement.capturedAt);
   const baselineAt = Number(measurement.baselineAt);
   const baselineFollowers = Number(measurement.baselineFollowers);
   const followers = Number(measurement.followers);
-  if (![capturedAt, baselineAt, baselineFollowers, followers].every(Number.isFinite)) throw new Error('Publication measurement timestamps/follower counts must be numeric.');
-  if (baselineAt > capturedAt) throw new Error('Publication follower baseline cannot be after capture.');
-  if (baselineFollowers < 0 || followers < 0) throw new Error('Publication follower counts cannot be negative.');
-  if (capturedAt < queueItem.publishedAt + windowMinutes * 60_000) throw new Error('Publication measurement capture is earlier than its target window.');
+  if (![capturedAt, baselineAt, baselineFollowers, followers].every(Number.isFinite)) throw new DomainValidationError('Publication measurement timestamps/follower counts must be numeric.');
+  if (baselineAt > capturedAt) throw new DomainValidationError('Publication follower baseline cannot be after capture.');
+  if (baselineFollowers < 0 || followers < 0) throw new DomainValidationError('Publication follower counts cannot be negative.');
+  if (capturedAt < queueItem.publishedAt + windowMinutes * 60_000) throw new DomainValidationError('Publication measurement capture is earlier than its target window.');
   const tweetId = String(measurement.tweetId || queueItem.outputTweetId || '').trim();
-  if (!tweetId) throw new Error('Publication measurement requires a tweet ID.');
-  if (queueItem.outputTweetId && tweetId !== String(queueItem.outputTweetId)) throw new Error('Publication measurement tweet ID does not match the published queue item.');
+  if (!tweetId) throw new DomainValidationError('Publication measurement requires a tweet ID.');
+  if (queueItem.outputTweetId && tweetId !== String(queueItem.outputTweetId)) throw new DomainValidationError('Publication measurement tweet ID does not match the published queue item.');
   const attributionInput = {
     overlappingMainFeedPublications: countOverlappingMainFeedPublications(queueItem.id, baselineAt, capturedAt),
     ...(measurement.attribution || {}),
@@ -4513,7 +4633,7 @@ export function recordPublicationMeasurement(measurement = {}) {
 
 export function listDueMeasurementWindows(now = Date.now()) {
   const timestamp = Number(now);
-  if (!Number.isFinite(timestamp)) throw new Error('Measurement due-window timestamp must be numeric.');
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('Measurement due-window timestamp must be numeric.');
   const published = db.prepare(`SELECT * FROM queue_items
     WHERE lane IN ('main', 'main_feed') AND status = 'published'
       AND published_at IS NOT NULL AND output_tweet_id IS NOT NULL
@@ -4597,7 +4717,7 @@ function summarizeEditorialGroups(observations, key) {
 
 export function getEditorialOutcomeSummary({ windowMinutes = 1440, limit = 200 } = {}) {
   const window = Number(windowMinutes);
-  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new Error(`Unsupported editorial outcome window: ${windowMinutes}.`);
+  if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(window)) throw new DomainValidationError(`Unsupported editorial outcome window: ${windowMinutes}.`);
   const measurements = listPublicationMeasurements({ windowMinutes: window, limit });
   const ageAppropriate = measurements.filter((measurement) => measurement.captureTiming?.ageAppropriate !== false);
   const observations = ageAppropriate.map(editorialOutcomeObservation).filter(Boolean);
@@ -4651,7 +4771,7 @@ export function getExperiment(id) {
 }
 
 export function listExperiments({ status = null, limit = 100 } = {}) {
-  if (status && !EXPERIMENT_STATUSES.has(status)) throw new Error(`Invalid experiment status: ${status}`);
+  if (status && !EXPERIMENT_STATUSES.has(status)) throw new DomainValidationError(`Invalid experiment status: ${status}`);
   const bounded = Math.max(1, Math.min(500, Number(limit || 100)));
   const rows = status
     ? db.prepare('SELECT * FROM experiments WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(status, bounded)
@@ -4661,9 +4781,9 @@ export function listExperiments({ status = null, limit = 100 } = {}) {
 
 export function createExperiment(definition = {}) {
   const validation = validateExperimentDefinition(definition);
-  if (!validation.valid) throw new Error(`Invalid experiment: ${validation.errors.map((error) => error.message).join(' ')}`);
+  if (!validation.valid) throw new DomainValidationError(`Invalid experiment: ${validation.errors.map((error) => error.message).join(' ')}`);
   const status = String(definition.status || 'draft');
-  if (!EXPERIMENT_STATUSES.has(status)) throw new Error(`Invalid experiment status: ${status}`);
+  if (!EXPERIMENT_STATUSES.has(status)) throw new DomainValidationError(`Invalid experiment status: ${status}`);
   const now = Date.now();
   db.exec('BEGIN');
   try {
@@ -4689,13 +4809,13 @@ export function createExperiment(definition = {}) {
 
 export function setExperimentStatus(id, status) {
   const normalized = String(status || '');
-  if (!EXPERIMENT_STATUSES.has(normalized)) throw new Error(`Invalid experiment status: ${normalized || 'missing'}`);
+  if (!EXPERIMENT_STATUSES.has(normalized)) throw new DomainValidationError(`Invalid experiment status: ${normalized || 'missing'}`);
   const current = getExperiment(id);
-  if (!current) throw new Error(`Experiment not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Experiment not found: ${id}`);
   if (current.status === normalized) return current;
   const allowed = (current.status === 'draft' && normalized === 'active')
     || (current.status === 'active' && normalized === 'completed');
-  if (!allowed) throw new Error(`Invalid experiment status transition: ${current.status} -> ${normalized}`);
+  if (!allowed) throw new DomainValidationError(`Invalid experiment status transition: ${current.status} -> ${normalized}`);
   const now = Date.now();
   db.prepare(`UPDATE experiments SET status = ?, started_at = CASE WHEN ? = 'active' THEN COALESCE(started_at, ?) ELSE started_at END,
     ended_at = CASE WHEN ? = 'completed' THEN ? ELSE NULL END WHERE id = ?`)
@@ -4705,10 +4825,10 @@ export function setExperimentStatus(id, status) {
 
 export function setExperimentMinimumCompletedPerVariant(id, minimumCompletedPerVariant) {
   const experiment = getExperiment(id);
-  if (!experiment) throw new Error(`Experiment not found: ${id}`);
-  if (experiment.status === 'completed') throw new Error('Completed experiment thresholds are historical and cannot be changed.');
+  if (!experiment) throw new DomainValidationError(`Experiment not found: ${id}`);
+  if (experiment.status === 'completed') throw new DomainValidationError('Completed experiment thresholds are historical and cannot be changed.');
   const minimum = Number(minimumCompletedPerVariant);
-  if (!Number.isInteger(minimum) || minimum < 1) throw new Error('minimumCompletedPerVariant must be a positive integer.');
+  if (!Number.isInteger(minimum) || minimum < 1) throw new DomainValidationError('minimumCompletedPerVariant must be a positive integer.');
   if (experiment.minimumCompletedPerVariant === minimum) return experiment;
   db.prepare('UPDATE experiments SET minimum_completed_per_variant = ? WHERE id = ?').run(minimum, Number(id));
   return getExperiment(id);
@@ -4716,10 +4836,10 @@ export function setExperimentMinimumCompletedPerVariant(id, minimumCompletedPerV
 
 export function setExperimentSecondaryMetrics(id, secondaryMetrics) {
   const experiment = getExperiment(id);
-  if (!experiment) throw new Error(`Experiment not found: ${id}`);
-  if (experiment.status === 'completed') throw new Error('Completed experiment metrics are historical and cannot be changed.');
+  if (!experiment) throw new DomainValidationError(`Experiment not found: ${id}`);
+  if (experiment.status === 'completed') throw new DomainValidationError('Completed experiment metrics are historical and cannot be changed.');
   const validation = validateExperimentDefinition({ ...experiment, secondaryMetrics });
-  if (!validation.valid) throw new Error(`Invalid experiment metrics: ${validation.errors.map((error) => error.message).join(' ')}`);
+  if (!validation.valid) throw new DomainValidationError(`Invalid experiment metrics: ${validation.errors.map((error) => error.message).join(' ')}`);
   const metrics = validation.experiment.secondaryMetrics;
   if (JSON.stringify(metrics) === JSON.stringify(experiment.secondaryMetrics)) return experiment;
   db.prepare('UPDATE experiments SET secondary_metrics_json = ? WHERE id = ?').run(JSON.stringify(metrics), Number(id));
@@ -4796,20 +4916,20 @@ function assignmentItem(queueItem, context = {}) {
 
 export function assignExperimentVariant(candidateKey, experimentId, variantLabel, { context = {}, timingHistorySufficient = false, assignedAt = Date.now() } = {}) {
   const queueItem = getQueueItemByCandidate(candidateKey);
-  if (!queueItem) throw new Error(`Queue item not found: ${candidateKey}`);
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${candidateKey}`);
   const experiment = getExperiment(experimentId);
-  if (!experiment) throw new Error(`Experiment not found: ${experimentId}`);
-  if (experiment.status !== 'active') throw new Error('Experiment assignment requires an active experiment.');
+  if (!experiment) throw new DomainValidationError(`Experiment not found: ${experimentId}`);
+  if (experiment.status !== 'active') throw new DomainValidationError('Experiment assignment requires an active experiment.');
   if (queueItem.experimentVariantId != null) {
     const assigned = db.prepare('SELECT experiment_id, label FROM experiment_variants WHERE id = ?').get(Number(queueItem.experimentVariantId));
     if (assigned && Number(assigned.experiment_id) === experiment.id && String(assigned.label) === String(variantLabel)) return queueItem;
-    throw new Error('Queue item already has an experiment assignment; each item supports one declared experiment assignment.');
+    throw new DomainValidationError('Queue item already has an experiment assignment; each item supports one declared experiment assignment.');
   }
   if (!['triage', 'researching', 'watching', 'drafting'].includes(queueItem.status)) {
-    throw new Error('Experiment assignment must happen before review, approval, or publication finalizes the treatment.');
+    throw new DomainValidationError('Experiment assignment must happen before review, approval, or publication finalizes the treatment.');
   }
   const timestamp = Number(assignedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Experiment assignedAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Experiment assignedAt must be a positive timestamp.');
   const profile = queueItem.targetUsername ? getRelationshipProfile(queueItem.targetUsername) : null;
   const assignmentContext = {
     relationshipStageBefore: profile?.relationshipStage || '',
@@ -4834,7 +4954,7 @@ export function assignExperimentVariant(candidateKey, experimentId, variantLabel
   const validation = validateVariantAssignment(experimentDefinition(experiment), variantLabel, assignmentItem(queueItem, assignmentContext), {
     ...assignmentContext, timingHistorySufficient: timingHistorySufficient === true,
   });
-  if (!validation.valid) throw new Error(`Experiment assignment rejected: ${validation.errors.map((error) => error.message).join(' ')}`);
+  if (!validation.valid) throw new DomainValidationError(`Experiment assignment rejected: ${validation.errors.map((error) => error.message).join(' ')}`);
   const variant = experiment.variants.find((entry) => entry.label === variantLabel);
   return saveQueueItem({
     ...queueItem,
@@ -4918,7 +5038,7 @@ function networkObservationForAssignment(queueItem, variantLabel) {
 
 export function getExperimentSummary(id, { windowMinutes = null } = {}) {
   const experiment = getExperiment(id);
-  if (!experiment) throw new Error(`Experiment not found: ${id}`);
+  if (!experiment) throw new DomainValidationError(`Experiment not found: ${id}`);
   const definition = experimentDefinition(experiment);
   const assignments = listExperimentAssignments(experiment.id);
   if (NETWORK_EXPERIMENT_DIMENSIONS.has(experiment.dimension)) {
@@ -4931,7 +5051,7 @@ export function getExperimentSummary(id, { windowMinutes = null } = {}) {
     assignments.map(({ queueItem, variantLabel }) => contentObservationForAssignment(queueItem, variantLabel, value)));
   if (windowMinutes != null) {
     const value = Number(windowMinutes);
-    if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(value)) throw new Error(`Unsupported experiment summary window: ${windowMinutes}.`);
+    if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(value)) throw new DomainValidationError(`Unsupported experiment summary window: ${windowMinutes}.`);
     return { experiment, kind: 'content', windowMinutes: value, summary: summarizeWindow(value) };
   }
   return {
@@ -5027,8 +5147,8 @@ export function getLearnedRuleByKey(scope, key) {
 }
 
 export function listLearnedRules({ status = null, scope = null, limit = 200 } = {}) {
-  if (status && !LEARNED_STATUS_SET.has(status)) throw new Error(`Invalid learned-rule status: ${status}`);
-  if (scope && !LEARNED_SCOPE_SET.has(scope)) throw new Error(`Invalid learned-rule scope: ${scope}`);
+  if (status && !LEARNED_STATUS_SET.has(status)) throw new DomainValidationError(`Invalid learned-rule status: ${status}`);
+  if (scope && !LEARNED_SCOPE_SET.has(scope)) throw new DomainValidationError(`Invalid learned-rule scope: ${scope}`);
   const where = [];
   const params = [];
   if (status) { where.push('status = ?'); params.push(status); }
@@ -5052,7 +5172,7 @@ export function listAcceptedLearnedRules({ scope = null, limit = 500, includeSus
 }
 
 function persistLearnedRule(rule, { source = rule.source || null, allowAcceptedUpdate = false } = {}) {
-  if (!rule || !LEARNED_SCOPE_SET.has(rule.scope) || !String(rule.key || '').trim()) throw new Error('A valid learned rule is required.');
+  if (!rule || !LEARNED_SCOPE_SET.has(rule.scope) || !String(rule.key || '').trim()) throw new DomainValidationError('A valid learned rule is required.');
   const existing = getLearnedRuleByKey(rule.scope, rule.key);
   if (existing && existing.status !== 'suggested' && !allowAcceptedUpdate) {
     return { rule: existing, updated: false, reason: `existing_${existing.status}_rule_preserved` };
@@ -5082,7 +5202,7 @@ function persistLearnedRule(rule, { source = rule.source || null, allowAcceptedU
 
 function learningDefaultsForExperiment(experiment) {
   const defaults = LEARNING_DIMENSION_DEFAULTS[experiment?.dimension];
-  if (!defaults) throw new Error(`No learned-strategy default exists for experiment dimension: ${experiment?.dimension || 'missing'}.`);
+  if (!defaults) throw new DomainValidationError(`No learned-strategy default exists for experiment dimension: ${experiment?.dimension || 'missing'}.`);
   return defaults;
 }
 
@@ -5090,18 +5210,18 @@ function experimentSummaryForLearning(experiment, windowMinutes) {
   if (NETWORK_EXPERIMENT_DIMENSIONS.has(experiment.dimension)) return getExperimentSummary(experiment.id).summary;
   const value = Number(windowMinutes);
   if (!PUBLICATION_MEASUREMENT_WINDOWS.includes(value)) {
-    throw new Error(`Content/timing learning requires an explicit measurement window: ${PUBLICATION_MEASUREMENT_WINDOWS.join(', ')} minutes.`);
+    throw new DomainValidationError(`Content/timing learning requires an explicit measurement window: ${PUBLICATION_MEASUREMENT_WINDOWS.join(', ')} minutes.`);
   }
   return getExperimentSummary(experiment.id, { windowMinutes: value }).summary;
 }
 
 function buildExperimentLearningCandidate(input = {}) {
   const experiment = getExperiment(Number(input.experimentId));
-  if (!experiment) throw new Error(`Experiment not found: ${input.experimentId}`);
+  if (!experiment) throw new DomainValidationError(`Experiment not found: ${input.experimentId}`);
   const baselineLabel = String(input.baselineLabel || '').trim();
   const comparisonLabel = String(input.comparisonLabel || '').trim();
   if (!baselineLabel || !comparisonLabel || baselineLabel === comparisonLabel) {
-    throw new Error('Learning refresh requires distinct explicit baselineLabel and comparisonLabel values.');
+    throw new DomainValidationError('Learning refresh requires distinct explicit baselineLabel and comparisonLabel values.');
   }
   const defaults = learningDefaultsForExperiment(experiment);
   const summary = experimentSummaryForLearning(experiment, input.windowMinutes);
@@ -5163,14 +5283,14 @@ export function refreshLearnedRuleSuggestion(input = {}) {
 
 export function acceptLearnedRule(id, { at = Date.now() } = {}) {
   const current = getLearnedRule(id);
-  if (!current) throw new Error(`Learned rule not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Learned rule not found: ${id}`);
   const next = transitionLearnedRule(current, 'accepted', { at });
   return persistLearnedRule(next, { source: current.source, allowAcceptedUpdate: true }).rule;
 }
 
 export function retireLearnedRule(id, { at = Date.now(), reason = '' } = {}) {
   const current = getLearnedRule(id);
-  if (!current) throw new Error(`Learned rule not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Learned rule not found: ${id}`);
   const next = transitionLearnedRule(current, 'retired', { at, reason });
   return persistLearnedRule(next, { source: current.source, allowAcceptedUpdate: true }).rule;
 }
@@ -5273,13 +5393,27 @@ function draftApprovalInvalidationReason(queueItem, draft) {
   return '';
 }
 
-export function saveDraft(draft) {
+export function saveDraft(draft, { expectedUpdatedAt = draft.updatedAt } = {}) {
   return runStoreTransaction(() => {
-    const now = Date.now();
     const existing = draft.id
-      ? db.prepare('SELECT id, created_at FROM drafts WHERE id = ?').get(draft.id)
-      : db.prepare('SELECT id, created_at FROM drafts WHERE candidate_key = ?').get(draft.candidateKey);
+      ? db.prepare('SELECT * FROM drafts WHERE id = ?').get(draft.id)
+      : db.prepare('SELECT * FROM drafts WHERE candidate_key = ?').get(draft.candidateKey);
+    if (draft.id && (!existing || existing.candidate_key !== draft.candidateKey)) throw new DomainValidationError('Draft identity changed or no longer exists.');
+    if (existing && expectedUpdatedAt != null && Number(existing.updated_at) !== Number(expectedUpdatedAt)) {
+      throw new DomainValidationError('Draft changed while the operation was in progress; reload before saving.', { code: 'DRAFT_CONFLICT', status: 409 });
+    }
+    const now = Math.max(Date.now(), Number(existing?.updated_at || 0) + 1);
     const queueItem = getQueueItemByCandidate(draft.candidateKey);
+    if (existing && (existing.status === 'published' || existing.published_tweet_id || ['publishing', 'published', 'unresolved'].includes(queueItem?.status))) {
+      const sameContent = String(draft.body || '') === String(existing.body || '')
+        && JSON.stringify(draft.threadParts || []) === existing.thread_parts_json
+        && JSON.stringify(draft.editor || {}) === existing.editor_json;
+      if (!sameContent || draft.status !== 'published' || !draft.publishedTweetId
+        || (existing.published_tweet_id && String(existing.published_tweet_id) !== String(draft.publishedTweetId))) {
+        throw new DomainValidationError('Claimed or published draft content is immutable; reconcile the publication before editing.', { status: 409 });
+      }
+      if (existing.status === 'published') return getDraft(existing.id);
+    }
     const invalidationReason = draftApprovalInvalidationReason(queueItem, draft);
     if (invalidationReason) {
       invalidateQueueApproval(draft.candidateKey, { actor: 'system', reason: invalidationReason });
@@ -5319,7 +5453,14 @@ export function getDraftByCandidate(key) {
 }
 
 export function deleteDraft(id) {
-  db.prepare('DELETE FROM drafts WHERE id = ?').run(Number(id));
+  return runStoreTransaction(() => {
+    const draft = getDraft(Number(id));
+    const queueItem = draft ? getQueueItemByCandidate(draft.candidateKey) : null;
+    if (draft?.status === 'published' || draft?.publishedTweetId || ['publishing', 'published', 'unresolved'].includes(queueItem?.status)) {
+      throw new DomainValidationError('Claimed or published drafts cannot be deleted.');
+    }
+    db.prepare('DELETE FROM drafts WHERE id = ?').run(Number(id));
+  });
 }
 
 export function listDrafts({ status, limit = 100 } = {}) {
@@ -5398,11 +5539,11 @@ export function getGrowthOperatorMemoryCheckpoint() {
 export function recordGrowthOperatorMemoryReview({ result, note = '', reviewedAt = Date.now() } = {}) {
   const normalizedResult = String(result || '');
   if (!GROWTH_OPERATOR_MEMORY_REVIEW_RESULTS.has(normalizedResult)) {
-    throw new Error(`Invalid memory review result: ${normalizedResult || 'missing'}.`);
+    throw new DomainValidationError(`Invalid memory review result: ${normalizedResult || 'missing'}.`);
   }
   const timestamp = Number(reviewedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Memory review reviewedAt must be a positive timestamp.');
-  if (timestamp > Date.now()) throw new Error('Memory review reviewedAt cannot be in the future.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Memory review reviewedAt must be a positive timestamp.');
+  if (timestamp > Date.now()) throw new DomainValidationError('Memory review reviewedAt cannot be in the future.');
   setAppState(GROWTH_OPERATOR_MEMORY_REVIEW_STATE_KEY, JSON.stringify({
     reviewedAt: timestamp,
     result: normalizedResult,
@@ -5462,7 +5603,7 @@ export function resetNicheProfile() {
 export function saveGrowthFocusObjective(objective) {
   const selectedObjective = String(objective || '');
   if (!GROWTH_FOCUS_OBJECTIVES.includes(selectedObjective)) {
-    throw new Error(`Unsupported Growth Focus objective: ${selectedObjective || 'missing'}.`);
+    throw new DomainValidationError(`Unsupported Growth Focus objective: ${selectedObjective || 'missing'}.`);
   }
   const profile = setActiveNicheProfile({ ...getActiveNicheProfile(), defaultObjective: selectedObjective });
   const updatedAt = Date.now();
@@ -5481,7 +5622,7 @@ export function saveGrowthFocusObjective(objective) {
 
 function requireSourceSnapshotKind(kind) {
   const value = String(kind || '');
-  if (!SOURCE_SNAPSHOT_KIND_SET.has(value)) throw new Error(`Unsupported source snapshot kind: ${value || 'missing'}.`);
+  if (!SOURCE_SNAPSHOT_KIND_SET.has(value)) throw new DomainValidationError(`Unsupported source snapshot kind: ${value || 'missing'}.`);
   return value;
 }
 
@@ -5492,7 +5633,7 @@ function parseAppStateJson(key, fallback) {
 export function saveDiscoverSnapshot(kind, candidates = [], fetchedAt = Date.now()) {
   const snapshotKind = requireSourceSnapshotKind(kind);
   const timestamp = Number(fetchedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Discover snapshot fetchedAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Discover snapshot fetchedAt must be a positive timestamp.');
   const keys = [...new Set((Array.isArray(candidates) ? candidates : []).map((candidate) => candidateKey(candidate)).filter(Boolean))];
   setAppState(`${DISCOVER_SNAPSHOT_PREFIX}${snapshotKind}`, JSON.stringify({ fetchedAt: timestamp, keys }));
   setAppState(`${DISCOVER_REFRESH_STATUS_PREFIX}${snapshotKind}`, JSON.stringify({ attemptedAt: timestamp, error: null }));
@@ -5502,7 +5643,7 @@ export function saveDiscoverSnapshot(kind, candidates = [], fetchedAt = Date.now
 export function recordDiscoverSnapshotError(kind, error, attemptedAt = Date.now()) {
   const snapshotKind = requireSourceSnapshotKind(kind);
   const timestamp = Number(attemptedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Discover refresh attemptedAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Discover refresh attemptedAt must be a positive timestamp.');
   const message = String(error?.message || error || 'Source refresh failed.');
   setAppState(`${DISCOVER_REFRESH_STATUS_PREFIX}${snapshotKind}`, JSON.stringify({ attemptedAt: timestamp, error: message }));
   return { kind: snapshotKind, attemptedAt: timestamp, error: message };
@@ -5557,12 +5698,12 @@ export function recordSourceObservations(observations = []) {
   try {
     for (const observation of values) {
       const key = String(observation?.candidateKey || '').trim();
-      if (!key) throw new Error('Source observation candidateKey is required.');
+      if (!key) throw new DomainValidationError('Source observation candidateKey is required.');
       const snapshotKind = requireSourceSnapshotKind(observation.snapshotKind);
       const observedAt = Number(observation.observedAt);
-      if (!Number.isSafeInteger(observedAt) || observedAt <= 0) throw new Error('Source observation observedAt must be a positive safe-integer timestamp.');
+      if (!Number.isSafeInteger(observedAt) || observedAt <= 0) throw new DomainValidationError('Source observation observedAt must be a positive safe-integer timestamp.');
       const rank = observation.rank == null ? null : Number(observation.rank);
-      if (rank != null && (!Number.isInteger(rank) || rank < 1)) throw new Error('Source observation rank must be a positive integer when supplied.');
+      if (rank != null && (!Number.isInteger(rank) || rank < 1)) throw new DomainValidationError('Source observation rank must be a positive integer when supplied.');
       statement.run(key, snapshotKind, observedAt, rank, JSON.stringify(observation.metrics || {}));
       inserted.push({ candidateKey: key, snapshotKind, observedAt, rank, metrics: observation.metrics || {} });
     }
@@ -5645,9 +5786,9 @@ function decodeEditorialRun(row) {
 
 export function createEditorialRun({ objective, sourceSnapshot = {}, context = {}, createdAt = Date.now() } = {}) {
   const selectedObjective = String(objective || '').trim();
-  if (!selectedObjective) throw new Error('Editorial run objective is required.');
+  if (!selectedObjective) throw new DomainValidationError('Editorial run objective is required.');
   const timestamp = Number(createdAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Editorial run createdAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Editorial run createdAt must be a positive timestamp.');
   const result = db.prepare(`INSERT INTO editorial_runs(
     objective, source_snapshot_json, context_json, scan_json, ai_execution_json, status, error, created_at
   ) VALUES (?, ?, ?, '{}', '{}', 'building', '', ?)`).run(
@@ -5662,10 +5803,10 @@ export function getEditorialRun(id) {
 
 export function updateEditorialRun(id, changes = {}) {
   const current = getEditorialRun(id);
-  if (!current) throw new Error(`Editorial run not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Editorial run not found: ${id}`);
   const next = { ...current, ...changes };
   const status = String(next.status || 'building');
-  if (!EDITORIAL_RUN_STATUS_SET.has(status)) throw new Error(`Unsupported editorial run status: ${status}.`);
+  if (!EDITORIAL_RUN_STATUS_SET.has(status)) throw new DomainValidationError(`Unsupported editorial run status: ${status}.`);
   const completedAt = next.completedAt == null ? null : Number(next.completedAt);
   db.prepare(`UPDATE editorial_runs SET source_snapshot_json = ?, context_json = ?, scan_json = ?,
     ai_execution_json = ?, status = ?, error = ?, completed_at = ? WHERE id = ?`).run(
@@ -5695,16 +5836,16 @@ function decodeResearchEvidence(row) {
 
 export function saveResearchEvidence(input = {}) {
   const runId = Number(input.editorialRunId);
-  if (!getEditorialRun(runId)) throw new Error(`Editorial run not found: ${input.editorialRunId}`);
+  if (!getEditorialRun(runId)) throw new DomainValidationError(`Editorial run not found: ${input.editorialRunId}`);
   const storyKey = String(input.storyKey || '').trim();
-  if (!storyKey) throw new Error('Research evidence storyKey is required.');
+  if (!storyKey) throw new DomainValidationError('Research evidence storyKey is required.');
   const claimType = String(input.claimType || 'other');
-  if (!RESEARCH_CLAIM_TYPE_SET.has(claimType)) throw new Error(`Unsupported research claim type: ${claimType}.`);
+  if (!RESEARCH_CLAIM_TYPE_SET.has(claimType)) throw new DomainValidationError(`Unsupported research claim type: ${claimType}.`);
   const status = String(input.status || 'unresolved');
-  if (!RESEARCH_EVIDENCE_STATUS_SET.has(status)) throw new Error(`Unsupported research evidence status: ${status}.`);
+  if (!RESEARCH_EVIDENCE_STATUS_SET.has(status)) throw new DomainValidationError(`Unsupported research evidence status: ${status}.`);
   const sourceKind = String(input.sourceKind || '').trim();
   const sourceFamily = String(input.sourceFamily || '').trim();
-  if (!sourceKind || !sourceFamily) throw new Error('Research evidence sourceKind and sourceFamily are required.');
+  if (!sourceKind || !sourceFamily) throw new DomainValidationError('Research evidence sourceKind and sourceFamily are required.');
   const observedAt = Number(input.observedAt || Date.now());
   const result = db.prepare(`INSERT INTO research_evidence(
     editorial_run_id, story_key, candidate_key, claim, claim_type, status, source_kind, source_family,
@@ -5751,11 +5892,11 @@ function decodeEditorialRecommendation(row) {
 
 export function saveEditorialRecommendation(input = {}) {
   const runId = Number(input.editorialRunId);
-  if (!getEditorialRun(runId)) throw new Error(`Editorial run not found: ${input.editorialRunId}`);
+  if (!getEditorialRun(runId)) throw new DomainValidationError(`Editorial run not found: ${input.editorialRunId}`);
   const rank = Number(input.rank);
-  if (!Number.isInteger(rank) || rank < 1) throw new Error('Editorial recommendation rank must be a positive integer.');
+  if (!Number.isInteger(rank) || rank < 1) throw new DomainValidationError('Editorial recommendation rank must be a positive integer.');
   const status = String(input.status || 'suggested');
-  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(status)) throw new Error(`Unsupported editorial recommendation status: ${status}.`);
+  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(status)) throw new DomainValidationError(`Unsupported editorial recommendation status: ${status}.`);
   const potentials = { ...(input.potentials || {}), targetCandidateKey: input.targetCandidateKey || input.potentials?.targetCandidateKey || null };
   const result = db.prepare(`INSERT INTO editorial_recommendations(
     editorial_run_id, story_key, rank, decision, pipeline, objective, title, thesis, why_now, why_format,
@@ -5791,12 +5932,12 @@ export function listEditorialRecommendations({ editorialRunId = null, objective 
 
 export function setEditorialRecommendationStatus(id, status, { at = Date.now() } = {}) {
   const current = getEditorialRecommendation(id);
-  if (!current) throw new Error(`Editorial recommendation not found: ${id}`);
+  if (!current) throw new DomainValidationError(`Editorial recommendation not found: ${id}`);
   const nextStatus = String(status || '');
-  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(nextStatus)) throw new Error(`Unsupported editorial recommendation status: ${nextStatus}.`);
+  if (!EDITORIAL_RECOMMENDATION_STATUS_SET.has(nextStatus)) throw new DomainValidationError(`Unsupported editorial recommendation status: ${nextStatus}.`);
   if (current.status === nextStatus) return current;
-  if (['selected', 'dismissed'].includes(current.status)) throw new Error(`Editorial recommendation ${id} is already ${current.status}.`);
-  if (current.status === 'superseded') throw new Error(`Editorial recommendation ${id} is superseded and cannot transition to ${nextStatus}.`);
+  if (['selected', 'dismissed'].includes(current.status)) throw new DomainValidationError(`Editorial recommendation ${id} is already ${current.status}.`);
+  if (current.status === 'superseded') throw new DomainValidationError(`Editorial recommendation ${id} is superseded and cannot transition to ${nextStatus}.`);
   const timestamp = Number(at);
   db.prepare(`UPDATE editorial_recommendations SET status = ?, selected_at = ?, dismissed_at = ? WHERE id = ?`).run(
     nextStatus,
@@ -5822,14 +5963,14 @@ export function getLatestEditorialPlan(objective) {
 
 export function linkQueueSource(queueItemId, candidateKeyValue, role = 'supporting') {
   const queueItem = getQueueItem(queueItemId);
-  if (!queueItem) throw new Error(`Queue item not found: ${queueItemId}`);
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${queueItemId}`);
   const key = String(candidateKeyValue || '').trim();
-  if (!getCandidate(key)) throw new Error(`Candidate not found: ${key}`);
+  if (!getCandidate(key)) throw new DomainValidationError(`Candidate not found: ${key}`);
   const sourceRole = String(role || 'supporting');
-  if (!QUEUE_SOURCE_ROLE_SET.has(sourceRole)) throw new Error(`Unsupported queue source role: ${sourceRole}.`);
+  if (!QUEUE_SOURCE_ROLE_SET.has(sourceRole)) throw new DomainValidationError(`Unsupported queue source role: ${sourceRole}.`);
   if (sourceRole === 'primary') {
     const existingPrimary = db.prepare(`SELECT candidate_key FROM queue_sources WHERE queue_item_id = ? AND role = 'primary'`).get(queueItem.id);
-    if (existingPrimary && existingPrimary.candidate_key !== key) throw new Error(`Queue item ${queueItem.id} already has primary source ${existingPrimary.candidate_key}.`);
+    if (existingPrimary && existingPrimary.candidate_key !== key) throw new DomainValidationError(`Queue item ${queueItem.id} already has primary source ${existingPrimary.candidate_key}.`);
   }
   db.prepare(`INSERT INTO queue_sources(queue_item_id, candidate_key, role) VALUES (?, ?, ?)
     ON CONFLICT(queue_item_id, candidate_key) DO UPDATE SET role = excluded.role`).run(queueItem.id, key, sourceRole);
@@ -5862,21 +6003,21 @@ export function recordEditorialSelection({
   selectedAt = Date.now(),
 } = {}) {
   const recommendation = getEditorialRecommendation(editorialRecommendationId);
-  if (!recommendation) throw new Error(`Editorial recommendation not found: ${editorialRecommendationId}`);
-  if (!getQueueItem(queueItemId)) throw new Error(`Queue item not found: ${queueItemId}`);
+  if (!recommendation) throw new DomainValidationError(`Editorial recommendation not found: ${editorialRecommendationId}`);
+  if (!getQueueItem(queueItemId)) throw new DomainValidationError(`Queue item not found: ${queueItemId}`);
   const actor = String(selectedBy || '');
-  if (!['human', 'mission_agent'].includes(actor)) throw new Error(`Unsupported editorial selection actor: ${actor || 'missing'}.`);
+  if (!['human', 'mission_agent'].includes(actor)) throw new DomainValidationError(`Unsupported editorial selection actor: ${actor || 'missing'}.`);
   const revision = grantRevision == null ? null : Number(grantRevision);
   if (actor === 'mission_agent' && (!Number.isInteger(revision) || revision < 1)) {
-    throw new Error('Mission-agent editorial selection requires a positive grant revision.');
+    throw new DomainValidationError('Mission-agent editorial selection requires a positive grant revision.');
   }
   if (actor === 'mission_agent') {
     const grant = getGrowthOperatorDelegation();
     if (grant.state !== 'running' || grant.mode !== 'live' || Number(grant.revision) !== revision) {
-      throw new Error('Mission-agent editorial selection requires the exact current live Growth Operator delegation revision.');
+      throw new DomainValidationError('Mission-agent editorial selection requires the exact current live Growth Operator delegation revision.');
     }
   }
-  if (actor === 'human' && revision != null) throw new Error('Human editorial selection cannot carry a mission grant revision.');
+  if (actor === 'human' && revision != null) throw new DomainValidationError('Human editorial selection cannot carry a mission grant revision.');
   const existing = getEditorialSelectionByRecommendation(editorialRecommendationId);
   if (existing) return existing;
   db.prepare(`INSERT INTO editorial_selections(
@@ -5898,7 +6039,7 @@ export function getLatestEditorialSelectionForQueueItem(queueItemId) {
 
 export function ensureEditorialCandidate(recommendationId) {
   const recommendation = getEditorialRecommendation(recommendationId);
-  if (!recommendation) throw new Error(`Editorial recommendation not found: ${recommendationId}`);
+  if (!recommendation) throw new DomainValidationError(`Editorial recommendation not found: ${recommendationId}`);
   const key = `editorial:${recommendation.id}`;
   const existing = getCandidate(key);
   if (existing) return existing;
@@ -5918,13 +6059,13 @@ export function ensureEditorialCandidate(recommendationId) {
 
 export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Date.now(), metricSource = 'profile' }) {
   const timestamp = Number(capturedAt);
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Performance snapshot capturedAt must be a positive timestamp.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Performance snapshot capturedAt must be a positive timestamp.');
   const source = String(metricSource || '').trim();
-  if (!source) throw new Error('Performance snapshot metricSource is required.');
+  if (!source) throw new DomainValidationError('Performance snapshot metricSource is required.');
   const optionalNumber = (value) => {
     if (value == null || value === '' || value === '-') return null;
     const number = Number(value);
-    if (!Number.isFinite(number)) throw new Error(`Invalid optional performance metric: ${value}`);
+    if (!Number.isFinite(number)) throw new DomainValidationError(`Invalid optional performance metric: ${value}`);
     return number;
   };
   db.exec('BEGIN');
@@ -5969,10 +6110,10 @@ export function recordAudienceAnalyticsSnapshot({ metric, windowDays, data = {},
   const timestamp = Number(capturedAt);
   const days = Number(windowDays);
   const normalizedMetric = String(metric || '').trim().toLowerCase();
-  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new Error('Audience analytics capturedAt must be a positive timestamp.');
-  if (!Number.isInteger(days) || days <= 0) throw new Error('Audience analytics windowDays must be a positive integer.');
-  if (!normalizedMetric) throw new Error('Audience analytics metric is required.');
-  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Audience analytics data must be an object.');
+  if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Audience analytics capturedAt must be a positive timestamp.');
+  if (!Number.isInteger(days) || days <= 0) throw new DomainValidationError('Audience analytics windowDays must be a positive integer.');
+  if (!normalizedMetric) throw new DomainValidationError('Audience analytics metric is required.');
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new DomainValidationError('Audience analytics data must be an object.');
   db.prepare(`INSERT OR REPLACE INTO audience_analytics_snapshots(captured_at, metric, window_days, data_json)
     VALUES (?, ?, ?, ?)`).run(timestamp, normalizedMetric, days, JSON.stringify(data));
   return { capturedAt: timestamp, metric: normalizedMetric, windowDays: days, data };
@@ -6010,23 +6151,23 @@ export function getPerformanceSnapshot(limit = 30) {
 
 function requireAiEnum(value, allowed, label) {
   const normalized = String(value || '').trim();
-  if (!allowed.has(normalized)) throw new Error(`Invalid ${label}: ${normalized || 'missing'}`);
+  if (!allowed.has(normalized)) throw new DomainValidationError(`Invalid ${label}: ${normalized || 'missing'}`);
   return normalized;
 }
 
 function normalizeAiProfileSettings(settings = {}) {
   if (settings == null) return {};
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('AI profile settings must be an object.');
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new DomainValidationError('AI profile settings must be an object.');
   const normalized = {};
   for (const [key, value] of Object.entries(settings)) {
-    if (!AI_PROFILE_SETTING_KEYS.has(key)) throw new Error(`Unsupported AI profile setting: ${key}`);
+    if (!AI_PROFILE_SETTING_KEYS.has(key)) throw new DomainValidationError(`Unsupported AI profile setting: ${key}`);
     if (key === 'catalogPath') {
       const pathValue = String(value || '').trim();
-      if (!pathValue.startsWith('/')) throw new Error('AI catalogPath must start with /.');
+      if (!pathValue.startsWith('/')) throw new DomainValidationError('AI catalogPath must start with /.');
       normalized.catalogPath = pathValue;
     } else if (key === 'structuredOutput') {
       const state = String(value || '').trim();
-      if (!AI_STRUCTURED_OUTPUT_STATE_SET.has(state)) throw new Error(`Invalid AI structuredOutput state: ${state || 'missing'}`);
+      if (!AI_STRUCTURED_OUTPUT_STATE_SET.has(state)) throw new DomainValidationError(`Invalid AI structuredOutput state: ${state || 'missing'}`);
       normalized.structuredOutput = state;
     } else {
       normalized[key] = String(value || '').trim();
@@ -6040,44 +6181,44 @@ function validateAiSecretRef(secretRef) {
   if (!value) return '';
   if (/^file:[A-Za-z0-9._-]+$/.test(value)) return value;
   if (/^env:[A-Za-z_][A-Za-z0-9_]*$/.test(value)) return value;
-  throw new Error('AI secret_ref must be a file:<id> or env:<NAME> reference.');
+  throw new DomainValidationError('AI secret_ref must be a file:<id> or env:<NAME> reference.');
 }
 
 function validateAiBaseUrl(baseUrl, { required = false } = {}) {
   const value = String(baseUrl || '').trim().replace(/\/+$/, '');
   if (!value) {
-    if (required) throw new Error('AI baseUrl is required for openai_compatible profiles.');
+    if (required) throw new DomainValidationError('AI baseUrl is required for openai_compatible profiles.');
     return '';
   }
   let parsed;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error('AI baseUrl must be a valid http(s) URL.');
+    throw new DomainValidationError('AI baseUrl must be a valid http(s) URL.');
   }
-  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('AI baseUrl must use http or https.');
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new DomainValidationError('AI baseUrl must use http or https.');
   return value;
 }
 
 function normalizeAiProfileInput(input = {}, current = null) {
   const merged = { ...(current || {}), ...(input || {}) };
   const name = String(merged.name || '').trim();
-  if (!name) throw new Error('AI profile name is required.');
+  if (!name) throw new DomainValidationError('AI profile name is required.');
   const runtime = requireAiEnum(merged.runtime, AI_RUNTIME_SET, 'AI runtime');
   const providerKind = requireAiEnum(merged.providerKind, AI_PROVIDER_SET, 'AI provider kind');
   const protocol = requireAiEnum(merged.protocol, AI_PROTOCOL_SET, 'AI protocol');
   const isDirect = runtime === 'direct_api';
-  if (isDirect && providerKind === 'runtime_managed') throw new Error('Direct API profiles require a direct provider kind.');
-  if (!isDirect && providerKind !== 'runtime_managed') throw new Error(`${runtime} profiles must use provider_kind=runtime_managed.`);
-  if (isDirect && protocol === 'runtime_native') throw new Error('Direct API profiles must use responses or chat_completions.');
-  if (!isDirect && protocol !== 'runtime_native') throw new Error(`${runtime} profiles must use protocol=runtime_native.`);
+  if (isDirect && providerKind === 'runtime_managed') throw new DomainValidationError('Direct API profiles require a direct provider kind.');
+  if (!isDirect && providerKind !== 'runtime_managed') throw new DomainValidationError(`${runtime} profiles must use provider_kind=runtime_managed.`);
+  if (isDirect && protocol === 'runtime_native') throw new DomainValidationError('Direct API profiles must use responses or chat_completions.');
+  if (!isDirect && protocol !== 'runtime_native') throw new DomainValidationError(`${runtime} profiles must use protocol=runtime_native.`);
   const model = String(merged.model || '').trim();
-  if (!model) throw new Error('AI profile model is required; use "inherit" explicitly for runtime-managed inheritance.');
-  if (isDirect && model === 'inherit') throw new Error('Direct API profiles require an explicit model ID.');
+  if (!model) throw new DomainValidationError('AI profile model is required; use "inherit" explicitly for runtime-managed inheritance.');
+  if (isDirect && model === 'inherit') throw new DomainValidationError('Direct API profiles require an explicit model ID.');
   const baseUrl = validateAiBaseUrl(merged.baseUrl, { required: isDirect && providerKind === 'openai_compatible' });
   const secretRef = validateAiSecretRef(merged.secretRef);
   if (isDirect && ['openai', 'openrouter'].includes(providerKind) && !secretRef) {
-    throw new Error(`${providerKind} profiles require a secret_ref.`);
+    throw new DomainValidationError(`${providerKind} profiles require a secret_ref.`);
   }
   return {
     name,
@@ -6143,7 +6284,7 @@ export function createAiProfile(profile = {}) {
 
 export function updateAiProfile(id, changes = {}) {
   const current = getAiProfile(id);
-  if (!current) throw new Error(`AI profile not found: ${id}`);
+  if (!current) throw new DomainValidationError(`AI profile not found: ${id}`);
   const normalized = normalizeAiProfileInput(changes, current);
   const now = Date.now();
   db.prepare(`UPDATE ai_profiles SET
@@ -6210,8 +6351,8 @@ export function getAiDefaultProfile() {
 export function setAiDefaultProfile(profileId) {
   if (profileId == null) return clearAiDefaultProfile();
   const profile = getAiProfile(profileId);
-  if (!profile) throw new Error(`AI profile not found: ${profileId}`);
-  if (!profile.enabled) throw new Error(`AI profile is disabled: ${profileId}`);
+  if (!profile) throw new DomainValidationError(`AI profile not found: ${profileId}`);
+  if (!profile.enabled) throw new DomainValidationError(`AI profile is disabled: ${profileId}`);
   db.prepare('UPDATE ai_runtime_settings SET default_profile_id = ?, updated_at = ? WHERE id = 1').run(profile.id, Date.now());
   return getAiRuntimeSettings();
 }
@@ -6247,8 +6388,8 @@ export function listAiRoleBindings() {
 function requireEnabledAiProfile(profileId, label) {
   if (profileId == null) return null;
   const profile = getAiProfile(profileId);
-  if (!profile) throw new Error(`${label} AI profile not found: ${profileId}`);
-  if (!profile.enabled) throw new Error(`${label} AI profile is disabled: ${profileId}`);
+  if (!profile) throw new DomainValidationError(`${label} AI profile not found: ${profileId}`);
+  if (!profile.enabled) throw new DomainValidationError(`${label} AI profile is disabled: ${profileId}`);
   return profile;
 }
 
@@ -6257,7 +6398,7 @@ export function setAiRoleBinding(role, { primaryProfileId = null, fallbackProfil
   if (primaryProfileId == null && fallbackProfileId == null) return clearAiRoleBinding(normalizedRole);
   const primary = requireEnabledAiProfile(primaryProfileId, 'Primary');
   const fallback = requireEnabledAiProfile(fallbackProfileId, 'Fallback');
-  if (primary && fallback && primary.id === fallback.id) throw new Error('AI primary and fallback profiles must be different.');
+  if (primary && fallback && primary.id === fallback.id) throw new DomainValidationError('AI primary and fallback profiles must be different.');
   const now = Date.now();
   db.prepare(`INSERT INTO ai_role_bindings(role, primary_profile_id, fallback_profile_id, updated_at)
     VALUES (?, ?, ?, ?)
@@ -6300,13 +6441,13 @@ function resolveExplicitAiProfile(profile) {
   if (typeof profile === 'object' && !Array.isArray(profile)) {
     if (profile.id != null) {
       const persisted = getAiProfile(profile.id);
-      if (!persisted) throw new Error(`AI profile not found: ${profile.id}`);
+      if (!persisted) throw new DomainValidationError(`AI profile not found: ${profile.id}`);
       return persisted;
     }
     return { id: null, ...normalizeAiProfileInput(profile), compatibility: false, createdAt: null, updatedAt: null };
   }
   const persisted = getAiProfile(profile);
-  if (!persisted) throw new Error(`AI profile not found: ${profile}`);
+  if (!persisted) throw new DomainValidationError(`AI profile not found: ${profile}`);
   return persisted;
 }
 
@@ -6317,14 +6458,14 @@ export function resolveAiProfileForRole(role, explicitProfile = null) {
   let source = profile ? 'explicit' : null;
   if (!profile && binding?.primaryProfileId != null) {
     profile = getAiProfile(binding.primaryProfileId);
-    if (!profile) throw new Error(`Bound AI profile not found: ${binding.primaryProfileId}`);
+    if (!profile) throw new DomainValidationError(`Bound AI profile not found: ${binding.primaryProfileId}`);
     source = 'role';
   }
   if (!profile) {
     const settings = getAiRuntimeSettings();
     if (settings.defaultProfileId != null) {
       profile = settings.defaultProfile;
-      if (!profile) throw new Error(`Default AI profile not found: ${settings.defaultProfileId}`);
+      if (!profile) throw new DomainValidationError(`Default AI profile not found: ${settings.defaultProfileId}`);
       source = 'global';
     }
   }
@@ -6334,7 +6475,7 @@ export function resolveAiProfileForRole(role, explicitProfile = null) {
   }
   const fallbackProfile = binding?.fallbackProfileId == null ? null : getAiProfile(binding.fallbackProfileId);
   if (binding?.fallbackProfileId != null && !fallbackProfile) {
-    throw new Error(`Fallback AI profile not found: ${binding.fallbackProfileId}`);
+    throw new DomainValidationError(`Fallback AI profile not found: ${binding.fallbackProfileId}`);
   }
   return {
     role: normalizedRole,
@@ -6347,7 +6488,7 @@ export function resolveAiProfileForRole(role, explicitProfile = null) {
 
 function normalizeAiRunMetadata(metadata = {}) {
   if (metadata == null) return {};
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error('AI run metadata must be an object.');
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new DomainValidationError('AI run metadata must be an object.');
   const isSensitiveKey = (key) => {
     const normalized = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
     return normalized.includes('prompt')
@@ -6366,7 +6507,7 @@ function normalizeAiRunMetadata(metadata = {}) {
     if (!value || typeof value !== 'object') return value;
     const result = {};
     for (const [key, child] of Object.entries(value)) {
-      if (isSensitiveKey(key)) throw new Error(`AI run metadata cannot contain ${key}.`);
+      if (isSensitiveKey(key)) throw new DomainValidationError(`AI run metadata cannot contain ${key}.`);
       result[key] = visit(child);
     }
     return result;
@@ -6407,15 +6548,15 @@ export function getAiRun(id) {
 
 export function createAiRunAttempt(input = {}) {
   const invocationId = String(input.invocationId || '').trim();
-  if (!invocationId) throw new Error('AI run invocationId is required.');
+  if (!invocationId) throw new DomainValidationError('AI run invocationId is required.');
   const attempt = Number(input.attempt || 1);
-  if (!Number.isInteger(attempt) || attempt < 1) throw new Error('AI run attempt must be a positive integer.');
+  if (!Number.isInteger(attempt) || attempt < 1) throw new DomainValidationError('AI run attempt must be a positive integer.');
   const attemptKind = requireAiEnum(input.attemptKind || 'primary', AI_ATTEMPT_KIND_SET, 'AI attempt kind');
   const role = requireAiEnum(input.role, AI_ROLE_SET, 'AI role');
   const runtime = requireAiEnum(input.runtime, AI_RUNTIME_SET, 'AI runtime');
   const providerKind = requireAiEnum(input.providerKind, AI_PROVIDER_SET, 'AI provider kind');
   const startedAt = Number(input.startedAt || Date.now());
-  if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error('AI run startedAt must be a positive timestamp.');
+  if (!Number.isFinite(startedAt) || startedAt <= 0) throw new DomainValidationError('AI run startedAt must be a positive timestamp.');
   const inserted = db.prepare(`INSERT INTO ai_runs(
     invocation_id, attempt, attempt_kind, role, profile_id, runtime, provider_kind, model, reasoning,
     fallback_profile_id, fallback_used, status, error_code, started_at, completed_at, duration_ms,
@@ -6431,16 +6572,16 @@ export function createAiRunAttempt(input = {}) {
 
 export function finishAiRunAttempt(id, changes = {}) {
   const current = getAiRun(id);
-  if (!current) throw new Error(`AI run not found: ${id}`);
+  if (!current) throw new DomainValidationError(`AI run not found: ${id}`);
   const status = requireAiEnum(changes.status || current.status, AI_RUN_STATUS_SET, 'AI run status');
   const completedAt = changes.completedAt == null ? (status === 'running' ? null : Date.now()) : Number(changes.completedAt);
   if (completedAt != null && (!Number.isFinite(completedAt) || completedAt < current.startedAt)) {
-    throw new Error('AI run completedAt must be at or after startedAt.');
+    throw new DomainValidationError('AI run completedAt must be at or after startedAt.');
   }
   const nullableNumber = (value, label) => {
     if (value == null) return null;
     const number = Number(value);
-    if (!Number.isFinite(number)) throw new Error(`${label} must be a finite number.`);
+    if (!Number.isFinite(number)) throw new DomainValidationError(`${label} must be a finite number.`);
     return number;
   };
   const metadata = normalizeAiRunMetadata({ ...current.metadata, ...(changes.metadata || {}) });

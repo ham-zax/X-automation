@@ -7,7 +7,6 @@ import { authorizeMainFeedContent, findOwnPublishedPostBrowser, publishMainFeedB
 import { getXApiMainFeedCapability, publishMainFeedApi } from './x_api_publish.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
-  AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
   getAutonomousReplyGrant,
   runAutonomousReplyCycle,
 } from './autonomous_reply.js';
@@ -52,11 +51,6 @@ import {
   setAppState,
 } from './store.js';
 
-const POLL_MINUTES = Number(process.env.POLL_MINUTES || 30);
-const REPLY_POLL_MINUTES = Math.max(
-  AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES,
-  Number(process.env.REPLY_POLL_MINUTES || AUTONOMOUS_REPLY_MIN_REFRESH_MINUTES),
-);
 const AUTO_POST = String(process.env.AUTO_POST || 'false').toLowerCase() === 'true';
 export const AUTO_EDITORIAL_PLAN_REFRESH = String(process.env.AUTO_EDITORIAL_PLAN_REFRESH || 'false').toLowerCase() === 'true';
 
@@ -289,8 +283,8 @@ export async function reconcilePendingBrowserPublications({
   finder = findOwnPublishedPostBrowser,
 } = {}) {
   ensureLegacyPublicationAttemptMigration();
-  const pending = listPublicationAttempts({ limit: 200 })
-    .filter((attempt) => ['send_started', 'investigating', 'confirmed_published'].includes(attempt.state))
+  const pending = listPublicationAttempts({ states: ['send_started', 'investigating'], oldestFirst: true, limit: 200 })
+    .concat(listPublicationAttempts({ state: 'confirmed_published', limit: 200 }))
     .filter((attempt) => ['original', 'quote', 'thread', 'reply', 'repost'].includes(attempt.pipeline));
   if (!pending.length) return { checked: 0, reconciled: [], unresolved: [] };
 
@@ -790,33 +784,16 @@ function installAutomationSignalHandlers() {
 }
 
 async function main() {
-  const once = process.argv.includes('--once');
-  if (once) {
-    await runCycle();
+  if (process.argv.includes('--measurements-only')) {
+    console.log(JSON.stringify(await captureDuePublicationMeasurements()));
     return;
   }
-
-  const mutationTransport = String(process.env.X_API_ACCESS_TOKEN || '').trim() ? 'x_api_v2' : 'none';
-  console.log(`[automation] Started. Full poll=${POLL_MINUTES}m, reply poll=${REPLY_POLL_MINUTES}m, scheduler=queue-aware, auto-post-requested=${AUTO_POST}, mutation-transport=${mutationTransport}.`);
-  let nextFullCycleAt = 0;
-  while (true) {
-    const now = Date.now();
-    try {
-      if (now >= nextFullCycleAt) {
-        nextFullCycleAt = now + POLL_MINUTES * 60_000;
-        await runCycle();
-      } else {
-        await runEngagementAutonomousCycle({
-          refreshSources: true,
-          refreshTargetTimelines: false,
-        });
-      }
-    } catch (error) {
-      console.error(`[automation] Cycle failed: ${error.message}`);
-    }
-    const untilFullCycle = Math.max(1_000, nextFullCycleAt - Date.now());
-    await new Promise((resolve) => setTimeout(resolve, Math.min(REPLY_POLL_MINUTES * 60_000, untilFullCycle)));
+  const once = process.argv.includes('--once');
+  if (!once) {
+    console.log('[automation] Continuous background operation is disabled. Live X browsing and autonomous operation require a reasoning-agent-owned Growth Run. Use --once only for an explicit maintenance cycle.');
+    return;
   }
+  await runCycle();
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

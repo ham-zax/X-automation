@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { getDailyPersonaTone, setDailyPersonaTone, DAILY_TONE_RUBRIC } from './persona_tone.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +10,7 @@ import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { refreshEngagementOpportunities } from './engagement.js';
 import {
   ensureAutonomousReplyLiveDecision,
+  inspectAutonomousReplyContent,
   getAutonomousReplyGrant,
   getAutonomousReplyRuntime,
 } from './autonomous_reply.js';
@@ -57,6 +59,8 @@ import {
 import { attachEditorialResearchSource } from './research.js';
 import {
   claimApprovedEngagementReplyForBrowser,
+  approveQueueItemAsMissionAgent,
+  editorialEvidenceForQueue,
   ensureCandidateWorkflow,
   getActiveAgentPriorityJudgment as activeAgentPriorityJudgment,
   inspectGrowthOpportunity,
@@ -1400,6 +1404,14 @@ async function main() {
     return;
   }
 
+  if (command === 'mission-approve') {
+    requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
+    result(approveQueueItemAsMissionAgent(payload.key, {
+      grantRevision: payload.grantRevision, verificationProvenance: payload.verificationProvenance,
+    }));
+    return;
+  }
+
   if (command === 'writer-packet') {
     const workflow = inspectWorkflow(payload.key);
     const pipeline = workflow.queueItem?.pipeline;
@@ -1413,6 +1425,7 @@ async function main() {
       candidate: workflow.candidate,
       queueItem: workflow.queueItem,
       draft: workflow.draft,
+      evidence: editorialEvidenceForQueue(workflow.queueItem),
       relationship: username ? getRelationshipProfile(username) : null,
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: workflow.candidate.key }),
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: workflow.candidate.key }),
@@ -1449,6 +1462,7 @@ async function main() {
       candidate,
       queueItem: workflow.queueItem,
       draft: writerBase,
+      evidence: editorialEvidenceForQueue(workflow.queueItem),
       relationship: username ? getRelationshipProfile(username) : null,
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
@@ -1457,6 +1471,7 @@ async function main() {
     const next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance, writerPacket });
     const analysis = scoreDraft(next, candidate, {
       pipeline,
+      evidence: editorialEvidenceForQueue(workflow.queueItem),
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
       recentReplies: pipeline === 'reply'
         ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key })
@@ -1584,7 +1599,7 @@ async function main() {
     if (!attemptId) throw new Error('publication-attempt-send-start requires attemptId.');
     const attempt = getPublicationAttempt(attemptId);
     if (!attempt) throw new Error(`Publication attempt not found: ${attemptId}`);
-    const sendStartedAt = payload.now == null ? Date.now() : Number(payload.now);
+    const sendStartedAt = Date.now();
     if (attempt.runId) {
       const claimedSessionId = String(attempt.claimHolder || '').trim();
       if (!claimedSessionId) throw new Error('Run-bound publication attempt is missing its immutable claim session provenance.');
@@ -1592,17 +1607,26 @@ async function main() {
     }
     const queueItem = getQueueItem(attempt.queueItemId);
     if (!queueItem || queueItem.status !== 'publishing') throw new Error('Publication attempt queue item is no longer in publishing state.');
-    const authority = queueItem.approvalSnapshot?.authority || {};
+    const authority = attempt.authoritySnapshot?.type ? attempt.authoritySnapshot : queueItem.approvalSnapshot?.authority || {};
     if (authority?.type === 'mission_agent') {
       const currentAuthority = requireGrowthOperatorDelegation({ actor: 'agent', requireLive: true });
       if (Number(currentAuthority.grant.revision) !== Number(attempt.delegationRevision)) {
         throw new Error('Publication attempt delegation revision is no longer current.');
+      }
+      const workflow = inspectWorkflow(queueItem.candidateKey);
+      if (queueItem.pipeline !== 'repost' && workflow.draft?.gates?.passed !== true) {
+        throw new Error('Publication content/evidence/persona review changed after claim; send is blocked.');
       }
     } else if (authority?.type === 'autonomous_reply') {
       const replyGrant = getAutonomousReplyGrant();
       if (replyGrant.state !== 'running' || replyGrant.mode !== 'live'
         || Number(replyGrant.revision) !== Number(authority.grantRevision)) {
         throw new Error('Autonomous Reply authority is no longer current for this publication attempt.');
+      }
+      const decision = getAutonomousReplyDecision(Number(authority.decisionId));
+      if (!decision || String(decision.exactReply || '').trim() !== attempt.approvedContent
+        || !inspectAutonomousReplyContent(queueItem, decision).passed) {
+        throw new Error('Autonomous Reply content/evidence/persona review is no longer current.');
       }
     }
     if (getAccountHealthSummary({ now: Date.now() }).health.state === 'constrained') {
@@ -1642,7 +1666,7 @@ async function main() {
   }
 
   if (command === 'browser-publish-claim') {
-    const now = payload.now == null ? Date.now() : Number(payload.now);
+    const now = Date.now();
     if (!Number.isFinite(now)) throw new Error('browser-publish-claim now must be numeric when supplied.');
     requireGrowthRunLease(payload.runId, payload.sessionId || '', now);
     let item = null;
@@ -2517,7 +2541,7 @@ async function main() {
   }
 
   if (command === 'browser-reply-claim') {
-    requireGrowthRunLease(payload.runId, payload.sessionId || '', payload.now == null ? Date.now() : Number(payload.now));
+    requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
     const key = String(payload.key || '');
     if (!key) throw new Error('browser-reply-claim requires key.');
     const queueItem = getQueueItemByCandidate(key);
@@ -2660,6 +2684,17 @@ async function main() {
     return;
   }
 
+  if (command === 'persona-tone') {
+    result({ tone: getDailyPersonaTone(), rubric: DAILY_TONE_RUBRIC, scope: 'wording_only' });
+    return;
+  }
+
+  if (command === 'persona-tone-set') {
+    const authority = requireConfirmedOrDelegated(payload.confirmSet, 'Daily persona tone');
+    result({ tone: setDailyPersonaTone(payload, { actor: authority.type === 'explicit_confirmation' ? 'human' : 'agent' }) });
+    return;
+  }
+
   if (command === 'persona-model') {
     const consumer = String(payload.consumer || '').trim();
     result({
@@ -2760,7 +2795,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

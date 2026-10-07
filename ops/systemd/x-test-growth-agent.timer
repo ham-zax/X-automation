@@ -1,10 +1,10 @@
 [Unit]
-Description=Wake the XGrowth reasoning operator roughly hourly
+Description=Wake the XGrowth reasoning operator roughly every 15 minutes
 
 [Timer]
-OnActiveSec=1h
-OnUnitActiveSec=1h
-AccuracySec=5min
+OnActiveSec=15min
+OnUnitActiveSec=15min
+AccuracySec=1min
 Persistent=false
 Unit=x-test-growth-agent.service
 

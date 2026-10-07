@@ -1,12 +1,9 @@
 [Unit]
-Description=X Test automation
+Description=X Test retired continuous automation (disabled)
+# Kept only to make the retired unit fail closed if installed accidentally.
+# Explicit bounded maintenance: npm run automation:once.
 
 [Service]
-Type=simple
-WorkingDirectory=/home/hamza/repo/x_test
-ExecStart=/bin/bash -c 'source /home/hamza/.nvm/nvm.sh && exec npm run automation'
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
+Type=oneshot
+ExecStart=/usr/bin/false
+Restart=no

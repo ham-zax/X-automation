@@ -194,7 +194,7 @@ Default runtime: OpenCode. Override with:
 - `X_GROWTH_OPENCODE_BIN=<path>`
 - `X_GROWTH_CODEX_BIN=<path>`
 
-The systemd timer wakes the runner roughly hourly. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
+The systemd timer wakes the runner roughly every 15 minutes. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
 
 The background `automation.js` service remains separate and must not automate browser/X mutation surfaces. It may continue source refresh, measurement, preparation, and compliant official-X-API work.
 

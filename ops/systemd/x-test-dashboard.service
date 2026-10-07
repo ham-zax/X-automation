@@ -4,7 +4,7 @@ Description=X Test dashboard
 [Service]
 Type=simple
 WorkingDirectory=/home/hamza/repo/x_test
-ExecStart=/bin/bash -c 'source /home/hamza/.nvm/nvm.sh && exec npm start'
+ExecStart=/bin/bash -c 'source /home/hamza/.nvm/nvm.sh && exec node dashboard.js'
 Restart=on-failure
 RestartSec=5
 

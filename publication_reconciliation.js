@@ -6,7 +6,9 @@ import {
   getLatestPublicationAttemptForQueueItem,
   getPublicationAttempt,
   getQueueItem,
-  listPublicationAttempts,
+  getPublicationAttemptCounts,
+  getBlockingMainFeedPublicationAttempt,
+  listLegacyUnprovenNotSentAttempts,
   listRecentUnresolvedMainFeedAttempts,
   migrateLegacyPublishingQueueItems,
   runStoreTransaction,
@@ -45,44 +47,47 @@ function hasDefinitiveNotSentProof(evidence) {
 
 export function ensureLegacyPublicationAttemptMigration({ now = Date.now() } = {}) {
   const publishing = migrateLegacyPublishingQueueItems();
-  const attempts = listPublicationAttempts({ limit: 500 });
   const corrected = [];
-  for (const attempt of attempts) {
-    if (attempt.state !== 'confirmed_not_sent' || hasDefinitiveNotSentProof(attempt.reconciliationEvidence)) continue;
-    const correctedAttempt = correctPublicationAttemptTerminalState(attempt.attemptId, {
-      state: 'closed_unresolved',
-      reconciliationEvidence: {
-        migration: 'legacy_confirmed_not_sent_without_definitive_proof',
-        reason: 'Legacy browser UI persistence was not sufficient proof that X never accepted the send.',
-      },
-      closureReason: 'Legacy confirmed_not_sent evidence was insufficient under the corrected publication boundary; outcome remains unresolved until positive live evidence is found.',
-      lastError: 'Legacy no-send evidence was not definitive.',
-      now,
-    });
-    const queueItem = queueForAttempt(correctedAttempt);
-    if (queueItem.status !== 'published') {
-      saveQueueItem({
-        ...queueItem,
-        status: 'unresolved',
-        publishStartedAt: null,
-        publishError: 'Publication outcome requires reconciliation; legacy no-send evidence was not definitive.',
+  for (;;) {
+    const attempts = listLegacyUnprovenNotSentAttempts({ limit: 500 });
+    if (!attempts.length) break;
+    for (const attempt of attempts) {
+      if (attempt.state !== 'confirmed_not_sent' || hasDefinitiveNotSentProof(attempt.reconciliationEvidence)) continue;
+      const correctedAttempt = correctPublicationAttemptTerminalState(attempt.attemptId, {
+        state: 'closed_unresolved',
+        reconciliationEvidence: {
+          migration: 'legacy_confirmed_not_sent_without_definitive_proof',
+          reason: 'Legacy browser UI persistence was not sufficient proof that X never accepted the send.',
+        },
+        closureReason: 'Legacy confirmed_not_sent evidence was insufficient under the corrected publication boundary; outcome remains unresolved until positive live evidence is found.',
+        lastError: 'Legacy no-send evidence was not definitive.',
+        now,
       });
-    }
-    if (correctedAttempt.authoritySnapshot?.type === 'autonomous_reply' && Number.isInteger(Number(correctedAttempt.authoritySnapshot?.decisionId))) {
-      const decision = getAutonomousReplyDecision(Number(correctedAttempt.authoritySnapshot.decisionId));
-      if (decision && decision.sentAt == null && !decision.outputTweetId && !decision.outputUrl) {
-        updateAutonomousReplyDecision(decision.id, {
-          decision: 'reconciliation_required',
-          claimedAt: null,
-          reasons: [{
-            code: 'PUBLICATION_OUTCOME_UNRESOLVED',
-            reason: 'Legacy confirmed_not_sent evidence was insufficient; do not retry until the exact publication outcome is reconciled.',
-          }],
-          updatedAt: Number(now),
+      const queueItem = queueForAttempt(correctedAttempt);
+      if (queueItem.status !== 'published') {
+        saveQueueItem({
+          ...queueItem,
+          status: 'unresolved',
+          publishStartedAt: null,
+          publishError: 'Publication outcome requires reconciliation; legacy no-send evidence was not definitive.',
         });
       }
+      if (correctedAttempt.authoritySnapshot?.type === 'autonomous_reply' && Number.isInteger(Number(correctedAttempt.authoritySnapshot?.decisionId))) {
+        const decision = getAutonomousReplyDecision(Number(correctedAttempt.authoritySnapshot.decisionId));
+        if (decision && decision.sentAt == null && !decision.outputTweetId && !decision.outputUrl) {
+          updateAutonomousReplyDecision(decision.id, {
+            decision: 'reconciliation_required',
+            claimedAt: null,
+            reasons: [{
+              code: 'PUBLICATION_OUTCOME_UNRESOLVED',
+              reason: 'Legacy confirmed_not_sent evidence was insufficient; do not retry until the exact publication outcome is reconciled.',
+            }],
+            updatedAt: Number(now),
+          });
+        }
+      }
+      corrected.push(correctedAttempt.attemptId);
     }
-    corrected.push(correctedAttempt.attemptId);
   }
   return { publishing, correctedConfirmedNotSent: corrected };
 }
@@ -311,22 +316,16 @@ export function confirmPublicationAttemptPublished(attemptId, {
 
 export function getPublicationReconciliationReadiness() {
   ensureLegacyPublicationAttemptMigration();
-  const attempts = listPublicationAttempts({ limit: 500 });
-  const investigating = attempts.filter((attempt) => attempt.state === 'investigating');
-  const sendStarted = attempts.filter((attempt) => attempt.state === 'send_started');
-  const claimed = attempts.filter((attempt) => attempt.state === 'claimed');
-  const closedUnresolved = attempts.filter((attempt) => attempt.state === 'closed_unresolved');
-  const active = [...investigating, ...sendStarted, ...claimed];
-  const mainFeedBlocking = active.filter((attempt) => MAIN_FEED_PIPELINES.has(attempt.pipeline)
-    && ['main', 'main_feed'].includes(attempt.lane));
+  const counts = getPublicationAttemptCounts();
+  const blocker = getBlockingMainFeedPublicationAttempt();
   return {
-    activeCount: active.length,
-    investigatingCount: investigating.length,
-    sendStartedCount: sendStarted.length,
-    claimedCount: claimed.length,
-    closedUnresolvedCount: closedUnresolved.length,
-    mainFeedBlockingAttemptId: mainFeedBlocking[0]?.attemptId || null,
-    mainFeedBlockingQueueItemId: mainFeedBlocking[0]?.queueItemId || null,
+    activeCount: counts.claimed + counts.send_started + counts.investigating,
+    investigatingCount: counts.investigating,
+    sendStartedCount: counts.send_started,
+    claimedCount: counts.claimed,
+    closedUnresolvedCount: counts.closed_unresolved,
+    mainFeedBlockingAttemptId: blocker?.attemptId || null,
+    mainFeedBlockingQueueItemId: blocker?.queueItemId || null,
   };
 }
 

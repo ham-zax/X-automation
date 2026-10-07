@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getAppState, setAppState } from './store.js';
+import { getAppState, setAppState, runStoreTransaction } from './store.js';
 
 const OPERATOR_LEASE_STATE_KEY = 'chatgpt_operator_lease';
 export const OPERATOR_LEASE_TTL_MS = 15 * 60_000;
@@ -66,19 +66,21 @@ export function acquireOperatorLease({
   adapterType = '',
   sessionId = '',
 } = {}) {
-  const acquiredAt = timestamp(now);
-  if (activeLease(acquiredAt)) throw new Error('An interactive operator lease is already active.');
-  const lease = {
-    leaseId: randomUUID(),
-    acquiredAt,
-    expiresAt: acquiredAt + OPERATOR_LEASE_TTL_MS,
-    holder: String(holder || ''),
-    runId: String(runId || ''),
-    adapterType: String(adapterType || ''),
-    sessionId: String(sessionId || ''),
-  };
-  setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(lease));
-  return { ...lease, ttlMinutes: OPERATOR_LEASE_TTL_MINUTES };
+  return runStoreTransaction(() => {
+    const acquiredAt = timestamp(now);
+    if (activeLease(acquiredAt)) throw new Error('An interactive operator lease is already active.');
+    const lease = {
+      leaseId: randomUUID(),
+      acquiredAt,
+      expiresAt: acquiredAt + OPERATOR_LEASE_TTL_MS,
+      holder: String(holder || ''),
+      runId: String(runId || ''),
+      adapterType: String(adapterType || ''),
+      sessionId: String(sessionId || ''),
+    };
+    setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(lease));
+    return { ...lease, ttlMinutes: OPERATOR_LEASE_TTL_MINUTES };
+  });
 }
 
 export function renewOperatorLease(leaseId, {
@@ -88,27 +90,31 @@ export function renewOperatorLease(leaseId, {
   adapterType = null,
   sessionId = null,
 } = {}) {
-  const currentAt = timestamp(now);
-  const expectedLeaseId = requireLeaseId(leaseId);
-  const lease = activeLease(currentAt);
-  if (!lease || lease.leaseId !== expectedLeaseId) throw new Error('leaseId does not match the active interactive operator lease.');
-  const renewed = {
-    ...lease,
-    holder: holder == null ? lease.holder : String(holder || ''),
-    runId: runId == null ? lease.runId : String(runId || ''),
-    adapterType: adapterType == null ? lease.adapterType : String(adapterType || ''),
-    sessionId: sessionId == null ? lease.sessionId : String(sessionId || ''),
-    expiresAt: currentAt + OPERATOR_LEASE_TTL_MS,
-  };
-  setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(renewed));
-  return { ...renewed, ttlMinutes: OPERATOR_LEASE_TTL_MINUTES };
+  return runStoreTransaction(() => {
+    const currentAt = timestamp(now);
+    const expectedLeaseId = requireLeaseId(leaseId);
+    const lease = activeLease(currentAt);
+    if (!lease || lease.leaseId !== expectedLeaseId) throw new Error('leaseId does not match the active interactive operator lease.');
+    const renewed = {
+      ...lease,
+      holder: holder == null ? lease.holder : String(holder || ''),
+      runId: runId == null ? lease.runId : String(runId || ''),
+      adapterType: adapterType == null ? lease.adapterType : String(adapterType || ''),
+      sessionId: sessionId == null ? lease.sessionId : String(sessionId || ''),
+      expiresAt: currentAt + OPERATOR_LEASE_TTL_MS,
+    };
+    setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(renewed));
+    return { ...renewed, ttlMinutes: OPERATOR_LEASE_TTL_MINUTES };
+  });
 }
 
 export function releaseOperatorLease(leaseId, { now = Date.now() } = {}) {
-  const currentAt = timestamp(now);
-  const expectedLeaseId = requireLeaseId(leaseId);
-  const lease = activeLease(currentAt);
-  if (!lease || lease.leaseId !== expectedLeaseId) throw new Error('leaseId does not match the active interactive operator lease.');
-  setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(null));
-  return { released: true, releasedAt: currentAt };
+  return runStoreTransaction(() => {
+    const currentAt = timestamp(now);
+    const expectedLeaseId = requireLeaseId(leaseId);
+    const lease = activeLease(currentAt);
+    if (!lease || lease.leaseId !== expectedLeaseId) throw new Error('leaseId does not match the active interactive operator lease.');
+    setAppState(OPERATOR_LEASE_STATE_KEY, JSON.stringify(null));
+    return { released: true, releasedAt: currentAt };
+  });
 }
