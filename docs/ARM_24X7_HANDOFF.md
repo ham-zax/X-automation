@@ -36,7 +36,7 @@ ARM's Chromium was signed in by setting the `auth_token` and `ct0` cookies (valu
 
 ## Models and the watchdog hack
 
-Preferred order for the operator: `muse-spark-1.3-contributor-free` → `mimo-v2.6-flash-free` → `big-pickle` → `space-bunny-free` (all under provider `opencode2api`). Pi's own default model, Pi subagent default and claive's worker role on ARM are `exo-free` (backups of the old config are next to the files as `*.bak-<timestamp>`). The runner has **no** built-in fallback and claive serve only backs off on provider errors; it never switches models.
+Preferred order for the operator: `muse-spark-1.3-contributor-free` → `big-pickle` → `mimo-v2.6-flash-free` → `space-bunny-free` (all under provider `opencode2api`). Pi's own default model, Pi subagent default and claive's worker role on ARM are `exo-free` (backups of the old config are next to the files as `*.bak-<timestamp>`). The runner has **no** built-in fallback and claive serve only backs off on provider errors; it never switches models.
 
 The substitute is the **watchdog goal** (`ops/claive/xwatch-goal.md`, installed at `~/work/scratch/xwatch/goal.md` on ARM). `x-test-watch.timer` queues it every 30 min (`--write --budget 25m --max-attempts 1 --engine pi --model mimo-v2.6-flash-free`). One cycle: read-only checks of the service, journal and database; classify model/provider failure versus X-side blockers (login, 423, rate limit, capability, delegation, health, reconciliation); on a model failure with no active Growth Run, move `model.conf` to the next model and `daemon-reload`; append a JSON line to `~/work/scratch/xwatch/stats.jsonl`; write X-side blockers to `~/work/scratch/xwatch/ALERTS.md`. It may not touch the repo, `.env`, the database (read-only), claive, git, the browser, or the services.
 
@@ -83,7 +83,7 @@ Production proof:
 - Before the daily quota was removed, the corrected accounting showed the earlier byte-counting bug clearly; the application now enforces no daily AI request/token allowance at all.
 - Run 40 was recovered through the canonical `growth-run-finish` path only after confirming it had zero publication attempts. The recovered terminal result records `runtimeFailure`, detaches the reasoning runtime and releases the lease.
 - New runner behavior automatically finishes an active run as `partial/capability_unavailable` with `result.runtimeFailure` when the reasoning child dies. The watchdog recognizes that marker as a provider/runtime failure instead of misclassifying it as an X-side blocker.
-- The watchdog's own model rotation is now `mimo-v2.6-flash-free`, `big-pickle`, `space-bunny-free`; the operator is preferred on `muse-spark-1.3-contributor-free`. Its tracked/live goal understands `runtimeFailure` and still only changes the operator model for a future pass.
+- The operator failover order is `big-pickle`, `mimo-v2.6-flash-free`, `space-bunny-free` after preferred `muse-spark-1.3-contributor-free`; the watchdog worker itself remains separately configured. Its tracked/live goal understands `runtimeFailure` and still only changes the operator model for a future pass.
 - Full repository test suite: **91/91 pass** after the final no-daily-quota and malformed-stream fallback changes. Production UI build succeeds.
 
 Rollback snapshots for the role migrations are under `~/work/scratch/`, including `x-test-ai-role-migration-2026-10-07T02-55-00-241Z.json` and `x-test-ai-role-migration-exo-default-2026-10-07T02-59-14-959Z.json`.
