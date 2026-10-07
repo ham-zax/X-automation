@@ -75,7 +75,9 @@ function approvedSchedulerWork(now) {
     lastMainFeedPostAt,
     learnedRules: listAcceptedLearnedRules({ limit: 500 }),
   });
-  return decisions.find((decision) => decision.eligible) || null;
+  return decisions.find((decision) => decision.eligible
+    && decision.recommendedAt != null
+    && Number(decision.recommendedAt) <= now) || null;
 }
 
 export function getGrowthOperatorMainFeedStatus({ now = Date.now(), operatorLeaseId = null } = {}) {

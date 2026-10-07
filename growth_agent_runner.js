@@ -117,6 +117,7 @@ Hard boundaries:
 - Do not edit source files, docs, configuration, package files, Git state, systemd units, dependencies, or environment variables.
 - Do not run git commands.
 - The only local state mutations you may make are through the canonical \`npm run agent -- <command>\` Growth OS bridge from ${REPO}.
+- Never wrap a canonical Growth OS bridge command in shell \`timeout\`, background it, pipe it through a process that can terminate it early, or otherwise impose a shorter external deadline. The bridge/runtime owns its bounded AI deadline and must return cleanly so claims, AI concurrency, and audit rows reconcile correctly.
 - Do not inspect implementation source to reverse-engineer bridge behavior. Use the operational docs and bridge outputs as the public contract. Apart from canonical \`npm run agent -- ...\` invocations and the named-session Agent Browser CLI, do not run ad hoc shell/node/python commands.
 ${browser.cliRule}
 - Never use a background Node daemon to mutate x.com.
