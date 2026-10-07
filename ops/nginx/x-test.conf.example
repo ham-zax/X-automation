@@ -1,0 +1,24 @@
+# Owner must provision DNS, certificates and dashboard credentials before installation.
+# Requires WEB_HOST=127.0.0.1 and WEB_PUBLIC_ORIGIN=https://your-domain.
+# Dashboard owner authentication applies to every proxied request.
+server {
+    listen 443 ssl;
+    server_name growth.example.invalid;
+    ssl_certificate /etc/ssl/x-test/fullchain.pem;
+    ssl_certificate_key /etc/ssl/x-test/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    # The upstream enforces WEB_AUTH_USER/WEB_AUTH_PASSWORD. Restrict ingress
+    # with a VPN/firewall or mTLS; do not stack independent Basic credentials.
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3030;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 300s;
+    }
+}

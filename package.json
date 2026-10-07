@@ -18,7 +18,14 @@
     "viral:snapshot": "node viral_style_research.js snapshot",
     "viral:export": "node viral_style_research.js export",
     "viral:inspect": "node viral_style_research.js inspect",
-    "ui:build": "cd ui && npm run build && cd .. && tailwindcss -i ./dashboard.tailwind.css -o ./dashboard.tailwind.generated.css --minify"
+    "viral:ingest": "node viral_style_research.js ingest",
+    "viral:analyze": "node viral_style_analyze.js --days 21",
+    "ui:build": "cd ui && npm run build && cd .. && tailwindcss -i ./dashboard.tailwind.css -o ./dashboard.tailwind.generated.css --minify",
+    "test": "node --test tests/*.test.mjs",
+    "backup": "node ops/backup.mjs backup",
+    "backup:verify": "node ops/backup.mjs verify",
+    "restore": "node ops/backup.mjs restore",
+    "measurements:capture": "node automation.js --measurements-only"
   },
   "keywords": [],
   "type": "module",
@@ -26,9 +33,17 @@
     "@opencode-ai/sdk": "^1.18.18",
     "@tailwindcss/cli": "^4.3.3",
     "bootstrap": "^5.3.8",
-    "clearcote": "^0.27.0",
+    "clearcote": "0.34.0",
     "dotenv": "^17.4.2",
     "tailwindcss": "^4.3.3",
-    "xactions": "^3.5.0"
+    "xactions": "4.0.1"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "overrides": {
+    "xactions": {
+      "xspace-agent": "0.2.0"
+    }
   }
 }

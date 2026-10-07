@@ -8,3 +8,8 @@ node_modules/
 .x-media/
 .DS_Store
 dashboard.tailwind.generated.css
+
+# Private recovery material
+.x-backups/
+.secrets/
+.x-web-owner-password
