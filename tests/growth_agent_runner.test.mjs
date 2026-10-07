@@ -61,13 +61,13 @@ try {
     const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_BIN: '/opt/pi', HOME: '/h' });
     assert.equal(config.executable, '/opt/pi');
     assert.equal(config.browserTarget, 'linux');
-    assert.equal(config.model, 'opencode2api/exo-free');
+    assert.equal(config.model, 'opencode2api/muse-spark-1.3-contributor-free');
     const command = runner.commandFor(config, 'work');
     assert.equal(command.stdinPrompt, undefined);
     assert.deepEqual(command.args.slice(-2), ['--', 'work']);
     for (const flag of ['--print', '--no-session', '--offline', '--no-extensions', '--no-approve']) assert.ok(command.args.includes(flag), flag);
     assert.equal(command.args[command.args.indexOf('--provider') + 1], 'opencode2api');
-    assert.equal(command.args[command.args.indexOf('--model') + 1], 'exo-free');
+    assert.equal(command.args[command.args.indexOf('--model') + 1], 'muse-spark-1.3-contributor-free');
     assert.equal(command.args[command.args.indexOf('--tools') + 1], 'read,bash');
     assert.equal(command.args[command.args.indexOf('--thinking') + 1], 'high');
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_THINKING: 'turbo' }), /X_GROWTH_PI_THINKING/);
