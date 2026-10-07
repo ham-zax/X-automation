@@ -465,6 +465,7 @@ export async function getWritingStrategyPreview(queueItemId) {
     taxonomyVersion: VIRAL_STYLE_TAXONOMY_VERSION,
     external: {
       generatedAt: viralReport.generatedAt,
+      freshness: viralReport.freshness,
       windowDays: viralReport.windowDays,
       maturityHours: viralReport.maturityHours,
       confidence: viralReport.confidence,

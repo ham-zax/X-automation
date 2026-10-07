@@ -1,3 +1,4 @@
+import { getDailyPersonaTone, DAILY_TONE_RUBRIC } from './persona_tone.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +8,7 @@ import {
   validateBehaviorDecision,
 } from './behavior.js';
 import { getCurrentPersonaStances } from './store.js';
+import { DomainValidationError } from './errors.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_MODEL_PATH = path.join(MODULE_DIR, 'persona', 'hamza-v1.json');
@@ -64,10 +66,13 @@ export function getPersonaModelSummary(options = {}) {
     version: String(model.version),
     status: String(model.status || ''),
     identity: model.identity || {},
+    dailyTone: getDailyPersonaTone(),
+    dailyToneRubric: DAILY_TONE_RUBRIC,
     operatorDecisions: model.operatorDecisions || {},
     candidateBeliefs: Array.isArray(model.candidateBeliefs) ? model.candidateBeliefs : [],
     accountEvidencePatterns: Array.isArray(model.accountEvidencePatterns) ? model.accountEvidencePatterns : [],
     knownUnknowns: Array.isArray(model.knownUnknowns) ? model.knownUnknowns : [],
+    voiceCalibration: model.voiceCalibration || {},
     sourceArtifacts: Array.isArray(model.sourceArtifacts) ? model.sourceArtifacts : [],
   };
 }
@@ -107,11 +112,15 @@ export function getPersonaSlice(consumer, options = {}) {
   if (consumer === 'writer') {
     return {
       ...shared,
+      dailyTone: getDailyPersonaTone(),
       affectPolicy: model.affectPolicy || {},
       relationshipPolicy: model.relationshipPolicy || {},
       behaviorExamples: model.behaviorExamples || {},
       languageRealization: model.languageRealization || {},
       technicalProvenanceSandbox: model.technicalProvenanceSandbox || {},
+      knownUnknowns: model.knownUnknowns || [],
+      candidateBeliefs: (model.candidateBeliefs || []).filter(belief => ['owner_decision', 'account_evidence_supported'].includes(belief.status)),
+      voiceCalibration: model.voiceCalibration || {},
     };
   }
   return { ...shared };
@@ -173,7 +182,7 @@ export function selectBehaviorDecision({
 
   if (explicitBehavior) {
     const validated = validateBehaviorDecision(explicitBehavior, { pipeline });
-    if (!validated.valid) throw new Error(`Invalid explicit behavior decision: ${validated.errors.join(' ')}`);
+    if (!validated.valid) throw new DomainValidationError(`Invalid explicit behavior decision: ${validated.errors.join(' ')}`);
     return normalizeBehaviorDecision({
       ...validated.behavior,
       selectedAt: validated.behavior.selectedAt || now,

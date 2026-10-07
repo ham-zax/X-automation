@@ -7,11 +7,13 @@ import {
   socialPurposeContextAvailable,
   validateBehaviorDecision,
 } from './behavior.js';
-import { getPersonaSlice, selectBehaviorDecision } from './persona.js';
+import { getActivePersonaModel, getPersonaSlice, selectBehaviorDecision } from './persona.js';
 import { assessActionRelevance } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
+import { bindContentReview, currentContentReview, factualQuantities, contentSources } from './content_review.js';
+import { getCurrentPatternFreshness, getHistoricalWritingExamples } from './writing_examples.js';
 
-const PLACEHOLDER = /\[[^\]]+\]/;
+const PLACEHOLDER = /\[(?:insert\b|add\b|replace\b|fill\b|your\s+(?:text|claim|evidence|link|hook)|hook\b|insight\b|evidence\b|action\b|placeholder\b|todo\b|tbd\b)[^\]]*\](?!\()|\{\{\s*(?:insert|placeholder|todo|tbd)\b[^}]*\}\}/i;
 const CONTENT_PIPELINES = new Set(['original', 'quote', 'thread', 'reply']);
 const WRITER_DECISIONS = new Set(['POST', 'DO_NOT_POST']);
 const MEDIA_TYPES = new Set(['none', 'screenshot', 'chart', 'code', 'diagram']);
@@ -85,10 +87,10 @@ function contentUnits(draft, pipeline) {
   return [body];
 }
 
-function recentText(item) {
-  if (typeof item === 'string') return item;
-  if (Array.isArray(item?.threadParts)) return item.threadParts[0] || '';
-  return item?.body || item?.finalText || item?.text || '';
+function recentTexts(item) {
+  if (typeof item === 'string') return [item];
+  if (Array.isArray(item?.threadParts) && item.threadParts.length) return item.threadParts;
+  return [item?.body || item?.finalText || item?.text || ''];
 }
 
 function asStringArray(value) {
@@ -195,6 +197,12 @@ export function buildWriterPacket({
     pipeline,
     behavior: behaviorValidation.behavior,
     persona: getPersonaSlice('writer'),
+    patternContext: {
+      freshness: getCurrentPatternFreshness(),
+      historical: writingStrategy
+        ? getHistoricalWritingExamples({ candidate, behavior: behaviorValidation.behavior, pipeline })
+        : { status: 'disabled', observationalShapeOnly: true, examples: [], limitation: 'Historical presentation references require a saved Apply selection.' },
+    },
     candidate: {
       source: candidate?.source ?? null,
       author: candidateAuthor(candidate),
@@ -304,6 +312,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
       altText: String(mediaInput.altText ?? '').trim(),
     },
     riskFlags: asStringArray(writerOutput?.riskFlags).filter(Boolean),
+    styleReferences: (writerPacket?.patternContext?.historical?.examples || []).map(item => ({ id: item.id, url: item.url, text: item.text })),
     behavior: behaviorValidation.behavior,
     personaModelVersion: behaviorValidation.behavior.personaModelVersion || writerPacket?.persona?.version || '',
     followReason: String(writerOutput?.followReason ?? writerOutput?.followValue ?? '').trim(),
@@ -327,6 +336,18 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     next.threadParts = editor.threadParts.length ? [...editor.threadParts] : (editor.finalText ? [editor.finalText] : []);
   } else {
     next.body = editor.finalText;
+  }
+  // Attestation survives only when the generated public text is unchanged.
+  if (draft?.editor?.ownerEvidence) {
+    next.editor.ownerEvidence = draft.editor.ownerEvidence;
+    if (!ownerEvidenceValid(next, pipeline)) delete next.editor.ownerEvidence;
+  }
+  if (writerOutput.contentReview) {
+    next.editor.contentReview = bindContentReview(writerOutput.contentReview, draftReviewContext(next, writerPacket.candidate, {
+      pipeline, behavior: writerPacket.behavior, evidence: writerPacket.evidence,
+      personaVersion: writerPacket.persona?.version,
+    }), { reviewer: writerOutput.contentReview.reviewer === 'writer_runtime' ? 'writer_runtime' : 'external_agent',
+      execution: writerOutput.contentReview.execution || null });
   }
   return next;
 }
@@ -355,7 +376,11 @@ function normalizeOwnerClaimGrammar(text) {
 
 function explicitOwnerExperienceClaim(text) {
   const value = normalizeOwnerClaimGrammar(text);
-  return /\b(?:i|we)\s+(?:(?:have|had|am|are|was|were)\s+)?(?:been\s+)?(?:built|building|tested|testing|used|using|tried|trying|ran|running|measured|measuring|deployed|deploying|migrated|migrating|spent|spending|bought|buying|paid|paying|debugged|debugging|shipped|shipping|implemented|implementing|hit|saw|seen|found)\b|\b(?:my|our)\s+(?:project|repo|repository|codebase|team|company|setup|workflow|app|product|benchmark|test|deployment|production|prod)\b|\b(?:saved|blocked|broke|cost|helped)\s+(?:me|us)\b|\b(?:worked|failed)\s+(?:for|on)\s+(?:me|us)\b/i.test(value);
+  const actions = '(?:built|build|building|tested|test|testing|used|use|using|tried|trying|ran|run|running|measured|measure|measuring|deployed|deploy|deploying|migrated|migrating|spent|spending|bought|buying|paid|paying|debugged|debugging|shipped|ship|shipping|implemented|implementing|switched|switching|adopted|adopting|benchmarked|benchmarking|launched|launching|installed|installing|rewrote|rewriting|hit|saw|seen|found|learned|worked)';
+  const firstPerson = new RegExp(`\\b(?:i|we)\\s+(?:(?:have|had|am|are|was|were|just|already|recently|finally|actually)\\s+)*(?:been\\s+)?${actions}\\b`, 'i');
+  const omittedSubject = /(?:^|[.!?\n]\s*)(?:just\s+|finally\s+)?(?:shipped|built|tested|measured|deployed|migrated|switched|benchmarked|launched|installed|rewrote)\b(?!-)/i;
+  return firstPerson.test(value) || omittedSubject.test(value)
+    || /\b(?:my|our)\s+(?:(?:\w+[- ]?){0,3})(?:project|repo|repository|codebase|team|company|setup|workflow|app|product|benchmark|test|deployment|production|prod|results?|experience|system|agent|tool|latency|costs?|customers?)\b|\b(?:saved|blocked|broke|cost|helped)\s+(?:me|us)\b|\b(?:worked|failed)\s+(?:for|on)\s+(?:me|us)\b/i.test(value);
 }
 
 function impliedOwnerExperienceSignal(text) {
@@ -373,6 +398,14 @@ function ownerEvidenceValid(draft, pipeline) {
   if (!String(evidence.claimSummary || '').trim() || !Number.isFinite(Number(evidence.attestedAt))) return false;
   const expectedHash = createHash('sha256').update(draftEvidenceText(draft, pipeline)).digest('hex');
   return String(evidence.textHash || '') === expectedHash;
+}
+
+export function draftReviewContext(draft, candidate, context = {}) {
+  const pipeline = context.pipeline || draft?.editor?.pipeline || 'original';
+  return { units: contentUnits(draft, pipeline), pipeline,
+    behavior: normalizeBehaviorDecision(context.behavior || draft?.editor?.behavior || {}, { pipeline }),
+    personaVersion: context.personaVersion || getActivePersonaModel().version,
+    candidate, evidence: context.evidence || [], ownerEvidence: ownerEvidenceValid(draft, pipeline) };
 }
 
 function socialInteractionContext(behavior, { relationship, conversationRelevanceCandidate } = {}) {
@@ -505,10 +538,11 @@ function duplicateAgainst(text, items) {
   let best = 0;
   let exact = false;
   for (const item of items) {
-    const other = recentText(item);
-    if (!other) continue;
-    if (normalizedText(text) && normalizedText(text) === normalizedText(other)) exact = true;
-    best = Math.max(best, similarity(text, other));
+    for (const other of recentTexts(item)) {
+      if (!other) continue;
+      if (normalizedText(text) && normalizedText(text) === normalizedText(other)) exact = true;
+      best = Math.max(best, similarity(text, other));
+    }
   }
   return { exact, similarity: best };
 }
@@ -534,6 +568,8 @@ export function evaluateDraftGates(draft, candidate, {
   conversationRelevanceCandidate = null,
   growthObjective = null,
   threadLengthApproved = false,
+  evidence = [],
+  requireContentReview = false,
 } = {}) {
   const pipeline = ensurePipeline(requestedPipeline || draft?.editor?.pipeline || 'original');
   const units = contentUnits(draft, pipeline);
@@ -547,6 +583,7 @@ export function evaluateDraftGates(draft, candidate, {
     growthFocus: true,
     purposeIntegrity: true,
     factualProvenance: true,
+    contentReview: true,
     behaviorAlignment: true,
     originality: true,
     scannability: true,
@@ -579,7 +616,30 @@ export function evaluateDraftGates(draft, candidate, {
     addIssue(failures, 'OWNER_EXPERIENCE_UNGROUNDED', 'The draft makes an explicit first-person factual/experience claim without a human attestation bound to this exact text.');
   }
   if (impliedOwnerExperienceSignal(combinedText) && !ownerEvidenceGrounded) {
-    addIssue(warnings, 'IMPLIED_OWNER_EXPERIENCE_REVIEW', 'The wording may imply personal use or lived experience that is not backed by a human attestation bound to this exact text.');
+    addIssue(warnings, 'IMPLIED_OWNER_EXPERIENCE_REVIEW', 'Review whether this wording implies unverified owner experience. Autonomous approval additionally requires an exact content review.');
+  }
+
+  const suppliedEvidence = evidence.filter(item => (draft?.editor?.evidenceUsed || []).map(String).includes(String(item.id)));
+  const sourceQuantities = contentSources(candidate, suppliedEvidence).flatMap(source => source.excerpts.flatMap(factualQuantities));
+  const unsupported = combinedText.split(/[.!?](?:\s+|$)|\n+/).flatMap(sentence => {
+    const illustrative = /^\s*(?:if|suppose|hypothetical|for example|e\.g\.|use|set|limit|stop|retry|wait)\b/i.test(sentence)
+      && !/\b(?:measured|achieved|delivers|benchmark results|our results|my results)\b/i.test(sentence);
+    return illustrative ? [] : factualQuantities(sentence).filter(quantity => !sourceQuantities.includes(quantity));
+  });
+  if (!ownerEvidenceGrounded && unsupported.length) {
+    checks.factualProvenance = false;
+    addIssue(failures, 'FACTUAL_QUANTITY_UNSUPPORTED', `Quantitative claims lack supplied evidence: ${[...new Set(unsupported)].join(', ')}.`);
+  }
+  const review = currentContentReview(draft?.editor?.contentReview, draftReviewContext(draft, candidate, { pipeline, behavior, evidence }));
+  if (review.current && review.factualPassed === false) {
+    checks.factualProvenance = false;
+    addIssue(failures, 'CONTENT_FACTUAL_REVIEW_FAILED', review.issues.join(' '));
+  }
+  if (requireContentReview && (!review.current || !review.passed || draft?.editor?.decision === 'DO_NOT_POST')) {
+    checks.contentReview = false;
+    addIssue(failures, 'CONTENT_REVIEW_REQUIRED', draft?.editor?.decision === 'DO_NOT_POST'
+      ? 'The Writer recommended DO_NOT_POST; autonomous approval is blocked.'
+      : `Autonomous approval requires a passing review bound to current text, evidence, behavior and persona. ${review.issues.join(' ')}`);
   }
 
   if (behaviorDecisionRequiresFactualEvidence(behavior)
@@ -628,8 +688,10 @@ export function evaluateDraftGates(draft, candidate, {
   }
 
   const sourceText = candidate?.text || '';
-  const sourceSimilarity = similarity(primaryText, sourceText);
-  const sourceExact = normalizedText(primaryText) && normalizedText(primaryText) === normalizedText(sourceText);
+  const sourceTexts = [sourceText, ...evidence.filter(item => item.sourceKind === 'x').map(item => item.summary || item.claim || ''),
+    ...(draft?.editor?.styleReferences || []).map(item => item.text)].filter(Boolean);
+  const sourceSimilarity = Math.max(0, ...units.flatMap(unit => sourceTexts.map(source => similarity(unit, source))));
+  const sourceExact = units.some(unit => sourceTexts.some(source => normalizedText(unit) && normalizedText(unit) === normalizedText(source)));
   if (sourceExact || sourceSimilarity >= 0.70) {
     checks.originality = false;
     checks.purposeIntegrity = false;
@@ -672,7 +734,9 @@ export function evaluateDraftGates(draft, candidate, {
   const recentMain = Array.isArray(recentPosts) ? recentPosts.slice(0, 20) : [];
   const recentReplyItems = Array.isArray(recentReplies) ? recentReplies.slice(0, 20) : [];
   const duplicatePool = pipeline === 'reply' ? [...recentMain, ...recentReplyItems] : recentMain;
-  const recentDuplicate = duplicateAgainst(primaryText, duplicatePool);
+  const duplicateResults = units.map(unit => duplicateAgainst(unit, duplicatePool));
+  const recentDuplicate = { exact: duplicateResults.some(result => result.exact),
+    similarity: Math.max(0, ...duplicateResults.map(result => result.similarity)) };
   if (recentDuplicate.exact || recentDuplicate.similarity >= 0.70) {
     checks.recentDuplicate = false;
     addIssue(failures, 'RECENT_DUPLICATE', `Draft matches recent published/approved text at ${recentDuplicate.similarity.toFixed(2)} similarity.`);
@@ -695,10 +759,10 @@ export function evaluateDraftGates(draft, candidate, {
         addIssue(failures, 'THREAD_PART_TOO_LONG', `Thread part ${index + 1} is ${weightedPostLength(units[index])}/280 weighted characters.`);
       }
       if (index > 0) {
-        const adjacent = duplicateAgainst(units[index], [units[index - 1]]);
+        const adjacent = duplicateAgainst(units[index], units.slice(0, index));
         if (adjacent.exact || adjacent.similarity >= 0.70) {
           checks.threadRules = false;
-          addIssue(failures, 'THREAD_PART_DUPLICATE', `Thread parts ${index} and ${index + 1} are exact/near duplicates.`);
+          addIssue(failures, 'THREAD_PART_DUPLICATE', `Thread part ${index + 1} repeats an earlier part.`);
         } else if (adjacent.similarity >= 0.50) {
           addIssue(warnings, 'THREAD_PART_SIMILARITY_WARNING', `Thread parts ${index} and ${index + 1} are similar (${adjacent.similarity.toFixed(2)}).`);
         }

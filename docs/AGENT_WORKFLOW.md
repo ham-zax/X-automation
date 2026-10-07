@@ -48,6 +48,7 @@ Available commands:
 - `inspect` - inspect one stored candidate, its draft, current exact-candidate disposition, recorded actions, action-time source context, and available output/outcome evidence.
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
+- `mission-approve` - approve an eligible exact main-feed draft/Repost under the current live delegation, active Growth Run/session lease, and source/evidence provenance; authored content requires a current passing content review. It never sets human approval metadata. Supply `key`, `runId`, `sessionId`, `grantRevision`, and `verificationProvenance` (`authorityType: mission_agent`, exact `sourceReferences`, and `evidenceReferences`).
 - `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
 - `operator-status` - read the compact cross-lane cockpit: active persona version/status, account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
 - `operator-memory-review` - record a completed Browser/`x-content` memory checkpoint and reset the interaction window; requires `confirmReview: true` and an exact result.

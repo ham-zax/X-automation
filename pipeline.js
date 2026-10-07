@@ -1,3 +1,4 @@
+import { DomainValidationError } from './errors.js';
 import { normalizeBehaviorDecision } from './behavior.js';
 import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { selectBehaviorDecision } from './persona.js';
@@ -38,6 +39,7 @@ import {
   listExperiments,
   listQueueItems,
   listQueueSources,
+  linkQueueSource,
   listResearchEvidence,
   listRecentOurConversationPosts,
   listRecentPublishedContent,
@@ -85,7 +87,7 @@ const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'r
 
 function requireCandidate(key) {
   const candidate = getCandidate(key);
-  if (!candidate) throw new Error(`Candidate not found: ${key}`);
+  if (!candidate) throw new DomainValidationError(`Candidate not found: ${key}`);
   return candidate;
 }
 
@@ -125,7 +127,7 @@ function sourceTweetId(candidate) {
   return match?.[1] || '';
 }
 
-function editorialEvidenceForQueue(queueItem) {
+export function editorialEvidenceForQueue(queueItem) {
   if (!queueItem) return [];
   const selection = getLatestEditorialSelectionForQueueItem(queueItem.id);
   if (!selection) return [];
@@ -203,18 +205,18 @@ function routeState(pipeline) {
 
 function requireCurrentStrategyDecision(queueItem, draft) {
   const selection = getLatestWritingStrategySelectionForQueueItem(queueItem.id);
-  if (!selection) throw new Error('Save No influence, Advice only, or Use for this draft before approval.');
+  if (!selection) throw new DomainValidationError('Save No influence, Advice only, or Use for this draft before approval.');
   const generation = draft?.editor?.generation;
   if (generation && (generation.strategySelectionId == null || generation.strategyMode == null)) {
-    throw new Error('This AI draft predates an explicit writing-strategy decision. Regenerate after saving the current writing choice before approval.');
+    throw new DomainValidationError('This AI draft predates an explicit writing-strategy decision. Regenerate after saving the current writing choice before approval.');
   }
   if (generation && Number(generation.strategySelectionId) !== Number(selection.id)) {
-    throw new Error('The writing-strategy choice changed after this AI generation. Regenerate with the current saved choice before approval.');
+    throw new DomainValidationError('The writing-strategy choice changed after this AI generation. Regenerate with the current saved choice before approval.');
   }
   return selection;
 }
 
-function contentGateContext(candidateKey, pipeline) {
+function contentGateContext(candidateKey, pipeline, { requireContentReview = null } = {}) {
   const queueItem = getQueueItemByCandidate(candidateKey);
   const draft = getDraftByCandidate(candidateKey);
   const strategySelection = queueItem ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
@@ -255,6 +257,7 @@ function contentGateContext(candidateKey, pipeline) {
       ? listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidateKey })
       : [],
     evidence: editorialEvidenceForQueue(queueItem),
+    requireContentReview: requireContentReview ?? (queueItem?.approvalSnapshot?.authority?.type === 'mission_agent'),
     mediaReady: Boolean(draft?.editor?.media?.attachment?.localPath),
     mediaPublishingAvailable: true,
     relevanceOverride: queueItem?.relevance?.humanOverride || null,
@@ -279,29 +282,29 @@ function requireMissionHookExperimentAssignment(queueItem) {
   const assignment = queueItem?.experimentAssignment || {};
   const experiment = activeExperiments.find((candidate) => Number(candidate.id) === Number(assignment.experimentId));
   if (!experiment) {
-    throw new Error('Mission-agent approval requires assignment to the active hook_type experiment before approval.');
+    throw new DomainValidationError('Mission-agent approval requires assignment to the active hook_type experiment before approval.');
   }
   const variant = (experiment.variants || []).find((candidate) => String(candidate.label) === String(assignment.variantLabel));
-  if (!variant) throw new Error('Mission-agent hook experiment assignment references an unknown variant.');
+  if (!variant) throw new DomainValidationError('Mission-agent hook experiment assignment references an unknown variant.');
 
   const patternId = String(assignment.context?.hookPattern ?? variant.config?.patternId ?? variant.config?.pattern_id ?? '').trim();
   const hookInstructions = String(assignment.context?.hookInstructions ?? variant.config?.hookInstructions ?? variant.config?.hook_instructions ?? '').trim();
   if (!patternId || !hookInstructions) {
-    throw new Error('Mission-agent hook experiment assignment requires hookPattern and hookInstructions.');
+    throw new DomainValidationError('Mission-agent hook experiment assignment requires hookPattern and hookInstructions.');
   }
   return { experiment, variant, patternId, hookInstructions };
 }
 
 function normalizeMissionVerificationProvenance(provenance = {}) {
   if (String(provenance.authorityType || '') !== 'mission_agent') {
-    throw new Error('Mission-agent approval requires verificationProvenance.authorityType=mission_agent.');
+    throw new DomainValidationError('Mission-agent approval requires verificationProvenance.authorityType=mission_agent.');
   }
   const normalizeReferences = (value, field, required = false) => {
     if (value === undefined && !required) return [];
-    if (!Array.isArray(value)) throw new Error(`Mission-agent approval requires verificationProvenance.${field} to be an array.`);
+    if (!Array.isArray(value)) throw new DomainValidationError(`Mission-agent approval requires verificationProvenance.${field} to be an array.`);
     const references = [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))];
     if (required && references.length === 0) {
-      throw new Error(`Mission-agent approval requires at least one concrete verificationProvenance.${field} reference.`);
+      throw new DomainValidationError(`Mission-agent approval requires at least one concrete verificationProvenance.${field} reference.`);
     }
     return references;
   };
@@ -320,7 +323,7 @@ function requireMissionSourceProvenance(queueItem, provenance) {
     .filter(Boolean))];
   const declared = [...new Set((provenance.sourceReferences || []).map((value) => String(value || '').trim()).filter(Boolean))];
   if (!expected.length || expected.length !== declared.length || expected.some((value) => !declared.includes(value))) {
-    throw new Error('Mission-agent source provenance must exactly match the queue source references.');
+    throw new DomainValidationError('Mission-agent source provenance must exactly match the queue source references.');
   }
 }
 
@@ -329,30 +332,30 @@ function requireMissionEvidenceProvenance(queueItem, draft, provenance) {
     .map((id) => String(id || '').trim()).filter(Boolean))];
   const declared = provenance.evidenceReferences;
   if (requested.length !== declared.length || requested.some((id) => !declared.includes(id))) {
-    throw new Error('Mission-agent evidence provenance must exactly match the draft evidenceUsed references.');
+    throw new DomainValidationError('Mission-agent evidence provenance must exactly match the draft evidenceUsed references.');
   }
   const storedEvidence = new Map(editorialEvidenceForQueue(queueItem).map((item) => [String(item.id), item]));
   const invalid = requested.filter((id) => !storedEvidence.has(id));
   if (invalid.length) {
-    throw new Error(`Mission-agent evidence provenance does not resolve to supplied stored Editorial evidence: ${invalid.join(', ')}.`);
+    throw new DomainValidationError(`Mission-agent evidence provenance does not resolve to supplied stored Editorial evidence: ${invalid.join(', ')}.`);
   }
   const ineligible = requested.filter((id) => !['primary_supported', 'source_claim'].includes(String(storedEvidence.get(id)?.status || '')));
   if (ineligible.length) {
-    throw new Error(`Mission-agent evidence provenance references unresolved or contradicted Editorial evidence: ${ineligible.join(', ')}.`);
+    throw new DomainValidationError(`Mission-agent evidence provenance references unresolved or contradicted Editorial evidence: ${ineligible.join(', ')}.`);
   }
 }
 
 function requireLiveGrowthOperatorDelegation(grantRevision) {
   const revision = Number(grantRevision);
   if (!Number.isInteger(revision) || revision < 1) {
-    throw new Error('Mission-agent approval requires a positive integer grantRevision.');
+    throw new DomainValidationError('Mission-agent approval requires a positive integer grantRevision.');
   }
   const grant = getGrowthOperatorDelegation();
   if (grant.state !== 'running' || grant.mode !== 'live') {
-    throw new Error('Growth Operator delegation must be running in live mode for mission-agent approval.');
+    throw new DomainValidationError('Growth Operator delegation must be running in live mode for mission-agent approval.');
   }
   if (Number(grant.revision) !== revision) {
-    throw new Error('Growth Operator delegation revision is stale or has been revoked.');
+    throw new DomainValidationError('Growth Operator delegation revision is stale or has been revoked.');
   }
   return grant;
 }
@@ -422,28 +425,28 @@ export function rescoreCandidateRelevance(options = {}) {
 }
 
 export function setRelevanceDecision(key, { decision, reason = '', actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Growth Focus override decisions require an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Growth Focus override decisions require an explicit human action.');
   const candidate = requireCandidate(key);
   ensureQueueItem(key);
   const queueItem = getQueueItemByCandidate(key);
   if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw new Error('Growth Focus decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
+    throw new DomainValidationError('Growth Focus decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
   }
   if (decision === 'clear_override') {
     const saved = saveQueueItem({ candidateKey: key, relevance: {} });
     return { queueItem: saved, growthFit: assessStrategicRelevance(candidate) };
   }
-  if (decision !== 'use_anyway') throw new Error(`Unsupported Growth Focus decision: ${decision || 'missing'}.`);
+  if (decision !== 'use_anyway') throw new DomainValidationError(`Unsupported Growth Focus decision: ${decision || 'missing'}.`);
 
   const growthFit = assessStrategicRelevance(candidate);
   if (growthFit.state === 'unknown') {
-    throw new Error('Growth fit is unknown. Rescore candidates from Growth Focus before choosing to use this opportunity.');
+    throw new DomainValidationError('Growth fit is unknown. Rescore candidates from Growth Focus before choosing to use this opportunity.');
   }
   if (growthFit.state !== 'outside') {
-    throw new Error(`Growth Focus override is only needed for outside-scope opportunities; current state is ${growthFit.state}.`);
+    throw new DomainValidationError(`Growth Focus override is only needed for outside-scope opportunities; current state is ${growthFit.state}.`);
   }
   const explanation = String(reason || '').trim();
-  if (!explanation) throw new Error('Using an outside-scope opportunity requires a short human reason.');
+  if (!explanation) throw new DomainValidationError('Using an outside-scope opportunity requires a short human reason.');
   const humanOverride = {
     accepted: true,
     reason: explanation,
@@ -460,22 +463,22 @@ export function setRelevanceDecision(key, { decision, reason = '', actor = 'huma
 }
 
 export function setRoutingDecision(key, { decision, reason = '', actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Use-anyway routing decisions require an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Use-anyway routing decisions require an explicit human action.');
   requireCandidate(key);
   ensureQueueItem(key);
   let queueItem = getQueueItemByCandidate(key);
   if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.humanApprovedAt || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw new Error('Routing decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
+    throw new DomainValidationError('Routing decisions cannot be changed after approval, publication, or an unresolved publication attempt.');
   }
   refreshQueueRecommendation(key);
   queueItem = getQueueItemByCandidate(key);
   if (decision === 'clear_override') return saveQueueItem({ candidateKey: key, routingDecision: {} });
-  if (decision !== 'use_anyway') throw new Error(`Unsupported routing decision: ${decision || 'missing'}.`);
+  if (decision !== 'use_anyway') throw new DomainValidationError(`Unsupported routing decision: ${decision || 'missing'}.`);
   if (queueItem.recommendedPipeline !== 'ignore') {
-    throw new Error(`Use anyway is only required when the current recommendation is Ignore; current recommendation is ${queueItem.recommendedPipeline || 'missing'}.`);
+    throw new DomainValidationError(`Use anyway is only required when the current recommendation is Ignore; current recommendation is ${queueItem.recommendedPipeline || 'missing'}.`);
   }
   const explanation = String(reason || '').trim();
-  if (!explanation) throw new Error('Using an ignored opportunity requires a short human reason.');
+  if (!explanation) throw new DomainValidationError('Using an ignored opportunity requires a short human reason.');
   return saveQueueItem({
     candidateKey: key,
     routingDecision: {
@@ -541,7 +544,7 @@ export function reconcileRecordedActionWorkflow(candidate, action, recorded) {
   const tweetId = recorded.output_tweet_id ? String(recorded.output_tweet_id) : null;
   const outputUrl = recorded.output_url || null;
   if (queueItem.outputTweetId && tweetId && String(queueItem.outputTweetId) !== tweetId) {
-    throw new Error(`Queue item ${queueItem.id} already has a different output tweet ID.`);
+    throw new DomainValidationError(`Queue item ${queueItem.id} already has a different output tweet ID.`);
   }
   const publishedAt = Number(recorded.created_at || Date.now());
   let draft = workflow.draft;
@@ -615,7 +618,7 @@ export function discardCandidateDraft(key) {
   const draft = getDraftByCandidate(key);
   if (!draft) return queueItem;
   if (queueItem && (['publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt)) {
-    throw new Error('Publishing, published, or unresolved work cannot be discarded.');
+    throw new DomainValidationError('Publishing, published, or unresolved work cannot be discarded.');
   }
   if (queueItem?.status === 'approved') {
     invalidateQueueApproval(key, { actor: 'human', reason: 'draft discarded after approval' });
@@ -642,13 +645,13 @@ export function discardCandidateDraft(key) {
 
 export function recordManualRepost(key, { actor = 'human' } = {}) {
   requireCandidate(key);
-  if (actor !== 'human') throw new Error('Manual repost completion requires an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Manual repost completion requires an explicit human action.');
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'main' || queueItem.pipeline !== 'repost') {
-    throw new Error('This source is not in the repost workflow.');
+    throw new DomainValidationError('This source is not in the repost workflow.');
   }
   if (queueItem.status !== 'approved') {
-    throw new Error('Approve the repost before recording it as completed.');
+    throw new DomainValidationError('Approve the repost before recording it as completed.');
   }
   const saved = saveQueueItem({
     ...queueItem,
@@ -668,13 +671,16 @@ export function recordManualRepost(key, { actor = 'human' } = {}) {
 export function routeCandidate(key, pipeline, { actor = 'human', reason = '', routeContext = {} } = {}) {
   return runStoreTransaction(() => {
     const candidate = requireCandidate(key);
-    if (!PIPELINES.includes(pipeline)) throw new Error(`Invalid pipeline: ${pipeline}`);
-    if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid routing actor: ${actor}`);
+    if (!PIPELINES.includes(pipeline)) throw new DomainValidationError(`Invalid pipeline: ${pipeline}`);
+    if (!['human', 'agent'].includes(actor)) throw new DomainValidationError(`Invalid routing actor: ${actor}`);
 
     ensureQueueItem(key);
     let previousQueueItem = getQueueItemByCandidate(key);
     if (['publishing', 'published', 'unresolved'].includes(previousQueueItem.status) || previousQueueItem.outputTweetId || previousQueueItem.publishedAt) {
-      throw new Error('Published, publishing, or unresolved items cannot be rerouted; use the publication reconciliation path instead.');
+      throw new DomainValidationError('Published, publishing, or unresolved items cannot be rerouted; use the publication reconciliation path instead.');
+    }
+    if (listQueueSources(previousQueueItem.id).length === 0) {
+      linkQueueSource(previousQueueItem.id, candidate.key, 'primary');
     }
     if (previousQueueItem.status === 'approved') {
       invalidateQueueApproval(key, { actor, reason: `route changed from ${previousQueueItem.pipeline} to ${pipeline} after approval` });
@@ -696,7 +702,7 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
           && routingDecision.routingReason === previousQueueItem.routingReason;
         const agentJudgment = actor === 'agent' ? getActiveAgentPriorityJudgment(previousQueueItem) : null;
         if (!humanOverride && !agentJudgment) {
-          throw new Error(actor === 'agent'
+          throw new DomainValidationError(actor === 'agent'
             ? 'This opportunity is currently recommended Ignore and has no active run-scoped agent priority judgment.'
             : 'This opportunity is currently recommended Ignore. Choose “Use anyway” and provide a reason before routing it into authored or repost work.');
         }
@@ -712,10 +718,10 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
         conversationRelevanceCandidate: parentConversation ? getCandidate(parentConversation.candidateKey) : null,
       });
       if (growthFit.state === 'unknown') {
-        throw new Error('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
+        throw new DomainValidationError('Growth fit needs a current classification before this opportunity can move into authored or repost work. Rescore candidates from Growth Focus.');
       }
       if (!growthFit.allowed) {
-        throw new Error('This opportunity is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
+        throw new DomainValidationError('This opportunity is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before proceeding.');
       }
     }
     const state = routeState(pipeline);
@@ -796,17 +802,17 @@ export function routeCandidate(key, pipeline, { actor = 'human', reason = '', ro
 export function setBehaviorDecision(key, input = {}, { actor = 'human' } = {}) {
   return runStoreTransaction(() => {
     const candidate = requireCandidate(key);
-    if (!['human', 'agent'].includes(actor)) throw new Error(`Invalid behavior actor: ${actor}`);
+    if (!['human', 'agent'].includes(actor)) throw new DomainValidationError(`Invalid behavior actor: ${actor}`);
     const queueItem = getQueueItemByCandidate(key);
-    if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+    if (!queueItem) throw new DomainValidationError(`Queue item not found: ${key}`);
     if (!TEXT_PIPELINES.has(queueItem.pipeline)) {
-      throw new Error(`Behavior selection requires a routed text pipeline; current pipeline is ${queueItem.pipeline || 'missing'}.`);
+      throw new DomainValidationError(`Behavior selection requires a routed text pipeline; current pipeline is ${queueItem.pipeline || 'missing'}.`);
     }
     if (['approved', 'publishing', 'published', 'unresolved'].includes(queueItem.status)
         || queueItem.humanApprovedAt
         || queueItem.outputTweetId
         || queueItem.publishedAt) {
-      throw new Error('Behavior cannot be changed after approval or publication.');
+      throw new DomainValidationError('Behavior cannot be changed after approval or publication.');
     }
 
     const behavior = selectBehaviorDecision({
@@ -856,7 +862,7 @@ export function requestQueueReview(key) {
   return runStoreTransaction(() => {
     const candidate = requireCandidate(key);
     let queueItem = getQueueItemByCandidate(key);
-    if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+    if (!queueItem) throw new DomainValidationError(`Queue item not found: ${key}`);
 
     if (queueItem.status === 'approved') {
       invalidateQueueApproval(key, { actor: 'system', reason: 'review requested after approval' });
@@ -865,10 +871,10 @@ export function requestQueueReview(key) {
     if (queueItem.pipeline === 'repost') {
       return saveQueueItem({ candidateKey: key, status: 'needs_review' });
     }
-    if (!TEXT_PIPELINES.has(queueItem.pipeline)) throw new Error(`Pipeline ${queueItem.pipeline} cannot request content review.`);
+    if (!TEXT_PIPELINES.has(queueItem.pipeline)) throw new DomainValidationError(`Pipeline ${queueItem.pipeline} cannot request content review.`);
 
     const draft = getDraftByCandidate(key);
-    if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    if (!draft) throw new DomainValidationError(`Draft required for ${queueItem.pipeline}.`);
     const analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
     const savedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     return {
@@ -882,26 +888,26 @@ export function requestQueueReview(key) {
 export function approveQueueItem(key) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
-  if (!queueItem) throw new Error(`Queue item not found: ${key}`);
-  if (!MAIN_FEED_PIPELINES.has(queueItem.pipeline)) throw new Error(`Pipeline ${queueItem.pipeline} is not a main-feed approval route.`);
-  if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before approval.');
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${key}`);
+  if (!MAIN_FEED_PIPELINES.has(queueItem.pipeline)) throw new DomainValidationError(`Pipeline ${queueItem.pipeline} is not a main-feed approval route.`);
+  if (queueItem.status !== 'needs_review') throw new DomainValidationError('Queue item must be in needs_review before approval.');
 
   let draft = null;
   let analysis = null;
   if (queueItem.pipeline === 'repost') {
     const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem.relevance?.humanOverride || null });
-    if (growthFit.state === 'unknown') throw new Error('Growth fit needs a current classification before repost approval.');
-    if (!growthFit.allowed) throw new Error('This repost is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before approval.');
+    if (growthFit.state === 'unknown') throw new DomainValidationError('Growth fit needs a current classification before repost approval.');
+    if (!growthFit.allowed) throw new DomainValidationError('This repost is outside the configured technical scope. Choose “Use this opportunity anyway” and provide a reason before approval.');
   } else {
     draft = getDraftByCandidate(key);
-    if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    if (!draft) throw new DomainValidationError(`Draft required for ${queueItem.pipeline}.`);
     requireCurrentStrategyDecision(queueItem, draft);
-    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
+    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, { requireContentReview: false }));
     draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     if (!analysis.publishable) {
       const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
       const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-      throw new Error(`Draft is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+      throw new DomainValidationError(`Draft is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
     }
     draft = saveDraft({ ...draft, status: 'ready' });
   }
@@ -928,11 +934,11 @@ export function approveQueueItem(key) {
 export function approveQueueItemAsMissionAgent(key, { grantRevision, verificationProvenance } = {}) {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
-  if (!queueItem) throw new Error(`Queue item not found: ${key}`);
+  if (!queueItem) throw new DomainValidationError(`Queue item not found: ${key}`);
   if (!['main', 'main_feed'].includes(queueItem.lane) || !AUTOMATED_MAIN_FEED_PIPELINES.has(queueItem.pipeline)) {
-    throw new Error('Mission-agent approval is limited to delegated main-feed Original, Quote, Thread, and Repost items.');
+    throw new DomainValidationError('Mission-agent approval is limited to delegated main-feed Original, Quote, Thread, and Repost items.');
   }
-  if (queueItem.status !== 'needs_review') throw new Error('Queue item must be in needs_review before mission-agent approval.');
+  if (queueItem.status !== 'needs_review') throw new DomainValidationError('Queue item must be in needs_review before mission-agent approval.');
 
   requireLiveGrowthOperatorDelegation(grantRevision);
   const provenance = normalizeMissionVerificationProvenance(verificationProvenance);
@@ -943,21 +949,21 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
 
   if (isRepost) {
     const growthFit = assessStrategicRelevance(candidate, { humanOverride: queueItem.relevance?.humanOverride || null });
-    if (growthFit.state === 'unknown') throw new Error('Growth fit needs a current classification before delegated repost approval.');
-    if (!growthFit.allowed) throw new Error('This repost is outside the configured technical scope and cannot use delegated approval without an existing human use-anyway decision.');
+    if (growthFit.state === 'unknown') throw new DomainValidationError('Growth fit needs a current classification before delegated repost approval.');
+    if (!growthFit.allowed) throw new DomainValidationError('This repost is outside the configured technical scope and cannot use delegated approval without an existing human use-anyway decision.');
     requireMissionEvidenceProvenance(queueItem, null, provenance);
   } else {
     requireMissionHookExperimentAssignment(queueItem);
     draft = getDraftByCandidate(key);
-    if (!draft) throw new Error(`Draft required for ${queueItem.pipeline}.`);
+    if (!draft) throw new DomainValidationError(`Draft required for ${queueItem.pipeline}.`);
     requireMissionEvidenceProvenance(queueItem, draft, provenance);
     requireCurrentStrategyDecision(queueItem, draft);
-    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline));
+    analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, { requireContentReview: true }));
     draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
     if (!analysis.publishable) {
       const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
       const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-      throw new Error(`Draft is not mission-agent approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+      throw new DomainValidationError(`Draft is not mission-agent approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
     }
     draft = saveDraft({ ...draft, status: 'ready' });
   }
@@ -994,25 +1000,25 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
 }
 
 export function approveEngagementQueueItem(key, { actor = 'human' } = {}) {
-  if (actor !== 'human') throw new Error('Engagement approval requires an explicit human action.');
+  if (actor !== 'human') throw new DomainValidationError('Engagement approval requires an explicit human action.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
-    throw new Error(`Engagement reply not found: ${key}`);
+    throw new DomainValidationError(`Engagement reply not found: ${key}`);
   }
-  if (queueItem.status !== 'needs_review') throw new Error('Engagement reply must be in needs_review before approval.');
+  if (queueItem.status !== 'needs_review') throw new DomainValidationError('Engagement reply must be in needs_review before approval.');
 
   const draft = getDraftByCandidate(key);
-  if (!draft) throw new Error('A reply draft is required before approval.');
+  if (!draft) throw new DomainValidationError('A reply draft is required before approval.');
   const analysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
   const checkedDraft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });
   if (!analysis.publishable) {
     const firstFailure = analysis.gates?.failures?.[0] || analysis.growthPackaging?.blockers?.[0];
     const detail = firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : '';
-    throw new Error(`Reply is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
+    throw new DomainValidationError(`Reply is not approval-ready. Writing quality is ${analysis.score}/50.${detail}`);
   }
   const approvedText = String(checkedDraft.body || '');
-  if (!approvedText.trim()) throw new Error('Approved reply text cannot be empty.');
+  if (!approvedText.trim()) throw new DomainValidationError('Approved reply text cannot be empty.');
   const readyDraft = saveDraft({ ...checkedDraft, status: 'ready' });
   const captured = runStoreTransaction(() => {
     saveQueueItem({
@@ -1034,10 +1040,10 @@ export function approveEngagementQueueItem(key, { actor = 'human' } = {}) {
 
 export function resolveEngagementItem(key, resolution, reason = '') {
   const queueItem = getQueueItemByCandidate(key);
-  if (!queueItem || queueItem.lane !== 'engagement') throw new Error(`Engagement item not found: ${key}`);
-  if (!['ignore', 'expire'].includes(resolution)) throw new Error(`Invalid engagement resolution: ${resolution}`);
+  if (!queueItem || queueItem.lane !== 'engagement') throw new DomainValidationError(`Engagement item not found: ${key}`);
+  if (!['ignore', 'expire'].includes(resolution)) throw new DomainValidationError(`Invalid engagement resolution: ${resolution}`);
   if (['publishing', 'published', 'unresolved'].includes(queueItem.status) || queueItem.outputTweetId || queueItem.publishedAt) {
-    throw new Error('Published, publishing, or unresolved engagement items cannot be resolved backward.');
+    throw new DomainValidationError('Published, publishing, or unresolved engagement items cannot be resolved backward.');
   }
   const status = resolution === 'ignore' ? 'ignored' : 'expired';
   return saveQueueItem({
@@ -1070,9 +1076,9 @@ async function sendEngagementReplyTransport({
   attemptId,
 }) {
   if (transport === postTweetBrowser) {
-    throw new Error('The legacy repository reply writer is disabled. Use the exact owner-send lane or let a Live autonomous decision remain eligible_live for persistent-agent browser-reply-claim execution.');
+    throw new DomainValidationError('The legacy repository reply writer is disabled. Use the exact owner-send lane or let a Live autonomous decision remain eligible_live for persistent-agent browser-reply-claim execution.');
   }
-  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured; leave autonomous Live work eligible for persistent-agent browser-reply-claim execution.');
+  if (typeof transport !== 'function') throw new DomainValidationError('No daemon-owned X reply mutation transport is configured; leave autonomous Live work eligible for persistent-agent browser-reply-claim execution.');
   const contentGate = authorizeReplyBrowserContent({
     candidateKey: candidate.key,
     text,
@@ -1081,7 +1087,7 @@ async function sendEngagementReplyTransport({
   });
   const attempt = getLatestPublicationAttemptForQueueItem(queueItem.id);
   if (!attempt || attempt.attemptId !== String(attemptId || '')) {
-    throw new Error('Reply transport requires the exact publication attempt created by its claim.');
+    throw new DomainValidationError('Reply transport requires the exact publication attempt created by its claim.');
   }
   markPublicationAttemptSendStarted(attempt.attemptId, {
     now: Date.now(),
@@ -1119,7 +1125,7 @@ async function sendEngagementReplyTransport({
         send: { authority, attemptedAt: Date.now(), recordingError: error.message },
       },
     });
-    throw new Error(`Reply publication outcome is ambiguous and requires reconciliation: ${error.message}`);
+    throw new DomainValidationError(`Reply publication outcome is ambiguous and requires reconciliation: ${error.message}`);
   }
 
   const { tweetId, url } = outputTweetIdentity(result, account);
@@ -1138,7 +1144,7 @@ async function sendEngagementReplyTransport({
         send: { authority, postedAt: Date.now(), recordingError: 'Transport returned no tweet ID.' },
       },
     });
-    throw new Error('Reply transport completed but returned no tweet ID; item remains publishing for reconciliation and cannot be retried automatically.');
+    throw new DomainValidationError('Reply transport completed but returned no tweet ID; item remains publishing for reconciliation and cannot be retried automatically.');
   }
 
   confirmPublicationAttemptPublished(attempt.attemptId, {
@@ -1223,7 +1229,7 @@ async function sendEngagementReplyTransport({
         send: { authority, postedAt: Date.now(), tweetId, url: url || null, recordingError: error.message },
       },
     });
-    throw new Error(`Reply posted as ${tweetId}, but local recording is incomplete: ${error.message}`);
+    throw new DomainValidationError(`Reply posted as ${tweetId}, but local recording is incomplete: ${error.message}`);
   }
 }
 
@@ -1235,25 +1241,25 @@ export function claimApprovedEngagementReplyForBrowser(key, {
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
-    throw new Error(`Engagement reply not found: ${key}`);
+    throw new DomainValidationError(`Engagement reply not found: ${key}`);
   }
   if (queueItem.status !== 'approved' || !queueItem.humanApprovedAt || !queueItem.approvedText) {
-    throw new Error('Reply must be explicitly human-approved before browser claim.');
+    throw new DomainValidationError('Reply must be explicitly human-approved before browser claim.');
   }
-  if (!queueItem.targetTweetId) throw new Error('Engagement reply is missing targetTweetId.');
+  if (!queueItem.targetTweetId) throw new DomainValidationError('Engagement reply is missing targetTweetId.');
   const draft = getDraftByCandidate(key);
-  if (!draft || draft.status !== 'ready') throw new Error('Approved reply draft is not ready.');
+  if (!draft || draft.status !== 'ready') throw new DomainValidationError('Approved reply draft is not ready.');
   const currentText = String(draft.body || '');
   if (currentText !== queueItem.approvedText) {
     saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
-    throw new Error('Reply text changed after approval; approval was invalidated.');
+    throw new DomainValidationError('Reply text changed after approval; approval was invalidated.');
   }
   const currentAnalysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
   if (!currentAnalysis.publishable || currentAnalysis.gates?.checks?.understandable !== true) {
     saveDraft({ ...draft, gates: currentAnalysis.gates, qualityScore: currentAnalysis.score, status: 'draft' });
     invalidateQueueApproval(key, { actor: 'system', reason: 'Current content gates changed after approval; reply requires review again.' });
     const firstFailure = currentAnalysis.gates?.failures?.[0];
-    throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
+    throw new DomainValidationError(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
   }
   const claimed = claimApprovedEngagementReplyForPublication(queueItem.id, {
     expectedUpdatedAt: queueItem.updatedAt,
@@ -1262,7 +1268,7 @@ export function claimApprovedEngagementReplyForBrowser(key, {
     transport: 'browser_agent',
     claimHolder,
   });
-  if (!claimed) throw new Error('Approved reply browser claim lost or authority changed; re-read engagement state before acting.');
+  if (!claimed) throw new DomainValidationError('Approved reply browser claim lost or authority changed; re-read engagement state before acting.');
   return { candidate, queueItem: claimed.queueItem, attempt: claimed.attempt, draft, analysis: currentAnalysis, exactReply: currentText };
 }
 
@@ -1272,31 +1278,31 @@ export async function sendApprovedEngagementReply(key, {
   transport = postTweetBrowser,
 } = {}) {
   if (transport === postTweetBrowser) {
-    throw new Error('The legacy repository reply writer is disabled. Use persistent-agent browser-reply-claim for this exact approved reply.');
+    throw new DomainValidationError('The legacy repository reply writer is disabled. Use persistent-agent browser-reply-claim for this exact approved reply.');
   }
-  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured.');
+  if (typeof transport !== 'function') throw new DomainValidationError('No daemon-owned X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
-    throw new Error(`Engagement reply not found: ${key}`);
+    throw new DomainValidationError(`Engagement reply not found: ${key}`);
   }
   if (queueItem.status !== 'approved' || !queueItem.humanApprovedAt || !queueItem.approvedText) {
-    throw new Error('Reply must be explicitly human-approved before sending.');
+    throw new DomainValidationError('Reply must be explicitly human-approved before sending.');
   }
-  if (!queueItem.targetTweetId) throw new Error('Engagement reply is missing targetTweetId.');
+  if (!queueItem.targetTweetId) throw new DomainValidationError('Engagement reply is missing targetTweetId.');
   const draft = getDraftByCandidate(key);
-  if (!draft || draft.status !== 'ready') throw new Error('Approved reply draft is not ready.');
+  if (!draft || draft.status !== 'ready') throw new DomainValidationError('Approved reply draft is not ready.');
   const currentText = String(draft.body || '');
   if (currentText !== queueItem.approvedText) {
     saveQueueItem({ ...queueItem, status: 'drafting', humanApprovedAt: null, approvedText: null });
-    throw new Error('Reply text changed after approval; approval was invalidated.');
+    throw new DomainValidationError('Reply text changed after approval; approval was invalidated.');
   }
   const currentAnalysis = scoreDraft(draft, candidate, contentGateContext(key, 'reply'));
   if (!currentAnalysis.publishable || currentAnalysis.gates?.checks?.understandable !== true) {
     saveDraft({ ...draft, gates: currentAnalysis.gates, qualityScore: currentAnalysis.score, status: 'draft' });
     invalidateQueueApproval(key, { actor: 'system', reason: 'Current content gates changed after approval; reply requires review again.' });
     const firstFailure = currentAnalysis.gates?.failures?.[0];
-    throw new Error(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
+    throw new DomainValidationError(`Reply approval is stale under the current content gates.${firstFailure ? ` ${firstFailure.code}: ${firstFailure.message}` : ''}`);
   }
   const claimed = claimApprovedEngagementReplyForPublication(queueItem.id, {
     expectedUpdatedAt: queueItem.updatedAt,
@@ -1304,7 +1310,7 @@ export async function sendApprovedEngagementReply(key, {
     transport: 'reply_transport',
     claimHolder: 'pipeline',
   });
-  if (!claimed) throw new Error('Approved reply transport claim lost or authority changed; re-read engagement state before acting.');
+  if (!claimed) throw new DomainValidationError('Approved reply transport claim lost or authority changed; re-read engagement state before acting.');
   return sendEngagementReplyTransport({
     candidate,
     queueItem: claimed.queueItem,
@@ -1331,20 +1337,20 @@ export async function sendAutonomousEngagementReply(key, {
   transport = postTweetBrowser,
 } = {}) {
   if (transport === postTweetBrowser) {
-    throw new Error('The legacy repository reply writer is disabled. Leave the exact decision eligible_live and use persistent-agent browser-reply-claim execution.');
+    throw new DomainValidationError('The legacy repository reply writer is disabled. Leave the exact decision eligible_live and use persistent-agent browser-reply-claim execution.');
   }
-  if (typeof transport !== 'function') throw new Error('No daemon-owned X reply mutation transport is configured.');
+  if (typeof transport !== 'function') throw new DomainValidationError('No daemon-owned X reply mutation transport is configured.');
   const candidate = requireCandidate(key);
   const queueItem = getQueueItemByCandidate(key);
   if (!queueItem || queueItem.lane !== 'engagement' || queueItem.pipeline !== 'reply') {
-    throw new Error(`Engagement reply not found: ${key}`);
+    throw new DomainValidationError(`Engagement reply not found: ${key}`);
   }
   if (queueItem.humanApprovedAt || queueItem.approvedText) {
-    throw new Error('Autonomous reply authority cannot consume or overwrite human approval.');
+    throw new DomainValidationError('Autonomous reply authority cannot consume or overwrite human approval.');
   }
-  if (!queueItem.targetTweetId) throw new Error('Autonomous engagement reply is missing targetTweetId.');
+  if (!queueItem.targetTweetId) throw new DomainValidationError('Autonomous engagement reply is missing targetTweetId.');
   if (hasCandidateAction(key, 'reply') || queueItem.outputTweetId || ['published', 'unresolved'].includes(queueItem.status)) {
-    throw new Error('This target already has a recorded or unresolved reply; autonomous resend is blocked.');
+    throw new DomainValidationError('This target already has a recorded or unresolved reply; autonomous resend is blocked.');
   }
   const decision = getAutonomousReplyDecision(Number(decisionId));
   if (!decision
@@ -1353,23 +1359,26 @@ export async function sendAutonomousEngagementReply(key, {
     || decision.targetTweetId !== queueItem.targetTweetId
     || Number(decision.grantRevision) !== Number(grantRevision)
     || decision.exactReply !== String(exactReply || '')) {
-    throw new Error('Autonomous reply claim/provenance does not match the exact candidate reply.');
+    throw new DomainValidationError('Autonomous reply claim/provenance does not match the exact candidate reply.');
   }
   const currentGrant = getAutonomousReplyGrantState() || {};
   if (currentGrant.state !== 'running' || currentGrant.mode !== 'live' || Number(currentGrant.revision) !== Number(grantRevision)) {
-    throw new Error('Autonomous reply grant was paused, stopped, or revised after claim; transport is blocked.');
+    throw new DomainValidationError('Autonomous reply grant was paused, stopped, or revised after claim; transport is blocked.');
   }
   if (getAccountHealthSummary().health.state === 'constrained') {
-    throw new Error('Account Health became constrained after autonomous claim; transport is blocked.');
+    throw new DomainValidationError('Account Health became constrained after autonomous claim; transport is blocked.');
   }
   const text = String(exactReply || '').trim();
-  if (!text) throw new Error('Autonomous reply text cannot be empty.');
-  const draft = saveDraft({
+  if (!text) throw new DomainValidationError('Autonomous reply text cannot be empty.');
+  const proposed = {
     ...(generatedDraft || createDraftScaffold(candidate, { pipeline: 'reply' })),
     candidateKey: key,
     body: text,
     status: 'draft',
-  });
+  };
+  const analysis = scoreDraft(proposed, candidate, contentGateContext(key, 'reply', { requireContentReview: true }));
+  if (!analysis.publishable) throw new DomainValidationError('Autonomous reply content/evidence/persona review is no longer current.');
+  const draft = saveDraft(proposed);
   const preparedItem = saveQueueItem({
     ...queueItem,
     draftId: draft.id,
@@ -1378,7 +1387,7 @@ export async function sendAutonomousEngagementReply(key, {
   });
   const attempt = getLatestPublicationAttemptForQueueItem(preparedItem.id);
   if (!attempt || attempt.state !== 'claimed') {
-    throw new Error('Autonomous reply is missing the publication attempt created by its live claim.');
+    throw new DomainValidationError('Autonomous reply is missing the publication attempt created by its live claim.');
   }
   return sendEngagementReplyTransport({
     candidate,
