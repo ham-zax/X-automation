@@ -8,7 +8,7 @@ import {
   setAppState,
   upsertCandidates,
 } from './store.js';
-import { fetchXTargetRecentPosts } from './tech_news.js';
+import { fetchXTargetRecentPosts, rankXViralPosts } from './tech_news.js';
 import { classifyNiche as classifyNicheDefault } from './strategy.js';
 
 const X_SNOWFLAKE_EPOCH = 1288834974657n;
@@ -110,6 +110,8 @@ function normalizeForYouPost(post, diagnostics, index) {
   }
 
   const url = `https://x.com/${username}/status/${tweetId}`;
+  const metrics = candidateMetrics(observedMetrics);
+  const [momentum] = rankXViralPosts([{ url, author: `@${username}`, text, timestamp, ...metrics }]);
   return {
     skipped: false,
     tweetId,
@@ -125,8 +127,9 @@ function normalizeForYouPost(post, diagnostics, index) {
       text,
       url,
       timestamp,
-      score: 0,
-      metrics: candidateMetrics(observedMetrics),
+      score: momentum?.score ?? 0,
+      ...(momentum ? { viral: momentum.viral } : {}),
+      metrics,
     },
   };
 }

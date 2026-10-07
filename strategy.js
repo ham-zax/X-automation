@@ -117,7 +117,7 @@ export const NICHE_GROUPS = [
 
 export const GROWTH_FOCUS_PROFILE_VERSION = 5;
 export const NICHE_LABELS = Object.fromEntries(NICHE_GROUPS.map(({ tag, label }) => [tag, label]));
-export const CANDIDATE_CLASSIFIER_VERSION = 10;
+export const CANDIDATE_CLASSIFIER_VERSION = 11;
 export const GROWTH_FOCUS_OBJECTIVES = Object.freeze([
   'qualified_growth',
   'reach_momentum',
@@ -539,11 +539,11 @@ const TERM_PATTERNS = new Map();
 function containsTerm(haystack, term) {
   let pattern = TERM_PATTERNS.get(term);
   if (!pattern) {
-    const escaped = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    const escaped = term.toLowerCase().replace(/([a-z])(?=\d)/g, '$1 ').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
     pattern = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
     TERM_PATTERNS.set(term, pattern);
   }
-  return pattern.test(haystack);
+  return pattern.test(haystack.replace(/([a-z])(?=\d)/g, '$1 '));
 }
 
 export function assessDiscoveryQuality(text) {

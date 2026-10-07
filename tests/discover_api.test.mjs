@@ -13,6 +13,7 @@ let store
 let webApi
 
 before(async () => {
+  process.env.WEB_AUTH_PASSWORD = 'discover-test-password'
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'discover-api-test-'))
   process.chdir(tmpDir)
   store = await import(pathToFileURL(path.join(REPO, 'store.js')).href)
@@ -68,7 +69,7 @@ async function getApi(url) {
     writeHead(nextStatus) { status = nextStatus },
     end(chunk = '') { body += String(chunk) },
   }
-  await webApi.handleApi({ method: 'GET' }, response, new URL(url))
+  await webApi.handleApi({ method: 'GET', headers: { authorization: `Basic ${Buffer.from('owner:discover-test-password').toString('base64')}` } }, response, new URL(url))
   assert.equal(status, 200, body)
   const parsed = JSON.parse(body)
   assert.equal(parsed.state, 'success')

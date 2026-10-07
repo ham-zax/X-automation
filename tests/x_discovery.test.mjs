@@ -12,6 +12,19 @@ let tmpDir
 let store
 let sourceRefresh
 
+test('configured product terms containing digits match their observed spelling', async () => {
+  const strategy = await import(pathToFileURL(path.join(REPO, 'strategy.js')).href)
+  const original = strategy.getActiveNicheProfile()
+  try {
+    strategy.setActiveNicheProfile({ ...original, contentGroups: original.contentGroups.map(group =>
+      group.tag === 'agents' ? { ...group, terms: [...group.terms, 't3 code'] } : group) })
+    assert.ok(strategy.classifyNiche('T3 Code now has over 400,000 users :)').tags.includes('agents'))
+    assert.equal(strategy.classifyNiche('AT3 Code unrelated').matches.includes('t3 code'), false)
+  } finally {
+    strategy.setActiveNicheProfile(original)
+  }
+})
+
 before(async () => {
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'x-discovery-test-'))
   process.chdir(tmpDir)
@@ -215,6 +228,22 @@ test('authenticated For You ingest validates, normalizes, deduplicates, and reco
   const repeated = discovery.ingestXForYouObservation(payload)
   assert.equal(repeated.acceptedCount, 2)
   assert.equal(store.getSourceMomentum(first.key, 'x_for_you').previous, null)
+})
+
+test('fresh browser observations retain canonical breakout momentum without filling missing metrics', async () => {
+  const discovery = await loadXDiscovery()
+  const observedAt = Date.now()
+  const tweetId = tweetIdForTimestamp(observedAt - 3_600_000, 29n)
+  const result = discovery.ingestXForYouObservation({ kind: 'x_for_you', observedAt, accountHandle: 'ham_zax', posts: [{
+    tweetId, username: 'builder', url: `https://x.com/builder/status/${tweetId}`, rank: 1,
+    text: 'An LLM coding agent needs a reliable API recovery path.', metrics: { views: 110000 },
+  }] })
+  assert.equal(result.acceptedCount, 1)
+  const candidate = store.getCandidate(`https://x.com/builder/status/${tweetId}`)
+  assert.equal(candidate.viral.tier, 'breakout')
+  assert.ok(candidate.viral.viewsPerHour >= 100000)
+  assert.equal(candidate.metrics.likes, undefined)
+  assert.equal(candidate.metrics.retweets, undefined)
 })
 
 test('invalid or zero-valid For You batches preserve last-known-good snapshot and record source error', async () => {
