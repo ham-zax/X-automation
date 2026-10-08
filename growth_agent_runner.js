@@ -194,7 +194,7 @@ Writing:
 - An original must have its own angle; never near-copy an inspiration source.
 - No hashtags. No emoji unless the source uses them. No links in replies.
 - English unless the source is in another language; then answer in that language.
-- Persona and wording detail: docs/POST_GENERATION_PROMPT.md (reading it is optional).
+- Persona: before your first draft, read the active persona once with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
 
 Stop:
 - Stop when \`scout\` returns no actionable cards (no T1/T2 card and no new mentions) two passes in a row.
