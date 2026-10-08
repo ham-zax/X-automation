@@ -120,9 +120,28 @@ try {
     assert.equal(args[args.indexOf('--provider') + 1], 'opencode2api');
     assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
     for (const flag of ['--model', '--max-model-steps', '--web', '--fallback-models']) assert.equal(args.includes(flag), false);
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'other' }), /must be muse or pi/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'other' }), /must be muse, pi, or codex/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'nemotron-free' }), /not allowed/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'ling-3.1-flash' }), /not allowed/);
+  });
+  await test('Claive Codex pins gpt-6-luna at max effort in yolo mode without unsupported flags', () => {
+    const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' });
+    assert.equal(config.model, 'gpt-6-luna');
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex', X_GROWTH_AGENT_MODEL: 'gpt-6' }), /require gpt-6-luna/);
+    const command = runner.commandFor(config, 'work', { promptFile: '/tmp/operator.md' });
+    const { args } = command;
+    assert.equal(args[args.indexOf('--engine') + 1], 'codex');
+    assert.equal(args[args.indexOf('--model') + 1], 'gpt-6-luna');
+    assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
+    assert.equal(args.includes('--web'), true);
+    for (const flag of ['--max-model-steps', '--provider', '--session-id', '--output-schema', '--fallback-models']) assert.equal(args.includes(flag), false);
+    assert.deepEqual(command.env, { CLAIVE_CODEX_YOLO: '1' });
+  });
+  await test('Claive Muse and Pi commands carry no yolo env', () => {
+    for (const engine of ['muse', 'pi']) {
+      const command = runner.commandFor(runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: engine }), 'work', { promptFile: '/tmp/operator.md' });
+      assert.equal(command.env, undefined, engine);
+    }
   });
   await test('prompt follows the browser target and no longer hardcodes the WebHarness path', () => {
     const base = { runtime: 'pi', sessionId: 'pi-1', maxDurationMinutes: 20 };
@@ -578,6 +597,13 @@ test('a real child that prints a 429 is persisted as rate_limited through main, 
     assert.equal(stderr.chunks.join(''), 'fwd-err HTTP 429 Too Many Requests\n');
     assert.deepEqual(await readState(file), { consecutiveFailures: 1, lastKind: 'rate_limited', lastAt: 100_000, notBefore: 220_000 });
   });
+});
+
+test('runChild merges command env into the child environment', async () => {
+  const stdout = sink();
+  await runner.runChild({ executable: process.execPath, args: ['-e', "process.stdout.write(String(process.env.CLAIVE_CODEX_YOLO))"], env: { CLAIVE_CODEX_YOLO: '1' } },
+    { cwd: tmpdir(), timeoutMs: 10_000, stdout, stderr: sink() });
+  assert.equal(stdout.chunks.join(''), '1');
 });
 
 test('runChild forwards large output unchanged and rejects with only the last 16 KiB for classification', async () => {

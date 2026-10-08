@@ -23,6 +23,7 @@ const DEFAULT_OPENCODE_MODEL = 'opencode/muse-spark-1.3-contributor-free';
 const DEFAULT_CODEX_BIN = path.join(HOME, '.nvm/versions/node/v24.19.0/bin/codex');
 const DEFAULT_CLAIVE_BIN = path.join(HOME, '.local/bin/claive');
 const CLAIVE_MODEL = 'muse-spark-1.3-contributor';
+const CLAIVE_CODEX_MODEL = 'gpt-6-luna';
 const DEFAULT_PI_BIN = path.join(HOME, '.local/bin/pi');
 const CURRENT_PI_BIN = path.join(HOME, '.pi/agent/bin/pi');
 
@@ -68,13 +69,17 @@ export function runtimeConfig(env = process.env) {
     throw new Error(`Unsupported X_GROWTH_AGENT_RUNTIME=${runtime}. Expected ${RUNTIMES.join(', ')}.`);
   }
   const claiveEngine = String(env.X_GROWTH_CLAIVE_ENGINE || 'muse').trim().toLowerCase();
-  if (runtime === 'claive' && !['muse', 'pi'].includes(claiveEngine)) {
-    throw new Error('X_GROWTH_CLAIVE_ENGINE must be muse or pi.');
+  if (runtime === 'claive' && !['muse', 'pi', 'codex'].includes(claiveEngine)) {
+    throw new Error('X_GROWTH_CLAIVE_ENGINE must be muse, pi, or codex.');
   }
-  const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : (runtime === 'claive' && claiveEngine === 'muse') || runtime === 'muse' ? CLAIVE_MODEL : '';
+  const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : (runtime === 'claive' && claiveEngine === 'muse') || runtime === 'muse' ? CLAIVE_MODEL
+    : runtime === 'claive' && claiveEngine === 'codex' ? CLAIVE_CODEX_MODEL : '';
   const model = String(env.X_GROWTH_AGENT_MODEL || defaultModel).trim();
   if (runtime === 'claive' && claiveEngine === 'muse' && model !== CLAIVE_MODEL) {
     throw new Error(`Claive Muse workers require ${CLAIVE_MODEL}; alternate engines/models need explicit owner authorization.`);
+  }
+  if (runtime === 'claive' && claiveEngine === 'codex' && model !== CLAIVE_CODEX_MODEL) {
+    throw new Error(`Claive Codex workers require ${CLAIVE_CODEX_MODEL}; alternate engines/models need explicit owner authorization.`);
   }
   const loweredModel = model.toLowerCase();
   if (loweredModel.includes('nemotron') || /(^|[\/_.:-])ling(?:$|[\/_.:-])/.test(loweredModel)) {
@@ -301,6 +306,11 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
       args.push('--provider', 'opencode2api', '--reasoning-effort', 'max');
       if (engineSessionId) args.push('--session-id', engineSessionId);
       if (config.model) args.push('--model', config.model);
+    } else if (config.claiveEngine === 'codex') {
+      // The codex engine rejects --max-model-steps and --output-schema and needs no provider or session flag.
+      // Yolo: claive's codex engine drops its Codex sandbox only when CLAIVE_CODEX_YOLO=1 is set for the child.
+      args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
+      return { executable: config.executable, args, env: { CLAIVE_CODEX_YOLO: '1' } };
     } else {
       args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
         '--max-model-steps', '100', '--web');
@@ -371,7 +381,7 @@ export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000, 
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('A positive child deadline is required.');
   return new Promise((resolve, reject) => {
     const child = spawn(command.executable, command.args, {
-      cwd, env: { ...process.env, PATH: `${path.join(HOME, '.local/bin')}:${process.env.PATH || ''}` }, shell: false, detached: true,
+      cwd, env: { ...process.env, ...command.env, PATH: `${path.join(HOME, '.local/bin')}:${process.env.PATH || ''}` }, shell: false, detached: true,
       stdio: [command.stdinPrompt ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
     let failure = null;
