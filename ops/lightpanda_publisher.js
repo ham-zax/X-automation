@@ -6,8 +6,24 @@ const TWEET_ID_RE = /^\d{5,25}$/;
 const PAGE_READ = `return (() => {
   const editor = document.querySelector('[data-testid="tweetTextarea_0"]')
     || document.querySelector('[role="textbox"][contenteditable="true"]');
-  const btn = document.querySelector('[data-testid="tweetButton"]')
-    || document.querySelector('[data-testid="tweetButtonInline"]');
+  const composer = editor?.closest('[role="dialog"]');
+  const btn = composer?.querySelector('[data-testid="tweetButton"]')
+    || composer?.querySelector('[data-testid="tweetButtonInline"]');
+  // X omits status links in its reply modal. Read only the rendered article's
+  // own tweet props; never infer parent identity from the URL or author text.
+  function tweetIdentity(article) {
+    const key = Object.keys(article).find(name => name.startsWith('__reactFiber$'));
+    for (let fiber = key && article[key], depth = 0; fiber && depth < 24; fiber = fiber.return, depth++) {
+      if (fiber.stateNode === composer) break;
+      const tweet = fiber.memoizedProps?.tweet;
+      if (tweet?.id_str) return {
+        id: String(tweet.id_str),
+        parentId: String(tweet.in_reply_to_status_id_str || ''),
+        quoteId: String(tweet.quoted_status_id_str || '')
+      };
+    }
+    return { id: '', parentId: '', quoteId: '' };
+  }
   const account = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
   return {
     url: location.href,
@@ -16,8 +32,10 @@ const PAGE_READ = `return (() => {
     profilePresent: !!account,
     editorText: editor?.innerText || editor?.textContent || '',
     sendButton: btn ? {selector: '[data-testid="'+btn.getAttribute('data-testid')+'"]', text: btn.innerText || '', disabled: !!btn.disabled || btn.getAttribute('aria-disabled') === 'true'} : null,
-    context: (document.body?.innerText || '').slice(0, 3000),
+    context: (composer?.innerText || '').slice(0, 3000),
+    composerParents: Array.from(composer?.querySelectorAll('article[data-testid="tweet"]') || []).map(tweetIdentity),
     articles: Array.from(document.querySelectorAll('article[data-testid="tweet"]')).slice(0, 14).map(article => ({
+      ...tweetIdentity(article),
       text: article.querySelector('[data-testid="tweetText"]')?.innerText || '',
       links: Array.from(article.querySelectorAll('a[href*="/status/"]')).map(a=>a.href).slice(0,15),
       visible: (article.innerText || '').slice(0, 500)
@@ -91,13 +109,14 @@ function parsedReceipts(result) {
   return Array.isArray(candidate) ? candidate : [];
 }
 function acceptedReceipt(receipt, input, now) {
-  if (!receipt || !isFresh(String(receipt.id || ''), now)) return false;
+  if (!receipt || !Number.isInteger(receipt.status) || receipt.status < 200 || receipt.status >= 300 || receipt.errors
+    || !isFresh(String(receipt.id || ''), now)) return false;
   const actual = compact(receipt.text);
   const expected = compact(input.expectedText);
   if (actual !== expected && !(input.action === 'quote' && actual === compact(`${input.expectedText} ${input.targetUrl}`))) return false;
   if (input.action === 'reply') return String(receipt.parent) === String(input.targetTweetId || '');
   if (receipt.parent) return false;
-  if (input.action === 'quote') return new RegExp(`/status/${String(input.targetTweetId)}(?:[/?#]|$)`).test(receipt.attachment + ' ' + actual);
+  if (input.action === 'quote') return new RegExp(`/status/${String(input.targetTweetId)}(?:[/?#]|$)`).test(receipt.attachment);
   return true;
 }
 
@@ -123,7 +142,8 @@ export async function driveLightpandaSend(input, deps = {}) {
     if (!['reply', 'quote', 'original'].includes(input.action) || !expected) {
       return { outcome: 'not_sent', reason: 'invalid_lightpanda_intent', evidence: { sendBoundaryCrossed: false, notSentProof: { kind: 'mutation_not_dispatched', detail: 'Invalid action or text; no browser operation attempted.' } } };
     }
-    client = await new LightpandaMcpClient().connect();
+    client = deps.client || new LightpandaMcpClient();
+    await client.connect();
     await client.tool('goto', { url: input.intentUrl, waitUntil: 'domcontentloaded', timeout: 15000 }, 19000);
     await client.tool('waitForState', { state: 'networkidle', timeout: 6500 }, 8500).catch(() => null);
     const before = await inspect(client);
@@ -134,22 +154,31 @@ export async function driveLightpandaSend(input, deps = {}) {
     if (actual !== clickExpected && actual !== expected) throw new Error('Lightpanda composer text does not exactly match approved content');
     if (input.action === 'reply') {
       const target = String(input.targetTweetId || '');
-      if (!TWEET_ID_RE.test(target) || !compact(before.context).toLowerCase().includes('replying to')) {
+      if (!TWEET_ID_RE.test(target) || before.composerParents?.length !== 1
+        || before.composerParents[0].id !== target
+        || !compact(before.context).toLowerCase().includes('replying to')) {
         throw new Error('Lightpanda reply target/context not independently verified');
       }
       if (input.targetAuthor && !compact(before.context).toLowerCase().includes(String(input.targetAuthor).replace(/^@/, '').toLowerCase())) {
         throw new Error('Lightpanda target author not shown in reply composer');
       }
     }
-    if (input.action === 'quote' && !actual.includes(String(input.targetTweetId || ''))) {
-      throw new Error('Lightpanda quote source ID missing from composer');
+    if (input.action === 'quote') {
+      const sourceUrl = input.targetUrl || (String(input.expectedText).match(/https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+/) || [])[0];
+      const target = String(input.targetTweetId || '');
+      if (!TWEET_ID_RE.test(target) || !sourceUrl
+        || !new RegExp(`^https://x\\.com/[A-Za-z0-9_]+/status/${target}(?:[/?#]|$)`).test(sourceUrl)
+        || !actual.includes(sourceUrl)) {
+        throw new Error('Lightpanda quote source URL does not match the exact approved target');
+      }
     }
     if (!before.sendButton || before.sendButton.disabled || !/^(post|reply)$/i.test(compact(before.sendButton.text))) {
       throw new Error('Lightpanda composer has no verified enabled Post/Reply control');
     }
     const audit = await client.tool('evaluate', { script: SEND_AUDIT_INSTALL }, 10000);
     if (!String(audit.text || '').includes('true') && audit.data !== true) throw new Error('Cannot install single-send network audit');
-    await beforeClick({ composerVerified: true, browser: 'lightpanda', intentUrl: input.intentUrl });
+    await beforeClick({ composerVerified: true, browser: 'lightpanda', intentUrl: input.intentUrl,
+      verifiedParentTweetId: input.action === 'reply' ? before.composerParents[0].id : null });
     state.sent = true; // mark boundary BEFORE the single potentially consequential RPC.
     state.clickedAt = Date.now();
     await client.tool('click', { selector: before.sendButton.selector }, 20000);
@@ -169,12 +198,14 @@ export async function driveLightpandaSend(input, deps = {}) {
     const after = await inspect(client);
     const candidates = (after.articles || []).filter(a => compact(a.text) === expected);
     for (const article of candidates) {
-      const id = (article.links || []).map(link => urlTweetId(link, handle)).find(id => id && isFresh(id, state.clickedAt));
+      const id = (article.links || []).map(link => urlTweetId(link, handle)).find(id => id && id === article.id && isFresh(id, state.clickedAt));
       if (!id) continue;
       // A matching fresh post is not sufficient to prove a Reply or Quote's
-      // target structure: require the exact source status link in this article.
+      // target structure: require this rendered tweet's actual parent/quote ID.
       const relation = String(input.targetTweetId || '');
-      if (input.action !== 'original' && !(article.links || []).some(link => new RegExp(`/status/${relation}(?:[/?#]|$)`).test(link))) continue;
+      if (input.action === 'reply' && article.parentId !== relation) continue;
+      if (input.action === 'quote' && article.quoteId !== relation) continue;
+      if (input.action === 'original' && (article.parentId || article.quoteId)) continue;
       return { outcome: 'published', reason: 'lightpanda_fresh_profile_structural_match', evidence: {
         outputTweetId: id, outputUrl: `https://x.com/${handle}/status/${id}`, browser: 'lightpanda',
         action: input.action, targetTweetId: relation, verifiedExactText: true, verifiedFreshId: true,

@@ -23,7 +23,9 @@ export class LightpandaMcpClient {
     });
     this.child.on('error', () => this.failAll(new Error('Lightpanda MCP subprocess failed')));
     this.child.on('exit', () => this.failAll(new Error('Lightpanda MCP subprocess exited')));
-    await this.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'xgrowth', version: '1' } });
+    try {
+      await this.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'xgrowth', version: '1' } });
+    } catch (error) { this.close(); throw error; }
     this.child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
     return this;
   }

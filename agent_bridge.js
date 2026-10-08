@@ -1736,6 +1736,7 @@ async function main() {
       targetAuthor: author,
       targetSnippet: sourceText,
       targetTweetId: validated.targetTweetId,
+      targetUrl: validated.targetUrl,
     }, {
       beforeClick: (evidence) => {
         markPublicationAttemptSendStarted(claim.attempt.attemptId, {
