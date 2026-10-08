@@ -1,6 +1,9 @@
 import { applyAcceptedLearnedRules } from './learning.js';
 
 const HOUR_MS = 3_600_000;
+const MINUTE_MS = 60_000;
+export const ORIGINAL_SPACING_MINUTES = 90;
+export const MAIN_FEED_SPACING_MINUTES = 30;
 const MAIN_FEED_LANES = new Set(['main', 'main_feed']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
@@ -9,16 +12,16 @@ const SEMANTIC_CONFLICT_THRESHOLD = 0.50;
 
 export const SCHEDULER_EMPIRICAL_ASSUMPTIONS = Object.freeze([
   Object.freeze({
-    code: 'ORDINARY_SPACING',
+    code: 'ORIGINAL_SPACING',
     classification: 'EMPIRICAL_VARIABLE',
-    hours: 3,
-    note: 'Coverage target, not an X platform rule or enforcement threshold.',
+    minutes: ORIGINAL_SPACING_MINUTES,
+    note: 'Owner-set coverage preference (2026-10-08) between Originals. Not an X platform rule or enforcement threshold.',
   }),
   Object.freeze({
-    code: 'EVERGREEN_SPACING',
+    code: 'MAIN_FEED_SPACING',
     classification: 'EMPIRICAL_VARIABLE',
-    preferredHours: [4, 6],
-    note: 'Editorial coverage preference; the upper end is used when the previous post is observably accelerating.',
+    minutes: MAIN_FEED_SPACING_MINUTES,
+    note: 'Owner-set coverage preference (2026-10-08) between any two main-feed posts. Not an X platform rule or enforcement threshold.',
   }),
   Object.freeze({
     code: 'VIRAL_HARD_FLOOR',
@@ -156,9 +159,13 @@ function stableKey(item) {
   return String(item?.id ?? item?.candidateKey ?? item?.candidate_key ?? item?.key ?? '');
 }
 
-function spacingTargetHours(item, previousPost = null) {
-  if (urgencyOf(item) !== 'evergreen') return 3;
-  return previousPost?.accelerating === true || previousPost?.isAccelerating === true ? 6 : 4;
+function isOriginal(post) {
+  return String(post?.pipeline || '') === 'original';
+}
+
+function pairSpacingMs(item, previousPost = null) {
+  const minutes = isOriginal(item) && isOriginal(previousPost) ? ORIGINAL_SPACING_MINUTES : MAIN_FEED_SPACING_MINUTES;
+  return minutes * MINUTE_MS;
 }
 
 function latestPublishedPost(recentPosts = [], lastMainFeedPostAt = null) {
@@ -372,7 +379,7 @@ export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
   if (delay) {
     for (const match of blockingMatches) {
       if (match.publishedAt == null) continue;
-      const candidateDelay = match.publishedAt + spacingTargetHours(item, match.recent) * HOUR_MS;
+      const candidateDelay = match.publishedAt + pairSpacingMs(item, match.recent);
       delayUntil = delayUntil == null ? candidateDelay : Math.max(delayUntil, candidateDelay);
     }
   }
@@ -489,13 +496,15 @@ export function recommendMainFeedSchedule(item, context = {}) {
   }
 
   const latest = latestPublishedPost(context.recentPosts || [], context.lastMainFeedPostAt ?? context.last_main_feed_post_at);
-  const spacingHours = spacingTargetHours(item, latest.post);
-  let recommendedAt = latest.publishedAt == null
-    ? now
-    : Math.max(now, latest.publishedAt + spacingHours * HOUR_MS);
+  const latestOriginal = latestPublishedPost((context.recentPosts || []).filter(isOriginal));
+  const spacingGates = [];
+  if (latest.publishedAt != null) spacingGates.push(latest.publishedAt + MAIN_FEED_SPACING_MINUTES * MINUTE_MS);
+  if (isOriginal(item) && latestOriginal.publishedAt != null) spacingGates.push(latestOriginal.publishedAt + ORIGINAL_SPACING_MINUTES * MINUTE_MS);
+  let recommendedAt = Math.max(now, ...spacingGates);
 
-  if (latest.publishedAt != null && recommendedAt > now) {
-    addIssue(warnings, 'COVERAGE_SPACING', `${urgency === 'evergreen' ? 'Evergreen' : 'Ordinary'} coverage spacing suggests waiting about ${spacingHours}h after the previous main-feed post.`);
+  if (spacingGates.length && recommendedAt > now) {
+    const originalClause = isOriginal(item) ? `, and ${ORIGINAL_SPACING_MINUTES} min after the previous Original` : '';
+    addIssue(warnings, 'COVERAGE_SPACING', `Main-feed coverage spacing suggests waiting until ${new Date(recommendedAt).toISOString()}: ${MAIN_FEED_SPACING_MINUTES} min after the previous main-feed post${originalClause}.`);
   }
   if (latest.post?.accelerating === true || latest.post?.isAccelerating === true) {
     addIssue(warnings, 'PREVIOUS_POST_ACCELERATING', 'The most recent supplied main-feed post is still accelerating; spacing remains an editorial coverage preference.');
