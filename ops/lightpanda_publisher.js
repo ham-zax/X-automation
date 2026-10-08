@@ -50,28 +50,47 @@ export const SEND_AUDIT_INSTALL = `return (() => {
   if (window.__xGrowthAuditInstalled) return true;
   window.__xGrowthAuditInstalled = true;
   window.__xGrowthTweetReceipts = [];
+  const tracked = url => String(url || '').split('?')[0].endsWith('/CreateTweet');
+  function capture(body, data, status) {
+    const payload = JSON.parse(body || '{}');
+    const variables = typeof payload.variables === 'string' ? JSON.parse(payload.variables) : payload.variables || {};
+    const result = data?.data?.create_tweet?.tweet_results?.result;
+    window.__xGrowthTweetReceipts.push({
+      status, text: String(variables.tweet_text || ''),
+      parent: String(variables.reply?.in_reply_to_tweet_id || ''),
+      attachment: String(variables.attachment_url || ''),
+      id: String((result?.tweet || result)?.rest_id || ''),
+      errors: Array.isArray(data?.errors) && data.errors.length > 0,
+      errorCodes: (data?.errors || []).map(error => error.code).filter(Number.isInteger),
+    });
+  }
   const nativeFetch = window.fetch;
   window.fetch = function(...args) {
-    const url = String(typeof args[0] === 'string' ? args[0] : args[0]?.url || '');
-    const tracked = /\\/CreateTweet(?:\\?|$)/i.test(url);
-    const body = tracked && typeof args[1]?.body === 'string' ? args[1].body : '';
+    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+    const body = typeof args[1]?.body === 'string' ? args[1].body : '';
     const promise = nativeFetch.apply(this, args);
-    if (tracked) Promise.resolve(promise).then(async response => {
-      try {
-        const payload = JSON.parse(body || '{}');
-        const variables = typeof payload.variables === 'string' ? JSON.parse(payload.variables) : payload.variables || {};
-        const data = await response.clone().json();
-        window.__xGrowthTweetReceipts.push({
-          status: response.status,
-          text: String(variables.tweet_text || ''),
-          parent: String(variables.reply?.in_reply_to_tweet_id || ''),
-          attachment: String(variables.attachment_url || ''),
-          id: String(data?.data?.create_tweet?.tweet_results?.result?.rest_id || ''),
-          errors: Array.isArray(data?.errors) && data.errors.length > 0,
-        });
-      } catch { /* Incomplete audit evidence remains unresolved. */ }
+    if (tracked(url)) Promise.resolve(promise).then(async response => {
+      try { capture(body, await response.clone().json(), response.status); } catch {}
     }).catch(() => {});
     return promise;
+  };
+  // X also uses XMLHttpRequest. Observe its real completion without changing
+  // the request, headers, event propagation, or acceptance behavior.
+  const requests = new WeakMap();
+  const nativeOpen = XMLHttpRequest.prototype.open;
+  const nativeSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function(...args) {
+    requests.set(this, String(args[0]).toUpperCase() === 'POST' && tracked(args[1]));
+    return nativeOpen.apply(this, args);
+  };
+  XMLHttpRequest.prototype.send = function(...args) {
+    if (requests.get(this)) {
+      const body = typeof args[0] === 'string' ? args[0] : '';
+      this.addEventListener('loadend', () => {
+        try { capture(body, this.responseType === 'json' ? this.response : JSON.parse(this.responseText), this.status); } catch {}
+      }, { once: true });
+    }
+    return nativeSend.apply(this, args);
   };
   return true;
 })()`;
@@ -185,7 +204,18 @@ export async function driveLightpandaSend(input, deps = {}) {
     await client.tool('waitForState', { state: 'networkidle', timeout: 6500 }, 8500).catch(() => null);
     // A verified successful CreateTweet response is stronger than UI/toasts.
     let receipts = [];
-    try { receipts = parsedReceipts(await client.tool('evaluate', { script: 'return window.__xGrowthTweetReceipts || []' }, 9000)); } catch {}
+    let postClickState = null;
+    try {
+      postClickState = await client.tool('evaluate', { script: `return JSON.stringify({
+        receipts: window.__xGrowthTweetReceipts || [],
+        editorPresent: !!document.querySelector('[data-testid="tweetTextarea_0"]'),
+        alerts: Array.from(document.querySelectorAll('[role="alert"], [data-testid="toast"]')).map(node => (node.innerText || '').slice(0, 300))
+      })` }, 9000);
+      let observed = postClickState.data ?? postClickState.text;
+      for (let i = 0; i < 3 && typeof observed === 'string'; i++) observed = JSON.parse(observed);
+      postClickState = observed;
+      receipts = parsedReceipts({ data: observed?.receipts });
+    } catch { postClickState = null; }
     const confirmed = receipts.find(receipt => acceptedReceipt(receipt, input, state.clickedAt));
     if (confirmed) return { outcome: 'published', reason: 'lightpanda_createtweet_response', evidence: {
       outputTweetId: confirmed.id, outputUrl: `https://x.com/${handle}/status/${confirmed.id}`, browser: 'lightpanda',
@@ -215,6 +245,11 @@ export async function driveLightpandaSend(input, deps = {}) {
     return { outcome: 'unresolved', reason: 'lightpanda_send_no_structural_proof', evidence: {
       sendBoundaryCrossed: true, browser: 'lightpanda', profilePageAvailable: Boolean(after?.profilePresent),
       matchingArticles: candidates.length,
+      receiptCount: receipts.length,
+      responseStatuses: receipts.map(receipt => receipt.status),
+      responseErrorCodes: receipts.flatMap(receipt => receipt.errorCodes || []),
+      postClickEditorPresent: postClickState?.editorPresent ?? null,
+      postClickAlerts: postClickState?.alerts || [],
     } };
   } catch (error) {
     const reason = String(error?.message || error).slice(0, 200);

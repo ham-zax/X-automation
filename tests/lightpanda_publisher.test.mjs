@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { driveLightpandaSend } from '../ops/lightpanda_publisher.js';
+import { runInNewContext } from 'node:vm';
+import { driveLightpandaSend, SEND_AUDIT_INSTALL } from '../ops/lightpanda_publisher.js';
 
 process.env.X_ACCOUNT = 'ham_zax';
 const target = '2108272338123079709';
@@ -28,11 +29,11 @@ function fixture(action = 'reply', options = {}) {
     async tool(name, args) {
       if (name === 'click') { clicked++; if (options.clickError) throw Error('Connection lost during click'); }
       if (name === 'evaluate') {
-        if (args.script.includes('return window.__xGrowthTweetReceipts')) return { data: [{
+        if (args.script.includes('receipts: window.__xGrowthTweetReceipts')) return { data: { receipts: [{
           status: 200, errors: false, id: ownId(), text: body,
           parent: action === 'reply' ? target : '', attachment: action === 'quote' ? targetUrl : '',
           ...options.receipt,
-        }] };
+        }], editorPresent: false, alerts: [] } };
         if (args.script.includes('window.fetch =')) return { data: true };
         return { data: clicked ? { ...before, articles: options.articles || [] } : before };
       }
@@ -106,4 +107,39 @@ test('preflight refusal does not dispatch the mutation', async () => {
   assert.equal(r.outcome, 'not_sent');
   assert.equal(r.evidence.sendBoundaryCrossed, false);
   assert.equal(f.counts().clicked, 0);
+});
+
+test('send audit observes native XHR and fetch without dispatching extra requests or retaining secrets', async () => {
+  const id = ownId();
+  const payload = JSON.stringify({ variables: { tweet_text: text, reply: { in_reply_to_tweet_id: target } }, secret: 'must-not-be-retained' });
+  const data = { data: { create_tweet: { tweet_results: { result: { rest_id: id } } } }, secret: 'must-not-be-retained' };
+  let fetchCalls = 0;
+  let xhrCalls = 0;
+  class FakeXhr {
+    open(method, url) { this.method = method; this.url = url; }
+    addEventListener(name, callback) { this.complete = callback; }
+    send(body) { xhrCalls++; this.body = body; this.status = 200; this.responseText = JSON.stringify(data); this.complete?.(); }
+  }
+  const window = { fetch(...args) {
+    fetchCalls++;
+    assert.equal(args[1].body, payload);
+    return Promise.resolve({ status: 200, clone: () => ({ json: async () => data }) });
+  } };
+  assert.equal(runInNewContext('(function(){' + SEND_AUDIT_INSTALL + '})()', { window, XMLHttpRequest: FakeXhr }), true);
+  assert.equal(fetchCalls + xhrCalls, 0);
+  const xhr = new FakeXhr();
+  xhr.open('POST', 'https://x.com/i/api/graphql/operation/CreateTweet');
+  xhr.send(payload);
+  await window.fetch('https://x.com/i/api/graphql/operation/CreateTweet', { body: payload });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(xhr.body, payload);
+  assert.equal(fetchCalls, 1);
+  assert.equal(xhrCalls, 1);
+  assert.equal(window.__xGrowthTweetReceipts.length, 2);
+  for (const receipt of window.__xGrowthTweetReceipts) {
+    assert.equal(receipt.id, id);
+    assert.equal(receipt.parent, target);
+    assert.equal(receipt.text, text);
+    assert.equal(JSON.stringify(receipt).includes('must-not-be-retained'), false);
+  }
 });
