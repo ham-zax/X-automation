@@ -1,4 +1,4 @@
-/* Cadence project page. Static CSS, no scripts, no third-party requests.
+/* Threadloom project page. Static CSS, no scripts, no third-party requests.
    Base styles are the final, readable state. Every animation lives inside
    prefers-reduced-motion: no-preference, so reduced-motion visitors get a still page. */
 
@@ -363,7 +363,7 @@ footer a { color: var(--muted); }
   .windows li { font-size: 0.8rem; }
 }
 
-/* Cadence field-notes art direction: restrained botanical ink + signal lime.
+/* Threadloom field-notes art direction: restrained botanical ink + signal lime.
    CSS-only examples remain interactive; no network fonts, scripts or motion dependence. */
 body {
   background: radial-gradient(ellipse 42rem 30rem at 100% 0%, rgba(215,243,107,.055), transparent 75%), var(--bg);
