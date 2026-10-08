@@ -48,6 +48,8 @@ Available commands:
 - `inspect` - inspect one stored candidate, its draft, current exact-candidate disposition, recorded actions, action-time source context, and available output/outcome evidence.
 - `create-draft` - save/route a candidate into a text pipeline and create/reuse the structured Hook/Insight/Evidence/Action scaffold.
 - `update-draft` - update/rescore a draft; `status: ready` now means **request workflow review**, not self-approval.
+- `scout` - read-only ranked action cards for a delegated Growth Operator: a T0 mentions check, at most one T2 original, and T1 reply cards with at most one quote; also returns `pace` against the 15-reply floor and 20-reply target. It performs no writes or sends.
+- `act` - one deterministic send for a reply, quote, or original: validate, run lease, attribution and near-copy checks, atomic claim (Account Health and delegation checked there), browser intent-URL send, confirmation, and reconciliation. It never sets human approval and never re-sends an uncertain attempt.
 - `mission-approve` - approve an eligible exact main-feed draft/Repost under the current live delegation, active Growth Run/session lease, and source/evidence provenance; authored content requires a current passing content review. It never sets human approval metadata. Supply `key`, `runId`, `sessionId`, `grantRevision`, and `verificationProvenance` (`authorityType: mission_agent`, exact `sourceReferences`, and `evidenceReferences`).
 - `queue` - inspect workflow queue items plus the temporary compatibility draft queue.
 - `operator-status` - read the compact cross-lane cockpit: active persona version/status, account/health, last-known discovery, lane champions, write readiness, due measurements, and queue-integrity warnings. It performs no network refresh or mutation.
@@ -414,7 +416,7 @@ Current writing-quality dimensions:
 
 These total 40 raw writing points and are proportionally normalized to the 50-point writing-quality scale. Growth fit and Growth Packaging are separate; the score is not a virality or follower-growth prediction.
 
-Ordinary owner approval for authored main-feed text requires at least **40/50** and a passing deterministic gate result. The 50-point score is purpose-aware: purpose, clarity, provenance, originality, and realization. Gates cover behavior validity, purpose/context integrity, factual and implied-biographical provenance, strategic relevance, source/recent duplication, understandability/placeholders/weighted length, CTA/treatment/media integrity, and format rules. Approval recomputes the latest saved content. Original/Quote/Thread approval sets the queue item to `approved` and its draft to compatibility `ready`; Repost has no Writer draft and uses current Growth Focus plus source/provenance authority. For Engage Next, owner approval freezes the exact reply body for later `browser-reply-claim`; it does not itself mutate X.
+Ordinary owner approval (the dashboard lane) for authored main-feed text requires at least **40/50** and a passing deterministic gate result. The 50-point score is purpose-aware: purpose, clarity, provenance, originality, and realization. Gates cover behavior validity, purpose/context integrity, factual and implied-biographical provenance, strategic relevance, source/recent duplication, understandability/placeholders/weighted length, CTA/treatment/media integrity, and format rules. Approval recomputes the latest saved content. Original/Quote/Thread approval sets the queue item to `approved` and its draft to compatibility `ready`; Repost has no Writer draft and uses current Growth Focus plus source/provenance authority. For Engage Next, owner approval freezes the exact reply body for later `browser-reply-claim`; it does not itself mutate X.
 
 ## Queue and automation interaction
 
@@ -430,6 +432,18 @@ Phase 1A workflow is current:
 6. Engage Next uses the same drafting/content gates. Manual replies retain their explicit owner approval lane, while delegated autonomous reply evaluation uses its separate grant. A persistent Growth Operator may execute a reply through its browser-agent lane only when the exact reply authority/grant, target, current content gates, Account Health, and live thread context support that action; the background daemon does not inherit browser authority.
 7. Phase 3 uses the approved **main-feed queue row** as publication authority. The scheduler computes priority/time without changing approval; an optional concrete human time override is stored separately from approval. Browser-agent publication must claim the exact due approved row before the consequential click so another execution plane cannot publish the same item concurrently.
 8. With `AUTO_POST=true`, the background daemon may atomically claim one due main-feed row only when its compliant official X API transport supports that exact route; unsupported Quote/Repost/local-media work stays `approved` and unclaimed. Separately, the persistent Growth Operator may use the browser-agent execution lane for Original/Quote/Thread/Repost; this does not turn `AUTO_POST` into a browser publisher.
+
+### Delegated scout → act path
+
+For a running Live Growth Operator delegation, the scout → act loop handles one action at a time:
+
+1. `scout` returns read-only ranked cards: a T0 mentions check, at most one T2 original, then T1 reply cards with at most one quote. Its `pace` reports confirmed replies in the last 24 hours against the floor and target.
+2. The reasoning agent writes text for one card.
+3. `act` validates the text and target, checks attribution and near-copy, atomically claims the exact action (checking Account Health and the live delegation grant there), sends through the x.com intent URL, confirms, and reconciles.
+
+Only objective checks block this path: the duplicate/near-copy fence, attribution checks, no re-send of an uncertain attempt, Account Health not CONSTRAINED, length and placeholders, the live delegation grant, and the run lease. The 50-point score, LLM content review, and persona tone are advisory there. The path never sets `humanApprovedAt`. Reply volume has no cap. Main-feed spacing (about 90 minutes between Originals, 30 minutes between any two main-feed posts) is applied by `scout` when it chooses cards; `act` does not re-check it.
+
+The dashboard lane and the older writer-packet/approval routes keep their existing gates. Attempt states and reconciliation rules are in `docs/GROWTH_RUN_PROTOCOL.md`.
 
 Inspect workflow state:
 

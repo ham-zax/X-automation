@@ -96,6 +96,23 @@ Growth Focus is also evolvable under live delegation. `growth-focus-expand` may 
 
 An unattended adapter should verify the existing Windows X session/account before beginning whenever practical. If authentication is established or changes after begin, resume the same run with updated truthful capabilities rather than starting a second run.
 
+## Scout → act loop
+
+Delegated runs may use a shorter loop for one action at a time. It follows the same run, lease, and attempt rules as the rest of this protocol.
+
+```bash
+printf '%s\n' '{"limit":10}' | npm run agent -- scout
+printf '%s\n' '{"action":"reply","text":"<text>","targetTweetId":"<id>","candidateKey":"<key>","runId":"<run-id>","sessionId":"<session>"}' | npm run agent -- act
+```
+
+`scout` is read-only. Its `pace` block reports confirmed replies in the last 24 hours against the floor (15) and target (20); when behind, the niche and velocity floors relax. Its `cards` are: a T0 mentions check first; at most one T2 original when the last original is at least 90 minutes old, the main feed is free, and fewer than four originals were posted in 24 hours; then T1 reply cards ranked by velocity, niche, and freshness, with at most one quote of a breakout post whose author has not been replied to in 24 hours.
+
+`act` performs one send for the text the agent wrote for a card. It validates the input, checks the run lease when a `runId` is supplied, runs attribution and near-copy checks against the card source, checks the duplicate fence, and atomically claims the exact action. That claim checks Account Health and the live delegation grant. Only then does `act` record `send_started` at the browser click, send through the x.com intent URL, and confirm the result from the CreateTweet response or the post toast.
+
+The outcomes are `confirmed_published`, `confirmed_not_sent`, or `closed_unresolved`. A confirmed send records the candidate action and relationship event inside `act`. A `closed_unresolved` result is never retried; the exact action stays duplicate-fenced.
+
+Main-feed spacing is applied when `scout` chooses cards. `act` does not re-check it, so spacing depends on the agent acting on a current `scout` result.
+
 ## Personalized For You sensing
 
 `x_for_you` is a browser-agent observation source, not a background HTTP pull source.
@@ -152,7 +169,7 @@ For Browser Fast Reply execution, take one final fresh read-only snapshot after 
 
 ### Reconciliation
 
-`confirmed_published` requires positive live/transport evidence and route-specific structure. Browser publication should normally reconcile through `record-action` with the same attempt ID plus structural `publicationVerification`.
+`confirmed_published` requires positive live/transport evidence and route-specific structure. Browser publication should normally reconcile through `record-action` with the same attempt ID plus structural `publicationVerification`. The `act` command reconciles internally (see the scout → act loop) and does not need a separate `record-action` call.
 
 `confirmed_not_sent` is retry authority, so it requires definitive evidence that the mutation was never dispatched or that the transport rejected it before acceptance. The bridge records that proof explicitly as `evidence.notSentProof.kind = mutation_not_dispatched | transport_rejected`. Composer persistence, a missing toast, or failure to find a post on X—even after a short wait—are not proof of not-sent.
 

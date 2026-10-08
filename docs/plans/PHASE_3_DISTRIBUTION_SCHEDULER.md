@@ -113,6 +113,8 @@ Urgency is a project classification, not a hidden X label.
 
 ## Initial Main-Feed Spacing Heuristics
 
+Superseded on 2026-10-08 for the delegated scout → act path: current spacing is about 90 minutes between Originals and 30 minutes between any two main-feed posts (`scheduler.js` lines 5-6, `scout.js` `SCOUT_DEFAULTS`). The values below are the original plan and are kept as history.
+
 Tag these `EMPIRICAL_VARIABLE`.
 
 ```text

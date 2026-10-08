@@ -417,10 +417,12 @@ The system should optimize **coverage**, not attempt to disguise automation.
 Initial editorial defaults:
 
 - serialize all original/quote/thread/repost publications;
-- preferred evergreen spacing: roughly 4-6 hours;
-- ordinary separation target: roughly 3 hours, advisory rather than a hard floor;
+- preferred evergreen spacing: roughly 4-6 hours (superseded 2026-10-08, see note below);
+- ordinary separation target: roughly 3 hours, advisory rather than a hard floor (superseded 2026-10-08, see note below);
 - do not post merely because a slot exists;
 - if two queued items are semantically similar, prefer the stronger one and delay/expire the weaker one.
+
+The two spacing bullets above are superseded as of 2026-10-08: current spacing is about 90 minutes between Originals and 30 minutes between any two main-feed posts.
 
 These are project defaults, not claims about hidden X enforcement.
 

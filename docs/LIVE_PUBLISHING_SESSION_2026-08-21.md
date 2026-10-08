@@ -250,7 +250,7 @@ Final prepared public copy:
 
 Growth Packaging was ready: clear stopping power/payoff, native Quote distribution leverage, no separate source URL requirement, no forced question, no media requirement, and a clear Apply strategy state.
 
-The item was explicitly approved once, but the existing scheduler declined an immediate second post after Slack and recommended `2026-08-21T16:46:53.502Z` (22:16:53 Asia/Kolkata), with a coverage-spacing warning of about four hours. The mission cap is not a quota, and one repaired live item had already exercised the complete production path. Rather than keep latent publication authority solely to increase the post count, the item was routed back through the normal Quote path.
+The item was explicitly approved once, but the existing scheduler declined an immediate second post after Slack and recommended `2026-08-21T16:46:53.502Z` (22:16:53 Asia/Kolkata), with a coverage-spacing warning of about four hours (historical; the 2026-10-08 rule is about 30 minutes between main-feed posts and 90 minutes between Originals). The mission cap is not a quota, and one repaired live item had already exercised the complete production path. Rather than keep latent publication authority solely to increase the post count, the item was routed back through the normal Quote path.
 
 Final inactive state:
 
