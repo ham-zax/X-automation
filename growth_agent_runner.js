@@ -29,6 +29,10 @@ const CLAIVE_CODEX_MODEL = 'gpt-6-luna';
 const DEFAULT_PI_BIN = path.join(HOME, '.local/bin/pi');
 const CURRENT_PI_BIN = path.join(HOME, '.pi/agent/bin/pi');
 
+function contextRecoveryPrompt() {
+  return readFileSync(path.join(REPO, 'docs/GROWTH_CONTEXT_RECOVERY.md'), 'utf8');
+}
+
 // Prefer an explicit X_GROWTH_PI_BIN; otherwise use whichever installed Pi
 // executable exists. The legacy ~/.local/bin/pi path may only be a
 // compatibility symlink, so the current ~/.pi/agent/bin/pi layout is an
@@ -205,6 +209,8 @@ Start:
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
 - Read \`growth-run-next\`. If it recommends \`recover_attempt\` or names an unfinished publication attempt, stop and reconcile that attempt first: read the "Recover an unfinished publication" section of docs/GROWTH_AGENT_EXECUTION.md, decide only from live evidence, and never resend it.
 
+${contextRecoveryPrompt()}
+
 Loop:
 - Track time from the begin call with \`date +%s%3N\`. Keep looping until about 3 minutes before the maxDurationMinutes budget ends.
 - Each pass: run \`npm run --silent agent -- scout\` with JSON \`{"limit":10}\`. Read the whole result (\`pace\` and \`cards\`) before acting.
@@ -231,7 +237,7 @@ Writing:
 - An original must have its own angle; never near-copy an inspiration source.
 - No hashtags. No emoji unless the source uses them. No links in replies.
 - English unless the source is in another language; then answer in that language.
-- Persona: before your first draft, read the active persona once with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
+- Persona: before your first draft and after every context compaction, read the active persona with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
 
 Stop:
 - Stop after two separately observed and successfully ingested discovery passes yield no worthwhile cards or new mentions. If collection is forbidden by run ceilings, finish with that actual reason instead of inferring no worthwhile work.
@@ -276,6 +282,8 @@ This is an OPERATIONAL growth session, not a software-engineering task.
 
 Execute this checklist first; it is included here so no separate discovery or historical-plan reading is needed:
 ${readFileSync(path.join(REPO, 'docs/GROWTH_AGENT_EXECUTION.md'), 'utf8')}
+
+${contextRecoveryPrompt()}
 
 Use the existing Growth OS, not just the browser. Its purpose is qualified developer/builder follower growth through purposeful content and recurring relationships:
 - Discovery/selection: operator-status, growth-next, cached engage-next, current Growth Focus, and exact live sources. X conversations feed Replies/Quotes/Reposts; GitHub Trending and HN feed researched Originals/Threads. Consult relationship-targets/relationship-inspect for relevant relationships and active responses.
@@ -709,8 +717,9 @@ export async function main(overrides = {}) {
         const attempts = deps.attempts({ runId: run.runId, limit: 100 });
         const uncertain = attempts.some(attempt => ['send_started', 'investigating'].includes(attempt.state));
         const followup = `Continue the SAME Growth Run ${run.runId}, sessionId ${sessionId}. Retained history and all existing operational boundaries still apply. Do not begin a new run or obtain another claim for an existing attempt.
+${contextRecoveryPrompt()}
 Your previous progress sentence ended the model turn without executing the described action. Call the next supported tool now, or finish through growth-run-finish with a concrete blocker.
-${attempts.length ? 'First inspect the existing publication-attempts for this run.' : 'The launcher verified that this run has no publication attempts. Execute the pending operation from your previous turn now (for example x-for-you-ingest with the already observed posts), or execute the currently permitted growth-run-next operation. Do not repeat queue/status/discovery inspection before completing that pending operation.'} ${uncertain
+${attempts.length ? 'First inspect the existing publication-attempts for this run.' : 'The launcher verified that this run has no publication attempts. Execute the pending operation from your previous turn now (for example x-for-you-ingest with the already observed posts), or execute the currently permitted growth-run-next operation. Apart from required context recovery, do not repeat queue/status/discovery inspection before completing that pending operation.'} ${uncertain
           ? 'RECONCILIATION ONLY this turn: a send has started or is uncertain. Inspect exact live output and reconcile through the bridge. Never click Post/Reply/Repost again or dispatch any public mutation.'
           : 'An owned claimed attempt may continue only under its exact current authority: re-observe the exact source/tab, use its existing attemptId, call send-start immediately before one send, then verify and reconcile. Unknown outcomes permit reconciliation only, never another send.'}
 Finish the durable run when done; do not end with another progress-only statement.

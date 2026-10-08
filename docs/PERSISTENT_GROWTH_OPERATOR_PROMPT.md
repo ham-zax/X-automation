@@ -73,6 +73,11 @@ Live X may correct stale observations. It does not override Growth OS approval/q
 
 ## Startup gates
 
+At startup and after every context compaction or incomplete-history resume,
+follow `docs/GROWTH_CONTEXT_RECOVERY.md` before drafting or sending. Reload the
+active persona even if an earlier turn already read it, and recover current
+run, attempt and conversation state from their owners rather than chat alone.
+
 Establish the minimum state needed for this invocation, then enter the loop:
 
 1. Inspect HEAD and working-tree status in `/home/hamza/repo/x_test`; preserve all existing work.

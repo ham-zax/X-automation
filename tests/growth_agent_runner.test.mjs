@@ -276,6 +276,8 @@ try {
       } else {
         assert.equal(id, engineId);
         assert.match(prompt, /SAME Growth Run same-run/);
+        assert.match(prompt, /after every context compaction/);
+        assert.match(prompt, /Reload `persona-model`/);
         assert.ok(prompt.includes(activeRun.sessionId));
         assert.match(prompt, count === 1 ? /owned claimed attempt/ : /RECONCILIATION ONLY/);
       }
@@ -367,10 +369,12 @@ test('GROWTH_AGENT_MODE defaults to executor, accepts legacy, and rejects other 
   assert.throws(() => runner.runtimeConfig({ GROWTH_AGENT_MODE: 'fast' }), /GROWTH_AGENT_MODE/);
 });
 
-test('default executor prompt is a compact scout and act loop with run and session bindings', () => {
+test('default executor prompt is a compact scout and act loop with run and session bindings', async () => {
   const base = { runtime: 'claive', sessionId: 'claive-s1', maxDurationMinutes: 15, browserTarget: 'linux', agentBrowserCli: '/bin/ab', cdpPort: '9333' };
   const executor = runner.buildOperatorPrompt({ ...base });
   const legacy = runner.operatorPrompt(base);
+  const recovery = await readFile(path.join(root, 'docs/GROWTH_CONTEXT_RECOVERY.md'), 'utf8');
+  for (const prompt of [executor, legacy]) assert.ok(prompt.includes(recovery));
   for (const text of ['scout', 'act', 'record-disposition', 'runId', 'sessionId `claive-s1`', 'https://x.com/notifications/mentions',
     'growth-run-begin', 'adapterType `claive_unattended`', 'ceilings.maxPublicMutations=8', 'ceilings.maxDurationMinutes=15']) {
     assert.ok(executor.includes(text), text);

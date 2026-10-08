@@ -14,8 +14,9 @@ chosen by `GROWTH_AGENT_MODE`:
 - `executor` (default): a compact scout, write, act loop. It runs `scout`,
   handles the T0 mentions check, T1 reply/quote cards and T2 originals, and
   sends each post through `act` with the run ID and session ID. It does not
-  embed this document. It reads only "Recover an unfinished publication" below,
-  and only when `growth-run-next` recommends `recover_attempt`.
+  embed this document. Both modes embed `docs/GROWTH_CONTEXT_RECOVERY.md` for
+  startup and post-compaction recovery; executor reads "Recover an unfinished
+  publication" below when `growth-run-next` recommends `recover_attempt`.
 - `legacy` (`GROWTH_AGENT_MODE=legacy`): the previous multi-step prompt, which
   embeds this whole document.
 
@@ -43,6 +44,10 @@ stdout/stderr. `runChild` forwards that output unchanged as it arrives, so a
 429 or 5xx line in the output is what drives `rate_limited` or `provider_error`.
 
 ## Resume work before discovery
+
+After compaction or an incomplete-history resume, first follow
+`docs/GROWTH_CONTEXT_RECOVERY.md`, including a fresh persona read. Compaction
+does not authorize a new run, reset a budget, or make an uncertain send retryable.
 
 Read `operator-status`, begin/resume the run and inspect `growth-run-next`.
 An executable `next.claim` outranks collecting another feed sample. Inspect
