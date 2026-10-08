@@ -1,4 +1,4 @@
-# ARM 24/7 operator handoff — 2026-10-07
+# ARM 24/7 operator handoff — 2026-10-07, updated 2026-10-08
 
 Written for the next agent (any model) to take over. This file lives in a public repository: it names no secrets, addresses or key paths. Server access details are in Hamza's private `myservers` repository.
 
@@ -18,6 +18,7 @@ Hamza asked that no extra code or review effort be spent on the supervision laye
 - **Drop-ins.** `model.conf` (Pi-era `X_GROWTH_AGENT_MODEL=opencode2api/big-pickle`) was moved aside to `model.conf.bak-202610081627`, because any non-luna model makes the runner refuse to start. `experiment.conf` (`X_GROWTH_AGENT_EXPERIMENT=1`) is still installed.
 - **Workspace allowlist.** claive on ARM refuses workspaces missing from `workspaces` in its `~/.config/claive/config.json`. `/home/ubuntu/repo/x_test` (write: true) was added on 2026-10-08. If it is missing, the run fails with `workspace ... is outside the claive config workspaces allowlist`.
 - **Watchdog.** `x-test-watch.timer` (the Pi/opencode2api watchdog that rewrote `model.conf`) is stopped and does not apply to the codex runtime. Do not restart it without rewriting it. `claive-serve.service` and the dashboard stay active.
+- **Browser.** Codex reads X with the Agent Browser CLI (`~/.local/bin/agent-browser --cdp 9222`), but `act` sends and confirms through `wh-browser` (`fast` observe/execute and `devtools` page/network reads). ARM has no GUI, so `~/.local/bin/wh-browser` there (installed 2026-10-08, not in git) is a copy of the WSL CLI with the WSLg display/audio env removed, the providers path set to `/home/ubuntu/repo/webharness/providers`, `DISPLAY=:99`, the `fast` tier given the `AGENT_BROWSER_*` env from `~/.config/mcp-dev-bridge/local-servers.json`, and no `jev` tier. Both tiers attach to the persistent Chromium on CDP 9222 (`webharness-chrome.service` on Xvfb) through `~/.config/mcp-dev-bridge/browser-fast.json`. Without it `act` fails before sending with `spawnSync wh-browser ENOENT`.
 - **Prompt.** The operator prompt defaults to the scout → act executor (`GROWTH_AGENT_MODE`, default `executor`). `GROWTH_AGENT_MODE=legacy` restores the old prompt.
 - **Backoff.** After a `rate_limited` or `provider_error` child result, the runner waits 2^n minutes (n = consecutive failures, capped at 30) before its next pass. State is kept in `$XDG_STATE_HOME/x_test/growth-runner-backoff.json` (default `~/.local/state/x_test/`). `X_GROWTH_AGENT_BACKOFF_FILE` overrides the path. `X_GROWTH_AGENT_BACKOFF=off` disables the gate.
 - **Deploying code.** Run `git pull --ff-only` in `/home/ubuntu/repo/x_test` and `/home/ubuntu/repo/claive` (claive is a symlinked install from that checkout). Units live in `~/.config/systemd/user/`; then run `systemctl --user daemon-reload`. Restart `x-test-dashboard.service` only when dashboard or server code changed. Over non-interactive ssh, export `XDG_RUNTIME_DIR=/run/user/$(id -u)` and put `~/.local/bin` on `PATH`.
@@ -39,7 +40,7 @@ Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config
 | --- | --- |
 | `x-test-dashboard.service` | Dashboard on 127.0.0.1:3030 (owner auth). |
 | `x-test-growth-agent.timer` / `.service` | Every ~15 min runs `node growth_agent_runner.js` (oneshot, 9 h timeout). Env: `X_GROWTH_AGENT_RUNTIME=pi`, `X_GROWTH_BROWSER_TARGET=linux`, `X_GROWTH_BROWSER_CDP_PORT=9222`, `X_GROWTH_AGENT_WINDOW_MINUTES=480`, `AI_ALLOW_RUNTIME_MANAGED=true`. An active service coalesces timer wakes. |
-| `x-test-growth-agent.service.d/model.conf` | Drop-in setting `X_GROWTH_AGENT_MODEL` (currently `opencode2api/muse-spark-1.3-contributor-free`). The watchdog rewrites this file to switch models. |
+| `x-test-growth-agent.service.d/model.conf` | Pi-era drop-in setting `X_GROWTH_AGENT_MODEL` (an `opencode2api/...` model), rewritten by the watchdog to switch models. Moved aside on 2026-10-08; not installed under claive+codex. |
 | `x-test-growth-agent.service.d/experiment.conf` | Drop-in setting `X_GROWTH_AGENT_EXPERIMENT=1`: adds the **experiment-mode** section to the operator prompt (see below). Delete the file and `daemon-reload` to return to the cautious default prompt. |
 | `x-test-watch.timer` / `.service` | Every 30 min queues the **watchdog goal** into claive if the queue is empty. |
 | `claive-serve.service` | claive supervisor; works the goal queue (config `~/.config/claive/config.json`, default engine `pi`, worker model `exo-free`). |
