@@ -101,7 +101,7 @@ export function runtimeConfig(env = process.env) {
   const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
     || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
   const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
-    || 'agent-browser-cli')
+    || 'lightpanda-mcp')
     .trim().toLowerCase();
   if (!BROWSER_INTERFACES.includes(browserInterface)) {
     throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
@@ -114,13 +114,17 @@ export function runtimeConfig(env = process.env) {
   if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
     throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
   }
-  const researchBrowser = String(env.X_GROWTH_RESEARCH_BROWSER || 'none').trim().toLowerCase();
+  const researchBrowser = String(env.X_GROWTH_RESEARCH_BROWSER || 'lightpanda-mcp').trim().toLowerCase();
   if (!RESEARCH_BROWSERS.includes(researchBrowser)) {
     throw new Error(`X_GROWTH_RESEARCH_BROWSER must be ${RESEARCH_BROWSERS.join(' or ')}.`);
   }
   const lightpandaMcpServer = String(env.X_GROWTH_LIGHTPANDA_MCP_SERVER || 'xgrowth_lightpanda').trim();
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(lightpandaMcpServer)) {
     throw new Error('X_GROWTH_LIGHTPANDA_MCP_SERVER must be a simple MCP server name.');
+  }
+  const publishBrowser = String(env.X_GROWTH_PUBLISH_BROWSER || 'lightpanda-mcp').trim().toLowerCase();
+  if (!['lightpanda-mcp', 'webharness-fast'].includes(publishBrowser)) {
+    throw new Error('X_GROWTH_PUBLISH_BROWSER must be lightpanda-mcp or webharness-fast.');
   }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
@@ -139,6 +143,7 @@ export function runtimeConfig(env = process.env) {
     browserFastBackend,
     researchBrowser,
     lightpandaMcpServer,
+    publishBrowser,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
@@ -156,10 +161,10 @@ export function runtimeConfig(env = process.env) {
   };
 }
 
-function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
+function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }) {
   if (browserTarget === 'linux') {
     return {
-      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }),
+      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }),
       observe: 'Before beginning a run, observe the current authenticated X tab and positively confirm @ham_zax; do not log in or enter credentials. If account verification fails, begin with x_authenticated=false and browser_mutation=false and report the blocker.',
       session: 'authenticated headless X session',
     };
@@ -174,8 +179,8 @@ function browserSection({ browserTarget, browserInterface, browserMcpServer, bro
   };
 }
 
-function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
-  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
+function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }) {
+  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId });
   return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
 }
 
@@ -184,7 +189,8 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
 // maxDurationMinutes lines: the launcher and tests read them from the prompt.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote',
+  lightpandaMcpServer = 'xgrowth_lightpanda' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Bias toward action: when eligible cards exist, complete at least 2 public actions per pass. The bridge gates still apply.
 ` : '';
@@ -193,7 +199,7 @@ This is an OPERATIONAL growth session, not a software-engineering task. Goal: qu
 
 Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
-- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
+- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId })}
 - Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
@@ -252,8 +258,9 @@ export function buildOperatorPrompt({ mode = 'executor', ...options }) {
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
-  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote',
+  lightpandaMcpServer = 'xgrowth_lightpanda' }) {
+  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
 - Each pass should complete at least 2 public actions when any eligible candidate exists. Prefer well-grounded replies to fresh For You posts first; if replies are dry, write and publish one original post or quote grounded in what you just observed. Do not stop after a thin feed: re-collect, use the editorial plan, or advance existing drafts and approved queue items.
