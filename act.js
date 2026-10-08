@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { whBrowserTransport } from './ops/browser_publish_transport.js';
 import { MAIN_FEED_SPACING_MINUTES, ORIGINAL_SPACING_MINUTES } from './scheduler.js';
 
 const MINUTE_MS = 60_000;
@@ -167,38 +167,6 @@ export function findBlockingAttemptForTarget(targetTweetId, attempts = []) {
 
 export function findDuplicateTextAttempt(text, attempts = []) {
   return attempts.find((attempt) => isNearCopy(text, attempt.approvedContent || '')) || null;
-}
-
-function runWhBrowser(args, { timeoutMs = 30000 } = {}) {
-  const result = spawnSync('wh-browser', args, { encoding: 'utf8', timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 });
-  if (result.error) throw new Error(`wh-browser failed: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`wh-browser exit ${result.status}: ${String(result.stderr || result.stdout || '').slice(0, 500)}`);
-  try {
-    return JSON.parse(String(result.stdout || ''));
-  } catch {
-    return { raw: String(result.stdout || '') };
-  }
-}
-
-function fastObserve(tab = null, scope = 'compact') {
-  const payload = tab ? { scope, tab } : { scope };
-  return runWhBrowser(['fast', 'observe', JSON.stringify(payload)]);
-}
-
-function fastExecute(tab, actions, finalState = 'compact') {
-  return runWhBrowser(['fast', 'execute', JSON.stringify({ tab, actions, final_state: finalState })], { timeoutMs: 60000 });
-}
-
-function devtoolsListPages() {
-  return runWhBrowser(['devtools', 'list_pages', '{}']);
-}
-
-function devtoolsListNetwork(pageId, pageSize = 1000) {
-  return runWhBrowser(['devtools', 'list_network_requests', JSON.stringify({ pageId, pageSize, resourceTypes: ['xhr', 'fetch'], includePreservedRequests: true })], { timeoutMs: 30000 });
-}
-
-function devtoolsGetNetwork(pageId, reqid) {
-  return runWhBrowser(['devtools', 'get_network_request', JSON.stringify({ pageId, reqid })], { timeoutMs: 30000 });
 }
 
 function snapshotText(observeResult) {
@@ -523,11 +491,11 @@ async function runComposerSend({ intentUrl, expectedText, action, targetAuthor =
 
 export async function driveBrowserSend(input, deps = {}) {
   const env = {
-    observe: deps.observe || fastObserve,
-    execute: deps.execute || fastExecute,
-    listPages: deps.listPages || devtoolsListPages,
-    listNetwork: deps.listNetwork || devtoolsListNetwork,
-    getNetwork: deps.getNetwork || devtoolsGetNetwork,
+    observe: deps.observe || whBrowserTransport.observe,
+    execute: deps.execute || whBrowserTransport.execute,
+    listPages: deps.listPages || whBrowserTransport.listPages,
+    listNetwork: deps.listNetwork || whBrowserTransport.listNetwork,
+    getNetwork: deps.getNetwork || whBrowserTransport.getNetwork,
     sleep: deps.sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     beforeClick: deps.beforeClick || (() => {}),
     now: deps.now || Date.now,

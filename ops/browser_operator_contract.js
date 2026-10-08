@@ -1,0 +1,25 @@
+// Browser-specific instructions live behind one small seam; Growth OS owns all sends.
+// Switching a browser must not change the action/claim/reconciliation protocol.
+export const BROWSER_INTERFACES = Object.freeze(['webharness-mcp', 'agent-browser-cli']);
+
+function cliInstructions({ agentBrowserCli, cdpPort, sessionId }) {
+  const cli = `${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId}`;
+  return `Fallback browser CLI: read its installed contract first with \`${agentBrowserCli} skills get core\` (or \`skills get core --full\`). Use only \`${cli} <command>\` against the EXISTING authenticated Chromium on port ${cdpPort}; never create another profile or browser.
+Correct CLI syntax: \`tab list --json\` to discover stable IDs, then \`tab t2\` only if t2 is the observed X tab (not \`tabs\` or \`tab 2\`); \`snapshot -i\` or \`snapshot\` for fresh refs; \`get attr @e1 href\` for an attribute (element first); \`get url\` for current URL. Do not guess command names or reuse stale refs.
+If a click is blocked by \`div#layers\` or another covering element, it was NOT dispatched. Observe the covering UI: use its current visible Close/Cancel control only when safe, or \`press Escape\` only if it cannot discard draft content. Re-snapshot before attempting any DIFFERENT pre-send action. Never force-click, script around overlays, or blindly repeat an action with uncertain effects.`;
+}
+
+export function browserOperatorContract({ browserTarget, browserInterface, agentBrowserCli, cdpPort, sessionId, browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  if (browserTarget !== 'linux') return ''; // Windows uses the existing browser-fast + native-dialog policy.
+  const fallback = cliInstructions({ agentBrowserCli, cdpPort, sessionId });
+  if (browserInterface === 'agent-browser-cli') {
+    return `Browser interface: agent-browser-cli (selected explicitly). ${fallback}
+Publishing boundary: ONLY the Growth OS bridge \`act\` may send; browser commands here are for observation and pre-send preparation. If any send might have been dispatched, stop UI mutations and reconcile through the existing attempt; never re-send.`;
+  }
+  if (browserInterface !== 'webharness-mcp') throw new Error(`Unsupported browser interface: ${browserInterface}`);
+  return `Browser interface: webharness-mcp (typed opt-in). Use ONLY the Codex typed MCP tools \`mcp__${browserMcpServer}__observe\` and \`mcp__${browserMcpServer}__execute\` from server \`${browserMcpServer}\`. Do not infer they are unavailable without attempting the typed observe call. Do not invoke a shell browser CLI, including skill-lookup commands, when this interface is selected.
+To inspect: \`observe\` with browser_target="linux", browser_backend="${browserFastBackend}", scope="interactive" (or "full" for post URLs). Carry returned \`active_tab\` into \`execute\` as tab, with the same target/backend/profile (do not switch backends); execute actions like [{"op":"navigate","url":"https://x.com/home"}] or [{"op":"click","target":"<ref from current observe>"}]. Execute stops on error and never retries. Read completed/failed/unknown/not_run and final_state. Use fresh observe after navigation, stale refs, or a tab mismatch; do not guess a tab or element.
+If an X dialog/overlay covers a click, inspect via \`observe\` scope="full"; act only on a newly observed Close/Cancel control when safe, or press Escape when no unsent text can be lost. Re-observe and resolve new refs. Do not force-click, remove overlays through JS, guess selectors, or replay the blocked action without establishing the new state.
+If the required MCP observe tool is genuinely absent or rejects the call, do not use agent-browser, wh-browser, or a different browser/profile as an automatic fallback in this run. Use the existing growth-run-finish capability-blocker reporting, make no public mutation, and report the exact MCP tool error or absence. An operator can select agent-browser-cli with X_GROWTH_BROWSER_INTERFACE=agent-browser-cli for a NEW run. No silent mid-run transport switching is permitted.
+Publishing boundary: ONLY the Growth OS bridge \`act\` may send; never use direct browser MCP/CLI Post/Reply/Quote clicks as a replacement. An attempted or unknown public send cannot be retried through another browser interface; reconcile the existing attempt or report a blocker. Browser selection never changes claim, health, or duplicate gates.`;
+}

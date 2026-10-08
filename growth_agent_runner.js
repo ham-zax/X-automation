@@ -12,6 +12,8 @@ import {
   updateGrowthAgentSchedulerStatus,
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
+import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
+import { RESEARCH_BROWSERS, researchBrowserContract } from './ops/browser_research_contract.js';
 import { finishGrowthRun } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -102,6 +104,28 @@ export function runtimeConfig(env = process.env) {
   if (!/^\d{2,5}$/.test(cdpPort)) throw new Error('X_GROWTH_BROWSER_CDP_PORT must be a port number.');
   const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
     || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
+  const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
+    || 'agent-browser-cli')
+    .trim().toLowerCase();
+  if (!BROWSER_INTERFACES.includes(browserInterface)) {
+    throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
+  }
+  const browserMcpServer = String(env.X_GROWTH_BROWSER_MCP_SERVER || 'xgrowth_browser').trim();
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(browserMcpServer)) {
+    throw new Error('X_GROWTH_BROWSER_MCP_SERVER must be a simple MCP server name.');
+  }
+  const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'clearcote').trim().toLowerCase();
+  if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
+    throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
+  }
+  const researchBrowser = String(env.X_GROWTH_RESEARCH_BROWSER || 'none').trim().toLowerCase();
+  if (!RESEARCH_BROWSERS.includes(researchBrowser)) {
+    throw new Error(`X_GROWTH_RESEARCH_BROWSER must be ${RESEARCH_BROWSERS.join(' or ')}.`);
+  }
+  const lightpandaMcpServer = String(env.X_GROWTH_LIGHTPANDA_MCP_SERVER || 'xgrowth_lightpanda').trim();
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(lightpandaMcpServer)) {
+    throw new Error('X_GROWTH_LIGHTPANDA_MCP_SERVER must be a simple MCP server name.');
+  }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
     throw new Error('X_GROWTH_AGENT_WINDOW_MINUTES must be between 1 and 480.');
@@ -114,6 +138,11 @@ export function runtimeConfig(env = process.env) {
     browserTarget,
     cdpPort,
     agentBrowserCli,
+    browserInterface,
+    browserMcpServer,
+    browserFastBackend,
+    researchBrowser,
+    lightpandaMcpServer,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
@@ -131,12 +160,11 @@ export function runtimeConfig(env = process.env) {
   };
 }
 
-function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) {
+function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
   if (browserTarget === 'linux') {
-    const cli = `${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId}`;
     return {
-      cliRule: `- Drive X through the persistent headless Chromium on CDP port ${cdpPort} with the Agent Browser CLI, always as \`${cli} <command>\` (this exact prefix keeps one named session). Pass \`--cdp ${cdpPort}\` every time; never launch a separate browser. Use no other shell/node/python command to touch x.com; never use the legacy repository writer.`,
-      observe: `Before beginning the run, use read-only Agent Browser observation (\`${cli} snapshot\`, \`${cli} get url\`, \`${cli} get title\`) of the existing X tab to establish whether the intended account is @ham_zax. If the browser is on a login page or another account, do not log in, do not enter credentials, and do not claim x_authenticated=true: begin the run with x_authenticated=false and browser_mutation=false, then finish via \`growth-run-finish\` recording the authentication blocker.`,
+      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }),
+      observe: 'Before beginning a run, observe the current authenticated X tab and positively confirm @ham_zax; do not log in or enter credentials. If account verification fails, begin with x_authenticated=false and browser_mutation=false and report the blocker.',
       session: 'authenticated headless X session',
     };
   }
@@ -150,10 +178,8 @@ function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) 
   };
 }
 
-function executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId }) {
-  if (browserTarget === 'linux') {
-    return `Browser: read X only as \`${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId} <command>\` (the persistent headless Chromium). Never launch another browser or touch x.com with other shell, node or python commands.`;
-  }
+function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
+  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
 }
 
@@ -161,7 +187,8 @@ function executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionI
 // reachable through GROWTH_AGENT_MODE=legacy. Keep the sessionId and
 // maxDurationMinutes lines: the launcher and tests read them from the prompt.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
-  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Bias toward action: when eligible cards exist, complete at least 2 public actions per pass. The bridge gates still apply.
 ` : '';
@@ -170,7 +197,7 @@ This is an OPERATIONAL growth session, not a software-engineering task. Goal: qu
 
 Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
-- ${executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId })}
+- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
 - Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
@@ -216,7 +243,7 @@ Hard rules:
 - Never blindly retry an uncertain send. Never invent a publication, URL or outcome.
 - Never print cookies, tokens or credentials. Never log in or enter credentials.
 - Never wrap a bridge command in \`timeout\`, background it, or pipe it through a process that can end it early.
-- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
+- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser interface selected above.
 
 Finish:
 - Call \`npm run --silent agent -- growth-run-finish\` with an accurate structured outcome and stop reason before your final response.
@@ -225,12 +252,14 @@ ${experimentNote}`;
 }
 
 export function buildOperatorPrompt({ mode = 'executor', ...options }) {
-  return mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
+  const mainPrompt = mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
+  return mainPrompt + researchBrowserContract(options);
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
-  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
-  const browser = browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId });
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
 - Each pass should complete at least 2 public actions when any eligible candidate exists. Prefer well-grounded replies to fresh For You posts first; if replies are dry, write and publish one original post or quote grounded in what you just observed. Do not stop after a thin feed: re-collect, use the editorial plan, or advance existing drafts and approved queue items.
@@ -322,7 +351,10 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
       // The codex engine rejects --max-model-steps and --output-schema and needs no provider or session flag.
       // Yolo: claive's codex engine drops its Codex sandbox only when CLAIVE_CODEX_YOLO=1 is set for the child.
       args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
-      return { executable: config.executable, args, env: { CLAIVE_CODEX_YOLO: '1' } };
+      return { executable: config.executable, args, env: {
+        CLAIVE_CODEX_YOLO: '1',
+        CLAIVE_CODEX_USE_USER_CONFIG: '1', // XGrowth-specific Codex worker uses installed browser skills/tools in either mode.
+      } };
     } else {
       args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
         '--max-model-steps', '100', '--web');
@@ -630,7 +662,9 @@ export async function main(overrides = {}) {
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
-      browserTarget: config.browserTarget, agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
+      browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
+      researchBrowser: config.researchBrowser, lightpandaMcpServer: config.lightpandaMcpServer,
+      agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';
     let promptDirectory;
