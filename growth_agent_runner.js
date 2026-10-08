@@ -12,6 +12,7 @@ import {
   updateGrowthAgentSchedulerStatus,
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
+import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
 import { finishGrowthRun } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -98,6 +99,20 @@ export function runtimeConfig(env = process.env) {
   if (!/^\d{2,5}$/.test(cdpPort)) throw new Error('X_GROWTH_BROWSER_CDP_PORT must be a port number.');
   const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
     || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
+  const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
+    || (runtime === 'claive' && claiveEngine === 'codex' && browserTarget === 'linux' ? 'webharness-mcp' : 'agent-browser-cli'))
+    .trim().toLowerCase();
+  if (!BROWSER_INTERFACES.includes(browserInterface)) {
+    throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
+  }
+  const browserMcpServer = String(env.X_GROWTH_BROWSER_MCP_SERVER || 'xgrowth_browser').trim();
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(browserMcpServer)) {
+    throw new Error('X_GROWTH_BROWSER_MCP_SERVER must be a simple MCP server name.');
+  }
+  const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'clearcote').trim().toLowerCase();
+  if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
+    throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
+  }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
     throw new Error('X_GROWTH_AGENT_WINDOW_MINUTES must be between 1 and 480.');
@@ -110,6 +125,9 @@ export function runtimeConfig(env = process.env) {
     browserTarget,
     cdpPort,
     agentBrowserCli,
+    browserInterface,
+    browserMcpServer,
+    browserFastBackend,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
@@ -127,12 +145,11 @@ export function runtimeConfig(env = process.env) {
   };
 }
 
-function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) {
+function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
   if (browserTarget === 'linux') {
-    const cli = `${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId}`;
     return {
-      cliRule: `- Drive X through the persistent headless Chromium on CDP port ${cdpPort} with the Agent Browser CLI, always as \`${cli} <command>\` (this exact prefix keeps one named session). Pass \`--cdp ${cdpPort}\` every time; never launch a separate browser. Use no other shell/node/python command to touch x.com; never use the legacy repository writer.`,
-      observe: `Before beginning the run, use read-only Agent Browser observation (\`${cli} snapshot\`, \`${cli} get url\`, \`${cli} get title\`) of the existing X tab to establish whether the intended account is @ham_zax. If the browser is on a login page or another account, do not log in, do not enter credentials, and do not claim x_authenticated=true: begin the run with x_authenticated=false and browser_mutation=false, then finish via \`growth-run-finish\` recording the authentication blocker.`,
+      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }),
+      observe: 'Before beginning a run, observe the current authenticated X tab and positively confirm @ham_zax; do not log in or enter credentials. If account verification fails, begin with x_authenticated=false and browser_mutation=false and report the blocker.',
       session: 'authenticated headless X session',
     };
   }
@@ -146,10 +163,8 @@ function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) 
   };
 }
 
-function executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId }) {
-  if (browserTarget === 'linux') {
-    return `Browser: read X only as \`${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId} <command>\` (the persistent headless Chromium). Never launch another browser or touch x.com with other shell, node or python commands.`;
-  }
+function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
+  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
 }
 
@@ -157,7 +172,8 @@ function executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionI
 // reachable through GROWTH_AGENT_MODE=legacy. Keep the sessionId and
 // maxDurationMinutes lines: the launcher and tests read them from the prompt.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
-  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Bias toward action: when eligible cards exist, complete at least 2 public actions per pass. The bridge gates still apply.
 ` : '';
@@ -166,7 +182,7 @@ This is an OPERATIONAL growth session, not a software-engineering task. Goal: qu
 
 Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
-- ${executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId })}
+- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
 - Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
@@ -176,9 +192,13 @@ Loop:
 - Track time from the begin call with \`date +%s%3N\`. Keep looping until about 3 minutes before the maxDurationMinutes budget ends.
 - Each pass: run \`npm run --silent agent -- scout\` with JSON \`{"limit":10}\`. Read the whole result (\`pace\` and \`cards\`) before acting.
 - T0 \`check_mentions\` (always the first card): observe https://x.com/notifications/mentions in the Browser above and find new replies to our posts. For each one worth answering, write a reply and send it with \`act\` action \`reply\`, targeting that reply's tweetId and URL. Skip replies we already answered.
+- Fresh discovery: \`scout\` only ranks saved candidates; it does not collect X. After checking mentions, read \`growth-run-next\` with this runId/sessionId. If it recommends \`collect_for_you\`, or scout has no T1 cards and collection is permitted, collect fresh posts before treating the pass as empty. Honor the returned observation/time ceilings and recovery blockers.
+- Collection: open https://x.com/home in the Browser above and select For You. Spend at most two minutes on one full observation and at most one scroll; capture a few diverse organic posts with exact text, author, status permalink and visible metrics. Do not build collector scripts or repeatedly reload. A fresh observation is not necessarily a recent post; inspect post age before choosing a reply.
+- Immediately submit the observed posts through \`npm run --silent agent -- x-for-you-ingest\`, JSON on stdin: \`{"kind":"x_for_you","observedAt":<actual date +%s%3N>,"accountHandle":"ham_zax","adapterType":"${runtime}_unattended","runId":"<runId>","sessionId":"${sessionId}","browserTarget":"${browserTarget}","browserBackend":"chrome","sensorVersion":"x_for_you_v1","collectionStatus":"complete","posts":[{"tweetId":"<numeric ID>","url":"https://x.com/<author>/status/<ID>","username":"<author>","text":"<exact observed text>","rank":1,"metrics":{"views":<observed number>}}]}\`. Every post needs the matching ID/permalink pair, username, non-empty text and positive integer rank. Include only observed non-negative numeric views/likes/reposts/replies/bookmarks; omit unavailable metrics and timestamp (the bridge derives post time from tweetId). Mark ads \`promoted:true\`; never invent source text, IDs or metrics.
+- Read ingestion diagnostics and engagement rejections, then rerun \`scout\` and evaluate the new cards. If collection or ingestion fails, report the exact capability blocker and finish; never report an unchanged cache as fresh discovery.
 - T1 \`reply\` and \`quote\` cards, in order: open the card \`url\` and read the post in context. Judge the purpose: is there a real builder conversation to add to? If not, record a skip with \`npm run --silent agent -- record-disposition\` and JSON \`{"key":"<candidateKey>","disposition":"skip","reason":"<why>"}\`. If yes, write the text and send it with \`act\` action \`reply\` or \`quote\`, as the card says.
 - T2 \`original\` (present only when allowed): write one original post, and only from real material: an inspiration URL on the card, a post you read in this run, or a fact from this repository. Never invent experiences, numbers, customers or events. Send it with \`act\` action \`original\`.
-- A pass with no T1/T2 cards and no new mentions is empty.
+- A pass with no worthwhile T1/T2 cards and no new mentions counts as empty only after fresh live collection, successful ingestion and another scout read. Never repeat the same cached scout result as a second discovery pass.
 
 Calling act: JSON on stdin with the card fields, for example \`{"action":"reply","runId":"<runId>","sessionId":"${sessionId}","targetTweetId":"<tweetId>","targetUrl":"<url>","candidateKey":"<candidateKey>","text":"<text>","card":{"author":"<author>","sourceText":"<card text>"}}\`. A quote uses action \`quote\` with the same target fields. An original has no target fields.
 
@@ -197,7 +217,7 @@ Writing:
 - Persona: before your first draft, read the active persona once with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
 
 Stop:
-- Stop when \`scout\` returns no actionable cards (no T1/T2 card and no new mentions) two passes in a row.
+- Stop after two separately observed and successfully ingested discovery passes yield no worthwhile cards or new mentions. If collection is forbidden by run ceilings, finish with that actual reason instead of inferring no worthwhile work.
 - Also stop about 3 minutes before the time budget ends, or at a blocker (authentication, constrained account health, or a lease rejected by act).
 
 Hard rules:
@@ -219,8 +239,9 @@ export function buildOperatorPrompt({ mode = 'executor', ...options }) {
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
-  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
-  const browser = browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId });
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
 - Each pass should complete at least 2 public actions when any eligible candidate exists. Prefer well-grounded replies to fresh For You posts first; if replies are dry, write and publish one original post or quote grounded in what you just observed. Do not stop after a thin feed: re-collect, use the editorial plan, or advance existing drafts and approved queue items.
@@ -310,7 +331,10 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
       // The codex engine rejects --max-model-steps and --output-schema and needs no provider or session flag.
       // Yolo: claive's codex engine drops its Codex sandbox only when CLAIVE_CODEX_YOLO=1 is set for the child.
       args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
-      return { executable: config.executable, args, env: { CLAIVE_CODEX_YOLO: '1' } };
+      return { executable: config.executable, args, env: {
+        CLAIVE_CODEX_YOLO: '1',
+        ...(config.browserInterface === 'webharness-mcp' ? { CLAIVE_CODEX_USE_USER_CONFIG: '1' } : {}),
+      } };
     } else {
       args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
         '--max-model-steps', '100', '--web');
@@ -618,7 +642,8 @@ export async function main(overrides = {}) {
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
-      browserTarget: config.browserTarget, agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
+      browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
+      agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';
     let promptDirectory;
