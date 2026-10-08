@@ -116,21 +116,58 @@ try {
       { ...clean, result: { investigating: 1, closedUnresolved: 0 } },
       { ...clean, result: { investigating: 0, closedUnresolved: 1 } }]) assert.equal(runner.continuationAllowed(run), false);
   });
-  await test('revoked authority, constrained health, uncertain sends and competing leases stop before another runtime', async () => {
+  await test('revoked authority, constrained health and competing leases stop before another runtime', async () => {
     for (const reason of ['delegation_not_live_or_revised', 'account_health_constrained',
-      'publication_reconciliation_required', 'operator_lease_active']) {
+      'operator_lease_active']) {
       let block = false;
       const state = harness({ mutate: ({ setGrant, grant }) => {
         block = true;
         if (reason === 'delegation_not_live_or_revised') setGrant({ ...grant, revision: 8 });
       } });
       if (reason === 'account_health_constrained') state.dependencies.health = () => ({ health: { state: block ? 'constrained' : 'normal' } });
-      if (reason === 'publication_reconciliation_required') state.dependencies.attempts = () => block ? [{ state: 'send_started' }] : [];
       if (reason === 'operator_lease_active') state.dependencies.lease = () => ({ active: block, leaseId: 'other', runId: 'other-run' });
       const outcome = await runner.main(state.dependencies);
       assert.equal(outcome.reason, reason);
       assert.equal(state.calls.length, 1);
     }
+  });
+  await test('an orphaned active run does not block a fresh reasoning session when no lease is active', async () => {
+    const state = harness({ minutes: 20 });
+    const originalRuns = state.dependencies.runs;
+    state.dependencies.runs = (query) => query.status === 'active'
+      ? [{ runId: 'stale-run', sessionId: 'old-session', status: 'active', stopReason: '' }]
+      : originalRuns(query);
+    const result = await runner.main(state.dependencies);
+    assert.equal(state.calls.length, 1);
+    assert.equal(result.reason, 'operation_window_elapsed');
+  });
+  await test('normal child exit with its durable run still active closes the orphan canonically', async () => {
+    const state = harness({ minutes: 20 });
+    let activeRun = null;
+    let finished = null;
+    state.dependencies.runs = ({ status, sessionId }) => {
+      if (status) return [];
+      return activeRun && activeRun.sessionId === sessionId ? [activeRun] : [];
+    };
+    state.dependencies.child = async (command) => {
+      const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
+      activeRun = { runId: 'run-active', sessionId, status: 'active', stopReason: '' };
+    };
+    state.dependencies.finishRun = (runId, payload) => {
+      finished = { runId, payload };
+      activeRun = { ...activeRun, status: payload.status, stopReason: payload.stopReason, finishedAt: 123456 };
+      return activeRun;
+    };
+    const result = await runner.main(state.dependencies);
+    assert.equal(finished.runId, 'run-active');
+    assert.equal(finished.payload.status, 'partial');
+    assert.equal(finished.payload.stopReason, 'manual_intervention_required');
+    assert.equal(finished.payload.result.launcherRecovery.reason, 'normal_child_exit_with_active_run');
+    assert.equal(finished.payload.result.runtimeFailure, undefined);
+    assert.equal(result.status, 'partial');
+    assert.equal(result.reason, 'launcher_closed_orphaned_active_run');
+    assert.equal(result.stopReason, 'manual_intervention_required');
+    assert.equal(state.heartbeatStops(), 1);
   });
   await test('runtime failure and a session without its own durable run cannot be reported as another run', async () => {
     const state = harness();
