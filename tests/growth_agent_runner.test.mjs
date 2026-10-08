@@ -76,6 +76,49 @@ try {
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_TARGET: 'mars' }), /X_GROWTH_BROWSER_TARGET/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_CDP_PORT: '9222; rm' }), /CDP_PORT/);
   });
+  await test('Claive pins Muse and cleans its operational prompt after a bounded pass', async () => {
+    const state = harness({ minutes: 20 });
+    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive' });
+    assert.equal(state.dependencies.config.model, 'muse-spark-1.3-contributor');
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_AGENT_MODEL: 'other' }), /require/);
+    let promptFile;
+    state.dependencies.child = async (command) => {
+      assert.equal(command.executable, path.join(process.env.HOME, '.local/bin/claive'));
+      assert.equal(command.args[0], 'run');
+      assert.equal(command.args[command.args.indexOf('--engine') + 1], 'muse');
+      assert.equal(command.args[command.args.indexOf('--reasoning-effort') + 1], 'xhigh');
+      assert.equal(command.args[command.args.indexOf('--model') + 1], 'muse-spark-1.3-contributor');
+      assert.equal(command.args.includes('--fallback-models'), false);
+      promptFile = command.args[command.args.indexOf('--prompt-file') + 1];
+      const prompt = await readFile(promptFile, 'utf8');
+      assert.match(prompt, /adapterType `claive_unattended`/);
+      assert.match(prompt, /publication-attempt-send-start/);
+    };
+    state.dependencies.runs = () => [{ runId: 'claive-run', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
+    const result = await runner.main(state.dependencies);
+    assert.equal(result.stopReason, 'no_worthwhile_eligible_work');
+    await assert.rejects(readFile(promptFile), { code: 'ENOENT' });
+    state.dependencies.child = async (command) => {
+      promptFile = command.args[command.args.indexOf('--prompt-file') + 1];
+      throw new Error('runtime unavailable');
+    };
+    state.dependencies.runs = () => [];
+    await assert.rejects(runner.main(state.dependencies), /runtime unavailable/);
+    await assert.rejects(readFile(promptFile), { code: 'ENOENT' });
+    assert.equal(state.heartbeatStops(), 2);
+  });
+  await test('Claive Pi uses opencode2api and inherits the selected model without Muse flags', () => {
+    const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
+    const { args } = runner.commandFor(config, 'work', { promptFile: '/tmp/operator.md' });
+    assert.equal(config.model, '');
+    assert.equal(args[args.indexOf('--engine') + 1], 'pi');
+    assert.equal(args[args.indexOf('--provider') + 1], 'opencode2api');
+    assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
+    for (const flag of ['--model', '--max-model-steps', '--web', '--fallback-models']) assert.equal(args.includes(flag), false);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'other' }), /must be muse or pi/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'nemotron-free' }), /not allowed/);
+    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'ling-3.1-flash' }), /not allowed/);
+  });
   await test('prompt follows the browser target and no longer hardcodes the WebHarness path', () => {
     const base = { runtime: 'pi', sessionId: 'pi-1', maxDurationMinutes: 20 };
     const linux = runner.operatorPrompt({ ...base, browserTarget: 'linux', agentBrowserCli: '/bin/ab', cdpPort: '9333' });
@@ -141,15 +184,18 @@ try {
     assert.equal(state.calls.length, 1);
     assert.equal(result.reason, 'operation_window_elapsed');
   });
-  await test('normal child exit with its durable run still active closes the orphan canonically', async () => {
+  await test('normal incomplete exit closes the orphan and allows only one continuation before any claim', async () => {
     const state = harness({ minutes: 20 });
     let activeRun = null;
     let finished = null;
+    let childCalls = 0;
     state.dependencies.runs = ({ status, sessionId }) => {
       if (status) return [];
       return activeRun && activeRun.sessionId === sessionId ? [activeRun] : [];
     };
     state.dependencies.child = async (command) => {
+      childCalls++;
+      if (childCalls === 2) assert.match(command.stdinPrompt, /CONTINUATION: Run run-active/);
       const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
       activeRun = { runId: 'run-active', sessionId, status: 'active', stopReason: '' };
     };
@@ -167,7 +213,65 @@ try {
     assert.equal(result.status, 'partial');
     assert.equal(result.reason, 'launcher_closed_orphaned_active_run');
     assert.equal(result.stopReason, 'manual_intervention_required');
+    assert.equal(childCalls, 2);
+    assert.equal(state.heartbeatStops(), 2);
+    assert.equal(result.sessions.length, 2);
+  });
+  await test('an incomplete run with any publication attempt is not automatically restarted', async () => {
+    const state = harness({ minutes: 20 });
+    let activeRun = null;
+    let calls = 0;
+    state.dependencies.runs = ({ sessionId }) => activeRun?.sessionId === sessionId ? [activeRun] : [];
+    state.dependencies.child = async command => {
+      calls++;
+      activeRun = { runId: 'claimed-run', sessionId: /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1], status: 'active' };
+    };
+    state.dependencies.attempts = ({ runId, limit }) => {
+      assert.equal(runId, 'claimed-run');
+      assert.equal(limit, 1);
+      return [{ attemptId: 'existing-attempt', state: 'claimed' }];
+    };
+    state.dependencies.finishRun = (runId, payload) => ({ ...activeRun, ...payload });
+    const result = await runner.main(state.dependencies);
+    assert.equal(calls, 1);
+    assert.equal(result.reason, 'launcher_closed_orphaned_active_run');
     assert.equal(state.heartbeatStops(), 1);
+  });
+  await test('Pi retains run and session across early ends and restricts uncertain sends to reconciliation', async () => {
+    const state = harness({ minutes: 20 });
+    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
+    let activeRun, engineId, count = 0;
+    state.dependencies.runs = ({ sessionId }) => activeRun?.sessionId === sessionId ? [activeRun] : [];
+    state.dependencies.attempts = () => [{ attemptId: 'owned', state: count === 1 ? 'claimed' : 'send_started' }];
+    state.dependencies.child = async command => {
+      const prompt = await readFile(command.args[command.args.indexOf('--prompt-file') + 1], 'utf8');
+      const id = command.args[command.args.indexOf('--session-id') + 1];
+      if (!count) {
+        engineId = id;
+        activeRun = { runId: 'same-run', sessionId: /sessionId `([^`]+)`/.exec(prompt)[1], status: 'active' };
+      } else {
+        assert.equal(id, engineId);
+        assert.match(prompt, /SAME Growth Run same-run/);
+        assert.ok(prompt.includes(activeRun.sessionId));
+        assert.match(prompt, count === 1 ? /owned claimed attempt/ : /RECONCILIATION ONLY/);
+      }
+      count++;
+    };
+    let finishes = 0;
+    state.dependencies.finishRun = (id, payload) => { finishes++; return { ...activeRun, ...payload }; };
+    const result = await runner.main(state.dependencies);
+    assert.equal(count, 4);
+    assert.equal(finishes, 1);
+    assert.equal(state.heartbeatStops(), 1);
+    assert.equal(result.sessions.length, 1);
+  });
+  await test('Pi provider failure never launches a continuation', async () => {
+    const state = harness({ minutes: 20 });
+    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
+    let count = 0;
+    state.dependencies.child = async () => { count++; throw new Error('provider failed'); };
+    await assert.rejects(runner.main(state.dependencies), /provider failed/);
+    assert.equal(count, 1);
   });
   await test('runtime failure and a session without its own durable run cannot be reported as another run', async () => {
     const state = harness();

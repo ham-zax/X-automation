@@ -193,6 +193,35 @@ function nextOperation(run, readiness, now) {
       stage: 'recovery',
       recommendedOperation: 'recover_attempt',
       permittedOperations: ['recover_attempt', 'collect_for_you', 'inspect_candidate', 'finish'],
+      recovery: {
+        command: 'publication-attempts',
+        payload: { limit: 100 },
+        attempts: listPublicationAttempts({ states: ['claimed', 'send_started', 'investigating'], oldestFirst: true, limit: 20 })
+          .map(attempt => ({
+            attemptId: attempt.attemptId, queueItemId: attempt.queueItemId,
+            candidateKey: attempt.candidateKey, pipeline: attempt.pipeline,
+            state: attempt.state, runId: attempt.runId, claimHolder: attempt.claimHolder,
+            claimedAt: attempt.claimedAt, sendStartedAt: attempt.sendStartedAt,
+          })),
+        executionRule: 'Recovery is read/reconcile work, not a new claim. Inspect the immutable attempt and its originating run/session. Never send a foreign claim or infer not-sent from sendStartedAt=null alone. Definitive non-dispatch/rejection evidence is required for confirmed_not_sent; otherwise retain investigation or close unresolved after useful recovery is exhausted.',
+      },
+      ceilings,
+    };
+  }
+  if (readiness.mainFeed?.blockingReason === 'approved_scheduler_work_available') {
+    const queueItemId = Number(readiness.mainFeed?.approvedQueueItemId || 0) || null;
+    return {
+      stage: 'acting',
+      recommendedOperation: 'claim_action',
+      permittedOperations: ['inspect_candidate', 'claim_action', 'finish'],
+      claim: queueItemId ? {
+        lane: 'main_feed',
+        command: 'browser-publish-claim',
+        queueItemId,
+        runId: run.runId,
+        sessionId: run.sessionId,
+        reason: 'An approved main-feed item is eligible now. The attached browser-agent lane owns the mutation even when the background daemon has no X API credentials.',
+      } : null,
       ceilings,
     };
   }
@@ -223,23 +252,6 @@ function nextOperation(run, readiness, now) {
       stage: 'sensing',
       recommendedOperation: 'collect_for_you',
       permittedOperations: ['collect_for_you', 'finish'],
-      ceilings,
-    };
-  }
-  if (readiness.mainFeed?.blockingReason === 'approved_scheduler_work_available') {
-    const queueItemId = Number(readiness.mainFeed?.approvedQueueItemId || 0) || null;
-    return {
-      stage: 'acting',
-      recommendedOperation: 'claim_action',
-      permittedOperations: ['inspect_candidate', 'claim_action', 'finish'],
-      claim: queueItemId ? {
-        lane: 'main_feed',
-        command: 'browser-publish-claim',
-        queueItemId,
-        runId: run.runId,
-        sessionId: run.sessionId,
-        reason: 'An approved main-feed item is eligible now. The attached browser-agent lane owns the mutation even when the background daemon has no X API credentials.',
-      } : null,
       ceilings,
     };
   }

@@ -9,6 +9,7 @@ import {
   SOURCE_SNAPSHOT_KINDS,
   createEditorialRun,
   ensureEditorialCandidate,
+  ensureQueueItem,
   getAccountHealthSummary,
   getCandidate,
   getDiscoverSnapshot,
@@ -754,6 +755,11 @@ function selectEditorialRecommendationWithAuthority(id, {
     }
   }
 
+  // Establish research provenance before generic routing can default to the
+  // synthetic editorial candidate itself as the primary source.
+  const sourceQueue = existingQueue || ensureQueueItem(selected.candidate.key);
+  linkEditorialSources(sourceQueue, sources, selected.primarySourceKey);
+
   let queueItem = routeCandidate(selected.candidate.key, selectedPipeline, {
     actor: selectedBy === 'mission_agent' ? 'agent' : 'human',
     reason: selectedBy === 'mission_agent'
@@ -798,7 +804,7 @@ function selectEditorialRecommendationWithAuthority(id, {
 }
 
 export function selectEditorialRecommendation(id, { pipelineOverride = null } = {}) {
-  return selectEditorialRecommendationWithAuthority(id, { pipelineOverride });
+  return runStoreTransaction(() => selectEditorialRecommendationWithAuthority(id, { pipelineOverride }));
 }
 
 export function selectEditorialRecommendationAsMissionAgent(id, { grantRevision } = {}) {

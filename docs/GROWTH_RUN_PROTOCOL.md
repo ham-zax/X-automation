@@ -189,10 +189,53 @@ A heartbeat proves recent runtime attachment only. Growth Run begin/resume/next 
 
 Default runtime: OpenCode. Override with:
 
-- `X_GROWTH_AGENT_RUNTIME=opencode|codex`
+- `X_GROWTH_AGENT_RUNTIME=opencode|codex|claude|pi|claive`
 - `X_GROWTH_AGENT_MODEL=<provider/model>`
 - `X_GROWTH_OPENCODE_BIN=<path>`
 - `X_GROWTH_CODEX_BIN=<path>`
+- `X_GROWTH_CLAIVE_BIN=<path>` (defaults to `~/.local/bin/claive`)
+
+The `claive` adapter launches tracked model turns within each bounded pass.
+`X_GROWTH_CLAIVE_ENGINE=muse|pi` selects the engine (default Muse). Muse uses
+`muse-spark-1.3-contributor`, `xhigh` reasoning, and its filesystem/network sandbox.
+Pi uses only `opencode2api`, `max` reasoning, and inherits its current global
+model when `X_GROWTH_AGENT_MODEL` is empty. Pi has no OS sandbox; the operational
+prompt restricts it to Growth OS bridge operations and the browser lane.
+Neither engine automatically switches provider/model. The temporary prompt is removed
+on success or failure. Workers operate through the same Growth Run bridge and
+authenticated browser lane; Claive never grants publication authority. Inspect
+workers with `claive list` / `claive show ID` and scheduler readiness with
+`operator-readiness`.
+
+If Pi exits normally while its durable run is active, the launcher may continue
+up to four total model turns within the original deadline, retaining the same
+Pi history, bridge session, Growth Run and exact claim authority. It checks the
+current delegation before each continuation. A send-started or investigating
+attempt restricts the follow-up to reconciliation; it never authorizes another
+send. Provider failures stop immediately. Exhausting the turn/deadline limit
+closes the run as partial through the canonical finish path.
+
+Other runtimes may start one fresh continuation only when the unfinished run
+created no publication attempt. That continuation has a new session/run and
+must obtain its own claim. Neither path switches provider or model, bypasses
+bridge gates, or restores authority to a closed attempt.
+
+Windows agents run `node ops/windows-dialog-recovery.mjs --dismiss` before
+initial observation and when navigation stalls. This native UI Automation
+fallback cancels only an exact “Leave site?” dialog in the WebHarness Chrome
+profile and verifies its absence; omit `--dismiss` for inspection only. It never
+clicks Leave or a publication button. Re-observe afterward, and reconcile any
+already-started publication without retrying it. A successful page snapshot
+alone does not establish that a native dialog is gone.
+
+To use Claive with the existing user timer, install
+`ops/systemd/x-test-growth-agent-claive.conf` as
+`~/.config/systemd/user/x-test-growth-agent.service.d/claive.conf`, reload the
+user systemd manager, then enable `x-test-growth-agent.timer`. Verify the runtime
+and authenticated account before enabling recurring runs. The supplied drop-in
+selects Pi with its existing model. Stop recurring work
+with `systemctl --user disable --now x-test-growth-agent.timer`; also stop
+`x-test-growth-agent.service` to end an in-flight worker.
 
 The systemd timer wakes the runner roughly every 15 minutes. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
 

@@ -370,6 +370,15 @@ await test('send-start needs only attemptId and validates the immutable run/sess
   });
   const content = autonomous.inspectAutonomousReplyContent(store.getQueueItem(claimed.queueItem.id), claimed.decision);
   assert.equal(content.passed, true, JSON.stringify(content.deterministicFailures));
+  const recovery = growthRun.getGrowthRunStatus(run.runId).next;
+  assert.equal(recovery.recommendedOperation, 'recover_attempt');
+  assert.equal(recovery.claim, undefined);
+  assert.equal(recovery.recovery.command, 'publication-attempts');
+  const pending = recovery.recovery.attempts.find(attempt => attempt.attemptId === claimed.attempt.attemptId);
+  assert.equal(pending.runId, run.runId);
+  assert.equal(pending.claimHolder, 'send-start-session');
+  assert.equal(pending.state, 'claimed');
+  assert.equal(pending.sendStartedAt, null);
   const result = runBridge('publication-attempt-send-start', { attemptId: claimed.attempt.attemptId });
   assert.equal(result.attempt.state, 'send_started');
   assert.equal(result.attempt.runId, run.runId);

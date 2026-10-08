@@ -440,16 +440,21 @@ export async function prepareAutonomousMainFeed({
       editorialRefreshed,
     };
   } catch (error) {
-    const ignored = routeCandidate(queueItem.candidateKey, 'ignore', {
-      actor: 'agent',
-      reason: `Delegated main-feed approval rejected: ${error.message}`,
-    });
+    // Approval rejection is a failed draft, not an Ignore decision about its
+    // source. Preserve exact work so the attached reasoning agent can revise
+    // it through the ordinary Writer/review path without weakening any gate.
     return {
-      action: 'skipped',
+      action: 'needs_revision',
       reason: 'mission_approval_rejected',
       error: error.message,
-      queueItemId: ignored.id,
-      candidateKey: ignored.candidateKey,
+      queueItemId: queueItem.id,
+      candidateKey: queueItem.candidateKey,
+      repair: draft ? {
+        draftId: draft.id,
+        command: 'writer-packet',
+        payload: { key: queueItem.candidateKey },
+        instructions: 'Inspect the exact failed review and revise the draft using a fresh Writer packet. Apply complete output with its unchanged generation, request ready, and mission-approve only after all current gates pass. Do not repeat unchanged approval or abandon this draft for another feed scan.',
+      } : null,
       editorialRecommendationId: work.recommendation.id,
       strategySelectionId: strategySelection?.id ?? null,
       editorialRefreshed,
