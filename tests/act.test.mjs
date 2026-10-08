@@ -534,6 +534,54 @@ await test('checkMainFeedSpacing leaves replies unaffected and ignores rows with
   assert.equal(act.checkMainFeedSpacing({ action: 'quote', recentPosts: [], now: SPACING_NOW }), null);
 });
 
+// Claims use explicit `now` on a timeline 10h in the past, so rows from later tests cannot fall inside a spacing window.
+const SPACING_TIMELINE = Date.now() - 10 * 60 * MIN;
+const rowCounts = () => ({
+  attempts: store.listPublicationAttempts({ limit: 500 }).length,
+  queue: store.listQueueItems({ limit: 10_000 }).length,
+});
+
+await test('claimActPublication refuses an Original 60 min after the last Original with no rows written, and allows 95 min', () => {
+  store.startGrowthOperatorDelegation({ actor: 'human' });
+  store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
+  const first = store.claimActPublication({
+    action: 'original', text: 'First original on the spacing timeline.', candidateKey: 'spacing-original-first',
+    claimHolder: 'test-session', now: SPACING_TIMELINE,
+  });
+  store.markQueuePublished(first.queueItem.id, '777001', 'https://x.com/ham_zax/status/777001', { publishedAt: SPACING_TIMELINE });
+  const before = rowCounts();
+  assert.throws(() => store.claimActPublication({
+    action: 'original', text: 'Second original, one hour after the first.', candidateKey: 'spacing-original-refused',
+    claimHolder: 'test-session', now: SPACING_TIMELINE + 60 * MIN,
+  }), (error) => error instanceof store.ActSpacingBlockedError && error.refusal.reason === 'original_spacing');
+  assert.deepEqual(rowCounts(), before, 'refused original wrote no publication_attempts or queue_items row');
+  assert.equal(store.getCandidate('spacing-original-refused'), null, 'refused original left no candidate row');
+  const allowed = store.claimActPublication({
+    action: 'original', text: 'Third original, 95 min after the first.', candidateKey: 'spacing-original-allowed',
+    claimHolder: 'test-session', now: SPACING_TIMELINE + 95 * MIN,
+  });
+  assert.equal(allowed.attempt.state, 'claimed');
+  store.markQueuePublished(allowed.queueItem.id, '777002', 'https://x.com/ham_zax/status/777002', { publishedAt: SPACING_TIMELINE + 95 * MIN });
+});
+
+await test('claimActPublication refuses a Quote 20 min after a main-feed post with no rows written, and a reply still claims', () => {
+  const quoteAt = SPACING_TIMELINE + 115 * MIN;
+  const before = rowCounts();
+  assert.throws(() => store.claimActPublication({
+    action: 'quote', text: 'Quoting a source 20 minutes after the last post.', targetTweetId: '666001',
+    targetUrl: 'https://x.com/builder/status/666001', candidateKey: 'spacing-quote-refused',
+    claimHolder: 'test-session', now: quoteAt,
+  }), (error) => error instanceof store.ActSpacingBlockedError && error.refusal.reason === 'main_feed_spacing');
+  assert.deepEqual(rowCounts(), before, 'refused quote wrote no publication_attempts or queue_items row');
+  assert.equal(store.getCandidate('spacing-quote-refused'), null, 'refused quote left no candidate row');
+  const reply = store.claimActPublication({
+    action: 'reply', text: 'A reply inside the main-feed spacing window still claims.', targetTweetId: '666002',
+    targetUrl: 'https://x.com/builder/status/666002', claimHolder: 'test-session', now: quoteAt,
+  });
+  assert.equal(reply.attempt.state, 'claimed');
+  assert.equal(reply.attempt.pipeline, 'reply');
+});
+
 await test('listRecentMainFeedPublications includes a published act Quote, so the spacing gate sees act posts', async () => {
   const delegation = store.startGrowthOperatorDelegation({ actor: 'human' });
   assert.equal(delegation.state, 'running');

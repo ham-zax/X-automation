@@ -111,7 +111,7 @@ printf '%s\n' '{"action":"reply","text":"<text>","targetTweetId":"<id>","candida
 
 The outcomes are `confirmed_published`, `confirmed_not_sent`, or `closed_unresolved`. A confirmed send records the candidate action and relationship event inside `act`. A `closed_unresolved` result is never retried; the exact action stays duplicate-fenced.
 
-Main-feed spacing is applied when `scout` chooses cards. `act` does not re-check it, so spacing depends on the agent acting on a current `scout` result.
+Main-feed spacing is applied when `scout` chooses cards. `act` re-checks it atomically at claim time and returns `spacing_blocked` without writing anything, so a refused act leaves no attempt or queue row.
 
 ## Personalized For You sensing
 

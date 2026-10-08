@@ -1,4 +1,5 @@
 import { DomainValidationError } from './errors.js';
+import { checkMainFeedSpacing } from './act.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import { legacyBehaviorDecision, normalizeBehaviorDecision } from './behavior.js';
@@ -1682,6 +1683,15 @@ export function getBlockingActAttemptForTarget(targetTweetId) {
     ORDER BY id DESC LIMIT 1`).get(id));
 }
 
+// Thrown inside claimActPublication's transaction so the rollback removes every write made before the check.
+export class ActSpacingBlockedError extends DomainValidationError {
+  constructor(refusal) {
+    super(refusal.detail, { code: 'spacing_blocked' });
+    this.name = 'ActSpacingBlockedError';
+    this.refusal = refusal;
+  }
+}
+
 export function claimActPublication({
   action,
   text,
@@ -1790,6 +1800,8 @@ export function claimActPublication({
       }
     }
     assertPublicationRunCapacity(runId, holder, timestamp);
+    const spacing = checkMainFeedSpacing({ action: pipeline, recentPosts: listRecentMainFeedPublications({ limit: 20 }), now: timestamp });
+    if (spacing) throw new ActSpacingBlockedError(spacing);
     const attemptId = randomUUID();
     db.prepare(`INSERT INTO publication_attempts(
       attempt_id, queue_item_id, candidate_key, run_id, lane, pipeline, action_type, action_fingerprint,
