@@ -13,6 +13,7 @@ import {
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
+import { RESEARCH_BROWSERS, researchBrowserContract } from './ops/browser_research_contract.js';
 import { finishGrowthRun } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -100,7 +101,7 @@ export function runtimeConfig(env = process.env) {
   const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
     || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
   const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
-    || (runtime === 'claive' && claiveEngine === 'codex' && browserTarget === 'linux' ? 'webharness-mcp' : 'agent-browser-cli'))
+    || 'agent-browser-cli')
     .trim().toLowerCase();
   if (!BROWSER_INTERFACES.includes(browserInterface)) {
     throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
@@ -112,6 +113,14 @@ export function runtimeConfig(env = process.env) {
   const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'clearcote').trim().toLowerCase();
   if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
     throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
+  }
+  const researchBrowser = String(env.X_GROWTH_RESEARCH_BROWSER || 'none').trim().toLowerCase();
+  if (!RESEARCH_BROWSERS.includes(researchBrowser)) {
+    throw new Error(`X_GROWTH_RESEARCH_BROWSER must be ${RESEARCH_BROWSERS.join(' or ')}.`);
+  }
+  const lightpandaMcpServer = String(env.X_GROWTH_LIGHTPANDA_MCP_SERVER || 'xgrowth_lightpanda').trim();
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(lightpandaMcpServer)) {
+    throw new Error('X_GROWTH_LIGHTPANDA_MCP_SERVER must be a simple MCP server name.');
   }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
@@ -128,6 +137,8 @@ export function runtimeConfig(env = process.env) {
     browserInterface,
     browserMcpServer,
     browserFastBackend,
+    researchBrowser,
+    lightpandaMcpServer,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
@@ -226,7 +237,7 @@ Hard rules:
 - Never blindly retry an uncertain send. Never invent a publication, URL or outcome.
 - Never print cookies, tokens or credentials. Never log in or enter credentials.
 - Never wrap a bridge command in \`timeout\`, background it, or pipe it through a process that can end it early.
-- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
+- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser interface selected above.
 
 Finish:
 - Call \`npm run --silent agent -- growth-run-finish\` with an accurate structured outcome and stop reason before your final response.
@@ -235,7 +246,8 @@ ${experimentNote}`;
 }
 
 export function buildOperatorPrompt({ mode = 'executor', ...options }) {
-  return mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
+  const mainPrompt = mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
+  return mainPrompt + researchBrowserContract(options);
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
@@ -333,7 +345,7 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
       args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
       return { executable: config.executable, args, env: {
         CLAIVE_CODEX_YOLO: '1',
-        ...(config.browserInterface === 'webharness-mcp' ? { CLAIVE_CODEX_USE_USER_CONFIG: '1' } : {}),
+        CLAIVE_CODEX_USE_USER_CONFIG: '1', // XGrowth-specific Codex worker uses installed browser skills/tools in either mode.
       } };
     } else {
       args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
@@ -643,6 +655,7 @@ export async function main(overrides = {}) {
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
       browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
+      researchBrowser: config.researchBrowser, lightpandaMcpServer: config.lightpandaMcpServer,
       agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';

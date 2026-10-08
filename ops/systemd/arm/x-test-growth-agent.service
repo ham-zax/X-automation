@@ -11,9 +11,11 @@ Environment=X_GROWTH_AGENT_RUNTIME=claive
 Environment=X_GROWTH_CLAIVE_ENGINE=codex
 Environment=CODEX_WORKER_BINARY=/home/ubuntu/.local/bin/codex
 Environment=X_GROWTH_BROWSER_TARGET=linux
-Environment=X_GROWTH_BROWSER_INTERFACE=webharness-mcp
+Environment=X_GROWTH_BROWSER_INTERFACE=agent-browser-cli
 Environment=X_GROWTH_BROWSER_MCP_SERVER=xgrowth_browser
 Environment=X_GROWTH_BROWSER_FAST_BACKEND=clearcote
+Environment=X_GROWTH_RESEARCH_BROWSER=lightpanda-mcp
+Environment=X_GROWTH_LIGHTPANDA_MCP_SERVER=xgrowth_lightpanda
 Environment=X_GROWTH_BROWSER_CDP_PORT=9222
 Environment=X_GROWTH_AGENT_WINDOW_MINUTES=480
 Environment=AI_ALLOW_RUNTIME_MANAGED=true
