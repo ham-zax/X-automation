@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,6 +21,23 @@ const DEFAULT_OPENCODE_BIN = path.join(HOME, '.opencode/bin/opencode');
 const DEFAULT_OPENCODE_MODEL = 'opencode/muse-spark-1.3-contributor-free';
 const DEFAULT_CODEX_BIN = path.join(HOME, '.nvm/versions/node/v24.19.0/bin/codex');
 const DEFAULT_PI_BIN = path.join(HOME, '.local/bin/pi');
+const CURRENT_PI_BIN = path.join(HOME, '.pi/agent/bin/pi');
+
+// Prefer an explicit X_GROWTH_PI_BIN; otherwise use whichever installed Pi
+// executable exists. The legacy ~/.local/bin/pi path may only be a
+// compatibility symlink, so the current ~/.pi/agent/bin/pi layout is an
+// equal fallback. No PATH mutation and no symlink creation here.
+function resolvePiBin(env = {}) {
+  const explicit = String(env.X_GROWTH_PI_BIN || '').trim();
+  if (explicit) return explicit;
+  try {
+    if (existsSync(DEFAULT_PI_BIN)) return DEFAULT_PI_BIN;
+  } catch {}
+  try {
+    if (existsSync(CURRENT_PI_BIN)) return CURRENT_PI_BIN;
+  } catch {}
+  return DEFAULT_PI_BIN;
+}
 const DEFAULT_PI_MODEL = 'opencode2api/muse-spark-1.3-contributor-free';
 const DEFAULT_PI_THINKING = 'high';
 const PI_THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -75,7 +93,7 @@ export function runtimeConfig(env = process.env) {
       : runtime === 'codex'
         ? String(env.X_GROWTH_CODEX_BIN || DEFAULT_CODEX_BIN)
         : runtime === 'pi'
-          ? String(env.X_GROWTH_PI_BIN || DEFAULT_PI_BIN)
+          ? resolvePiBin(env)
           : String(env.X_GROWTH_CLAUDE_BIN || 'claude'),
   };
 }
@@ -314,6 +332,48 @@ export async function main(overrides = {}) {
     try {
       await deps.child(command, { timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000) });
       const run = deps.runs({ sessionId, limit: 1 })[0] || null;
+      // A reasoning child may exit 0 without finishing its durable Growth Run
+      // (production run 76 published a reply, then exited while status=active).
+      // Close the orphan through the canonical finish path so its lease is
+      // released and its runtime detached; publication accounting is preserved
+      // by finishGrowthRun and nothing is retried here. No runtimeFailure
+      // marker is recorded: a normal exit is not provider-failure evidence and
+      // must not trigger model failover.
+      if (run?.status === 'active') {
+        try {
+          const closed = deps.finishRun(run.runId, {
+            status: 'partial',
+            stopReason: 'manual_intervention_required',
+            stopDetail: 'Reasoning runtime exited normally without finishing its Growth Run; launcher closed the orphaned run via the canonical finish path without retrying any publication.',
+            result: {
+              launcherRecovery: {
+                reason: 'normal_child_exit_with_active_run',
+                runtime: config.runtime,
+                model: config.model,
+              },
+            },
+            now: now(),
+          });
+          sessions.push({
+            sessionId,
+            runId: run.runId,
+            status: closed?.status || closed?.run?.status || 'partial',
+            stopReason: closed?.stopReason || closed?.run?.stopReason || 'manual_intervention_required',
+            finishedAt: closed?.finishedAt || closed?.run?.finishedAt || now(),
+          });
+          return finish({
+            status: closed?.status || closed?.run?.status || 'partial',
+            runId: run.runId,
+            stopReason: closed?.stopReason || closed?.run?.stopReason || 'manual_intervention_required',
+            reason: 'launcher_closed_orphaned_active_run',
+          });
+        } catch (recoveryError) {
+          const recoveryMessage = `Launcher could not close orphaned active run ${run.runId}: ${String(recoveryError?.message || recoveryError)}`;
+          record({ lastError: recoveryMessage });
+          sessions.push({ sessionId, runId: run.runId, status: 'launcher_recovery_failed' });
+          return finish({ status: 'blocked', reason: 'launcher_recovery_failed', runId: run.runId, stopDetail: recoveryMessage }, run.runId);
+        }
+      }
       sessions.push({ sessionId, runId: run?.runId || '', status: run?.status || 'missing',
         stopReason: run?.stopReason || null, finishedAt: run?.finishedAt || null });
       if (!continuationAllowed(run)) return finish(run
