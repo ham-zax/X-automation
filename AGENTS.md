@@ -14,6 +14,10 @@ Use `agent_bridge.js` for supported state operations and the authorized browser 
 
 The objective is relevant follower growth, supported by purposeful posts and sustained relationships. Output volume is diagnostic. Improve from measured evidence; never promise a follower increase or infer causal attribution from a coincident account delta.
 
+Production operator host is the ARM server: only one operator runs at a time, and WSL is test-only.
+
+Deployment and the current runtime are documented in `docs/ARM_24X7_HANDOFF.md`.
+
 ## Account identity
 
 Target identity: **developer + builder in tech**.

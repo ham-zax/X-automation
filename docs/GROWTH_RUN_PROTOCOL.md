@@ -213,12 +213,14 @@ Default runtime: OpenCode. Override with:
 - `X_GROWTH_CLAIVE_BIN=<path>` (defaults to `~/.local/bin/claive`)
 
 The `claive` adapter launches tracked model turns within each bounded pass.
-`X_GROWTH_CLAIVE_ENGINE=muse|pi` selects the engine (default Muse). Muse uses
+`X_GROWTH_CLAIVE_ENGINE=muse|pi|codex` selects the engine (default Muse). Muse uses
 `muse-spark-1.3-contributor`, `xhigh` reasoning, and its filesystem/network sandbox.
 Pi uses only `opencode2api`, `max` reasoning, and inherits its current global
 model when `X_GROWTH_AGENT_MODEL` is empty. Pi has no OS sandbox; the operational
 prompt restricts it to Growth OS bridge operations and the browser lane.
-Neither engine automatically switches provider/model. The temporary prompt is removed
+Codex is locked to `gpt-6-luna` at `max` reasoning with web search and runs with
+`CLAIVE_CODEX_YOLO=1` (no Codex sandbox; the prompt is the only guard), as on ARM.
+No engine automatically switches provider/model. The temporary prompt is removed
 on success or failure. Workers operate through the same Growth Run bridge and
 authenticated browser lane; Claive never grants publication authority. Inspect
 workers with `claive list` / `claive show ID` and scheduler readiness with

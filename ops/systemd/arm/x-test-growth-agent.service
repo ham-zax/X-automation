@@ -1,5 +1,5 @@
 [Unit]
-Description=XGrowth unattended reasoning operator (Pi)
+Description=XGrowth unattended reasoning operator (claive codex gpt-6-luna, yolo)
 After=network-online.target x-test-dashboard.service
 Wants=network-online.target
 
@@ -7,7 +7,9 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/home/ubuntu/repo/x_test
 Environment=X_GROWTH_AGENT_SCHEDULED=1
-Environment=X_GROWTH_AGENT_RUNTIME=pi
+Environment=X_GROWTH_AGENT_RUNTIME=claive
+Environment=X_GROWTH_CLAIVE_ENGINE=codex
+Environment=CODEX_WORKER_BINARY=/home/ubuntu/.local/bin/codex
 Environment=X_GROWTH_BROWSER_TARGET=linux
 Environment=X_GROWTH_BROWSER_CDP_PORT=9222
 Environment=X_GROWTH_AGENT_WINDOW_MINUTES=480

@@ -4,11 +4,34 @@ Written for the next agent (any model) to take over. This file lives in a public
 
 ## Goal
 
-Hamza wants `@ham_zax` operated continuously by an unattended reasoning agent on a small always-on server (the **ARM** host, Oracle Cloud, Ubuntu 24.04 aarch64, **Pi runtime; Muse 1.3 Contributor is the preferred operator model**). The WSL workstation is **not** the operator host any more: Hamza said it will not run the operator. Never start a second operator elsewhere against another copy of the database (duplicate posts).
+Hamza wants `@ham_zax` operated continuously by an unattended reasoning agent on a small always-on server (the **ARM** host, Oracle Cloud, Ubuntu 24.04 aarch64, **claive runtime with the Codex engine, model `gpt-6-luna`**; see Current deployment). The WSL workstation is **not** the operator host any more: Hamza said it will not run the operator. Never start a second operator elsewhere against another copy of the database (duplicate posts).
 
 Hamza asked that no extra code or review effort be spent on the supervision layer for now; the watchdog below is deliberately a hack made of existing parts.
 
+## Current deployment (2026-10-08)
+
+- **Only operator host: ARM.** WSL is development/test; its `x-test-growth-agent` timer and service are stopped. Never run two operators or two live copies of the database (duplicate posts). Access is over ssh with the alias `arm`; host details stay in Hamza's private `myservers` repository.
+- **Runtime: claive with the Codex engine.** `growth_agent_runner.js` runs `claive run --engine codex --model gpt-6-luna --reasoning-effort max --web` with `CLAIVE_CODEX_YOLO=1` set for the child (runner commit `70de8c7`, claive commit `388652d`). claive then passes `--dangerously-bypass-approvals-and-sandbox` to Codex. Read-only turns stay sandboxed.
+- **Why yolo.** Codex's bwrap sandbox fails on ARM (`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`), and `workspace-write` also blocks localhost TCP to the Chromium CDP port 9222. So, as with Pi before, the prompt is the only guard. The run is unprivileged and executes as the `ubuntu` user. Codex auth lives in the `ubuntu` user's Codex configuration on ARM.
+- **Model is locked.** With claive+codex the runner refuses any `X_GROWTH_AGENT_MODEL` other than `gpt-6-luna`. Reasoning effort is hard-coded to `max` in `commandFor`.
+- **Unit environment** (`x-test-growth-agent.service`, description `XGrowth unattended reasoning operator (claive codex gpt-6-luna, yolo)`): `X_GROWTH_AGENT_RUNTIME=claive`, `X_GROWTH_CLAIVE_ENGINE=codex`, `CODEX_WORKER_BINARY=/home/ubuntu/.local/bin/codex` (codex 0.161 is not on the default PATH), plus the unchanged `X_GROWTH_AGENT_SCHEDULED=1`, `X_GROWTH_BROWSER_TARGET=linux`, `X_GROWTH_BROWSER_CDP_PORT=9222`, `X_GROWTH_AGENT_WINDOW_MINUTES=480`, `AI_ALLOW_RUNTIME_MANAGED=true` and `PATH`.
+- **Drop-ins.** `model.conf` (Pi-era `X_GROWTH_AGENT_MODEL=opencode2api/big-pickle`) was moved aside to `model.conf.bak-202610081627`, because any non-luna model makes the runner refuse to start. `experiment.conf` (`X_GROWTH_AGENT_EXPERIMENT=1`) is still installed.
+- **Workspace allowlist.** claive on ARM refuses workspaces missing from `workspaces` in its `~/.config/claive/config.json`. `/home/ubuntu/repo/x_test` (write: true) was added on 2026-10-08. If it is missing, the run fails with `workspace ... is outside the claive config workspaces allowlist`.
+- **Watchdog.** `x-test-watch.timer` (the Pi/opencode2api watchdog that rewrote `model.conf`) is stopped and does not apply to the codex runtime. Do not restart it without rewriting it. `claive-serve.service` and the dashboard stay active.
+- **Prompt.** The operator prompt defaults to the scout → act executor (`GROWTH_AGENT_MODE`, default `executor`). `GROWTH_AGENT_MODE=legacy` restores the old prompt.
+- **Backoff.** After a `rate_limited` or `provider_error` child result, the runner waits 2^n minutes (n = consecutive failures, capped at 30) before its next pass. State is kept in `$XDG_STATE_HOME/x_test/growth-runner-backoff.json` (default `~/.local/state/x_test/`). `X_GROWTH_AGENT_BACKOFF_FILE` overrides the path. `X_GROWTH_AGENT_BACKOFF=off` disables the gate.
+- **Deploying code.** Run `git pull --ff-only` in `/home/ubuntu/repo/x_test` and `/home/ubuntu/repo/claive` (claive is a symlinked install from that checkout). Units live in `~/.config/systemd/user/`; then run `systemctl --user daemon-reload`. Restart `x-test-dashboard.service` only when dashboard or server code changed. Over non-interactive ssh, export `XDG_RUNTIME_DIR=/run/user/$(id -u)` and put `~/.local/bin` on `PATH`.
+- **Moving the operator to another host (DB sync), as done on 2026-10-08:**
+  1. Stop the operator timer and service on both hosts, and let any pass end (no active Growth Run, no operator lease, no open publication attempt).
+  2. Stop the source dashboard. A clean stop checkpoints the WAL, so the `-wal`/`-shm` files disappear. Do not `mv` those files by script.
+  3. Snapshot with `sqlite3 .x-research.sqlite ".backup <file>"` and check `PRAGMA integrity_check`.
+  4. Back up the destination database, copy the snapshot into place, and `chmod 600` it.
+  5. Restart the destination dashboard and confirm the maximum `publication_attempts.id` matches the source.
+  6. Start the operator only on the destination.
+
 ## What runs on ARM (user systemd units, linger on)
+
+*Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
 
 Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config/systemd/user/`. Repo: `/home/ubuntu/repo/x_test` (a git clone of this repository, kept current with `git pull --ff-only`).
 
@@ -26,6 +49,8 @@ Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config
 
 ## How a pass works
 
+*Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
+
 `growth_agent_runner.js` checks delegation (must be `running` + `live`, unchanged revision), the operator lease, account health, outstanding publication attempts and active runs; then it launches Pi once per Growth Run (max 20 min, 8 public mutations) with the operator prompt, and may start fresh passes until `X_GROWTH_AGENT_WINDOW_MINUTES` elapses. Pi is run as `pi --print --no-session --offline --no-extensions --no-approve --tools read,bash --thinking high --provider opencode2api --model <model> -- <prompt>`. X is driven through the Agent Browser CLI against the persistent Chromium (`agent-browser --cdp 9222 --session <sessionId> ...`). If the browser is not signed in as `@ham_zax` the run records an authentication blocker and does not log in.
 
 Runner changes this session (`origin/main`): `a2346fb` (Pi runtime, portable paths, `X_GROWTH_BROWSER_TARGET`), `55eed51` (default model `opencode2api/exo-free`). Env knobs: `X_GROWTH_AGENT_RUNTIME`, `X_GROWTH_AGENT_MODEL` (`provider/model`), `X_GROWTH_PI_BIN`, `X_GROWTH_PI_THINKING`, `X_GROWTH_BROWSER_TARGET`, `X_GROWTH_BROWSER_CDP_PORT`, `X_GROWTH_AGENT_BROWSER_CLI`, `X_GROWTH_REPO`. See `ops/systemd/README.md`.
@@ -35,6 +60,8 @@ Runner changes this session (`origin/main`): `a2346fb` (Pi runtime, portable pat
 ARM's Chromium was signed in by setting the `auth_token` and `ct0` cookies (values from ARM's private `.env`, keys `AUTH_TOKEN`, `CT0`) with `agent-browser --cdp 9222 cookies set ... --domain .x.com --expires <+1y>`, then verified by reading the profile link (`/ham_zax`) on `x.com/home`. If X invalidates the session, passes will record authentication blockers until the cookies are refreshed the same way. Never print the values.
 
 ## Models and the watchdog hack
+
+*Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
 
 Preferred order for the operator: `muse-spark-1.3-contributor-free` → `big-pickle` → `mimo-v2.6-flash-free` → `space-bunny-free` (all under provider `opencode2api`). Pi's own default model, Pi subagent default and claive's worker role on ARM are `exo-free` (backups of the old config are next to the files as `*.bak-<timestamp>`). The runner has **no** built-in fallback and claive serve only backs off on provider errors; it never switches models.
 
@@ -110,9 +137,11 @@ Already recorded in the database: every attempt in `publication_attempts` (actio
 
 ## Operating it
 
+*Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
+
 - Look: `systemctl --user status x-test-growth-agent.service`, `journalctl --user -u x-test-growth-agent.service`, `claive goal list --all`, `~/work/scratch/xwatch/{stats.jsonl,ALERTS.md}`. Over non-interactive ssh export `XDG_RUNTIME_DIR=/run/user/$(id -u)` and put `~/.local/bin` on `PATH`.
-- Stop: `systemctl --user disable --now x-test-growth-agent.timer x-test-watch.timer`. Stopping the service mid-run leaves an active Growth Run that must be recovered (`active_run_requires_recovery`). Prefer letting the pass end, or pause delegation in the dashboard.
-- Switch the model by hand: edit `model.conf`, `systemctl --user daemon-reload` (applies from the next pass).
+- Stop: `systemctl --user disable --now x-test-growth-agent.timer`. `x-test-watch.timer` is already stopped and must not be restarted without rewriting it. Stopping the service mid-run leaves an active Growth Run that must be recovered (`active_run_requires_recovery`). Prefer letting the pass end, or pause delegation in the dashboard.
+- Switching the model is not possible under claive+codex: the runner accepts only `gpt-6-luna` and refuses any other `X_GROWTH_AGENT_MODEL`. `model.conf` is no longer installed (see Current deployment).
 
 ## Open decisions and next steps
 
