@@ -48,7 +48,7 @@ const DEFAULT_WEBHARNESS_AGENT_BROWSER = path.join(HOME, 'repo/webharness/node_m
 const DEFAULT_LINUX_AGENT_BROWSER = path.join(HOME, '.local/bin/agent-browser');
 const DEFAULT_CDP_PORT = '9222';
 const BROWSER_TARGETS = ['windows', 'linux'];
-const RUNTIMES = ['opencode', 'codex', 'claude', 'pi', 'claive'];
+const RUNTIMES = ['opencode', 'codex', 'claude', 'pi', 'claive', 'muse'];
 const SCHEDULER_INTERVAL_MS = 15 * 60_000;
 
 export function runtimeConfig(env = process.env) {
@@ -63,7 +63,7 @@ export function runtimeConfig(env = process.env) {
   if (runtime === 'claive' && !['muse', 'pi'].includes(claiveEngine)) {
     throw new Error('X_GROWTH_CLAIVE_ENGINE must be muse or pi.');
   }
-  const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : runtime === 'claive' && claiveEngine === 'muse' ? CLAIVE_MODEL : '';
+  const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : (runtime === 'claive' && claiveEngine === 'muse') || runtime === 'muse' ? CLAIVE_MODEL : '';
   const model = String(env.X_GROWTH_AGENT_MODEL || defaultModel).trim();
   if (runtime === 'claive' && claiveEngine === 'muse' && model !== CLAIVE_MODEL) {
     throw new Error(`Claive Muse workers require ${CLAIVE_MODEL}; alternate engines/models need explicit owner authorization.`);
@@ -101,6 +101,8 @@ export function runtimeConfig(env = process.env) {
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     executable: runtime === 'claive'
       ? String(env.X_GROWTH_CLAIVE_BIN || DEFAULT_CLAIVE_BIN)
+      : runtime === 'muse'
+      ? String(env.X_GROWTH_MUSE_BIN || 'muse')
       : runtime === 'opencode'
       ? String(env.X_GROWTH_OPENCODE_BIN || DEFAULT_OPENCODE_BIN)
       : runtime === 'codex'
@@ -223,6 +225,17 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
         '--max-model-steps', '100', '--web');
     }
     return { executable: config.executable, args };
+  }
+  if (config.runtime === 'muse') {
+    // Direct Muse CLI: --yolo trusts this workspace and disables approval/sandbox so the
+    // operator can reach the browser lane; the prompt's hard boundaries remain the guard.
+    if (!promptFile) throw new Error('Muse requires a temporary operational prompt file.');
+    return {
+      executable: config.executable,
+      args: ['exec', '--yolo', '--workspace', REPO, '--model', config.model || CLAIVE_MODEL,
+        '--reasoning-effort', config.thinking === 'max' ? 'max' : 'xhigh',
+        '--max-model-steps', '200', '--prompt-file', promptFile],
+    };
   }
   if (config.runtime === 'claude') {
     const args = ['--print', '--no-session-persistence', '--permission-mode', 'dontAsk',
@@ -383,7 +396,7 @@ export async function main(overrides = {}) {
     const stopHeartbeatPump = deps.heartbeat(`${config.runtime}_unattended`, sessionId);
     try {
       let promptFile;
-      if (config.runtime === 'claive') {
+      if (config.runtime === 'claive' || config.runtime === 'muse') {
         promptDirectory = await mkdtemp(path.join(tmpdir(), 'x-growth-claive-'));
         promptFile = path.join(promptDirectory, 'operator.md');
         await writeFile(promptFile, prompt, { mode: 0o600 });
