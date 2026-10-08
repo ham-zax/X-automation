@@ -82,6 +82,7 @@ import {
   acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
+  claimActPublication,
   claimAutonomousReplyDecision,
   claimQueueItemForPublication,
   createExperiment,
@@ -141,6 +142,9 @@ import {
   listQueueItems,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
+  listRecentPublishedReplies,
+  markQueuePublished,
+  releaseActQueueItemAfterNotSent,
   listResearchEvidence,
   listRelationshipEvents,
   listRelationshipProfiles,
@@ -1666,6 +1670,125 @@ async function main() {
     throw new Error('publication-attempt-resolve supports confirmed_not_sent or closed_unresolved. Confirmed publication must use record-action with positive structural verification.');
   }
 
+  if (command === 'scout') {
+    const scoutModule = await import('./scout.js');
+    const store = await import('./store.js');
+    const input = scoutModule.readScoutInput(store, { now: Date.now() });
+    const { pace, cards } = scoutModule.buildScoutCards({ ...input, limit: payload.limit });
+    result({ generatedAt: input.now, pace, cards });
+    return;
+  }
+
+  if (command === 'act') {
+    const actModule = await import('./act.js');
+    const validated = actModule.validateActInput(payload);
+    if (payload.runId) {
+      requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
+    }
+    const card = payload.card && typeof payload.card === 'object' ? payload.card : {};
+    const author = String(card.author || payload.targetUsername || '').replace(/^@/, '');
+    const sourceText = String(card.sourceText || '');
+    const rewrite = actModule.checkAttributionNeedsRewrite(validated.text, { action: validated.action, sourceText });
+    if (rewrite) {
+      result({ status: 'needs_rewrite', ...rewrite, action: validated.action });
+      return;
+    }
+    if (sourceText && actModule.isNearCopy(validated.text, sourceText)) {
+      throw new Error('act blocked: text is a near-copy of the source post it responds to.');
+    }
+    const recentMain = listRecentPublishedContent({ limit: 200 }).map((item) => item?.text || item?.body || '');
+    const recentReplies = listRecentPublishedReplies({ limit: 200 }).map((item) => item?.text || item?.outputText || '');
+    for (const existing of [...recentMain, ...recentReplies]) {
+      if (existing && actModule.isNearCopy(validated.text, existing)) {
+        throw new Error('act blocked: duplicate/near-copy of recently published text.');
+      }
+    }
+    const spacing = actModule.checkMainFeedSpacing({ action: validated.action, recentPosts: listRecentMainFeedPublications({ limit: 20 }), now: Date.now() });
+    if (spacing) {
+      result({ status: 'spacing_blocked', ...spacing, action: validated.action });
+      return;
+    }
+    const intentUrl = actModule.buildIntentUrl(validated);
+    const claim = claimActPublication({
+      action: validated.action,
+      text: validated.text,
+      targetTweetId: validated.targetTweetId,
+      targetUrl: validated.targetUrl,
+      targetUsername: author,
+      candidateKey: validated.candidateKey || card.cardId || null,
+      runId: payload.runId || null,
+      claimHolder: String(payload.sessionId || 'act_bridge'),
+    });
+    const drive = await actModule.driveBrowserSend({
+      intentUrl,
+      expectedText: validated.text,
+      action: validated.action,
+      targetAuthor: author,
+      targetSnippet: sourceText,
+      targetTweetId: validated.targetTweetId,
+    }, {
+      beforeClick: (evidence) => {
+        markPublicationAttemptSendStarted(claim.attempt.attemptId, {
+          preSendEvidence: { ...evidence, intentUrl, transport: 'browser_agent' },
+        });
+      },
+    });
+    const now = Date.now();
+    const ownHandle = String(process.env.X_ACCOUNT || 'ham_zax').replace(/^@/, '');
+    const outputTweetId = String(drive.evidence?.outputTweetId || '').trim();
+    if (drive.outcome === 'published' && /^\d{5,25}$/.test(outputTweetId)) {
+      const outputUrl = drive.evidence?.outputUrl || `https://x.com/${ownHandle}/status/${outputTweetId}`;
+      const published = confirmPublicationAttemptPublished(claim.attempt.attemptId, {
+        outputTweetId,
+        outputUrl,
+        evidence: { ...drive.evidence, intentUrl, action: validated.action, targetTweetId: validated.targetTweetId, confirmedBy: drive.reason },
+        executionEvidence: { transport: 'browser_agent', intentUrl, runId: payload.runId || null },
+        now,
+      });
+      markQueuePublished(claim.queueItem.id, outputTweetId, outputUrl, { publishedAt: now });
+      const actionName = validated.action === 'reply' ? 'reply' : validated.action === 'quote' ? 'quote' : 'direct';
+      const recorded = recordCandidateAction({
+        candidateKey: claim.candidate.key,
+        action: actionName,
+        outputTweetId,
+        outputUrl,
+        commentary: `delegated act ${validated.action}`,
+        createdAt: now,
+      });
+      let relationshipEvent = null;
+      if ((validated.action === 'reply' || validated.action === 'quote') && author) {
+        relationshipEvent = recordRelationshipEvent({
+          username: author,
+          eventType: validated.action === 'reply' ? 'our_reply' : 'our_quote',
+          candidateKey: claim.candidate.key,
+          sourceTweetId: validated.targetTweetId || null,
+          ourTweetId: outputTweetId,
+          occurredAt: now,
+          metadata: { attemptId: published.attemptId, outputUrl },
+        });
+      }
+      result({ status: 'confirmed_published', attempt: published, recorded, relationshipEvent, outputUrl });
+      return;
+    }
+    if (drive.outcome === 'not_sent') {
+      const resolved = confirmPublicationAttemptNotSent(claim.attempt.attemptId, {
+        reason: String(drive.reason || 'browser proved the mutation was never dispatched'),
+        evidence: { ...drive.evidence, sendBoundaryCrossed: false, intentUrl },
+        now,
+      });
+      releaseActQueueItemAfterNotSent(claim.queueItem.id, { reason: drive.reason, now });
+      result({ status: 'confirmed_not_sent', attempt: resolved.attempt, reason: drive.reason });
+      return;
+    }
+    const unresolved = closePublicationAttemptUnresolved(claim.attempt.attemptId, {
+      reason: String(drive.reason || 'no confirmatory evidence; recovery exhausted without retry'),
+      evidence: { ...drive.evidence, intentUrl },
+      now,
+    });
+    result({ status: 'closed_unresolved', attempt: unresolved.attempt, reason: drive.reason });
+    return;
+  }
+
   if (command === 'browser-publish-claim') {
     const now = Date.now();
     if (!Number.isFinite(now)) throw new Error('browser-publish-claim now must be numeric when supplied.');
@@ -2796,7 +2919,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

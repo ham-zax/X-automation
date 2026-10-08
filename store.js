@@ -1674,6 +1674,159 @@ function insertPublicationAttempt(queueItem, {
   return getPublicationAttempt(attemptId);
 }
 
+export function getBlockingActAttemptForTarget(targetTweetId) {
+  const id = String(targetTweetId || '').trim();
+  if (!id) return null;
+  return decodePublicationAttempt(db.prepare(`SELECT * FROM publication_attempts
+    WHERE target_tweet_id = ? AND state IN ('claimed', 'send_started', 'confirmed_published', 'investigating', 'closed_unresolved')
+    ORDER BY id DESC LIMIT 1`).get(id));
+}
+
+export function claimActPublication({
+  action,
+  text,
+  targetTweetId = '',
+  targetUrl = '',
+  targetUsername = '',
+  candidateKey = null,
+  runId = null,
+  claimHolder = '',
+  now = Date.now(),
+} = {}) {
+  const pipeline = String(action || '').trim().toLowerCase();
+  if (!['reply', 'quote', 'original'].includes(pipeline)) {
+    throw new DomainValidationError(`act supports reply|quote|original; received ${action || 'missing'}.`);
+  }
+  const body = String(text || '').trim();
+  if (!body) throw new DomainValidationError('act requires non-empty text.');
+  if (body.length > 280) throw new DomainValidationError(`act text is ${body.length} chars; X limit is 280.`);
+  const targetId = String(targetTweetId || '').trim();
+  if ((pipeline === 'reply' || pipeline === 'quote') && !/^\d{5,25}$/.test(targetId)) {
+    throw new DomainValidationError(`act ${pipeline} requires a numeric targetTweetId.`);
+  }
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('act claim timestamp must be numeric.');
+  const holder = String(claimHolder || '').trim() || 'act_bridge';
+
+  if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') {
+    throw new DomainValidationError('act blocked: Account Health is CONSTRAINED.');
+  }
+  let grantRevision = null;
+  if (pipeline === 'reply') {
+    const grant = getAutonomousReplyGrantState() || {};
+    if (grant.state !== 'running' || grant.mode !== 'live') {
+      throw new DomainValidationError('act reply blocked: the autonomous-reply grant is not running/live.');
+    }
+    grantRevision = Number(grant.revision);
+  } else {
+    const grant = getGrowthOperatorDelegation() || {};
+    if (grant.state !== 'running' || grant.mode !== 'live') {
+      throw new DomainValidationError(`act ${pipeline} blocked: the Growth Operator delegation is not running/live.`);
+    }
+    grantRevision = Number(grant.revision);
+  }
+
+  const key = String(candidateKey || '').trim()
+    || String(targetUrl || '').trim()
+    || (targetId ? `act:${pipeline}:${targetId}` : `act:${pipeline}:${hashCanonical(body).slice(0, 16)}:${new Date(timestamp).toISOString().slice(0, 10)}`);
+  const lane = pipeline === 'reply' ? 'engagement' : 'main';
+  const actionType = pipeline === 'reply' ? 'reply' : pipeline === 'quote' ? 'quote' : 'direct';
+  const approvedContentHash = hashCanonical(body);
+
+  return runStoreTransaction(() => {
+    if (!getCandidate(key)) {
+      upsertCandidates([{
+        key,
+        source: pipeline === 'original' ? 'owner' : 'x',
+        title: targetUsername ? `@${String(targetUsername).replace(/^@/, '')}` : key,
+        text: '',
+        url: targetUrl || key,
+        timestamp,
+        metrics: {},
+      }]);
+    }
+    let queueItem = getQueueItemByCandidate(key);
+    if (!queueItem) {
+      ensureQueueItem(key, { lane, pipeline, status: 'approved' });
+      queueItem = getQueueItemByCandidate(key);
+    }
+    if (!queueItem) throw new DomainValidationError(`act queue item could not be created for ${key}.`);
+    if (['published', 'unresolved', 'ignored', 'expired', 'failed'].includes(queueItem.status)
+      || queueItem.publishedAt != null || queueItem.outputTweetId) {
+      throw new DomainValidationError(`act target is already terminal as ${queueItem.status}; never re-send.`);
+    }
+    queueItem = saveQueueItem({
+      ...queueItem,
+      lane,
+      pipeline,
+      status: 'approved',
+      targetTweetId: targetId || queueItem.targetTweetId || '',
+      targetUsername: targetUsername || queueItem.targetUsername || '',
+      approvedText: body,
+      humanApprovedAt: null,
+      publishStartedAt: null,
+      publishError: null,
+      approvalSnapshot: {
+        authority: { type: 'delegated_act', action: pipeline, grantRevision },
+        verificationProvenance: {
+          authorityType: 'delegated_act',
+          sourceReferences: targetUrl ? [targetUrl] : [key],
+          evidenceReferences: [],
+        },
+        approvedAt: timestamp,
+        contentHash: approvedContentHash,
+      },
+      approvalInvalidatedAt: null,
+      approvalInvalidationReason: '',
+    });
+
+    const fingerprint = computePublicationActionFingerprint(queueItem, { approvedContentHash });
+    const fenced = getDuplicateFencedPublicationAttempt(fingerprint);
+    if (fenced) throw new DomainValidationError(`act duplicate-fenced by attempt ${fenced.attemptId} (${fenced.state}).`);
+    if (targetId) {
+      const targetFence = getBlockingActAttemptForTarget(targetId);
+      if (targetFence) {
+        throw new DomainValidationError(`act target ${targetId} is fenced by attempt ${targetFence.attemptId} (${targetFence.state}); never re-send.`);
+      }
+    }
+    assertPublicationRunCapacity(runId, holder, timestamp);
+    const attemptId = randomUUID();
+    db.prepare(`INSERT INTO publication_attempts(
+      attempt_id, queue_item_id, candidate_key, run_id, lane, pipeline, action_type, action_fingerprint,
+      delegation_revision, authority_snapshot_json, approved_content, approved_content_hash,
+      target_tweet_id, target_url, source_identity_json, transport, claim_holder, state, claimed_at,
+      send_started_at, pre_send_evidence_json, execution_evidence_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      attemptId,
+      Number(queueItem.id),
+      queueItem.candidateKey,
+      runId == null ? null : String(runId),
+      lane,
+      pipeline,
+      actionType,
+      fingerprint,
+      Number.isInteger(grantRevision) ? grantRevision : null,
+      JSON.stringify({ type: 'delegated_act', action: pipeline, grantRevision }),
+      body,
+      approvedContentHash,
+      targetId || null,
+      targetUrl || null,
+      JSON.stringify({ candidateKey: queueItem.candidateKey, sourceUrl: String(targetUrl || '') }),
+      'browser_agent',
+      holder,
+      'claimed',
+      timestamp,
+      null,
+      JSON.stringify({}),
+      JSON.stringify({}),
+      timestamp,
+      timestamp,
+    );
+    const claimed = saveQueueItem({ ...getQueueItem(Number(queueItem.id)), status: 'publishing', publishStartedAt: timestamp, publishError: null });
+    return { candidate: getCandidate(key), queueItem: claimed, attempt: getPublicationAttempt(attemptId) };
+  });
+}
+
 export function markPublicationAttemptSendStarted(attemptId, { preSendEvidence = null, now = Date.now() } = {}) {
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication send-start timestamp must be numeric.');
@@ -2612,6 +2765,18 @@ export function markQueuePublished(id, tweetId, outputUrl = null, { publishedAt 
       published_at = ?, publish_error = NULL, updated_at = ? WHERE id = ? AND status = 'publishing'`)
     .run(normalizedTweetId, outputUrl || null, timestamp, timestamp, Number(id));
   if (Number(result.changes || 0) !== 1) throw new DomainValidationError(`Queue item ${id} is not in publishing state.`);
+  return getQueueItem(Number(id));
+}
+
+// Call after confirmPublicationAttemptNotSent: that reconciler restores delegated_act items to approved,
+// which would let the scheduler pick up a row whose send was already refused. Move it back to drafting.
+export function releaseActQueueItemAfterNotSent(id, { reason = 'browser proved the send was never dispatched', now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) throw new DomainValidationError('releaseActQueueItemAfterNotSent requires a numeric now timestamp.');
+  const result = db.prepare(`UPDATE queue_items SET status = 'drafting', publish_error = ?, updated_at = ?
+      WHERE id = ? AND status IN ('publishing', 'approved')`)
+    .run(String(reason).slice(0, 500), timestamp, Number(id));
+  if (Number(result.changes || 0) !== 1) throw new DomainValidationError(`Queue item ${id} is not in publishing or approved state.`);
   return getQueueItem(Number(id));
 }
 
