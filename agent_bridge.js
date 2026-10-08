@@ -1705,13 +1705,6 @@ async function main() {
       }
     }
     const intentUrl = actModule.buildIntentUrl(validated);
-    const publishBrowser = String(process.env.X_GROWTH_PUBLISH_BROWSER || 'lightpanda-mcp').trim().toLowerCase();
-    if (!['lightpanda-mcp', 'webharness-fast'].includes(publishBrowser)) {
-      throw new Error('X_GROWTH_PUBLISH_BROWSER must be lightpanda-mcp or webharness-fast.');
-    }
-    const driver = publishBrowser === 'lightpanda-mcp'
-      ? (await import('./ops/lightpanda_publisher.js')).driveLightpandaSend
-      : actModule.driveBrowserSend;
     let claim;
     try {
       claim = claimActPublication({
@@ -1729,18 +1722,17 @@ async function main() {
       result({ status: 'spacing_blocked', ...error.refusal, action: validated.action });
       return;
     }
-    const drive = await driver({
+    const drive = await actModule.driveBrowserSend({
       intentUrl,
       expectedText: validated.text,
       action: validated.action,
       targetAuthor: author,
       targetSnippet: sourceText,
       targetTweetId: validated.targetTweetId,
-      targetUrl: validated.targetUrl,
     }, {
       beforeClick: (evidence) => {
         markPublicationAttemptSendStarted(claim.attempt.attemptId, {
-          preSendEvidence: { ...evidence, intentUrl, transport: publishBrowser },
+          preSendEvidence: { ...evidence, intentUrl, transport: 'browser_agent' },
         });
       },
     });
@@ -1753,7 +1745,7 @@ async function main() {
         outputTweetId,
         outputUrl,
         evidence: { ...drive.evidence, intentUrl, action: validated.action, targetTweetId: validated.targetTweetId, confirmedBy: drive.reason },
-        executionEvidence: { transport: publishBrowser, intentUrl, runId: payload.runId || null },
+        executionEvidence: { transport: 'browser_agent', intentUrl, runId: payload.runId || null },
         now,
       });
       markQueuePublished(claim.queueItem.id, outputTweetId, outputUrl, { publishedAt: now });

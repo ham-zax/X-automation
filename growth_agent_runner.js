@@ -13,7 +13,6 @@ import {
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
-import { RESEARCH_BROWSERS, researchBrowserContract } from './ops/browser_research_contract.js';
 import { finishGrowthRun } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -105,7 +104,7 @@ export function runtimeConfig(env = process.env) {
   const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
     || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
   const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
-    || 'lightpanda-mcp')
+    || 'agent-browser-cli')
     .trim().toLowerCase();
   if (!BROWSER_INTERFACES.includes(browserInterface)) {
     throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
@@ -117,18 +116,6 @@ export function runtimeConfig(env = process.env) {
   const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'clearcote').trim().toLowerCase();
   if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
     throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
-  }
-  const researchBrowser = String(env.X_GROWTH_RESEARCH_BROWSER || 'lightpanda-mcp').trim().toLowerCase();
-  if (!RESEARCH_BROWSERS.includes(researchBrowser)) {
-    throw new Error(`X_GROWTH_RESEARCH_BROWSER must be ${RESEARCH_BROWSERS.join(' or ')}.`);
-  }
-  const lightpandaMcpServer = String(env.X_GROWTH_LIGHTPANDA_MCP_SERVER || 'xgrowth_lightpanda').trim();
-  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(lightpandaMcpServer)) {
-    throw new Error('X_GROWTH_LIGHTPANDA_MCP_SERVER must be a simple MCP server name.');
-  }
-  const publishBrowser = String(env.X_GROWTH_PUBLISH_BROWSER || 'lightpanda-mcp').trim().toLowerCase();
-  if (!['lightpanda-mcp', 'webharness-fast'].includes(publishBrowser)) {
-    throw new Error('X_GROWTH_PUBLISH_BROWSER must be lightpanda-mcp or webharness-fast.');
   }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
@@ -145,9 +132,6 @@ export function runtimeConfig(env = process.env) {
     browserInterface,
     browserMcpServer,
     browserFastBackend,
-    researchBrowser,
-    lightpandaMcpServer,
-    publishBrowser,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
@@ -165,10 +149,10 @@ export function runtimeConfig(env = process.env) {
   };
 }
 
-function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }) {
+function browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
   if (browserTarget === 'linux') {
     return {
-      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }),
+      cliRule: browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }),
       observe: 'Before beginning a run, observe the current authenticated X tab and positively confirm @ham_zax; do not log in or enter credentials. If account verification fails, begin with x_authenticated=false and browser_mutation=false and report the blocker.',
       session: 'authenticated headless X session',
     };
@@ -183,8 +167,8 @@ function browserSection({ browserTarget, browserInterface, browserMcpServer, bro
   };
 }
 
-function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId }) {
-  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId });
+function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId }) {
+  if (browserTarget === 'linux') return browserOperatorContract({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
 }
 
@@ -193,8 +177,7 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
 // maxDurationMinutes lines: the launcher and tests read them from the prompt.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote',
-  lightpandaMcpServer = 'xgrowth_lightpanda' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Bias toward action: when eligible cards exist, complete at least 2 public actions per pass. The bridge gates still apply.
 ` : '';
@@ -203,7 +186,7 @@ This is an OPERATIONAL growth session, not a software-engineering task. Goal: qu
 
 Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
-- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId })}
+- ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
 - Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
@@ -217,7 +200,7 @@ Loop:
 - T0 \`check_mentions\` (always the first card): observe https://x.com/notifications/mentions in the Browser above and find new replies to our posts. For each one worth answering, write a reply and send it with \`act\` action \`reply\`, targeting that reply's tweetId and URL. Skip replies we already answered.
 - Fresh discovery: \`scout\` only ranks saved candidates; it does not collect X. After checking mentions, read \`growth-run-next\` with this runId/sessionId. If it recommends \`collect_for_you\`, or scout has no T1 cards and collection is permitted, collect fresh posts before treating the pass as empty. Honor the returned observation/time ceilings and recovery blockers.
 - Collection: open https://x.com/home in the Browser above and select For You. Spend at most two minutes on one full observation and at most one scroll; capture a few diverse organic posts with exact text, author, status permalink and visible metrics. Do not build collector scripts or repeatedly reload. A fresh observation is not necessarily a recent post; inspect post age before choosing a reply.
-- Immediately submit the observed posts through \`npm run --silent agent -- x-for-you-ingest\`, JSON on stdin: \`{"kind":"x_for_you","observedAt":<actual date +%s%3N>,"accountHandle":"ham_zax","adapterType":"${runtime}_unattended","runId":"<runId>","sessionId":"${sessionId}","browserTarget":"${browserTarget}","browserBackend":"${browserInterface === 'lightpanda-mcp' ? 'lightpanda' : 'chrome'}","sensorVersion":"x_for_you_v1","collectionStatus":"complete","posts":[{"tweetId":"<numeric ID>","url":"https://x.com/<author>/status/<ID>","username":"<author>","text":"<exact observed text>","rank":1,"metrics":{"views":<observed number>}}]}\`. Every post needs the matching ID/permalink pair, username, non-empty text and positive integer rank. Include only observed non-negative numeric views/likes/reposts/replies/bookmarks; omit unavailable metrics and timestamp (the bridge derives post time from tweetId). Mark ads \`promoted:true\`; never invent source text, IDs or metrics.
+- Immediately submit the observed posts through \`npm run --silent agent -- x-for-you-ingest\`, JSON on stdin: \`{"kind":"x_for_you","observedAt":<actual date +%s%3N>,"accountHandle":"ham_zax","adapterType":"${runtime}_unattended","runId":"<runId>","sessionId":"${sessionId}","browserTarget":"${browserTarget}","browserBackend":"chrome","sensorVersion":"x_for_you_v1","collectionStatus":"complete","posts":[{"tweetId":"<numeric ID>","url":"https://x.com/<author>/status/<ID>","username":"<author>","text":"<exact observed text>","rank":1,"metrics":{"views":<observed number>}}]}\`. Every post needs the matching ID/permalink pair, username, non-empty text and positive integer rank. Include only observed non-negative numeric views/likes/reposts/replies/bookmarks; omit unavailable metrics and timestamp (the bridge derives post time from tweetId). Mark ads \`promoted:true\`; never invent source text, IDs or metrics.
 - Read ingestion diagnostics and engagement rejections, then rerun \`scout\` and evaluate the new cards. If collection or ingestion fails, report the exact capability blocker and finish; never report an unchanged cache as fresh discovery.
 - T1 \`reply\` and \`quote\` cards, in order: open the card \`url\` and read the post in context. Judge the purpose: is there a real builder conversation to add to? If not, record a skip with \`npm run --silent agent -- record-disposition\` and JSON \`{"key":"<candidateKey>","disposition":"skip","reason":"<why>"}\`. If yes, write the text and send it with \`act\` action \`reply\` or \`quote\`, as the card says.
 - T2 \`original\` (present only when allowed): write one original post, and only from real material: an inspiration URL on the card, a post you read in this run, or a fact from this repository. Never invent experiences, numbers, customers or events. Send it with \`act\` action \`original\`.
@@ -249,7 +232,7 @@ Hard rules:
 - Never blindly retry an uncertain send. Never invent a publication, URL or outcome.
 - Never print cookies, tokens or credentials. Never log in or enter credentials.
 - Never wrap a bridge command in \`timeout\`, background it, or pipe it through a process that can end it early.
-- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser interface selected above.
+- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
 
 Finish:
 - Call \`npm run --silent agent -- growth-run-finish\` with an accurate structured outcome and stop reason before your final response.
@@ -258,15 +241,13 @@ ${experimentNote}`;
 }
 
 export function buildOperatorPrompt({ mode = 'executor', ...options }) {
-  const mainPrompt = mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
-  return mainPrompt + researchBrowserContract(options);
+  return mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote',
-  lightpandaMcpServer = 'xgrowth_lightpanda' }) {
-  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, lightpandaMcpServer, agentBrowserCli, cdpPort, sessionId });
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
 - Each pass should complete at least 2 public actions when any eligible candidate exists. Prefer well-grounded replies to fresh For You posts first; if replies are dry, write and publish one original post or quote grounded in what you just observed. Do not stop after a thin feed: re-collect, use the editorial plan, or advance existing drafts and approved queue items.
@@ -331,7 +312,7 @@ using adapterType \`${runtime}_unattended\`, sessionId \`${sessionId}\`, truthfu
 
 Then follow the run state rather than improvising a parallel workflow:
 1. If recovery is requested, inspect the exact publication attempt and reconcile only from evidence. If useful recovery is exhausted, close unresolved rather than calling it not-sent.
-2. If \`collect_for_you\` is requested, use the ${browser.session}. Verify the intended account is @ham_zax. Collect a bounded, diverse set of recent organic For You observations, stopping early when marginal value falls. Submit them through \`x-for-you-ingest\` with top-level observedAt (the actual observation time as a positive safe-integer Unix timestamp in milliseconds), accountHandle=ham_zax plus adapterType, sessionId, runId, browserTarget=${browserTarget}, browserBackend=${browserInterface === 'lightpanda-mcp' ? 'lightpanda' : 'chrome'}, sensorVersion, and collectionStatus. Each \`posts[]\` entry must match the bridge contract exactly: \`tweetId\` as a numeric string, \`url\` as the matching \`https://x.com/<username>/status/<tweetId>\` permalink, \`username\`, non-empty \`text\`, and a positive integer \`rank\`; set \`promoted=true\` for ads/promoted posts so they are skipped, and include \`metrics\` only as non-negative numeric views/likes/reposts/replies/bookmarks plus optional numeric \`timestamp\`. Never submit placeholder IDs, profile URLs, relative-time strings as timestamps, or post objects missing the permalink/ID pair.
+2. If \`collect_for_you\` is requested, use the ${browser.session}. Verify the intended account is @ham_zax. Collect a bounded, diverse set of recent organic For You observations, stopping early when marginal value falls. Submit them through \`x-for-you-ingest\` with top-level observedAt (the actual observation time as a positive safe-integer Unix timestamp in milliseconds), accountHandle=ham_zax plus adapterType, sessionId, runId, browserTarget=${browserTarget}, browserBackend=chrome, sensorVersion, and collectionStatus. Each \`posts[]\` entry must match the bridge contract exactly: \`tweetId\` as a numeric string, \`url\` as the matching \`https://x.com/<username>/status/<tweetId>\` permalink, \`username\`, non-empty \`text\`, and a positive integer \`rank\`; set \`promoted=true\` for ads/promoted posts so they are skipped, and include \`metrics\` only as non-negative numeric views/likes/reposts/replies/bookmarks plus optional numeric \`timestamp\`. Never submit placeholder IDs, profile URLs, relative-time strings as timestamps, or post objects missing the permalink/ID pair.
 3. Use \`growth-next\`, \`inspect\`, relationship/context commands, exact live-source inspection, owner-supplied evidence from \`docs/OWNER_PROFILE_EVIDENCE.md\`, and primary sources where claims are material. If \`growth-next\` returns an empty \`items\` array and \`growth-run-next\` permits \`collect_for_you\`, immediately refresh the For You observations and ingest them before deciding the run is dry; do not idle on an exhausted-but-still-fresh snapshot. Treat heuristic scores and the current Growth Focus taxonomy as advisory evidence, not cages. When your live judgment materially differs, call \`operator-priority-set\` with this runId/sessionId, a 0-100 score, a concrete reason, and the signals that changed your view (for example momentum, crowding, source quality, relationship value, current viral/style context, or Hamza fit). If a clearly durable developer/builder identity or community term is missing from Growth Focus, use \`growth-focus-expand\` under the active run to extend the relevant group (or add a justified Core/Adjacent group) with a concrete reason, then re-evaluate. Do not expand from random off-topic noise or promote explicit exclusion terms. The source itself need not be technical when the social act has a coherent builder-identity, relationship, community, or profile-discovery purpose. The active-run score becomes the execution priority while the heuristic remains visible for comparison. Do not act on a weak social paraphrase when verification matters.
 4. Read \`persona-tone\`. If no daily preference is active, use observed candidate context to select a small tilt through \`persona-tone-set\`, with a concrete reason, stored candidate sourceReferences and influence no greater than 0.1. Never override an active owner preference or claim knowledge of Hamza's private mood. This is a wording preference only; it cannot change routing, truth, purpose, silence or authority. Supply purpose/behavior judgment through canonical bridge commands. Preserve Hamza's persona and the rule that not every useful social act needs a technical lesson.
 5. Choose Reply, Quote, Repost, Original, or silence dynamically. Likes are not part of the dependable-autonomy contract yet and must not be performed invisibly.
@@ -360,7 +341,7 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
       args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
       return { executable: config.executable, args, env: {
         CLAIVE_CODEX_YOLO: '1',
-        CLAIVE_CODEX_USE_USER_CONFIG: '1', // XGrowth-specific Codex worker uses installed browser skills/tools in either mode.
+        CLAIVE_CODEX_USE_USER_CONFIG: '1', // Keep Codex worker's browser skill discovery in CLI and typed-MCP mode.
       } };
     } else {
       args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
@@ -670,7 +651,6 @@ export async function main(overrides = {}) {
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
       browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
-      researchBrowser: config.researchBrowser, lightpandaMcpServer: config.lightpandaMcpServer,
       agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';

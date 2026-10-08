@@ -135,7 +135,7 @@ try {
     assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
     assert.equal(args.includes('--web'), true);
     for (const flag of ['--max-model-steps', '--provider', '--session-id', '--output-schema', '--fallback-models']) assert.equal(args.includes(flag), false);
-    assert.deepEqual(command.env, { CLAIVE_CODEX_YOLO: '1', CLAIVE_CODEX_USE_USER_CONFIG: '1' });
+    assert.deepEqual(command.env, { CLAIVE_CODEX_YOLO: '1' });
   });
   await test('Claive Muse and Pi commands carry no yolo env', () => {
     for (const engine of ['muse', 'pi']) {

@@ -1,14 +1,6 @@
 // Browser-specific instructions live behind one small seam; Growth OS owns all sends.
 // Switching a browser must not change the action/claim/reconciliation protocol.
-export const BROWSER_INTERFACES = Object.freeze(['lightpanda-mcp', 'webharness-mcp', 'agent-browser-cli']);
-
-const X_OBSERVATION_SCHEMA = JSON.stringify({
-  account: '[data-testid="SideNav_AccountSwitcher_Button"]',
-  posts: [{ selector: 'article[data-testid="tweet"]', limit: 6, fields: {
-    text: '[data-testid="tweetText"]', context: '',
-    statusUrls: [{ selector: 'a[href*="/status/"]', attr: 'href' }],
-  } }],
-});
+export const BROWSER_INTERFACES = Object.freeze(['webharness-mcp', 'agent-browser-cli']);
 
 function cliInstructions({ agentBrowserCli, cdpPort, sessionId }) {
   const cli = `${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId}`;
@@ -17,14 +9,9 @@ Correct CLI syntax: \`tab list --json\` to discover stable IDs, then \`tab t2\` 
 If a click is blocked by \`div#layers\` or another covering element, it was NOT dispatched. Observe the covering UI: use its current visible Close/Cancel control only when safe, or \`press Escape\` only if it cannot discard draft content. Re-snapshot before attempting any DIFFERENT pre-send action. Never force-click, script around overlays, or blindly repeat an action with uncertain effects.`;
 }
 
-export function browserOperatorContract({ browserTarget, browserInterface, agentBrowserCli, cdpPort, sessionId, browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote', lightpandaMcpServer = 'xgrowth_lightpanda' }) {
+export function browserOperatorContract({ browserTarget, browserInterface, agentBrowserCli, cdpPort, sessionId, browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
   if (browserTarget !== 'linux') return ''; // Windows uses the existing browser-fast + native-dialog policy.
   const fallback = cliInstructions({ agentBrowserCli, cdpPort, sessionId });
-  if (browserInterface === 'lightpanda-mcp') {
-    return `Primary X browser: native Lightpanda MCP tools from server \`${lightpandaMcpServer}\`: \`mcp__${lightpandaMcpServer}__goto\`, \`mcp__${lightpandaMcpServer}__tree\`, \`mcp__${lightpandaMcpServer}__markdown\`, \`mcp__${lightpandaMcpServer}__extract\`, \`mcp__${lightpandaMcpServer}__waitForState\`, and \`mcp__${lightpandaMcpServer}__getUrl\`. Use these tools for ALL X account reads, For You collection, Mentions, and public-web research; no Agent Browser / WH Browser shell or MCP fallback.
-The native Lightpanda MCP launcher reads only the existing X cookies from the local persistent Chromium via an anonymous pipe, without persisting or revealing them. Verify signed-in @ham_zax controls before claiming x_authenticated=true. After \`goto({"url":"https://x.com/home","waitUntil":"domcontentloaded"})\`, wait with \`waitForState({"state":"networkidle"})\`, then verify the actual DOM with \`extract(${JSON.stringify({ schema: X_OBSERVATION_SCHEMA })})\`. The extract schema is a JSON string mapping field names to CSS selectors, not JSON Schema. Use the account field to confirm @ham_zax, and the post/context/status URLs for exact observations. Native \`tree\` can omit X account controls and the entire timeline even when the DOM is rendered; an empty/shallow tree is not an authentication blocker until this bounded DOM extraction also fails. URL/title success alone does not establish that an authenticated X timeline rendered. For mentions apply the same readiness and account checks; source ID/permalink and exact text are required. Failure is an explicit authentication/rendering blocker, not proof of no work.
-Lightpanda's tools are native goto/tree/extract/etc., not browser-fast observe/execute. Only the Growth OS \`act\` bridge may perform public Post/Reply/Quote writes. Do NOT click X Post/Reply/Quote/Repost/Like/Follow controls yourself; the bridge's Lightpanda publisher owns one guarded send and structural verification. Do not bypass claims or retry an uncertain send. Do not switch browser transports or use unauthenticated Lightpanda output as live X account evidence.`;
-  }
   if (browserInterface === 'agent-browser-cli') {
     return `Browser interface: agent-browser-cli (selected explicitly). ${fallback}
 Publishing boundary: ONLY the Growth OS bridge \`act\` may send; browser commands here are for observation and pre-send preparation. If any send might have been dispatched, stop UI mutations and reconcile through the existing attempt; never re-send.`;
