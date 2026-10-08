@@ -314,15 +314,13 @@ export async function main(overrides = {}) {
     if (deps.health({ now: now() }).health.state === 'constrained') {
       return finish({ status: 'blocked', reason: 'account_health_constrained' });
     }
-    // Do not block the launcher on an unresolved publication attempt. The
-    // Growth Run state machine already exposes stage=recovery and
-    // recommendedOperation=recover_attempt when reconciliation is pending.
-    // Launching the reasoning runtime is what gives that recovery path access
-    // to the authenticated browser and the exact attempt evidence. Blocking
-    // here made every later timer wake return publication_reconciliation_required
-    // forever after an interrupted send.
-    const active = deps.runs({ status: 'active', limit: 1 })[0];
-    if (active) return finish({ status: 'blocked', reason: 'active_run_requires_recovery' }, active.runId);
+    // Do not block the launcher on unresolved publication state or an
+    // orphaned active Growth Run. beginGrowthRun() resumes an existing active
+    // run and ensureRunLease() safely reacquires an expired lease for the new
+    // reasoning session. A genuinely concurrent operator is already fenced by
+    // the active-lease check above. Launching here is therefore the recovery
+    // mechanism: the run state machine can enter recovery, reconcile from live
+    // browser evidence, or continue the interrupted run without a blind write.
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
     const prompt = operatorPrompt({ runtime: config.runtime, sessionId, maxDurationMinutes,
