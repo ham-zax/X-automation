@@ -23,7 +23,7 @@ import {
   updateGrowthRun,
 } from './store.js';
 
-const STOP_REASONS = new Set([
+export const GROWTH_RUN_STOP_REASONS = Object.freeze([
   'no_worthwhile_eligible_work',
   'resource_ceiling_reached',
   'delegation_revoked',
@@ -33,6 +33,7 @@ const STOP_REASONS = new Set([
   'budget_exhausted',
   'manual_intervention_required',
 ]);
+const STOP_REASONS = new Set(GROWTH_RUN_STOP_REASONS);
 
 const TERMINAL_RESULTS = new Set(['completed', 'partial', 'blocked', 'unresolved']);
 
@@ -421,7 +422,7 @@ export function finishGrowthRun(runId, {
   const terminalStatus = String(status || 'completed');
   const reason = String(stopReason || '');
   if (!TERMINAL_RESULTS.has(terminalStatus)) throw new Error(`Invalid Growth Run terminal result: ${terminalStatus}.`);
-  if (!STOP_REASONS.has(reason)) throw new Error(`Invalid Growth Run stop reason: ${reason}.`);
+  if (!STOP_REASONS.has(reason)) throw new Error(`Invalid Growth Run stop reason: ${reason}. Allowed stop reasons: ${GROWTH_RUN_STOP_REASONS.join(', ')}.`);
   const counts = getPublicationAttemptCounts({ runId: run.runId });
   const summary = {
     ...result,

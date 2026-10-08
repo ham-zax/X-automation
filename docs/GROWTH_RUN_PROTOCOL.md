@@ -107,6 +107,14 @@ printf '%s\n' '{"action":"reply","text":"<text>","targetTweetId":"<id>","candida
 
 `scout` is read-only. Its `pace` block reports confirmed replies in the last 24 hours against the floor (15) and target (20); when behind, the niche and velocity floors relax. Its `cards` are: a T0 mentions check first; at most one T2 original when the last original is at least 90 minutes old, the main feed is free, and fewer than four originals were posted in 24 hours; then T1 reply cards ranked by velocity, niche, and freshness, with at most one quote of a breakout post whose author has not been replied to in 24 hours.
 
+Before drafting a reply/quote, the agent may call the read-only
+`act-target-status` command with `{"targetTweetId":"<source tweet ID>",
+"candidateKey":"<saved key if any>"}`. `eligibleForAttempt=false` means
+an existing target attempt or terminal queue state must not be re-sent. An
+eligible preflight is advisory, never an authorization: the atomic `act` claim
+and every existing duplicate, lease, delegation, and Account Health fence still
+control the public mutation.
+
 `act` performs one send for the text the agent wrote for a card. It validates the input, checks the run lease when a `runId` is supplied, runs attribution and near-copy checks against the card source, checks the duplicate fence, and atomically claims the exact action. That claim checks Account Health and the live delegation grant. Only then does `act` record `send_started` at the browser click, send through the x.com intent URL, and confirm the result from the CreateTweet response or the post toast.
 
 The outcomes are `confirmed_published`, `confirmed_not_sent`, or `closed_unresolved`. A confirmed send records the candidate action and relationship event inside `act`. A `closed_unresolved` result is never retried; the exact action stays duplicate-fenced.

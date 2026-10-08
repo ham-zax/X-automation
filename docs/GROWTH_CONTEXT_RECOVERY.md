@@ -2,15 +2,22 @@
 
 At startup, after every context compaction, and when resuming with incomplete
 history, complete this recovery before drafting or dispatching a public action.
+**Fresh-run exception:** when no runId exists yet, first establish the authenticated
+browser and call `growth-run-begin`. Do not call `growth-run-status`,
+`growth-run-resume`, or `growth-run-next` with only a sessionId or an invented
+runId. For a resumed run with a known active runId, check/resume it first; never
+start a new run to bypass an unfinished publication attempt.
 Chat summaries are working notes; Growth OS and live observations own truth.
 
 1. Read `operator-status`. Reload `persona-model` with `{"consumer":"writer"}`
    even if it was read before compaction. Use the returned identity, voice,
    language, affect, examples, daily tone and current stances for new wording.
-2. Recover the current `runId` and `sessionId` from the checkpoint and bridge
-   state. Read `growth-run-status` for that run; resume an active run through
-   `growth-run-resume` with the actual adapter/session and truthful capabilities
-   to revalidate delegation and the operator lease. Do not start a new run,
+2. Recover the `runId` and `sessionId` from the checkpoint and bridge state
+   for an existing run; for a new run, use the ID returned by `growth-run-begin`.
+   Read `growth-run-status` only with a known runId. Call `growth-run-resume`
+   with the actual adapter/session and truthful capabilities **only** if
+   recovering an already-active run; never resume a newly begun run merely
+   because its runId is now known. Do not start a new run,
    reset ceilings, or reuse a foreign claim because context was compacted.
    If IDs cannot be established or resume is rejected, stop public writes and
    report the blocker. Then read `growth-run-next`.

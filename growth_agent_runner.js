@@ -13,7 +13,7 @@ import {
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
-import { finishGrowthRun } from './growth_run.js';
+import { finishGrowthRun, GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
 const HOME = homedir();
@@ -189,7 +189,7 @@ Start:
 - ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
 - Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
-- Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
+- Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`. A fresh session MUST NOT call \`growth-run-status\` or \`growth-run-resume\` before it has a real runId; the recovery checklist below applies to existing runs only until \`growth-run-begin\` returns.
 - Read \`growth-run-next\`. If it recommends \`recover_attempt\` or names an unfinished publication attempt, stop and reconcile that attempt first: read the "Recover an unfinished publication" section of docs/GROWTH_AGENT_EXECUTION.md, decide only from live evidence, and never resend it.
 
 ${contextRecoveryPrompt()}
@@ -197,12 +197,12 @@ ${contextRecoveryPrompt()}
 Loop:
 - Track time from the begin call with \`date +%s%3N\`. Keep looping until about 3 minutes before the maxDurationMinutes budget ends.
 - Each pass: run \`npm run --silent agent -- scout\` with JSON \`{"limit":10}\`. Read the whole result (\`pace\` and \`cards\`) before acting.
-- T0 \`check_mentions\` (always the first card): observe https://x.com/notifications/mentions in the Browser above and find new replies to our posts. For each one worth answering, write a reply and send it with \`act\` action \`reply\`, targeting that reply's tweetId and URL. Skip replies we already answered.
+- T0 \`check_mentions\` (always the first card): observe https://x.com/notifications/mentions in the Browser above and find new replies to our posts. For each worthwhile target, first call read-only \`act-target-status\` with the exact numeric targetTweetId (and candidateKey when saved). Skip when blocked; when clear, write a reply and send it with \`act\` action \`reply\`, targeting that reply's tweetId and URL. Skip replies we already answered.
 - Fresh discovery: \`scout\` only ranks saved candidates; it does not collect X. After checking mentions, read \`growth-run-next\` with this runId/sessionId. If it recommends \`collect_for_you\`, or scout has no T1 cards and collection is permitted, collect fresh posts before treating the pass as empty. Honor the returned observation/time ceilings and recovery blockers.
 - Collection: open https://x.com/home in the Browser above and select For You. Spend at most two minutes on one full observation and at most one scroll; capture a few diverse organic posts with exact text, author, status permalink and visible metrics. Do not build collector scripts or repeatedly reload. A fresh observation is not necessarily a recent post; inspect post age before choosing a reply.
 - Immediately submit the observed posts through \`npm run --silent agent -- x-for-you-ingest\`, JSON on stdin: \`{"kind":"x_for_you","observedAt":<actual date +%s%3N>,"accountHandle":"ham_zax","adapterType":"${runtime}_unattended","runId":"<runId>","sessionId":"${sessionId}","browserTarget":"${browserTarget}","browserBackend":"chrome","sensorVersion":"x_for_you_v1","collectionStatus":"complete","posts":[{"tweetId":"<numeric ID>","url":"https://x.com/<author>/status/<ID>","username":"<author>","text":"<exact observed text>","rank":1,"metrics":{"views":<observed number>}}]}\`. Every post needs the matching ID/permalink pair, username, non-empty text and positive integer rank. Include only observed non-negative numeric views/likes/reposts/replies/bookmarks; omit unavailable metrics and timestamp (the bridge derives post time from tweetId). Mark ads \`promoted:true\`; never invent source text, IDs or metrics.
 - Read ingestion diagnostics and engagement rejections, then rerun \`scout\` and evaluate the new cards. If collection or ingestion fails, report the exact capability blocker and finish; never report an unchanged cache as fresh discovery.
-- T1 \`reply\` and \`quote\` cards, in order: open the card \`url\` and read the post in context. Judge the purpose: is there a real builder conversation to add to? If not, record a skip with \`npm run --silent agent -- record-disposition\` and JSON \`{"key":"<candidateKey>","disposition":"skip","reason":"<why>"}\`. If yes, write the text and send it with \`act\` action \`reply\` or \`quote\`, as the card says.
+- T1 \`reply\` and \`quote\` cards, in order: call read-only \`act-target-status\` with JSON containing targetTweetId=card.tweetId and candidateKey=card.candidateKey; skip blocked targets (atomic claim remains final authority). Then open the card \`url\` and read the post in context. Judge the purpose: is there a real builder conversation to add to? If not, record a skip with \`npm run --silent agent -- record-disposition\` and JSON \`{"key":"<candidateKey>","disposition":"skip","reason":"<why>"}\`. If yes, write the text and send it with \`act\` action \`reply\` or \`quote\`, as the card says.
 - T2 \`original\` (present only when allowed): write one original post, and only from real material: an inspiration URL on the card, a post you read in this run, or a fact from this repository. Never invent experiences, numbers, customers or events. Send it with \`act\` action \`original\`.
 - A pass with no worthwhile T1/T2 cards and no new mentions counts as empty only after fresh live collection, successful ingestion and another scout read. Never repeat the same cached scout result as a second discovery pass.
 
@@ -235,7 +235,7 @@ Hard rules:
 - Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
 
 Finish:
-- Call \`npm run --silent agent -- growth-run-finish\` with an accurate structured outcome and stop reason before your final response.
+- Call \`npm run --silent agent -- growth-run-finish\` with JSON \`{"runId":"<actual runId>","status":"completed","stopReason":"no_worthwhile_eligible_work","stopDetail":"No worthwhile eligible actions remain."}\` after a healthy empty pass. Supported stopReason values: ${GROWTH_RUN_STOP_REASONS.join(", ")}. If growth-run-next offers the permitted operation \`finish\`, prefer it to derive the reason. Never invent stop reasons: status and stopReason are different fields.
 - Final response: published URLs (from \`outputUrl\`), skipped count, unresolved attempt IDs, and any blocker.
 ${experimentNote}`;
 }
@@ -470,7 +470,7 @@ export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000, 
         return;
       }
       const { code = null, signal = null } = exited || {};
-      if (code === 0) resolve({ code, signal: signal || null });
+      if (code === 0) resolve({ code, signal: signal || null, outputTail });
       else {
         const error = new Error(`Growth agent runtime exited with code ${code}${signal ? ` (${signal})` : ''}.`);
         error.exitCode = code;
@@ -525,6 +525,13 @@ export function classifyChildResult({ exitCode, deadlineExpired = false, tail = 
   if (CHILD_FAILURE_PATTERNS.rate_limited.test(tail)) return 'rate_limited';
   if (CHILD_FAILURE_PATTERNS.provider_error.test(tail)) return 'provider_error';
   return 'other';
+}
+
+// Claive can exit 0 while individual tool calls fail; retain the distinct
+// operational signal without changing Growth Run completion or retry policy.
+export function parseClaiveToolFailures(outputTail = '') {
+  const matches = [...String(outputTail || '').matchAll(/Task failures reported:\s*(\d+)/g)];
+  return matches.length ? Number(matches.at(-1)[1]) : 0;
 }
 
 export function backoffMinutes(consecutiveFailures) {
@@ -598,10 +605,12 @@ export async function main(overrides = {}) {
   const record = overrides.record || ((patch) => scheduledInvocation
     ? updateGrowthAgentSchedulerStatus(patch) : getGrowthAgentSchedulerStatus());
   const sessions = [];
+  let toolFailures = 0;
   record({ configured: true, enabled: true, lastInvocationAt: startedAt,
     nextInvocationAt: startedAt + SCHEDULER_INTERVAL_MS, lastError: null });
   const finish = (result, activeRunId = '') => {
-    const outcome = { ...result, windowMinutes: config.windowMinutes, startedAt,
+    const outcome = { ...result, toolFailures, operationalStatus: toolFailures > 0 ? 'degraded' : (result.status === 'completed' ? 'clean' : result.status),
+      windowMinutes: config.windowMinutes, startedAt,
       deadline, sessions };
     record({ lastInvocationResult: outcome, activeRunId });
     return outcome;
@@ -672,10 +681,11 @@ export async function main(overrides = {}) {
       for (let turn = 0; turn < 4; turn++) {
         const command = commandFor(config, prompt, { promptFile, engineSessionId });
         try {
-          await deps.child(command, {
+          const childResult = await deps.child(command, {
             timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000),
             killGraceMs: config.runtime === 'claive' ? 15_000 : 5_000,
           });
+          if (config.runtime === 'claive') toolFailures += parseClaiveToolFailures(childResult?.outputTail);
         } catch (childError) {
           // Rethrown unchanged: the catch below closes the run or rethrows.
           // A failed child is never relaunched within this invocation.

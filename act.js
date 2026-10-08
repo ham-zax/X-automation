@@ -364,11 +364,19 @@ async function runComposerSend({ intentUrl, expectedText, action, targetAuthor =
     return notSent('intent_tab_missing', 'mutation_not_dispatched', 'Intent navigation did not report a composer tab; nothing was clicked.', null, { intentUrl });
   }
   state.tab = tab;
-  await env.sleep(2500);
-  const observed = await env.observe(tab, 'full');
-  const snapshot = snapshotText(observed);
+  // An X intent tab can open before its prefilled composer becomes visible.
+  // Re-observe only: no typing, clicking, or retrying a public mutation here.
   const normalizedExpected = String(expectedText || '').trim().slice(0, 60).toLowerCase();
-  const snapshotLower = snapshot.toLowerCase();
+  let observed;
+  let snapshot = '';
+  let snapshotLower = '';
+  for (const readDelayMs of [1500, 1250, 1250, 1250]) {
+    await env.sleep(readDelayMs);
+    observed = await env.observe(tab, 'full');
+    snapshot = snapshotText(observed);
+    snapshotLower = snapshot.toLowerCase();
+    if (normalizedExpected && snapshotLower.includes(normalizedExpected.slice(0, 30))) break;
+  }
   if (!normalizedExpected || !snapshotLower.includes(normalizedExpected.slice(0, 30))) {
     return notSent('composer_prefill_mismatch', 'mutation_not_dispatched', 'Composer prefill does not match the approved text; no click was attempted.', tab, { intentUrl, snapshotExcerpt: snapshot.slice(0, 800) });
   }

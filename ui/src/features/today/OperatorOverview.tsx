@@ -49,7 +49,9 @@ export function OperatorOverview() {
   const unresolved = readiness.reconciliation.closedUnresolvedCount
   const verificationInProgress = readiness.reconciliation.activeCount
   const schedulerReady = Boolean(readiness.scheduler.growthAgent.configured && readiness.scheduler.growthAgent.enabled)
-  const needsAttention = !readiness.permission.live
+  const reportedToolFailures = readiness.scheduler.growthAgent.lastInvocationResult?.toolFailures
+  const toolFailures = typeof reportedToolFailures === 'number' && Number.isFinite(reportedToolFailures) ? reportedToolFailures : 0
+  const needsAttention = toolFailures > 0 || !readiness.permission.live
     || readiness.accountHealth.constrained
     || !xConnected
     || (verificationInProgress > 0 && !agentActive)
@@ -57,6 +59,7 @@ export function OperatorOverview() {
   const growthTone = needsAttention ? 'warning' : agentActive ? 'info' : 'success'
   const attention: string[] = []
 
+  if (toolFailures > 0) attention.push(`The last agent session completed with ${toolFailures} failed tool commands. Its publications and run result are tracked separately; inspect Claive logs for the failed commands.`)
   if (!readiness.permission.live) attention.push('Autonomous growth is paused or not in Live mode.')
   if (!xConnected) attention.push('The authenticated X account is not currently verified.')
   if (readiness.accountHealth.constrained) {

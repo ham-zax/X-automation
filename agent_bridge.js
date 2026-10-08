@@ -115,6 +115,7 @@ import {
   getNicheProfile,
   getPublicationMeasurements,
   getPublicationAttempt,
+  getBlockingActAttemptForTarget,
   getLatestPublicationAttemptForQueueItem,
   getPerformanceSnapshot,
   getCurrentPersonaStances,
@@ -1680,6 +1681,32 @@ async function main() {
     return;
   }
 
+  if (command === 'act-target-status') {
+    // Read-only advisory preflight. The atomic claimActPublication fence remains
+    // the final authority even if another operator sends after this check.
+    const actModule = await import('./act.js');
+    const targetTweetId = String(payload.targetTweetId || actModule.extractTweetIdFromUrl(payload.targetUrl || '')).trim();
+    if (!/^\d{5,25}$/.test(targetTweetId)) {
+      throw new Error('act-target-status requires a numeric targetTweetId or a valid X status targetUrl.');
+    }
+    const blockingAttempt = getBlockingActAttemptForTarget(targetTweetId);
+    const key = String(payload.candidateKey || payload.targetUrl || '').trim();
+    const item = key ? getQueueItemByCandidate(key) : null;
+    const terminalQueue = item && (['published', 'unresolved', 'ignored', 'expired', 'failed'].includes(item.status)
+      || item.publishedAt != null || Boolean(item.outputTweetId));
+    result({
+      targetTweetId,
+      eligibleForAttempt: !blockingAttempt && !terminalQueue,
+      reason: blockingAttempt ? 'target_attempt_fenced' : terminalQueue ? 'candidate_terminal' : 'no_known_fence',
+      existing: blockingAttempt ? {
+        attemptId: blockingAttempt.attemptId, state: blockingAttempt.state,
+      } : terminalQueue ? { queueItemId: item.id, state: item.status } : null,
+      advisory: true,
+      executionRule: 'Recheck the exact observed target and use act for the final atomic claim. Never re-send an existing or unresolved target.',
+    });
+    return;
+  }
+
   if (command === 'act') {
     const actModule = await import('./act.js');
     const validated = actModule.validateActInput(payload);
@@ -2922,7 +2949,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {
