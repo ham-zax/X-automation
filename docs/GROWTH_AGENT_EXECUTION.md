@@ -6,6 +6,42 @@ Use `npm run --silent agent -- COMMAND` with JSON on stdin. Read the complete
 result after the command exits; an `error` field means failure even if a shell
 pipeline hid the exit code.
 
+## Runner prompt modes
+
+`growth_agent_runner.js` sends one of two prompts to each unattended pass,
+chosen by `GROWTH_AGENT_MODE`:
+
+- `executor` (default): a compact scout, write, act loop. It runs `scout`,
+  handles the T0 mentions check, T1 reply/quote cards and T2 originals, and
+  sends each post through `act` with the run ID and session ID. It does not
+  embed this document. It reads only "Recover an unfinished publication" below,
+  and only when `growth-run-next` recommends `recover_attempt`.
+- `legacy` (`GROWTH_AGENT_MODE=legacy`): the previous multi-step prompt, which
+  embeds this whole document.
+
+Both modes share the same run begin, lease, continuation, deadline and
+transcript behavior. The mode only changes the prompt text.
+
+## Child failure backoff
+
+Each reasoning child exit is classified as `ok`, `rate_limited`,
+`provider_error`, `deadline` or `other` (`classifyChildResult`, patterns in
+`CHILD_FAILURE_PATTERNS`). After consecutive `rate_limited` or `provider_error`
+failures, the next invocation waits min(2^n, 30) minutes, where n is the failure
+count (2, 4, 8, 16, 30, 30). An `ok` exit resets the count. `deadline` and
+`other` are logged but do not change it. A failed child is never relaunched in
+the same invocation.
+
+The state is one JSON object `{ consecutiveFailures, lastKind, lastAt,
+notBefore }`, written atomically (temp file, then rename) with mode 0600. The
+default path is `${XDG_STATE_HOME:-$HOME/.local/state}/x_test/growth-runner-backoff.json`;
+the parent directory is created on write with mode 0700. Set
+`X_GROWTH_AGENT_BACKOFF_FILE` to use another path. Set
+`X_GROWTH_AGENT_BACKOFF=off` to disable the gate. A missing or corrupt file means
+no backoff. Classification reads the last 16 KiB of the child's combined
+stdout/stderr. `runChild` forwards that output unchanged as it arrives, so a
+429 or 5xx line in the output is what drives `rate_limited` or `provider_error`.
+
 ## Resume work before discovery
 
 Read `operator-status`, begin/resume the run and inspect `growth-run-next`.

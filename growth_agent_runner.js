@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
@@ -51,6 +51,14 @@ const BROWSER_TARGETS = ['windows', 'linux'];
 const RUNTIMES = ['opencode', 'codex', 'claude', 'pi', 'claive', 'muse'];
 const SCHEDULER_INTERVAL_MS = 15 * 60_000;
 
+function growthAgentMode(env) {
+  const mode = String(env.GROWTH_AGENT_MODE || 'executor').trim().toLowerCase();
+  if (!['executor', 'legacy'].includes(mode)) {
+    throw new Error(`Unsupported GROWTH_AGENT_MODE=${mode}. Expected executor or legacy.`);
+  }
+  return mode;
+}
+
 export function runtimeConfig(env = process.env) {
   if (env.NODE_ENV === 'production' && env.AI_ALLOW_RUNTIME_MANAGED !== 'true') {
     throw new Error('Production reasoning runtimes require AI_ALLOW_RUNTIME_MANAGED=true and provider-side billing limits.');
@@ -99,6 +107,7 @@ export function runtimeConfig(env = process.env) {
     agentBrowserCli,
     thinking,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
+    agentMode: growthAgentMode(env),
     executable: runtime === 'claive'
       ? String(env.X_GROWTH_CLAIVE_BIN || DEFAULT_CLAIVE_BIN)
       : runtime === 'muse'
@@ -130,6 +139,78 @@ function browserSection({ browserTarget, agentBrowserCli, cdpPort, sessionId }) 
     observe: 'Before beginning the run, use browser-fast read-only observation of the existing Windows X tab to establish whether the intended account is @ham_zax. Do not claim x_authenticated=true until the account is positively observed.',
     session: 'authenticated Windows X session',
   };
+}
+
+function executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId }) {
+  if (browserTarget === 'linux') {
+    return `Browser: read X only as \`${agentBrowserCli} --cdp ${cdpPort} --session ${sessionId} <command>\` (the persistent headless Chromium). Never launch another browser or touch x.com with other shell, node or python commands.`;
+  }
+  return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
+}
+
+// Compact default prompt for the scout -> write -> act loop. operatorPrompt stays
+// reachable through GROWTH_AGENT_MODE=legacy. Keep the sessionId and
+// maxDurationMinutes lines: the launcher and tests read them from the prompt.
+export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
+  agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false }) {
+  const experimentNote = experiment ? `
+EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Bias toward action: when eligible cards exist, complete at least 2 public actions per pass. The bridge gates still apply.
+` : '';
+  return `You are the unattended growth operator for XGrowth in ${REPO}, account @ham_zax.
+This is an OPERATIONAL growth session, not a software-engineering task. Goal: qualified developer/builder follower growth through purposeful replies, quotes and originals. Quality over volume; a quiet pass is healthy.
+
+Start:
+- Use sessionId \`${sessionId}\` on every bridge call.
+- ${executorBrowserLine({ browserTarget, agentBrowserCli, cdpPort, sessionId })}
+- Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
+- Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=8 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass.
+- Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`.
+- Read \`growth-run-next\`. If it recommends \`recover_attempt\` or names an unfinished publication attempt, stop and reconcile that attempt first: read the "Recover an unfinished publication" section of docs/GROWTH_AGENT_EXECUTION.md, decide only from live evidence, and never resend it.
+
+Loop:
+- Track time from the begin call with \`date +%s%3N\`. Keep looping until about 3 minutes before the maxDurationMinutes budget ends.
+- Each pass: run \`npm run --silent agent -- scout\` with JSON \`{"limit":10}\`. Read the whole result (\`pace\` and \`cards\`) before acting.
+- T0 \`check_mentions\` (always the first card): observe https://x.com/notifications/mentions in the Browser above and find new replies to our posts. For each one worth answering, write a reply and send it with \`act\` action \`reply\`, targeting that reply's tweetId and URL. Skip replies we already answered.
+- T1 \`reply\` and \`quote\` cards, in order: open the card \`url\` and read the post in context. Judge the purpose: is there a real builder conversation to add to? If not, record a skip with \`npm run --silent agent -- record-disposition\` and JSON \`{"key":"<candidateKey>","disposition":"skip","reason":"<why>"}\`. If yes, write the text and send it with \`act\` action \`reply\` or \`quote\`, as the card says.
+- T2 \`original\` (present only when allowed): write one original post, and only from real material: an inspiration URL on the card, a post you read in this run, or a fact from this repository. Never invent experiences, numbers, customers or events. Send it with \`act\` action \`original\`.
+- A pass with no T1/T2 cards and no new mentions is empty.
+
+Calling act: JSON on stdin with the card fields, for example \`{"action":"reply","runId":"<runId>","sessionId":"${sessionId}","targetTweetId":"<tweetId>","targetUrl":"<url>","candidateKey":"<candidateKey>","text":"<text>","card":{"author":"<author>","sourceText":"<card text>"}}\`. A quote uses action \`quote\` with the same target fields. An original has no target fields.
+
+Act outcomes (the \`status\` field of the act result):
+- \`confirmed_published\`: the post is live. Keep its \`outputUrl\` for the summary and continue.
+- \`confirmed_not_sent\` or \`needs_rewrite\`: nothing was sent. Fix the named problem and retry that same card ONCE.
+- \`closed_unresolved\`: the outcome is unknown. Never retry that target; keep its attempt ID for the summary and move on.
+- An \`error\` result: if it names an attempt ID with an unknown outcome, treat it as closed_unresolved. Otherwise fix the named problem and retry that card once.
+
+Writing:
+- At most 280 characters. A quote's link counts as 25 characters, so quote text must be at most 255.
+- Plain, specific, developer/builder voice. Reply to what was actually said; do not restate the source; no generic praise.
+- An original must have its own angle; never near-copy an inspiration source.
+- No hashtags. No emoji unless the source uses them. No links in replies.
+- English unless the source is in another language; then answer in that language.
+- Persona and wording detail: docs/POST_GENERATION_PROMPT.md (reading it is optional).
+
+Stop:
+- Stop when \`scout\` returns no actionable cards (no T1/T2 card and no new mentions) two passes in a row.
+- Also stop about 3 minutes before the time budget ends, or at a blocker (authentication, constrained account health, or a lease rejected by act).
+
+Hard rules:
+- Never set or fake human approval fields; never click dashboard approval or config controls; never start automation.js.
+- Only the bridge \`act\` publishes. Do not call publication-attempt-send-start or browser-publish-claim yourself; act runs its own claim, send-start, one send and verification.
+- Never blindly retry an uncertain send. Never invent a publication, URL or outcome.
+- Never print cookies, tokens or credentials. Never log in or enter credentials.
+- Never wrap a bridge command in \`timeout\`, background it, or pipe it through a process that can end it early.
+- Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
+
+Finish:
+- Call \`npm run --silent agent -- growth-run-finish\` with an accurate structured outcome and stop reason before your final response.
+- Final response: published URLs (from \`outputUrl\`), skipped count, unresolved attempt IDs, and any blocker.
+${experimentNote}`;
+}
+
+export function buildOperatorPrompt({ mode = 'executor', ...options }) {
+  return mode === 'legacy' ? operatorPrompt(options) : executorPrompt(options);
 }
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
@@ -276,25 +357,46 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
   return { executable: config.executable, args, stdinPrompt: prompt };
 }
 
+// Bounded tail of child output kept for failure classification.
+const OUTPUT_TAIL_BYTES = 16 * 1024;
+// After the child exits, wait this long for piped output before settling, so a
+// descendant that inherited the pipes cannot hold the runner open.
+const OUTPUT_DRAIN_MS = 2_000;
+
 // Kill the whole reasoning/browser subprocess group; never reconcile claims by guessing.
-export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000 } = {}) {
+// Rejections carry exitCode (non-zero child exit), deadlineExpired (the runner's own kill)
+// and outputTail (last OUTPUT_TAIL_BYTES of combined output) so the caller can classify
+// the failure without parsing messages. Output is forwarded unchanged as it arrives.
+export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000, stdout = process.stdout, stderr = process.stderr } = {}) {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error('A positive child deadline is required.');
   return new Promise((resolve, reject) => {
     const child = spawn(command.executable, command.args, {
       cwd, env: { ...process.env, PATH: `${path.join(HOME, '.local/bin')}:${process.env.PATH || ''}` }, shell: false, detached: true,
-      stdio: [command.stdinPrompt ? 'pipe' : 'ignore', 'inherit', 'inherit'],
+      stdio: [command.stdinPrompt ? 'pipe' : 'ignore', 'pipe', 'pipe'],
     });
     let failure = null;
     let killTimer;
+    let drainTimer;
+    let exited = null;
+    let settled = false;
+    let tail = Buffer.alloc(0);
+    const capture = (destination) => (chunk) => {
+      destination.write(chunk);
+      tail = Buffer.concat([tail, chunk]);
+      if (tail.length > OUTPUT_TAIL_BYTES) tail = tail.subarray(tail.length - OUTPUT_TAIL_BYTES);
+    };
+    child.stdout.on('data', capture(stdout));
+    child.stderr.on('data', capture(stderr));
     const killGroup = (signal) => {
       if (!child.pid) return;
       try { process.kill(-child.pid, signal); } catch (error) {
         if (error.code !== 'ESRCH') failure ||= error;
       }
     };
-    const stop = (reason) => {
+    const stop = (reason, { deadlineExpired = false } = {}) => {
       if (failure) return;
       failure = new Error(reason);
+      failure.deadlineExpired = deadlineExpired;
       killGroup('SIGTERM');
       killTimer = setTimeout(() => killGroup('SIGKILL'), killGraceMs);
     };
@@ -302,22 +404,49 @@ export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000 }
     const onInt = () => stop('Growth agent interrupted by SIGINT.');
     process.once('SIGTERM', onTerm);
     process.once('SIGINT', onInt);
-    const timeout = setTimeout(() => stop('Growth agent runtime deadline expired.'), timeoutMs);
-    const cleanup = () => {
+    const timeout = setTimeout(() => stop('Growth agent runtime deadline expired.', { deadlineExpired: true }), timeoutMs);
+    const release = () => {
       clearTimeout(timeout);
       clearTimeout(killTimer);
+      clearTimeout(drainTimer);
       process.removeListener('SIGTERM', onTerm);
       process.removeListener('SIGINT', onInt);
+    };
+    const settle = (action) => {
+      if (settled) return;
+      settled = true;
+      release();
+      child.stdout.destroy();
+      child.stderr.destroy();
+      action();
+    };
+    const finish = () => {
+      const outputTail = tail.toString('utf8');
+      if (failure) {
+        failure.outputTail = outputTail;
+        reject(failure);
+        return;
+      }
+      const { code = null, signal = null } = exited || {};
+      if (code === 0) resolve({ code, signal: signal || null });
+      else {
+        const error = new Error(`Growth agent runtime exited with code ${code}${signal ? ` (${signal})` : ''}.`);
+        error.exitCode = code;
+        error.outputTail = outputTail;
+        reject(error);
+      }
+    };
+    child.once('error', (error) => {
+      killGroup('SIGKILL');
+      settle(() => reject(error));
+    });
+    child.once('exit', (code, signal) => {
+      exited = { code, signal };
       // A CLI may exit while browser/tool descendants remain alive.
       killGroup('SIGKILL');
-    };
-    child.once('error', (error) => { cleanup(); reject(error); });
-    child.once('exit', (code, signal) => {
-      cleanup();
-      if (failure) reject(failure);
-      else if (code === 0) resolve({ code, signal: signal || null });
-      else reject(new Error(`Growth agent runtime exited with code ${code}${signal ? ` (${signal})` : ''}.`));
+      drainTimer = setTimeout(() => settle(finish), OUTPUT_DRAIN_MS);
     });
+    child.once('close', () => settle(finish));
     if (command.stdinPrompt) {
       child.stdin.on('error', (error) => { if (error.code !== 'EPIPE') stop(error.message); });
       child.stdin.end(command.stdinPrompt);
@@ -339,6 +468,77 @@ export function continuationAllowed(run) {
     && run.stopReason === 'resource_ceiling_reached'
     && run.result?.closedUnresolved === 0
     && run.result?.investigating === 0;
+}
+
+// Patterns are matched against the output tail that runChild captures from a failed child.
+export const CHILD_FAILURE_PATTERNS = Object.freeze({
+  rate_limited: /\b429\b|rate limit|quota|too many requests/i,
+  provider_error: /\b5\d{2}\b|overloaded|ECONNRESET|ETIMEDOUT|socket hang up|provider[\s_-]*error/i,
+});
+
+// Precedence: a deadline kill is never a provider signal, and exit 0 is always ok.
+export function classifyChildResult({ exitCode, deadlineExpired = false, tail = '' } = {}) {
+  if (deadlineExpired) return 'deadline';
+  if (exitCode === 0) return 'ok';
+  if (CHILD_FAILURE_PATTERNS.rate_limited.test(tail)) return 'rate_limited';
+  if (CHILD_FAILURE_PATTERNS.provider_error.test(tail)) return 'provider_error';
+  return 'other';
+}
+
+export function backoffMinutes(consecutiveFailures) {
+  if (!(consecutiveFailures >= 1)) return 0;
+  return Math.min(2 ** consecutiveFailures, 30);
+}
+
+export function emptyBackoffState() {
+  return { consecutiveFailures: 0, lastKind: null, lastAt: null, notBefore: null };
+}
+
+export function nextBackoffState(previous, kind, nowMs) {
+  if (kind === 'ok') return { consecutiveFailures: 0, lastKind: 'ok', lastAt: nowMs, notBefore: null };
+  if (kind === 'rate_limited' || kind === 'provider_error') {
+    const consecutiveFailures = previous.consecutiveFailures + 1;
+    return { consecutiveFailures, lastKind: kind, lastAt: nowMs,
+      notBefore: nowMs + backoffMinutes(consecutiveFailures) * 60_000 };
+  }
+  // deadline and other are logged but neither extend nor reset the counter.
+  return { ...previous, lastKind: kind, lastAt: nowMs };
+}
+
+// Missing, unreadable, or malformed state means no backoff.
+export function readBackoffState(file) {
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    const consecutiveFailures = parsed?.consecutiveFailures;
+    if (!Number.isInteger(consecutiveFailures) || consecutiveFailures < 0) return emptyBackoffState();
+    return {
+      consecutiveFailures,
+      lastKind: typeof parsed.lastKind === 'string' ? parsed.lastKind : null,
+      lastAt: Number.isFinite(parsed.lastAt) ? parsed.lastAt : null,
+      notBefore: Number.isFinite(parsed.notBefore) ? parsed.notBefore : null,
+    };
+  } catch {
+    return emptyBackoffState();
+  }
+}
+
+export function writeBackoffState(file, state) {
+  mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 });
+  renameSync(tmp, file);
+}
+
+// Backoff must survive across invocations, so the default lives outside the repo.
+// X_GROWTH_AGENT_BACKOFF_FILE overrides it; X_GROWTH_AGENT_BACKOFF=off disables the gate.
+export function backoffStateFilePath(env = process.env) {
+  if (env.X_GROWTH_AGENT_BACKOFF_FILE) return env.X_GROWTH_AGENT_BACKOFF_FILE;
+  const stateHome = env.XDG_STATE_HOME || path.join(HOME, '.local/state');
+  return path.join(stateHome, 'x_test', 'growth-runner-backoff.json');
+}
+
+export function backoffGateEnabled(env = process.env) {
+  return String(env.X_GROWTH_AGENT_BACKOFF || '').trim().toLowerCase() !== 'off';
 }
 
 export async function main(overrides = {}) {
@@ -364,6 +564,25 @@ export async function main(overrides = {}) {
     record({ lastInvocationResult: outcome, activeRunId });
     return outcome;
   };
+  const env = overrides.env || process.env;
+  const backoffEnabled = backoffGateEnabled(env);
+  const backoffFile = overrides.backoffStateFile ?? backoffStateFilePath(env);
+  if (backoffEnabled) {
+    const { notBefore, lastKind } = readBackoffState(backoffFile);
+    if (notBefore !== null && now() < notBefore) {
+      return finish({ status: 'backoff', reason: 'child_failure_backoff', lastKind,
+        notBefore, remainingMs: notBefore - now() });
+    }
+  }
+  // Persisting backoff state must never mask the child outcome it describes.
+  const persistChildKind = (kind) => {
+    if (!backoffEnabled) return;
+    try {
+      writeBackoffState(backoffFile, nextBackoffState(readBackoffState(backoffFile), kind, now()));
+    } catch (error) {
+      console.error(`Growth agent backoff state not written: ${String(error?.message || error)}`);
+    }
+  };
   const initialRevision = deps.delegation().revision;
   let incompleteRestarts = 0;
   let continuationCheckpoint = '';
@@ -388,7 +607,7 @@ export async function main(overrides = {}) {
     // browser evidence, or continue the interrupted run without a blind write.
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
-    const prompt = operatorPrompt({ runtime: config.runtime, sessionId, maxDurationMinutes,
+    const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
       browserTarget: config.browserTarget, agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';
@@ -409,10 +628,22 @@ export async function main(overrides = {}) {
       // follow-ups instead of abandoning an owned claim in a closed run.
       for (let turn = 0; turn < 4; turn++) {
         const command = commandFor(config, prompt, { promptFile, engineSessionId });
-        await deps.child(command, {
-          timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000),
-          killGraceMs: config.runtime === 'claive' ? 15_000 : 5_000,
-        });
+        try {
+          await deps.child(command, {
+            timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000),
+            killGraceMs: config.runtime === 'claive' ? 15_000 : 5_000,
+          });
+        } catch (childError) {
+          // Rethrown unchanged: the catch below closes the run or rethrows.
+          // A failed child is never relaunched within this invocation.
+          persistChildKind(classifyChildResult({
+            exitCode: childError?.exitCode,
+            deadlineExpired: childError?.deadlineExpired,
+            tail: childError?.outputTail,
+          }));
+          throw childError;
+        }
+        persistChildKind('ok');
         run = deps.runs({ sessionId, limit: 1 })[0] || null;
         if (!retainedPi || run?.status !== 'active' || turn === 3
           || deadline - now() < 60_000) break;

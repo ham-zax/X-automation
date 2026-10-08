@@ -1,7 +1,7 @@
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -11,6 +11,10 @@ const previousCwd = process.cwd();
 process.chdir(scratch);
 // Importing the runner must neither invoke a real runtime nor operate on live state.
 const runner = await import(pathToFileURL(path.join(root, 'growth_agent_runner.js')).href);
+// Every harness run gets its own backoff file here, so no test touches the real default path.
+const backoffDir = await mkdtemp(path.join(tmpdir(), 'growth-runner-backoff-'));
+after(() => rm(backoffDir, { recursive: true, force: true }));
+let harnessCount = 0;
 
 function harness({ minutes = 120, stopReason = 'resource_ceiling_reached', mutate } = {}) {
   let clock = 100_000;
@@ -25,6 +29,7 @@ function harness({ minutes = 120, stopReason = 'resource_ceiling_reached', mutat
     health: () => ({ health: { state: 'normal' } }),
     attempts: () => [],
     record: () => {},
+    backoffStateFile: path.join(backoffDir, `harness-${++harnessCount}.json`),
     runs: ({ status, sessionId }) => status ? [] : [runs.get(sessionId)].filter(Boolean),
     heartbeat: () => () => { heartbeatStops++; },
     child: async (command, options) => {
@@ -335,4 +340,253 @@ test('experiment mode is opt-in and only adds the experiment section to the prom
   assert.equal(runner.operatorPrompt({ ...base, experiment: true }).includes('EXPERIMENT MODE'), true);
   assert.equal(runner.runtimeConfig({}).experiment, false);
   assert.equal(runner.runtimeConfig({ X_GROWTH_AGENT_EXPERIMENT: 'true' }).experiment, true);
+});
+
+test('GROWTH_AGENT_MODE defaults to executor, accepts legacy, and rejects other values', () => {
+  assert.equal(runner.runtimeConfig({}).agentMode, 'executor');
+  assert.equal(runner.runtimeConfig({ GROWTH_AGENT_MODE: ' Legacy ' }).agentMode, 'legacy');
+  assert.throws(() => runner.runtimeConfig({ GROWTH_AGENT_MODE: 'fast' }), /GROWTH_AGENT_MODE/);
+});
+
+test('default executor prompt is a compact scout and act loop with run and session bindings', () => {
+  const base = { runtime: 'claive', sessionId: 'claive-s1', maxDurationMinutes: 15, browserTarget: 'linux', agentBrowserCli: '/bin/ab', cdpPort: '9333' };
+  const executor = runner.buildOperatorPrompt({ ...base });
+  const legacy = runner.operatorPrompt(base);
+  for (const text of ['scout', 'act', 'record-disposition', 'runId', 'sessionId `claive-s1`', 'https://x.com/notifications/mentions',
+    'growth-run-begin', 'adapterType `claive_unattended`', 'ceilings.maxPublicMutations=8', 'ceilings.maxDurationMinutes=15']) {
+    assert.ok(executor.includes(text), text);
+  }
+  assert.ok(executor.length < legacy.length);
+  assert.ok(executor.split('\n').length <= 120);
+  assert.equal(runner.buildOperatorPrompt({ ...base, mode: 'executor' }), executor);
+});
+
+test('GROWTH_AGENT_MODE=legacy builds the previous operator prompt unchanged', () => {
+  const base = { runtime: 'pi', sessionId: 'pi-1', maxDurationMinutes: 15, browserTarget: 'linux', agentBrowserCli: '/bin/ab', cdpPort: '9333' };
+  const legacy = runner.buildOperatorPrompt({ ...base, mode: runner.runtimeConfig({ GROWTH_AGENT_MODE: 'legacy' }).agentMode });
+  assert.equal(legacy, runner.operatorPrompt(base));
+  assert.ok(legacy.includes('You are the unattended reasoning operator for XGrowth'));
+  assert.ok(legacy.includes('Before scanning, read operator-status and growth-run-next'));
+  assert.equal(legacy.includes('growth-run-begin'), true);
+});
+
+test('the default executor prompt reaches the runtime child through main', async () => {
+  const state = harness({ minutes: 20 });
+  const prompts = [];
+  state.dependencies.child = async (command) => { prompts.push(command.stdinPrompt); };
+  state.dependencies.runs = () => [{ runId: 'run-1', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
+  await runner.main(state.dependencies);
+  assert.ok(prompts.length >= 1);
+  assert.match(prompts[0], /You are the unattended growth operator for XGrowth/);
+  assert.match(prompts[0], /adapterType `claude_unattended`/);
+  assert.match(prompts[0], /maxDurationMinutes=20/);
+  assert.equal(prompts[0].includes('Before scanning, read operator-status'), false);
+});
+
+test('GROWTH_AGENT_MODE=legacy sends the legacy prompt through main', async () => {
+  const state = harness({ minutes: 20 });
+  state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claude', X_GROWTH_AGENT_WINDOW_MINUTES: '20', GROWTH_AGENT_MODE: 'legacy' });
+  const prompts = [];
+  state.dependencies.child = async (command) => { prompts.push(command.stdinPrompt); };
+  state.dependencies.runs = () => [{ runId: 'run-1', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
+  await runner.main(state.dependencies);
+  assert.ok(prompts.length >= 1);
+  assert.ok(prompts[0].includes('You are the unattended reasoning operator for XGrowth'));
+  assert.ok(prompts[0].includes('Before scanning, read operator-status and growth-run-next'));
+});
+
+// Runs fn with a fresh state file path; the file holds `contents` when given.
+async function withStateFile(fn, contents) {
+  const dir = await mkdtemp(path.join(tmpdir(), 'growth-backoff-'));
+  try {
+    const file = path.join(dir, 'backoff.json');
+    if (contents !== undefined) await writeFile(file, contents);
+    return await fn(file);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+const readState = async file => JSON.parse(await readFile(file, 'utf8'));
+
+test('child failures are classified from exit code, deadline, and captured tail', () => {
+  const { classifyChildResult, CHILD_FAILURE_PATTERNS } = runner;
+  assert.ok(CHILD_FAILURE_PATTERNS.rate_limited instanceof RegExp);
+  assert.ok(CHILD_FAILURE_PATTERNS.provider_error instanceof RegExp);
+  assert.equal(classifyChildResult({ exitCode: 0, tail: 'HTTP 429' }), 'ok');
+  for (const tail of ['HTTP 429 Too Many Requests', 'Error: rate limit exceeded', 'quota exhausted', 'too many requests'])
+    assert.equal(classifyChildResult({ exitCode: 1, tail }), 'rate_limited', tail);
+  for (const tail of ['API Error: 503 overloaded', 'read ECONNRESET', 'connect ETIMEDOUT', 'socket hang up', 'provider error: bad gateway'])
+    assert.equal(classifyChildResult({ exitCode: 1, tail }), 'provider_error', tail);
+  assert.equal(classifyChildResult({ exitCode: 1, tail: 'syntax error in prompt' }), 'other');
+  assert.equal(classifyChildResult({ exitCode: undefined, tail: '' }), 'other');
+  assert.equal(classifyChildResult({ exitCode: 1, deadlineExpired: true, tail: 'HTTP 429' }), 'deadline');
+  assert.equal(classifyChildResult({ exitCode: null, deadlineExpired: true }), 'deadline');
+});
+
+test('backoff waits 2, 4, 8, 16, 30, 30 minutes over consecutive rate or provider failures', () => {
+  const start = 1_000_000;
+  let state = runner.emptyBackoffState();
+  const waits = [];
+  for (const kind of ['rate_limited', 'provider_error', 'rate_limited', 'provider_error', 'rate_limited', 'provider_error']) {
+    state = runner.nextBackoffState(state, kind, start);
+    waits.push((state.notBefore - start) / 60_000);
+  }
+  assert.deepEqual(waits, [2, 4, 8, 16, 30, 30]);
+  assert.equal(state.consecutiveFailures, 6);
+  assert.equal(state.lastKind, 'provider_error');
+});
+
+test('an ok child resets the backoff counter and clears the gate', () => {
+  let state = runner.emptyBackoffState();
+  for (let i = 0; i < 3; i++) state = runner.nextBackoffState(state, 'rate_limited', 0);
+  state = runner.nextBackoffState(state, 'ok', 5);
+  assert.deepEqual(state, { consecutiveFailures: 0, lastKind: 'ok', lastAt: 5, notBefore: null });
+  assert.equal(runner.nextBackoffState(state, 'rate_limited', 0).notBefore, 2 * 60_000);
+});
+
+test('deadline and other failures are logged without changing the counter or the gate', () => {
+  const failed = { consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 10, notBefore: 480_010 };
+  for (const kind of ['deadline', 'other']) {
+    const next = runner.nextBackoffState(failed, kind, 20);
+    assert.equal(next.consecutiveFailures, 3, kind);
+    assert.equal(next.notBefore, 480_010, kind);
+    assert.equal(next.lastKind, kind);
+    assert.equal(next.lastAt, 20);
+  }
+});
+
+test('a deadline-killed child through main leaves the persisted counter unchanged', async () => {
+  const state = harness({ minutes: 20 });
+  state.dependencies.runs = () => [];
+  state.dependencies.child = async () => {
+    throw Object.assign(new Error('Growth agent runtime deadline expired.'), { deadlineExpired: true });
+  };
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    await assert.rejects(runner.main(state.dependencies), /deadline expired/);
+    assert.deepEqual(await readState(file), { consecutiveFailures: 2, lastKind: 'deadline', lastAt: 100_000, notBefore: null });
+  }, JSON.stringify({ consecutiveFailures: 2, lastKind: 'rate_limited', lastAt: 1, notBefore: null }));
+});
+
+test('a future notBefore launches no child and reports the remaining wait', async () => {
+  const state = harness({ minutes: 20 });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    const outcome = await runner.main(state.dependencies);
+    assert.equal(outcome.status, 'backoff');
+    assert.equal(outcome.reason, 'child_failure_backoff');
+    assert.equal(outcome.lastKind, 'provider_error');
+    assert.equal(outcome.remainingMs, 60_000);
+    assert.equal(state.calls.length, 0);
+    assert.equal(state.heartbeatStops(), 0);
+  }, JSON.stringify({ consecutiveFailures: 1, lastKind: 'provider_error', lastAt: 99_000, notBefore: 160_000 }));
+});
+
+test('a corrupt backoff file means no backoff and the child launches', async () => {
+  const state = harness({ minutes: 20 });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    const outcome = await runner.main(state.dependencies);
+    assert.equal(outcome.reason, 'operation_window_elapsed');
+    assert.equal(state.calls.length, 1);
+    assert.equal((await readState(file)).consecutiveFailures, 0);
+  }, '{"consecutiveFailures": 4, "notBefore": ');
+});
+
+test('a missing backoff file means no backoff and the child launches', async () => {
+  const state = harness({ minutes: 20 });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    state.dependencies.child = async () => { throw new Error('runtime unavailable'); };
+    await assert.rejects(runner.main(state.dependencies), /runtime unavailable/);
+    assert.deepEqual(await readState(file), { consecutiveFailures: 0, lastKind: 'other', lastAt: 100_000, notBefore: null });
+  });
+});
+
+test('X_GROWTH_AGENT_BACKOFF=off launches despite a future notBefore and leaves the file alone', async () => {
+  const state = harness({ minutes: 20 });
+  const contents = JSON.stringify({ consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 99_000, notBefore: 900_000 });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    state.dependencies.env = { X_GROWTH_AGENT_BACKOFF: 'off' };
+    const outcome = await runner.main(state.dependencies);
+    assert.equal(outcome.reason, 'operation_window_elapsed');
+    assert.equal(state.calls.length, 1);
+    assert.equal(await readFile(file, 'utf8'), contents);
+  }, contents);
+});
+
+test('a successful child after a backoff window resets the persisted counter', async () => {
+  const state = harness({ minutes: 20 });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    await runner.main(state.dependencies);
+    assert.equal(state.calls.length, 1);
+    assert.equal((await readState(file)).consecutiveFailures, 0);
+    assert.equal((await readState(file)).lastKind, 'ok');
+  }, JSON.stringify({ consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 1, notBefore: 50_000 }));
+});
+
+// Records what the runner writes to this process's stdout and stderr. Nothing reaches the
+// real streams, so child output cannot disturb the test reporter.
+// Collects forwarded child output through runChild's sinks. The global streams are
+// not stubbed because the node test reporter writes to them while a test runs.
+function sink() {
+  const chunks = [];
+  return { chunks, write: (chunk) => { chunks.push(Buffer.from(chunk).toString('utf8')); return true; } };
+}
+
+test('backoff state path defaults under XDG_STATE_HOME or HOME and honours the explicit override', () => {
+  assert.equal(runner.backoffStateFilePath({ XDG_STATE_HOME: '/xdg' }), path.join('/xdg', 'x_test', 'growth-runner-backoff.json'));
+  assert.equal(runner.backoffStateFilePath({}), path.join(homedir(), '.local', 'state', 'x_test', 'growth-runner-backoff.json'));
+  assert.equal(runner.backoffStateFilePath({ XDG_STATE_HOME: '/xdg', X_GROWTH_AGENT_BACKOFF_FILE: '/tmp/explicit.json' }), '/tmp/explicit.json');
+});
+
+test('backoff state writes create a 0700 parent, a 0600 file, and leave no temp file behind', async () => {
+  const file = path.join(backoffDir, 'nested', 'x_test', 'growth-runner-backoff.json');
+  const state = { consecutiveFailures: 1, lastKind: 'other', lastAt: 1, notBefore: null };
+  runner.writeBackoffState(file, state);
+  assert.equal((await stat(path.dirname(file))).mode & 0o777, 0o700);
+  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  assert.deepEqual(await readdir(path.dirname(file)), ['growth-runner-backoff.json']);
+  assert.deepEqual(await readState(file), state);
+});
+
+test('main persists to the default path under XDG_STATE_HOME when no explicit file is configured', async () => {
+  const state = harness({ minutes: 20 });
+  const xdg = await mkdtemp(path.join(backoffDir, 'xdg-'));
+  state.dependencies.backoffStateFile = undefined;
+  state.dependencies.env = { XDG_STATE_HOME: xdg };
+  await runner.main(state.dependencies);
+  assert.equal(state.calls.length, 1);
+  const persisted = await readState(path.join(xdg, 'x_test', 'growth-runner-backoff.json'));
+  assert.equal(persisted.consecutiveFailures, 0);
+  assert.equal(persisted.lastKind, 'ok');
+});
+
+test('a real child that prints a 429 is persisted as rate_limited through main, and its output is forwarded', async () => {
+  const state = harness({ minutes: 20 });
+  const source = "process.stdout.write('fwd-out\\n');process.stderr.write('fwd-err HTTP 429 Too Many Requests\\n');process.exitCode = 1;";
+  const stdout = sink();
+  const stderr = sink();
+  state.dependencies.child = (command, options) => runner.runChild({ executable: process.execPath, args: ['-e', source] }, { ...options, stdout, stderr });
+  await withStateFile(async file => {
+    state.dependencies.backoffStateFile = file;
+    await assert.rejects(runner.main(state.dependencies), /exited with code 1/);
+    assert.equal(stdout.chunks.join(''), 'fwd-out\n');
+    assert.equal(stderr.chunks.join(''), 'fwd-err HTTP 429 Too Many Requests\n');
+    assert.deepEqual(await readState(file), { consecutiveFailures: 1, lastKind: 'rate_limited', lastAt: 100_000, notBefore: 220_000 });
+  });
+});
+
+test('runChild forwards large output unchanged and rejects with only the last 16 KiB for classification', async () => {
+  const source = "process.stdout.write('fwd-' + 'x'.repeat(40 * 1024) + '\\nHTTP 429\\n');process.exitCode = 1;";
+  const stdout = sink();
+  const error = await runner.runChild({ executable: process.execPath, args: ['-e', source] }, { cwd: tmpdir(), timeoutMs: 10_000, stdout, stderr: sink() }).catch(caught => caught);
+  assert.equal(error.exitCode, 1);
+  assert.equal(stdout.chunks.join(''), `fwd-${'x'.repeat(40 * 1024)}\nHTTP 429\n`);
+  assert.equal(error.outputTail.length, 16 * 1024);
+  assert.ok(error.outputTail.endsWith('\nHTTP 429\n'));
+  assert.equal(runner.classifyChildResult({ exitCode: error.exitCode, tail: error.outputTail }), 'rate_limited');
 });
