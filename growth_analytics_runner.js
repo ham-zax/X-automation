@@ -3,6 +3,8 @@
 // It observes authenticated X Analytics and writes through analytics-record.
 import 'dotenv/config';
 import { spawn, execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { leaseAgentBrowserTab } from './ops/agent_browser_session.js';
 import { mkdtemp, writeFile, readFile, mkdir, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
@@ -35,10 +37,17 @@ async function checkpoint(next) {
 }
 await checkpoint({lastStartedAt:now,status:'running'});
 const promptDir = await mkdtemp(path.join(os.tmpdir(),'xgrowth-analytics-'));
+let browserTabLease;
 try {
+  // A read-only analytics session still creates a Chrome page. Allocate and
+  // later reclaim its exact tab; never close the owner's shared browser.
+  const sessionId = `analytics-${randomUUID()}`;
+  const browserCli = process.env.X_GROWTH_AGENT_BROWSER_CLI || path.join(os.homedir(),'.local/bin/agent-browser');
+  const cdpPort = process.env.X_GROWTH_BROWSER_CDP_PORT || '9222';
+  browserTabLease = await leaseAgentBrowserTab({ cli:browserCli, cdpPort, sessionId });
   const template = await readFile(path.join(repo,'ops','analytics_collector_prompt.md'),'utf8');
   const promptFile = path.join(promptDir,'operator.md');
-  await writeFile(promptFile,`${template}\nCollection begins at ${new Date(now).toISOString()} (UTC).\n`,{mode:0o600});
+  await writeFile(promptFile,`${template}\nCollection begins at ${new Date(now).toISOString()} (UTC).\nUse ONLY the existing authenticated Chrome on CDP ${cdpPort} with ${browserCli} --cdp ${cdpPort} --session ${sessionId} --pin-tab <command>. This job owns exact tab ${browserTabLease.targetId}. First navigate that OWN tab to https://x.com/ham_zax and verify authentication. Do not switch to another tab or create new tabs. The launcher closes ONLY this exact job-owned tab when done; never close shared Chrome.\n`,{mode:0o600});
   const bin = process.env.X_GROWTH_CLAIVE_BIN || path.join(os.homedir(),'.local/bin/claive');
   if (!existsSync(bin)) throw new Error('Claive binary not found');
   const args = ['run','--workspace',repo,'--prompt-file',promptFile,
@@ -53,4 +62,12 @@ try {
   await checkpoint({lastStartedAt:now,status:'failed',error:String(error?.message||error)});
   console.error('Analytics collector failed:',error?.message||error);
   process.exitCode=1;
-} finally { await rm(promptDir,{recursive:true,force:true}); }
+} finally {
+  if (browserTabLease) {
+    const cleanup = await browserTabLease.release().catch(error => ({
+      cleaned:false,warnings:[String(error?.message||error)],
+    }));
+    console.log(`Analytics browser tab cleanup: ${JSON.stringify(cleanup)}`);
+  }
+  await rm(promptDir,{recursive:true,force:true});
+}

@@ -14,6 +14,7 @@ import {
 } from './growth_agent_runtime.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
+import { leaseAgentBrowserTab } from './ops/agent_browser_session.js';
 import { finishGrowthRun, GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -188,7 +189,7 @@ This is an OPERATIONAL growth session, not a software-engineering task. Goal: qu
 Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
 - ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
-- Observe the X tab first and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
+- In a run-owned, newly allocated blank Agent Browser tab, first navigate that SAME tab to https://x.com/home; never take over a tab left by another run. Observe the X page and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
 - Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=25 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass. This is an atomic per-run resource safety boundary, NOT a posting quota; further eligible work can continue in a subsequent run.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`. A fresh session MUST NOT call \`growth-run-status\` or \`growth-run-resume\` before it has a real runId; the recovery checklist below applies to existing runs only until \`growth-run-begin\` returns.
 - Read the current product policy with \`npm run --silent agent -- growth-policy\`; it is the single owner-controlled source of truth for sleep hours, discovery, publication lanes, FOLLOW/LIKE permissions and conservative rolling daily safety ceilings, topical preferences, strictness, follower selectivity and learning. Read \`npm run --silent agent -- growth-analysis\` and consider verified performance recommendations only when enough measured samples exist. Read the existing writer persona as prescribed below: user persona/preferences always take precedence over generic growth copy.
@@ -665,14 +666,33 @@ export async function main(overrides = {}) {
     // browser evidence, or continue the interrupted run without a blind write.
     const sessionId = `${config.runtime}-${randomUUID()}`;
     const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
-    const prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
+    let prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
       browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
       agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
       + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
     continuationCheckpoint = '';
     let promptDirectory;
+    let browserTabLease;
     const stopHeartbeatPump = deps.heartbeat(`${config.runtime}_unattended`, sessionId);
     try {
+      // Agent Browser creates a new page for each --cdp session, even on a
+      // read-only tab list. The daemon's close command leaves that page alive.
+      // Own exactly the new page, pin Luna to it, and close it after the child
+      // exits. Never close the shared authenticated Chrome or pre-existing tabs.
+      if (scheduledInvocation && config.browserTarget === 'linux'
+          && config.browserInterface === 'agent-browser-cli') {
+        try {
+          browserTabLease = await leaseAgentBrowserTab({
+            cli: config.agentBrowserCli, cdpPort: config.cdpPort, sessionId,
+          });
+        } catch (error) {
+          const detail = String(error?.message || error).slice(0, 350);
+          console.error(`Browser preflight blocked unattended run: ${detail}`);
+          sessions.push({sessionId, status:'browser_preflight_blocked', detail});
+          return finish({status:'blocked', reason:'capability_unavailable', detail});
+        }
+        prompt += `\nBROWSER TAB OWNERSHIP: This unattended run owns the dedicated Chrome tab with exact CDP targetId ${browserTabLease.targetId}. Keep --pin-tab on EVERY agent-browser call. Select ONLY that tab, navigate it using open; do not switch to other sessions' tabs, create secondary tabs or close the shared Chrome. The launcher will close this run's exact tab after you exit. Never touch a pre-existing X tab.\n`;
+      }
       let promptFile;
       if (config.runtime === 'claive' || config.runtime === 'muse') {
         promptDirectory = await mkdtemp(path.join(tmpdir(), 'x-growth-claive-'));
@@ -823,6 +843,12 @@ Finish the durable run when done; do not end with another progress-only statemen
       throw error;
     } finally {
       stopHeartbeatPump();
+      if (browserTabLease) {
+        const cleanup = await browserTabLease.release().catch(error => ({
+          cleaned:false, warnings:[String(error?.message || error)],
+        }));
+        console.log(`Growth browser tab cleanup: ${JSON.stringify(cleanup)}`);
+      }
       if (promptDirectory) await rm(promptDirectory, { recursive: true, force: true });
     }
   }
