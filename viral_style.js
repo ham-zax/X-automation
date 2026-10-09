@@ -66,11 +66,15 @@ function hookLabels(text, first) {
   add('quantified_claim', /(?:\b\d+(?:\.\d+)?(?:x|%|k|m|b)?\b|\$\s?\d)/i.test(first)
     && /\b(?:more|less|faster|slower|better|worse|higher|lower|cheaper|cost|accuracy|performance|usage|tokens?|requests?|stars?|hours?|days?|models?|billion|million)\b/i.test(first));
   add('release_announcement', /\b(?:introducing|launching|released?|releasing|now (?:live|available)|is live|new\s+[A-Za-z0-9._-]+)\b/i.test(first));
+  // These labels describe the hook's observed promise, not proof it is true.
+  add('unexpected_capability', /\b(?:you can now|can now|turn(?:s|ed|ing)? .{3,75} into|run(?:s|ning)? .{3,65} on|(?:android|iphone|ios|linux|browser).{0,50}(?:on|inside|into) .{3,50}|without (?:root|jailbreak|coding|installing))\b/i.test(first));
+  add('free_resource', /\b(?:free|open.source|no cost|without paying)\b/i.test(first)
+    && /\b(?:tools?|websites?|apps?|repos?|frameworks?|guides?|blueprints?|templates?|resources?)\b/i.test(first));
   add('impossible_result', /\b(?:insane|crazy|wild|shouldn['’]?t be possible|impossible|let that sink in|actually insane)\b/i.test(first));
   add('contrarian_take', /\b(?:hot take|unpopular opinion|everyone says|people think|but actually|counterintuitive|wrong about)\b/i.test(first));
   add('conditional_hack', /^\s*(?:if|when)\b/i.test(first) || /\b(?:here['’]?s the workaround|workaround|hack:)\b/i.test(first));
-  add('curated_list', /\b(?:top\s+)?\d+\s+(?:best\s+)?(?:prompts?|tools?|ways?|things?|lessons?|use cases?|bots?|resources?)\b/i.test(first)
-    || /\bbest\s+(?:prompts?|tools?|ways?|things?|lessons?|use cases?|bots?|resources?)\b/i.test(first)
+  add('curated_list', /\b(?:top\s+)?\d+\s+(?:best\s+)?(?:prompts?|tools?|websites?|sites?|apps?|projects?|repos?|ways?|things?|lessons?|use cases?|bots?|resources?)\b/i.test(first)
+    || /\bbest\s+(?:prompts?|tools?|websites?|sites?|apps?|projects?|repos?|ways?|things?|lessons?|use cases?|bots?|resources?)\b/i.test(first)
     || /🧵|\bthread\b/i.test(first));
   add('breaking_alert', /^(?:🚨\s*)?(?:breaking|new|just in|alert)\b/i.test(first) || opening.startsWith('🚨'));
   add('cost_value', /\$\s?\d|\b(?:cheaper|price|pricing|cost|credits?|free|\d+x usage)\b/i.test(first));
@@ -94,6 +98,9 @@ function styleLabels(text, features) {
   add('utility_workaround', hooks.has('conditional_hack') || /\b(?:workaround|daily driver|context switches?|workflow|fix)\b/i.test(value));
   add('benchmark_proof', features.hasBenchmarkLanguage && (features.numberCount > 0 || features.percentCount > 0));
   add('curated_resource_thread', hooks.has('curated_list') && (features.hasThreadPromise || features.hasResourcePromise));
+  add('useful_tech_discovery', hooks.has('unexpected_capability') || (hooks.has('free_resource') && features.hasResourcePromise));
+  add('visual_capability_demo', (features.mediaType === 'image' || features.mediaType === 'video' || features.mediaType === 'mixed')
+    && (hooks.has('unexpected_capability') || hooks.has('release_announcement')));
   add('compressed_reveal', features.wordCount <= 45 && (hooks.has('impossible_result') || hooks.has('breaking_alert')));
   add('authority_announcement', hooks.has('release_announcement') && /\b(?:we|teams|launching|available|live|introducing)\b/i.test(value));
   add('cost_value_comparison', hooks.has('cost_value') && /\b(?:cheaper|cost|price|credits?|usage|free|subscription|api)\b/i.test(value));
@@ -123,6 +130,7 @@ export function extractViralStyleFeatures(post = {}) {
   const emojiCount = (text.match(EMOJI_RE) || []).length;
 
   const features = {
+    mediaType: ['image', 'video', 'mixed'].includes(post.mediaType) ? post.mediaType : 'none',
     charCount: text.length,
     wordCount: tokenList.length,
     sentenceCount: sentenceCount(text),
@@ -151,7 +159,7 @@ export function extractViralStyleFeatures(post = {}) {
     hasCuriosityGap: /\b(?:here['’]?s|what happened|the reason|why this matters|let that sink in|you won['’]?t believe|i dug out|i found)\b/i.test(text),
     hasImpossibleSurpriseLanguage: /\b(?:insane|crazy|wild|impossible|shouldn['’]?t be possible|let that sink in)\b/i.test(text),
     hasProofLanguage: /\b(?:tested|measured|tracked|benchmark|telemetry|data|requests?|results?|according to|evidence|proof)\b/i.test(text) || /(?:^|\s)source\s*:/i.test(text),
-    hasResourcePromise: /\b(?:guide|prompts? included|download|install|repo|github|blog|thread below|use cases?|resources?|template|checklist)\b/i.test(text),
+    hasResourcePromise: /\b(?:guide|prompts? included|download|install|repo|github|blog|thread below|use cases?|resources?|websites?|toolbox|blueprint|templates?|checklist)\b/i.test(text),
     hasThreadPromise: /(?:🧵|\bthread\b|\b\d+\s+(?:things?|prompts?|ways?|tools?|use cases?)\b)/i.test(text),
   };
   features.hookLabels = hookLabels(text, opening);

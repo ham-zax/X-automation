@@ -313,6 +313,8 @@ Keep **internal fact/risk context** backstage. It remains inspectable in draft m
 
 `sourceStyle` is observational structure, not a template. Transfer pacing, information density, or context use only when they fit the selected behavior. Never copy distinctive wording.
 
+For the owner-preferred *useful technology discovery* format, analyze the reader psychology before drafting: a specific result that sounds surprising but is true, a working demonstration or clear artifact, a concrete payoff, a credible path to try it, and one consequential limitation when applicable. Existing Viral Styles labels (`unexpected_capability`, `curated_list`, `free_resource`, `visual_capability_demo`, etc.) are descriptive comparisons, not language to reproduce. In Hamza's active persona, author a distinct observation or useful synthesis: do not recycle source order, proprietary media, punchlines, claims of first-hand testing, hyperbole, or misleading "easy/free/works everywhere" language. When the only contribution is a paraphrase, Quote/Repost with credit or `DO_NOT_POST` instead.
+
 Use concrete nouns early when a factual or technical act needs them. Do not force technical anchors into a social-only reaction.
 
 External examples and strategy evidence are references, not copyable tweet templates.
@@ -536,7 +538,9 @@ Explain in one sentence why it helps.
 
 A screenshot/chart/code/diagram should support the selected purpose, not serve as generic decoration.
 
-### STEP 12 — FINAL CUT
+### STEP 12 — BOUNDED CRITIQUE AND FINAL CUT
+
+Before finalizing a useful-tech discovery, privately examine the draft through three lenses: reader (does the first line explain a concrete benefit without bait?), fact-checker (is every capability, compatibility, cost and setup claim grounded and the originator credited?), and Hamza (does this sound like the active persona and give a distinct reason to follow?). If one lens fails, revise only the unsupported or weak parts and reconsider the route; at most two bounded internal passes, then return `DO_NOT_POST` or needs-review rather than looping endlessly. No self-assigned review may override the existing independent content review, media, attestation or publication gates.
 
 Perform one compression pass.
 

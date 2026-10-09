@@ -24,7 +24,9 @@ Deployment and the current runtime are documented in `docs/ARM_24X7_HANDOFF.md`.
 
 Target identity: **developer + builder in tech**.
 
-Growth Focus is preference, not a closed whitelist. Registered content groups describe the topics the account should lean toward; the broader configurable technical audience defines an open-world exploration surface. A strong unregistered tech topic—new tooling, hardware, chips, robotics, security, systems, another engineering field, or a newly emerging category—may compete on live momentum without first being hardcoded as a niche. AI is one pillar inside that technical identity, not the parent category.
+Growth Focus is preference, not a closed whitelist. Useful, surprising software discoveries and tool/resource demos are now an owner-preferred **cross-topic discovery format**, handled by the existing For You/Latest/Momentum, Viral Styles, Scout, editorial and Writer workflow—not an extra feed or an AI-only niche. Study source hooks and observed saves, verify the real project, and write a distinct contribution in the current persona. Refer to `docs/NICHE_AND_KEYWORDS.md` and `docs/GROWTH_OS_MOMENTUM_OPERATOR.md`; suggestions from recursive critique have no authority until evidence-backed learning approval.
+
+Registered content groups describe the topics the account should lean toward; the broader configurable technical audience defines an open-world exploration surface. A strong unregistered tech topic—new tooling, hardware, chips, robotics, security, systems, another engineering field, or a newly emerging category—may compete on live momentum without first being hardcoded as a niche. AI is one pillar inside that technical identity, not the parent category.
 
 Universal operating principle:
 

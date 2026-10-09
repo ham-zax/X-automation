@@ -791,20 +791,24 @@ function selectRotatingXQueryGroups(kind, now = Date.now()) {
   const budget = Math.max(1, Math.min(all.length || 1, Number(configuredBudget || 1)));
   if (all.length <= budget) return all;
 
+  const rotationMinutes = Math.max(1, Number(profile.discovery?.rotationMinutes || 15));
+  const slot = Math.floor(Number(now) / (rotationMinutes * 60_000));
+  const formatLenses = all.filter((item) => item.chunk === 'utility_lens' || item.chunk === 'capability_lens');
+  // Reuse an existing query slot for one concrete, useful-discovery search.
+  // Keep the other slots for configured Growth Focus rather than flooding X.
+  const reserved = budget >= 3 && formatLenses.length ? [formatLenses[slot % formatLenses.length]] : [];
   const byTag = new Map();
-  for (const group of all) {
+  for (const group of (reserved.length ? all.filter((item) => !formatLenses.includes(item)) : all)) {
     const bucket = byTag.get(group.tag) || [];
     bucket.push(group);
     byTag.set(group.tag, bucket);
   }
   const tags = [...byTag.keys()];
-  if (!tags.length) return [];
-  const rotationMinutes = Math.max(1, Number(profile.discovery?.rotationMinutes || 15));
-  const slot = Math.floor(Number(now) / (rotationMinutes * 60_000));
+  if (!tags.length) return reserved;
   const sourceOffset = kind === 'momentum' ? Math.floor(tags.length / 2) : 0;
   const start = ((slot * budget) + sourceOffset) % tags.length;
   const orderedTags = Array.from({ length: tags.length }, (_, index) => tags[(start + index) % tags.length]);
-  const selected = [];
+  const selected = [...reserved];
   for (let depth = 0; selected.length < budget; depth++) {
     let added = false;
     for (const tag of orderedTags) {

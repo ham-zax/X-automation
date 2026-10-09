@@ -179,6 +179,18 @@ Examples:
 
 The purpose is genuine network formation, not synthetic engagement.
 
+### H. Useful, surprising software discoveries (cross-topic format lens)
+
+Owner preference (2026-10-10): actively find and develop **discoveries worth trying, saving or sharing** across the already-configured developer/builder topics. This is NOT a new crypto niche, a generic technology-news feed, a replacement for real builder work, or an invented daily quota. The existing X For You, X Latest, X Momentum, Viral Styles, GitHub, HN, editorial and learned-strategy surfaces own this work.
+
+Look for a concrete capability that seems counterintuitive but is true, a lesser-known useful free/open-source application, a surprising cross-device workflow, a trustworthy curated toolbox, a reproducible 2–5 step setup, a short product demonstration, or a genuinely high-value public resource. Match developer/builder utility before raw virality. For casual consumer-app stories, find a real engineering, self-hosting, operating-system, tool-building or workflow connection; otherwise let them remain exploratory or skip them.
+
+Owner-selected public *format examples*, not reusable publication copy, include [Android-to-CarPlay/DiPlay](https://x.com/baranymo/status/2108557883314962821) (concrete unexpected capability + project link), [Husk/Android-apps-on-iOS](https://x.com/ios_mhmd/status/2108504862707405306) (visual demonstration + important setup caveats), [free-web-tool collection](https://x.com/The_techAI/status/2108372627882680572) (high bookmark utility, but curate/verify before repeating), and [agent collaboration project](https://x.com/romanftp/status/2108475056133132666) (viral hook whose strongest claim needs correction against the original project). The [fitness blueprint example](https://x.com/armedxfit/status/2053476722373206407) demonstrates a resource-packaging technique, NOT a mandate to pivot into health topics. These sources are inspirations for **why a format appeals**, not Hamza-owned discoveries, verified benchmark datasets or permission to reuse their media.
+
+Candidate questions: What does it actually do? Which devices/versions/permissions are required? Where is the official repository or documentation? Is it genuinely free, available, safe and legal to use as claimed? Is there a clear action path? Can we add a comparison, a verified limitation, a short independent setup, or a more useful selection than the viral source? If not, credit and Quote/Repost where appropriate; do not paraphrase a creator's post into an Original. Favor source-owned screenshots with authorization or independently made demonstrations over copied media; if the approved artifact is unavailable, publish with a useful project link or defer media instead of fabricating it.
+
+Treat view counts, replies and bookmarks as *observations*, not guarantees. Judge incremental saves, qualified follows, profile visits and recurring developer attention using comparable, fresh account evidence. Never self-assign first-hand tests without actual recorded proof and exact-text owner attestation.
+
 ## 4. Content mix target
 
 Use the active Growth Focus `targetShare` values as a planning bias, not rigid quotas. The default profile currently allocates:

@@ -51,6 +51,7 @@ import {
   stopAutonomousReplies,
 } from './autonomous_reply.js';
 import { assessStrategicRelevance, getActiveContentGroups, getAudienceNicheLabels, getNicheLabels, isOpportunityCandidate } from './strategy.js';
+import { extractViralStyleFeatures } from './viral_style.js';
 import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
@@ -891,6 +892,12 @@ export function requireEngagementSendAllowed() {
 function formatCandidate(candidate, { includeQueue = true, sourceKind = null, editorialRecommendation = null, objective = null } = {}) {
   const metrics = candidate.metrics || {};
   const niche = candidate.niche || {};
+  const sourceShape = candidate.source === 'x' ? extractViralStyleFeatures({ text: candidate.text || '' }) : null;
+  const observedViews = Number(metrics.views);
+  const observedBookmarks = Number(metrics.bookmarks);
+  const bookmarksPerThousandViews = metrics.views != null && metrics.bookmarks != null
+    && Number.isFinite(observedViews) && observedViews > 0 && Number.isFinite(observedBookmarks) && observedBookmarks >= 0
+    ? Math.round(observedBookmarks / observedViews * 10_000) / 10 : null;
   let queueItem = includeQueue ? getQueueItemByCandidate(candidate.key) : null;
   if (includeQueue && candidate.saved && queueItem && !queueItem.recommendedPipeline) {
     queueItem = refreshQueueRecommendation(candidate.key).queueItem;
@@ -922,6 +929,11 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
     timestamp: candidate.timestamp || null,
     score: candidate.score || 0,
     saved: Boolean(candidate.saved),
+    sourceStyle: sourceShape ? {
+      hookLabels: sourceShape.hookLabels,
+      styleLabels: sourceShape.styleLabels,
+      bookmarksPerThousandViews,
+    } : null,
     sourceKinds: getCandidateSourceKinds(candidate.key),
     metrics: candidate.source === 'github'
       ? metrics.starsToday != null && metrics.rank != null
@@ -938,7 +950,8 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
         ? metrics.rank != null
           ? { points: metrics.points, comments: metrics.comments, by: metrics.by, rank: metrics.rank, hnUrl: metrics.hnUrl, kind: 'hn' }
           : { points: metrics.points, comments: metrics.comments, kind: 'hn_legacy' }
-        : { views: metrics.views, likes: metrics.likes, retweets: metrics.retweets, replies: metrics.replies, kind: 'x' },
+        : { views: metrics.views, likes: metrics.likes, retweets: metrics.retweets, replies: metrics.replies,
+          ...(metrics.bookmarks != null ? { bookmarks: metrics.bookmarks } : {}), kind: 'x' },
     niche: {
       tags: (niche.tags || []).map((tag) => ({ tag, label: getNicheLabels()[tag] || tag })),
       matches: niche.matches || [],

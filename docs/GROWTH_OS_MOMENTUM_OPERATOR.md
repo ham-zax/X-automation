@@ -79,6 +79,8 @@ That broader direction produces three useful branches:
 
 A fourth branch, **add more dashboard tabs**, is rejected. It is the old fragmented solution with new labels. The agent still has to mentally join source, momentum, route, style, and state.
 
+**Owner's October 2026 refinement:** Run a discovery-format lens across these *existing* surfaces. Identify true unexpected capabilities (e.g. cross-device apps), newly useful free/open-source tools, small reproducible workflows, and carefully verified curated resource lists. X Latest/Momentum's rotating format queries find examples; For You provides personalized observations; Viral Styles compares hook/shape patterns against author baselines; Scout surfaces source hook labels and actually observed bookmark rates; editorial chooses the most purposeful Original/Quote/Thread/Repost; Writer applies the active Hamza persona and bounded critique; approved claims and observable outcomes flow back to the existing learning/experiment ledger. None of this requires a new UI feed, a separate publisher, or unbounded self-modifying prompts. A viral post may be only an inspiration to research or Quote, not a license to repackage another author's media or testimony.
+
 The structural insight is that **candidate selection, distribution leverage, and copy shape are one operating decision**. The OS should keep them inspectable as separate evidence fields, but hand them to the agent together.
 
 ## New operator loop

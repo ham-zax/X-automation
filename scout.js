@@ -5,6 +5,7 @@
 
 import { activityWindow, observedBreakout } from './growth_activity_policy.js';
 import { classifyContentStyle } from './growth_performance_learning.js';
+import { extractViralStyleFeatures } from './viral_style.js';
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
@@ -108,6 +109,14 @@ export function buildScoutCards(input = {}) {
     const viewsPerHour = Math.max(0, Number(candidate.viewsPerHour) || 0);
     const engagementsPerHour = Math.max(0, Number(candidate.engagementsPerHour) || 0);
     const contentStyle = classifyContentStyle(candidate.text || '');
+    const sourceShape = extractViralStyleFeatures({ text: candidate.text || '' });
+    const observed = candidate.observedMetrics || {};
+    const views = Number(observed.views);
+    const bookmarks = Number(observed.bookmarks);
+    // A small, optional save-intent signal. Missing snapshots are unknown, not zero.
+    const bookmarksPerThousandViews = observed.views != null && observed.bookmarks != null
+      && Number.isFinite(views) && views > 0 && Number.isFinite(bookmarks) && bookmarks >= 0
+      ? Math.round((bookmarks / views) * 1_000 * 10) / 10 : null;
     const interestKey = {
       code_and_builds: 'code_demos', launch_and_breaking: 'ai_breakthroughs',
       tools_and_discoveries: 'tool_discoveries',
@@ -116,12 +125,15 @@ export function buildScoutCards(input = {}) {
     }[contentStyle];
     const topicWeight = policy?.editorial?.interests?.[interestKey] ?? 50;
     const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72 })
-      + (topicWeight - 50) / 25;
+      + (topicWeight - 50) / 25
+      + (bookmarksPerThousandViews == null ? 0 : Math.min(1.25, bookmarksPerThousandViews / 20));
     replyCards.push({
       tier: 'T1',
       action: eligibleActions.includes('reply') ? 'reply' : 'quote',
       eligibleActions,
       contentStyle,
+      hookLabels: sourceShape.hookLabels,
+      styleLabels: sourceShape.styleLabels,
       urgent: candidate.urgent || null,
       candidateKey: candidate.key,
       url,
@@ -135,10 +147,11 @@ export function buildScoutCards(input = {}) {
         viralTier: candidate.viralTier || null, // Telemetry only, never a category gate.
         nicheScore: candidate.nicheScore ?? null,
         nicheTags: candidate.nicheTags || [],
-        observed: candidate.observedMetrics || {},
+        observed,
+        bookmarksPerThousandViews,
       },
       score,
-      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; a Repost via social-discover when the original deserves unchanged sharing. No score/viral label is an action threshold.`,
+      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. ${bookmarksPerThousandViews == null ? 'Bookmark rate unavailable.' : `Observed ${bookmarksPerThousandViews} bookmarks per 1,000 views.`} Source shape: ${sourceShape.hookLabels.join(', ')} / ${sourceShape.styleLabels.join(', ')} (heuristic, not proof). Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; a source-backed Original/Thread through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.`,
     });
   }
   replyCards.sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))

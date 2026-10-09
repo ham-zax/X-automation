@@ -514,6 +514,21 @@ export function getXSearchQueryGroups() {
     }));
   }
 
+  // Search existing X Latest/Momentum/Viral Styles for useful software discoveries.
+  // These are cross-topic retrieval lenses, not new niches or publishing grants.
+  // Owner-disabled content groups remain disabled.
+  const discoverableTags = new Set(activeContentGroups.filter((item) => item.discover !== false).map((item) => item.tag));
+  if (discoverableTags.has('devtools') || discoverableTags.has('builders')) {
+    groups.push({ tag: discoverableTags.has('devtools') ? 'devtools' : 'builders', label: 'Useful software discoveries', targetShare: 0,
+      query: '("open source" OR "github repo" OR "free tool") ("you can now" OR "I built" OR "how to" OR "just released")',
+      chunk: 'utility_lens', exploratory: false });
+  }
+  if (['devtools', 'infra', 'systems'].some((tag) => discoverableTags.has(tag))) {
+    groups.push({ tag: ['devtools', 'infra', 'systems'].find((tag) => discoverableTags.has(tag)), label: 'Unexpected software capabilities', targetShare: 0,
+      query: '("android app" OR "ios app" OR "browser extension" OR "linux tool") ("run on" OR "turn into" OR "now possible" OR "open source")',
+      chunk: 'capability_lens', exploratory: false });
+  }
+
   if (ACTIVE_NICHE_PROFILE.exploration.enabled && ACTIVE_NICHE_PROFILE.exploration.maxSearchQueries > 0) {
     const preferredTerms = new Set(activeContentGroups.flatMap((group) => group.terms.map((term) => String(term).trim().toLowerCase())));
     const explorationTerms = roundRobinGroupTerms(ACTIVE_NICHE_PROFILE.audienceGroups.filter((group) => group.discover !== false))

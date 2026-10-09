@@ -40,7 +40,8 @@ function candidateMetricLine(candidate: DiscoveredCandidate): string {
     const author = metrics.by ? ` · by ${metrics.by}` : ''
     return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments${author}${metrics.kind === 'hn_legacy' ? ' · historical collected candidate' : ''}`
   }
-  return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies`
+  const bookmarks = metrics.bookmarks == null ? '' : ` · ${formatNumber(metrics.bookmarks as number)} bookmarks`
+  return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies${bookmarks}`
 }
 
 function sourceMomentumLine(candidate: DiscoveredCandidate): string | null {
@@ -121,9 +122,10 @@ function CandidateRow({
       <div className="mt-2 break-words text-base font-semibold text-slate-900">{candidate.title}</div>
       {candidate.displayText && <div className="mt-2 line-clamp-4 text-sm leading-6 text-slate-600">{candidate.displayText}</div>}
       <div className="mt-3 text-xs leading-5 text-slate-500">{candidateMetricLine(candidate)}</div>
-      {sourceLabels.length > 0 && (
+      {(sourceLabels.length > 0 || candidate.sourceStyle?.styleLabels.some((label) => ['useful_tech_discovery', 'curated_resource_thread', 'visual_capability_demo'].includes(label))) && (
         <div className="mt-2 flex flex-wrap gap-1">
           {sourceLabels.map((label) => <Badge key={label} tone="info">{label}</Badge>)}
+          {candidate.sourceStyle?.styleLabels.filter((label) => ['useful_tech_discovery', 'curated_resource_thread', 'visual_capability_demo'].includes(label)).map((label) => <Badge key={label}>{label.replaceAll('_', ' ')}</Badge>) }
         </div>
       )}
     </button>
@@ -215,6 +217,15 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
 
       {candidate.displayText && <div className="source-text">{candidate.displayText}</div>}
       <div className="mt-2 text-sm text-slate-500">{candidateMetricLine(candidate)}</div>
+      {candidate.sourceStyle && (candidate.sourceStyle.hookLabels.some((label) => label !== 'plain_declarative')
+        || candidate.sourceStyle.styleLabels.some((label) => label !== 'general_observation')
+        || candidate.sourceStyle.bookmarksPerThousandViews != null) && (
+        <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <strong>Observed hook/format:</strong> {candidate.sourceStyle.hookLabels.filter((label) => label !== 'plain_declarative').join(', ').replaceAll('_', ' ')} · {candidate.sourceStyle.styleLabels.filter((label) => label !== 'general_observation').join(', ').replaceAll('_', ' ')}
+          {candidate.sourceStyle.bookmarksPerThousandViews != null && <span> · {candidate.sourceStyle.bookmarksPerThousandViews} saves / 1,000 views</span>}
+          <span className="block mt-1">Heuristic source structure; not proof of the claim, media rights, or predicted virality.</span>
+        </div>
+      )}
       <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />
       {movement && <div className="mt-1 text-xs font-medium text-slate-600">Source movement: {movement}</div>}
 

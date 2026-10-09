@@ -18,6 +18,8 @@ Its core promise combines real technical work with recognizable judgment, taste,
 
 Prefer behavior that best serves the selected objective and context. Strong candidates may be backed by our own experiment/result, primary-source detail, a useful comparison, a real builder judgment, a relationship opportunity, support/celebration, humor, taste, or a socially generative question. Plain headline summary and generic activity remain weak.
 
+**Cross-topic discovery opportunity (owner preference):** Inside the *existing* source and viral-style workflow, actively recognize a verified surprising software capability, useful free/open-source app, resource collection, practical how-to, or demonstration that a developer/builder would save or share. A headline can be timely without being a worthy feed post; identify (1) exact user payoff, (2) primary project/documentation or reproducible proof, (3) compatibility, security, pricing and setup caveats that change the claim, (4) distinct Hamza judgment or organization beyond the source, and (5) best route. A source-backed Original or Thread can be right even without firsthand use; do not convert the creator's work into an implied Hamza invention. Quote if the original demo is essential context, Repost only when amplification alone suffices. Metrics and structural hook labels may influence research priority, not establish truth, guaranteed reach, or follower conversion.
+
 The default editorial objective is `qualified_growth`. Other allowed objectives are:
 
 - `reach_momentum`

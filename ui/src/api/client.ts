@@ -516,6 +516,7 @@ export interface DiscoveredCandidate {
   timestamp: number | null
   score: number
   saved: boolean
+  sourceStyle: { hookLabels: string[]; styleLabels: string[]; bookmarksPerThousandViews: number | null } | null
   sourceKinds: string[]
   metrics: Record<string, number | string> & { kind: string }
   niche: {
