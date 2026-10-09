@@ -90,6 +90,7 @@ import {
   clearAiRoleBinding,
   getAccountAnalyticsSnapshot,
   getGrowthProductPolicyView,
+  recordGrowthFollowerObservation,
   getGrowthPerformanceAnalysis,
   refreshGrowthPerformanceAnalysis,
   getAccountHealthSummary,
@@ -1945,6 +1946,15 @@ async function main() {
 
   if (command === 'growth-policy') {
     result(getGrowthProductPolicyView());
+    return;
+  }
+  if (command === 'growth-followers-record') {
+    if (payload.confirmRecord !== true) throw new Error('growth-followers-record requires confirmRecord=true and actual observed data.');
+    const expected=String(process.env.X_ACCOUNT || 'ham_zax').replace(/^@/, '').toLowerCase();
+    const account=String(payload.accountHandle || '').replace(/^@/, '').toLowerCase();
+    if (!account || account !== expected) throw new Error('Follower observation accountHandle must match the authenticated owner.');
+    result({ recorded: recordGrowthFollowerObservation({ followers: payload.followers,
+      observedAt: payload.observedAt ?? Date.now() }) });
     return;
   }
   if (command === 'growth-analysis') {

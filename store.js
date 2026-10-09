@@ -1635,9 +1635,8 @@ function requireAutonomousActivity({ action, now, runId, editorial, candidateKey
     if (Number(row.total) >= dailyLimit) throw new DomainValidationError(`Configured ${action} daily maximum reached (${dailyLimit}).`);
   }
   const observed = observedActivityMomentum(candidateKey);
-  const account = getPerformanceSnapshot(1).account;
-  const fresh = account && now - Number(account.captured_at || 0) <= 14 * 86_400_000;
-  const audience = audienceTier(fresh ? Number(account.followers) : NaN, policy);
+  const followerObservation = getFreshGrowthFollowerObservation({now});
+  const audience = audienceTier(followerObservation?.followers ?? NaN, policy);
   const decision = evaluateActivity({ action: approvedEditorial ? 'reply' : action,
     now, editorial, policy, audienceSelectivity: audience.selectivity,
     ...observed, runBound: true });
@@ -5731,6 +5730,7 @@ export function getAppState(key, fallback = null) {
 
 const GROWTH_PRODUCT_POLICY_KEY = 'growth_product_policy_v1';
 const GROWTH_ANALYSIS_STATE_KEY = 'growth_performance_analysis_v1';
+const GROWTH_FOLLOWERS_STATE_KEY = 'growth_follower_observation_v1';
 
 export function getGrowthProductPolicy() {
   const raw = getAppState(GROWTH_PRODUCT_POLICY_KEY, null);
@@ -5743,14 +5743,38 @@ export function saveGrowthProductPolicy(patch) {
   return next;
 }
 
+export function getFreshGrowthFollowerObservation({ now = Date.now() } = {}) {
+  const recent = json(getAppState(GROWTH_FOLLOWERS_STATE_KEY, null), null);
+  if (recent && Number.isInteger(recent.followers)
+    && now >= recent.observedAt && now - recent.observedAt < 14 * 86_400_000) return recent;
+  const account = getPerformanceSnapshot(1).account;
+  if (account && now >= Number(account.captured_at) && now - Number(account.captured_at) < 14 * 86_400_000) {
+    return { followers: Number(account.followers), observedAt: Number(account.captured_at), source: 'observed_account_metrics' };
+  }
+  return null;
+}
+
+export function recordGrowthFollowerObservation({ followers, observedAt = Date.now(), source = 'authenticated_x_profile' } = {}) {
+  const count=Number(followers), at=Number(observedAt), now=Date.now();
+  if (!Number.isInteger(count) || count < 0 || count > 1_000_000_000) throw new DomainValidationError('Observed follower count must be a nonnegative integer.');
+  if (!Number.isSafeInteger(at) || at > now + 60_000 || at < now - 10 * 60_000) {
+    throw new DomainValidationError('Follower observation must use the actual capture time within the last ten minutes.');
+  }
+  const previous=json(getAppState(GROWTH_FOLLOWERS_STATE_KEY, null),null);
+  if (previous && Number(previous.observedAt) > at) throw new DomainValidationError('Cannot overwrite newer observed follower evidence.');
+  const next={followers:count,observedAt:at,source};
+  setAppState(GROWTH_FOLLOWERS_STATE_KEY,JSON.stringify(next));
+  return next;
+}
+
 export function getGrowthProductPolicyView() {
   const policy = getGrowthProductPolicy();
-  const account = getPerformanceSnapshot(1).account;
-  const fresh = account && Date.now() - Number(account.captured_at || 0) < 14 * 86_400_000;
+  const observation = getFreshGrowthFollowerObservation();
   return {
     policy,
-    audience: audienceTier(fresh ? Number(account.followers) : NaN, policy),
-    accountMetricsCapturedAt: account?.captured_at || null,
+    audience: audienceTier(observation?.followers ?? NaN, policy),
+    accountMetricsCapturedAt: observation?.observedAt || null,
+    followerObservationSource: observation?.source || null,
     personaModel: getActivePersonaForGrowthPolicy(),
   };
 }
