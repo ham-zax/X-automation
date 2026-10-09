@@ -4,9 +4,16 @@ This repository is the operating system for the `@ham_zax` X account.
 
 The strategic architecture is **network-first and behavior-aware**: use research to find purposeful conversations, select a plausible Hamza role before writing, build recurring relevant relationships, convert profile visits with owned work and recognizable identity, and learn which purpose/mode/affect/depth decisions recruit the target audience.
 
-## Run-stop terminology for reasoning agents
+## Run outcomes and execution boundaries
 
-Interpret stop reasons as operational evidence, not ordinary-language assumptions. The persisted `budget_exhausted` label is a legacy agent-reported stop reason; it is **not** evidence of depleted money, tokens, daily quotas, or opportunities. When ending early to preserve the three-minute execution-deadline safety margin, record `execution_window_safety_margin` and concrete timing in `stopDetail`, and explicitly say if eligible candidates remain. `resource_ceiling_reached` is reserved for a bridge-detected hard run ceiling. `no_worthwhile_eligible_work` means a sufficiently refreshed exploration found no worthwhile eligible action, not merely that this session ran out of time. Per-run execution ceilings are safety boundaries, not publishing goals or daily growth-policy quotas. Never rename persisted stop-reason identifiers without a coordinated compatibility migration.
+Treat terminal `status`, structured `stopReason`, and `stopDetail` as distinct evidence. A `completed` run means its durable run lifecycle finished, not that growth opportunities or daily allowances were used up. The unattended launcher currently requests up to **25 public mutation attempts per run**, a bounded duration (normally 20 minutes), and a separate default **50 accepted For You observations**; these are safety ceilings, **not** publication targets or browser-command counts. Owner-defined daily lane/social limits live in `growth-policy` and are separate.
+
+- `run_deadline_reserve_reached`: the reasoning operator deliberately stopped new work at the planned reserve before its run deadline (normally three minutes; shorter runs reserve less) to finish and reconcile. Include measured timing and whether opportunities remain in `stopDetail`. This is **not** token, monetary, activity-quota, or opportunity exhaustion.
+- `resource_ceiling_reached`: the bridge reported a hard duration/mutation ceiling or the observation ceiling prevented required fresh collection. Preserve which ceiling was reached in `stopDetail`.
+- `no_worthwhile_eligible_work`: fresh and sufficient exploration found no worthwhile eligible action. Never infer this from elapsed time, an unchanged scout cache, or a daily cap.
+- `budget_exhausted`: **historical/legacy stored value** with ambiguous meaning. The bridge still accepts it for compatibility; new agent reports must not emit it or infer its exact cause from the label alone.
+
+The launcher may continue a clean time-reserve or resource-ceiling finish only with no unresolved publication attempts and enough overall execution time remaining; otherwise the next scheduled invocation can evaluate saved opportunities. No completed run grants authority to reuse its prior claims, replay a send, or bypass recovery. See `docs/GROWTH_RUN_PROTOCOL.md`.
 
 ## Product interaction model
 

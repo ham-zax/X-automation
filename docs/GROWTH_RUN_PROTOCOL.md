@@ -42,20 +42,29 @@ Terminal run results:
 - `blocked`
 - `unresolved`
 
-Structured stop reasons:
+Structured stop reasons for **new** runs:
 
 - `no_worthwhile_eligible_work`
 - `resource_ceiling_reached`
+- `run_deadline_reserve_reached`
 - `delegation_revoked`
 - `delegation_revised`
 - `capability_unavailable`
 - `reconciliation_scope_blocked`
-- `budget_exhausted`
 - `manual_intervention_required`
 
-`budget_exhausted` is a legacy compatibility identifier for an agent-reported execution-window stop. It does **not** establish that money, tokens, or an action quota ran out. For the planned three-minute safety margin, state `execution_window_safety_margin` and the actual timing in `stopDetail`; identify remaining candidates rather than claiming the work was exhausted. `resource_ceiling_reached` instead means the bridge observed a hard run duration or public-mutation ceiling. An observation ceiling restricts further collection but does not itself prove the whole run is finished. `no_worthwhile_eligible_work` requires a genuinely exhausted, sufficiently refreshed opportunity pass.
+Legacy stored stop reason: `budget_exhausted`. It remains accepted by `growth-run-finish` so older runs and external consumers are not invalidated, but **new reasoning operators must not select it**. It does not prove depleted tokens, money, or action allowances; inspect the historical run's `stopDetail` and runtime evidence instead.
 
-Bounds are ceilings, not targets. A run may stop before any public action. A healthy no-action run is valid when no worthwhile eligible opportunity remains.
+| Stop reason | Meaning and source | Continuation |
+| --- | --- | --- |
+| `run_deadline_reserve_reached` | Agent ended early at the planned run-deadline safety reserve (normally three minutes, reduced for short runs), leaving time to finish/reconcile. `stopDetail` must state actual timing when measured and whether opportunities remain. | A clean completed run may be followed by a **new** run only while sufficient overall launcher time remains. Otherwise the next scheduled invocation can re-evaluate saved candidates. |
+| `resource_ceiling_reached` | Bridge-derived: hard run duration, public-mutation-attempt count, or accepted For You observation ceiling preventing required collection. Preserve the precise reported ceiling in `stopDetail`. | Same clean-run continuation rule; the ceiling is not a daily quota. |
+| `no_worthwhile_eligible_work` | Agent found no worthwhile eligible action after sufficiently fresh exploration. This is not a synonym for running out of time, candidates uninspected, or hitting a limit. | Ends the current launcher cycle rather than manufacturing another discovery pass. |
+| `budget_exhausted` (legacy) | Ambiguous historical reason; not emitted for new runs. | Not used to authorize automatic continuation from its label alone. |
+
+A `completed` status only says the Growth Run was durably finished. The launcher permits continuation after `run_deadline_reserve_reached` or `resource_ceiling_reached` only when publication accounting reports **zero investigating and zero closed-unresolved** attempts and the remaining launcher window accommodates a safe subsequent session. Live delegation, account health, operator lease, exact-source verification, social-action policy, and publication-attempt fences still govern each new run. Stale opportunities require re-observation; never retry an uncertain send.
+
+Run ceilings are not goals. The code defaults to 20 minutes, 50 *accepted For You posts*, and 10 public mutation attempts when no values are supplied; the unattended executor explicitly sets **25 mutation attempts** and a launcher-provided run duration (up to 20 minutes). An observation ceiling is not a count of browser commands. Rolling daily lane/social limits are separate and owner-controlled through `growth-policy`. A healthy no-action run is valid when no worthwhile eligible opportunity remains.
 
 ## Public agent bridge
 

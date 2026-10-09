@@ -26,13 +26,19 @@ import {
 export const GROWTH_RUN_STOP_REASONS = Object.freeze([
   'no_worthwhile_eligible_work',
   'resource_ceiling_reached',
+  'run_deadline_reserve_reached',
   'delegation_revoked',
   'delegation_revised',
   'capability_unavailable',
   'reconciliation_scope_blocked',
-  'budget_exhausted', // Legacy wire/storage identifier: agent-reported execution-window stop; not proof of token or financial exhaustion.
+  'budget_exhausted', // Legacy persisted reason; accepted for historical compatibility, not for new operator reports.
   'manual_intervention_required',
 ]);
+// Don't advertise the deprecated ambiguous reason to reasoning operators.
+// Historical Growth Runs may still contain it, so finish validation accepts it.
+export const GROWTH_RUN_OPERATOR_STOP_REASONS = Object.freeze(
+  GROWTH_RUN_STOP_REASONS.filter(reason => reason !== 'budget_exhausted'),
+);
 const STOP_REASONS = new Set(GROWTH_RUN_STOP_REASONS);
 
 const TERMINAL_RESULTS = new Set(['completed', 'partial', 'blocked', 'unresolved']);
@@ -365,6 +371,15 @@ export function resumeGrowthRun(runId, {
   });
 }
 
+function finishDetailFromNextOperation(next) {
+  // Preserve the bridge's precise reason (especially the sensing ceiling).
+  if (next?.stopDetail) return next.stopDetail;
+  if (next?.ceilings?.reason === 'max_duration') return 'The run reached its configured hard duration ceiling.';
+  if (next?.ceilings?.reason === 'max_public_mutations') return 'The run reached its configured public-mutation attempt ceiling.';
+  if (next?.stopReason) return `The Growth Run must finish: ${next.stopReason}.`;
+  return 'The reasoning operator found no additional worthwhile eligible action for this run.';
+}
+
 export async function advanceGrowthRun(runId, {
   operation = null,
   capabilities = null,
@@ -398,9 +413,7 @@ export async function advanceGrowthRun(runId, {
     return finishGrowthRun(run.runId, {
       status: 'completed',
       stopReason: status.next?.stopReason || 'no_worthwhile_eligible_work',
-      stopDetail: status.next?.stopReason
-        ? 'The Growth Run reached its configured resource ceiling.'
-        : 'The reasoning operator found no additional worthwhile eligible action for this run.',
+      stopDetail: finishDetailFromNextOperation(status.next),
       now: timestamp,
     });
   }

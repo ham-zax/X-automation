@@ -15,7 +15,7 @@ import {
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
 import { leaseAgentBrowserTab } from './ops/agent_browser_session.js';
-import { finishGrowthRun, GROWTH_RUN_STOP_REASONS } from './growth_run.js';
+import { finishGrowthRun, GROWTH_RUN_OPERATOR_STOP_REASONS } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
 const HOME = homedir();
@@ -58,6 +58,10 @@ const DEFAULT_CDP_PORT = '9222';
 const BROWSER_TARGETS = ['windows', 'linux'];
 const RUNTIMES = ['opencode', 'codex', 'claude', 'pi', 'claive', 'muse'];
 const SCHEDULER_INTERVAL_MS = 5 * 60_000;
+// Planned reconciliation time is not an engagement quota. Avoid launching a
+// follow-up shorter than this reserve plus one useful working minute.
+const FINISH_RESERVE_MINUTES = 3;
+const MIN_SAFE_FOLLOWUP_MINUTES = FINISH_RESERVE_MINUTES + 1;
 
 function growthAgentMode(env) {
   const mode = String(env.GROWTH_AGENT_MODE || 'executor').trim().toLowerCase();
@@ -180,6 +184,8 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
   browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  // Short configured windows cannot reserve three full minutes.
+  const finishReserveMinutes = Math.min(FINISH_RESERVE_MINUTES, Math.max(0, maxDurationMinutes - 1));
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Act on every worthwhile eligible opportunity, including long sequences of valuable replies; do not invent filler or treat measured virality as a required category. The bridge gates still apply.
 ` : '';
@@ -190,7 +196,7 @@ Start:
 - Use sessionId \`${sessionId}\` on every bridge call.
 - ${executorBrowserLine({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId })}
 - In a run-owned, newly allocated blank Agent Browser tab, first navigate that SAME tab to https://x.com/home; never take over a tab left by another run. Observe the X page and confirm the account is @ham_zax. If the browser shows a login page or another account, do not log in and do not enter credentials. Begin the run with x_authenticated=false and browser_mutation=false, then stop and report the authentication blocker.
-- Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=25 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass. This is an atomic per-run resource safety boundary, NOT a posting quota; further eligible work can continue in a subsequent run.
+- Begin or resume with \`npm run --silent agent -- growth-run-begin\`, JSON on stdin: adapterType \`${runtime}_unattended\`, this sessionId, and capabilities for reasoning, browser_read, browser_mutation, x_authenticated and primary_source_web_research set truthfully. Set ceilings.maxPublicMutations=25 and ceilings.maxDurationMinutes=${maxDurationMinutes} for this bounded pass. These are per-run safety ceilings, not posting goals or daily limits. The hard duration/mutation ceiling, the accepted For You observation ceiling, and the early deadline reserve are distinct conditions. Remaining eligible work can be reconsidered in a fresh, authorized session; never reuse a prior run's claim.
 - Keep the \`runId\` from that result. Every \`act\` call needs both \`runId\` and \`sessionId\`. A fresh session MUST NOT call \`growth-run-status\` or \`growth-run-resume\` before it has a real runId; the recovery checklist below applies to existing runs only until \`growth-run-begin\` returns.
 - Read the current product policy with \`npm run --silent agent -- growth-policy\`; it is the single owner-controlled source of truth for sleep hours, discovery, publication lanes, FOLLOW/LIKE permissions and conservative rolling daily safety ceilings, topical preferences, strictness, follower selectivity and learning. Read \`npm run --silent agent -- growth-analysis\` and consider verified performance recommendations only when enough measured samples exist. Read the existing writer persona as prescribed below: user persona/preferences always take precedence over generic growth copy.
 - Read \`growth-run-next\`. If it recommends \`recover_attempt\` or names an unfinished publication attempt, stop and reconcile that attempt first: read the "Recover an unfinished publication" section of docs/GROWTH_AGENT_EXECUTION.md, decide only from live evidence, and never resend it.
@@ -198,7 +204,7 @@ Start:
 ${contextRecoveryPrompt()}
 
 Loop:
-- Track time from the begin call with \`date +%s%3N\`. Keep looping until about 3 minutes before the maxDurationMinutes budget ends.
+- Track time from the begin call with \`date +%s%3N\`. Continue while useful work remains, but reserve about ${finishReserveMinutes} minute(s) before this run's maxDurationMinutes deadline for finishing and reconciling durable actions. For a very short run, do not begin any mutation that cannot be verified and reconciled before its hard deadline.
 - Each pass: run \`npm run --silent agent -- scout\` with JSON \`{"limit":50}\`. Read the entire \`pace\`, especially \`pace.activity.rest\`, \`pace.activity.fullDiscoveryIntervalMinutes\` and \`pace.activity.lastObservationAt\`, and all cards. This is a discovery batch, not a posting goal. The host probes every five minutes even if full feed collection is configured less frequently: during intermediate wakes, make only a short fresh breaking-news/urgent-source check rather than a full repetitive For You scan. Verified emergencies override the ordinary scan interval.
 - Owner activity rhythm: observe the live configurable \`growth-policy.activity\` and \`scout.pace.activity\` values; NEVER use a hardcoded local sleep time. During rest, use read-only discovery and look only for independently observed explosive engagement or verified major AI launches/research breakthroughs. A genuinely verified urgent event may override ANY cadence or rest window immediately; no emergency may override source truth, account health, live authority, near-copy/duplicate fencing, or send reconciliation. Never pretend to be physically online or randomize/post mechanically to impersonate human habits.
 - During waking hours, behave like a builder naturally using X: several purposeful replies can occur close together; a standalone post requires exceptional utility. There is no mandatory number, artificial cadence or fake presence. Follower growth is the goal, so prioritize qualified people discovering our useful replies and distinctive writing, not raw post counts. Use product follower-tier guidance to become modestly less selective about good standalone material as a REAL measured audience grows; never manufacture output.
@@ -231,8 +237,8 @@ Writing:
 - Persona: before your first draft and after every context compaction, read the active persona with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
 
 Stop:
-- Stop only after the available distinct sources have been meaningfully explored and two separately observed, successfully ingested discovery passes yield no worthwhile opportunities or new mentions. If collection is forbidden by run ceilings, finish with that actual reason instead of inferring no worthwhile work.
-- Finish about 3 minutes before this run's execution deadline to leave time for recording and reconciliation. This is a session time boundary, not evidence that money, tokens, daily action allowance, or worthwhile opportunities are exhausted. Also finish at an actual blocker (authentication, constrained account health, or a lease rejected by act).
+- Use no_worthwhile_eligible_work only after meaningfully exploring distinct available sources and two separately observed, successfully ingested discovery passes show no worthwhile opportunities or new mentions. If collection is forbidden by a ceiling, finish with that actual reason instead; an observation cap does not prove all opportunities are exhausted.
+- When about ${finishReserveMinutes} minute(s) remain before this run's execution deadline, stop starting new actions and finish/reconcile safely using run_deadline_reserve_reached. This deliberate time reserve is not token, money, policy-quota or opportunity exhaustion. Otherwise finish for a real blocker (authentication, constrained account health or rejected lease) with its actual reason.
 
 Hard rules:
 - Never set or fake human approval fields; never click dashboard approval or config controls; never start automation.js.
@@ -243,8 +249,8 @@ Hard rules:
 - Do not edit files, config, packages or environment; do not run git; no background daemons; no ad hoc shell, node or python scripts beyond \`date +%s%3N\` and the browser CLIs.
 
 Finish:
-- Call \`npm run --silent agent -- growth-run-finish\` with JSON \`{"runId":"<actual runId>","status":"completed","stopReason":"no_worthwhile_eligible_work","stopDetail":"No worthwhile eligible actions remain."}\` after a healthy empty pass. Supported stopReason values: ${GROWTH_RUN_STOP_REASONS.join(", ")}. If growth-run-next offers the permitted operation \`finish\`, prefer it to derive the reason. Never invent stop reasons: status and stopReason are different fields.
-- If finishing because the execution window is closing, use the existing compatible stopReason \`budget_exhausted\` with a precise stopDetail stating \`execution_window_safety_margin\`, elapsed time, run deadline, and whether worthwhile candidates remain. Never infer token or financial exhaustion from this reason. Use \`resource_ceiling_reached\` only when the bridge reports a hard run ceiling. Do not claim \`no_worthwhile_eligible_work\` if candidates were left unexamined.
+- Call \`npm run --silent agent -- growth-run-finish\` with JSON \`{"runId":"<actual runId>","status":"completed","stopReason":"no_worthwhile_eligible_work","stopDetail":"No worthwhile eligible actions remain."}\` after a healthy empty pass. Current stopReason values: ${GROWTH_RUN_OPERATOR_STOP_REASONS.join(", ")}. If growth-run-next offers the permitted operation \`finish\`, prefer it to derive the reason. Never invent stop reasons: status and stopReason are different fields.
+- If ending at the planned deadline reserve, report \`run_deadline_reserve_reached\` and a factual \`stopDetail\` describing the remaining time (if measured) and whether worthwhile candidates remain. If the model/provider actually rejects work due to quota or unavailable reasoning capability, record the observed error under \`capability_unavailable\`; do not misclassify it as a run deadline. Do not emit legacy \`budget_exhausted\` (an ambiguous label retained only for historical records). Use \`resource_ceiling_reached\` when the bridge reports a reached duration, mutation, or required-observation ceiling; prefer its exact reported stopDetail. Do not use \`no_worthwhile_eligible_work\` to describe unfinished exploration.
 - Final response: published URLs (from \`outputUrl\`), skipped count, unresolved attempt IDs, and any blocker.
 ${experimentNote}`;
 }
@@ -317,7 +323,7 @@ ${browser.observe}
 
 Begin/resume the canonical run with:
 \`npm run agent -- growth-run-begin\`
-using adapterType \`${runtime}_unattended\`, sessionId \`${sessionId}\`, truthful capabilities for reasoning, browser_read, browser_mutation, x_authenticated, and primary_source_web_research, and \`ceilings.maxPublicMutations=25\`, \`ceilings.maxDurationMinutes=${maxDurationMinutes}\` for this bounded pass. The finite per-run ceiling protects lease/resource accounting, not daily frequency or per-lane quotas. The launcher may start another fresh reasoning session only after a clean resource-ceiling finish; this session must finish and exit at its ceiling. If authentication changes after begin, update the same run through \`growth-run-resume\` rather than abandoning it.
+using adapterType \`${runtime}_unattended\`, sessionId \`${sessionId}\`, truthful capabilities for reasoning, browser_read, browser_mutation, x_authenticated, and primary_source_web_research, and \`ceilings.maxPublicMutations=25\`, \`ceilings.maxDurationMinutes=${maxDurationMinutes}\` for this bounded pass. The finite per-run ceiling protects lease/resource accounting, not daily frequency or per-lane quotas. The launcher can start another fresh session after a clean hard-ceiling finish or a clean early deadline-reserve finish, only if enough of its overall invocation window remains. Otherwise the next scheduled invocation can evaluate persistent opportunities again. Use \`run_deadline_reserve_reached\` (not legacy \`budget_exhausted\`) when reserving time for reconciliation. Never reinterpret remaining work as \`no_worthwhile_eligible_work\`. If authentication changes after begin, update the same run through \`growth-run-resume\` rather than abandoning it.
 
 Then follow the run state rather than improvising a parallel workflow:
 1. If recovery is requested, inspect the exact publication attempt and reconcile only from evidence. If useful recovery is exhausted, close unresolved rather than calling it not-sent.
@@ -516,7 +522,8 @@ function startRuntimeHeartbeatPump(adapterType, sessionId) {
 
 export function continuationAllowed(run) {
   return !!run && run.status === 'completed'
-    && run.stopReason === 'resource_ceiling_reached'
+    && (run.stopReason === 'resource_ceiling_reached'
+      || run.stopReason === 'run_deadline_reserve_reached')
     && run.result?.closedUnresolved === 0
     && run.result?.investigating === 0;
 }
@@ -801,6 +808,15 @@ Finish the durable run when done; do not end with another progress-only statemen
         ? { status: run.status, runId: run.runId, stopReason: run.stopReason || null }
         : { status: 'blocked', reason: 'runtime_completed_without_growth_run' },
       run?.status === 'active' ? run.runId : '');
+      // A clean run may yield to another bounded pass, but a window
+      // shorter than the planned finish reserve plus one working minute
+      // cannot accommodate a useful new session.
+      // Preserve the completed run; the regular scheduler can revisit work.
+      const remainingMs = deadline - now();
+      if (remainingMs >= 60_000 && remainingMs < MIN_SAFE_FOLLOWUP_MINUTES * 60_000) {
+        return finish({ status: 'completed', reason: 'insufficient_time_for_safe_followup',
+          runId: run.runId, stopReason: run.stopReason });
+      }
     } catch (error) {
       const run = deps.runs({ sessionId, limit: 1 })[0] || null;
       const message = String(error?.message || error);
