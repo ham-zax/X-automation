@@ -66,7 +66,8 @@ Available commands:
 - `record-action` - persist a successful direct/quote/repost/reply result, including output tweet ID/URL, commentary, and durable action-time source context. It can capture a live source inline when the candidate is not stored yet.
 - `record-disposition` - persist or revise an exact-candidate `skip` / `defer` (or clear it) with a transparent reason and optional expiry; it can also capture a live source inline.
 - `relationship-targets` - list strategic relationship profiles with optional class/stage/min-TargetScore filters.
-- `relationship-inspect` - inspect one relationship profile plus recent append-only event history.
+- `relationship-context` - read a known author's stored profile/events, or return `tracked: false` for a not-yet-tracked X handle without an error or creating a profile.
+- `relationship-inspect` - strict lookup of an existing relationship profile plus recent append-only event history; missing profiles are errors.
 - `relationship-events` - read bounded recent relationship events for one username.
 - `engage-next` - read cached ranked actionable engagement items, grouped into Active Conversations and New Opportunities; pass `refresh: true` only for compatibility with an intentional inline refresh.
 - `engage-refresh` - explicitly refresh engagement sources, then return refreshed Active Conversations and New Opportunities; compact output is the default.
@@ -204,11 +205,12 @@ Read through the bridge rather than querying SQLite directly:
 
 ```bash
 npm run agent -- relationship-targets <<<'{"class":"relationship","stage":"responsive","minTargetScore":40,"limit":20}'
+npm run agent -- relationship-context <<<'{"username":"@example","limit":20}'
 npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
 npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
 ```
 
-These Phase-1B commands remain read-only. Phase 1C now records relationship events internally only when it observes a real target response or after an explicitly approved reply is successfully sent.
+The existing profile readers relationship-targets and relationship-inspect may refresh cached audience-derived scores as a side effect. Prefer `relationship-context` for a guaranteed no-write lookup. It returns `{username, tracked, status, profile, events}`; an unseen X handle yields `status: "not_tracked"`, `profile: null`, and `events: []` with a successful exit. The input `username` must be a valid X handle and `limit` must be an integer from 1 through 200. Never create a relationship profile just to make a lookup succeed. Phase 1C records relationship events internally only when it observes a real target response or after an explicitly approved reply is successfully sent.
 
 ### Engage Next — implemented
 

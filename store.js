@@ -3921,6 +3921,28 @@ export function listRelationshipEvents(username, { limit = 100 } = {}) {
     .all(normalized, Math.max(1, Math.min(1000, Number(limit || 100)))).map(decodeRelationshipEvent);
 }
 
+// Unlike getRelationshipProfile(), this reader never hydrates a profile from
+// audience state or writes a refreshed score. Unknown accounts are an ordinary
+// discovery state: a confirmed interaction can create their profile later.
+export function readRelationshipContext(username, { limit = 20 } = {}) {
+  if (typeof username !== 'string') throw new DomainValidationError('relationship-context requires a username string.');
+  const normalized = normalizeRelationshipUsername(username);
+  if (!/^[a-z0-9_]{1,15}$/.test(normalized)) {
+    throw new DomainValidationError('relationship-context username must be a valid X handle (1-15 letters, numbers or underscores).');
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+    throw new DomainValidationError('relationship-context limit must be an integer from 1 to 200.');
+  }
+  const profile = getStoredRelationshipProfile(normalized);
+  return {
+    username: normalized,
+    tracked: profile !== null,
+    status: profile ? 'tracked' : 'not_tracked',
+    profile,
+    events: profile ? listRelationshipEvents(normalized, { limit }) : [],
+  };
+}
+
 export function applyRelationshipEvent(username) {
   const normalized = normalizeRelationshipUsername(username);
   if (!normalized) throw new DomainValidationError('relationship event username is required.');
