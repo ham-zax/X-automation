@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodically backfill observed X post/reply analytics for Luna learning
+
+[Timer]
+OnCalendar=*-*-* 09:15:00 Asia/Kolkata
+OnCalendar=*-*-* 15:15:00 Asia/Kolkata
+OnCalendar=*-*-* 22:15:00 Asia/Kolkata
+RandomizedDelaySec=5min
+Persistent=false
+Unit=x-test-growth-analytics.service
+
+[Install]
+WantedBy=timers.target

@@ -34,6 +34,8 @@ import {
 } from './learning.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { evaluateActivity } from './growth_activity_policy.js';
+import { DEFAULT_GROWTH_POLICY, validateGrowthPolicy, mergeGrowthPolicy, audienceTier } from './growth_product_policy.js';
+import { analyzeGrowthPerformance } from './growth_performance_learning.js';
 import {
   CANDIDATE_CLASSIFIER_VERSION,
   GROWTH_FOCUS_OBJECTIVES,
@@ -1617,10 +1619,27 @@ function observedActivityMomentum(candidateKeyText) {
   return { momentum: candidates[0] || null, postCreatedAt: candidate.timestamp };
 }
 
-function requireAutonomousActivity({ action, now, runId, editorial, candidateKey }) {
+function requireAutonomousActivity({ action, now, runId, editorial, candidateKey, approvedEditorial = false }) {
   if (!runId) return;
+  const policy = getGrowthProductPolicy();
+  if (!policy.lanes[action]?.enabled) throw new DomainValidationError(`Autonomous ${action} disabled in product settings.`);
+  const dailyLimit = policy.lanes[action]?.dailyLimit;
+  if (dailyLimit != null) {
+    // Advisory count becomes authoritative only within the same transaction as
+    // the claim. Count confirmed, reserved and unresolved mutation boundaries;
+    // an uncertain publication must not free a daily slot.
+    const row = db.prepare(`SELECT COUNT(*) AS total FROM publication_attempts
+      WHERE pipeline=? AND created_at>=?
+        AND state IN ('claimed','send_started','investigating','confirmed_published','closed_unresolved')`)
+      .get(action, now-86_400_000);
+    if (Number(row.total) >= dailyLimit) throw new DomainValidationError(`Configured ${action} daily maximum reached (${dailyLimit}).`);
+  }
   const observed = observedActivityMomentum(candidateKey);
-  const decision = evaluateActivity({ action, now, editorial,
+  const account = getPerformanceSnapshot(1).account;
+  const fresh = account && now - Number(account.captured_at || 0) <= 14 * 86_400_000;
+  const audience = audienceTier(fresh ? Number(account.followers) : NaN, policy);
+  const decision = evaluateActivity({ action: approvedEditorial ? 'reply' : action,
+    now, editorial, policy, audienceSelectivity: audience.selectivity,
     ...observed, runBound: true });
   if (!decision.allowed) throw new DomainValidationError(`Autonomous ${action} blocked by activity policy: ${decision.reason} (${decision.window.localTime} ${decision.window.timeZone}; rest ${decision.window.sleepStart}–${decision.window.sleepEnd}).`);
   return decision;
@@ -1648,7 +1667,8 @@ function insertPublicationAttempt(queueItem, {
   // enforces rest for automated sends, with independent measured urgency.
   const approvalAuthority = authoritySnapshot || queueItem.approvalSnapshot?.authority || {};
   if (approvalAuthority.type !== 'human') {
-    requireAutonomousActivity({ action: 'reply', now: timestamp, runId, candidateKey: queueItem.candidateKey });
+    requireAutonomousActivity({ action: queueItem.pipeline, approvedEditorial: true,
+      now: timestamp, runId, candidateKey: queueItem.candidateKey });
   }
   const candidate = getCandidate(queueItem.candidateKey);
   const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey);
@@ -5707,6 +5727,63 @@ export function setAppState(key, value) {
 
 export function getAppState(key, fallback = null) {
   return db.prepare('SELECT value FROM app_state WHERE key = ?').get(key)?.value ?? fallback;
+}
+
+const GROWTH_PRODUCT_POLICY_KEY = 'growth_product_policy_v1';
+const GROWTH_ANALYSIS_STATE_KEY = 'growth_performance_analysis_v1';
+
+export function getGrowthProductPolicy() {
+  const raw = getAppState(GROWTH_PRODUCT_POLICY_KEY, null);
+  return raw ? validateGrowthPolicy(json(raw, {})) : validateGrowthPolicy(DEFAULT_GROWTH_POLICY);
+}
+
+export function saveGrowthProductPolicy(patch) {
+  const next = mergeGrowthPolicy(getGrowthProductPolicy(), patch);
+  setAppState(GROWTH_PRODUCT_POLICY_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function getGrowthProductPolicyView() {
+  const policy = getGrowthProductPolicy();
+  const account = getPerformanceSnapshot(1).account;
+  const fresh = account && Date.now() - Number(account.captured_at || 0) < 14 * 86_400_000;
+  return {
+    policy,
+    audience: audienceTier(fresh ? Number(account.followers) : NaN, policy),
+    accountMetricsCapturedAt: account?.captured_at || null,
+    personaModel: getActivePersonaForGrowthPolicy(),
+  };
+}
+
+function getActivePersonaForGrowthPolicy() {
+  // Dedicated persona settings are authoritative. This is an explicit pointer,
+  // not a competing copy of voice or private personality details.
+  return { settingsRoute: '/settings/persona', source: 'active_persona_model' };
+}
+
+export function getGrowthPerformanceAnalysis() {
+  return json(getAppState(GROWTH_ANALYSIS_STATE_KEY, null), null);
+}
+
+export function refreshGrowthPerformanceAnalysis({ now = Date.now() } = {}) {
+  const policy = getGrowthProductPolicy();
+  if (!policy.learning.enabled) return { disabled: true, previous: getGrowthPerformanceAnalysis() };
+  const snapshot = getPerformanceSnapshot(500);
+  const attempts = listPublicationAttempts({ states: ['confirmed_published'], limit: 500 });
+  const report = analyzeGrowthPerformance({ metrics: snapshot.posts,
+    attempts, policy, now });
+  return saveGrowthPerformanceAnalysis(report);
+}
+
+export function saveGrowthPerformanceAnalysis(report) {
+  if (!report || typeof report !== 'object' || Array.isArray(report) || !Number.isFinite(report.generatedAt)) {
+    throw new DomainValidationError('Performance analysis requires a generatedAt and a structured report.');
+  }
+  const existing = getGrowthPerformanceAnalysis();
+  const revision = Number(existing?.revision || 0) + 1;
+  const saved = { ...report, revision };
+  setAppState(GROWTH_ANALYSIS_STATE_KEY, JSON.stringify(saved));
+  return saved;
 }
 
 export function getGrowthOperatorMemoryCheckpoint() {

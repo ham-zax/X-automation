@@ -2,6 +2,7 @@ const SETTINGS_ITEMS = [
   ['#/settings/growth-focus', 'Topics & audience', 'Choose the topics to focus on and the people you want to reach.'],
   ['#/settings/persona', 'Voice & preferences', 'Review Hamza’s voice, interests, and recorded opinions.'],
   ['#/settings/growth-operator', 'Agent control', 'Set what the agent may do, then start, pause, or stop its access.'],
+  ['#/settings/publishing', 'Publishing strategy', 'Configure sleep, replies, quotes, originals, content priorities, follower tiers, and learning.'],
   ['#/settings/ai', 'AI connection', 'Connect a provider, choose models, and check usage.'],
   ['#/settings/autonomous-replies', 'Reply automation', 'Choose when the agent may reply and review its decisions.'],
   ['#/settings/advanced', 'Diagnostics', 'Check account health, connection problems, and system details.'],

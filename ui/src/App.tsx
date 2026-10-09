@@ -17,6 +17,7 @@ const Advanced = lazy(() => import('./features/advanced/Advanced').then((module)
 const AISettings = lazy(() => import('./features/settings/AISettings').then((module) => ({ default: module.AISettings })))
 const AutonomousRepliesSettings = lazy(() => import('./features/settings/AutonomousRepliesSettings').then((module) => ({ default: module.AutonomousRepliesSettings })))
 const GrowthOperatorSettings = lazy(() => import('./features/settings/GrowthOperatorSettings').then((module) => ({ default: module.GrowthOperatorSettings })))
+const GrowthPolicySettings = lazy(() => import('./features/settings/GrowthPolicySettings').then((module) => ({ default: module.GrowthPolicySettings })))
 const NicheSettings = lazy(() => import('./features/settings/NicheSettings').then((module) => ({ default: module.NicheSettings })))
 const PersonaSettings = lazy(() => import('./features/settings/PersonaSettings').then((module) => ({ default: module.PersonaSettings })))
 const Settings = lazy(() => import('./features/settings/Settings').then((module) => ({ default: module.Settings })))
@@ -62,6 +63,7 @@ function RouteContent() {
   if (first === 'settings' && second === 'growth-focus') return <NicheSettings />
   if (first === 'settings' && second === 'persona') return <PersonaSettings />
   if (first === 'settings' && second === 'growth-operator') return <GrowthOperatorSettings />
+  if (first === 'settings' && second === 'publishing') return <GrowthPolicySettings />
   if (first === 'settings' && second === 'ai') return <AISettings />
   if (first === 'settings' && second === 'autonomous-replies') return <AutonomousRepliesSettings />
   if (first === 'settings' && second === 'advanced') return <Advanced />

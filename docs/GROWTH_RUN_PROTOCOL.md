@@ -96,6 +96,8 @@ Growth Focus is also evolvable under live delegation. `growth-focus-expand` may 
 
 An unattended adapter should verify the existing Windows X session/account before beginning whenever practical. If authentication is established or changes after begin, resume the same run with updated truthful capabilities rather than starting a second run.
 
+The product configuration is editable through `#/settings/publishing` and inspectable through `growth-policy`. The active persona is configured through Voice & preferences. Treat `scout.pace.lanes`, `scout.pace.audience`, `scout.pace.contentInterests`, and `growth-analysis` as the latest decisions/evidence, including optional owner-set daily limits and measured follower-tier selectivity. Topic preferences favor code snippets, tool releases and useful builder experiments as well as AI breakthroughs, not just generic original posts. See `docs/GROWTH_PRODUCT_POLICY.md`.
+
 ## Scout → act loop
 
 Delegated runs may use a shorter loop for one action at a time. It follows the same run, lease, and attempt rules as the rest of this protocol.

@@ -67,6 +67,10 @@ import {
   deleteAiProfile,
   getAiProfile,
   getAppState,
+  getGrowthProductPolicyView,
+  saveGrowthProductPolicy,
+  getGrowthPerformanceAnalysis,
+  refreshGrowthPerformanceAnalysis,
   getStoreHealth,
   setAppState,
   getAiRuntimeSettings,
@@ -2430,6 +2434,26 @@ export async function handleApi(req, res, requestUrl) {
         return sendSuccess({ action, queueItem: formatQueueItem(queueItem) });
       }
       throw validationError(`Unknown triage action: ${action || '(missing)'}`);
+    }
+
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'growth-policy') {
+      return sendSuccess(getGrowthProductPolicyView());
+    }
+    if (method === 'POST' && segments.length === 1 && segments[0] === 'growth-policy') {
+      const payload = await readBody();
+      if (payload.confirmChange !== true || !payload.policy || typeof payload.policy !== 'object') {
+        throw validationError('Saving a growth policy requires a policy object and confirmChange=true.');
+      }
+      saveGrowthProductPolicy(payload.policy);
+      return sendSuccess(getGrowthProductPolicyView());
+    }
+    if (method === 'GET' && segments.length === 1 && segments[0] === 'growth-analysis') {
+      return sendSuccess(getGrowthPerformanceAnalysis() || { measuredPosts: 0, recommendations: ['Collect observed post analytics to generate evidence-backed recommendations.'] });
+    }
+    if (method === 'POST' && segments.length === 2 && segments[0] === 'growth-analysis' && segments[1] === 'refresh') {
+      const payload = await readBody();
+      if (payload.confirmRefresh !== true) throw validationError('Analysis refresh requires confirmRefresh=true.');
+      return sendSuccess(refreshGrowthPerformanceAnalysis());
     }
 
     if (method === 'GET' && segments.length === 1 && segments[0] === 'growth-operator') {

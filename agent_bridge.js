@@ -89,6 +89,9 @@ import {
   clearAiDefaultProfile,
   clearAiRoleBinding,
   getAccountAnalyticsSnapshot,
+  getGrowthProductPolicyView,
+  getGrowthPerformanceAnalysis,
+  refreshGrowthPerformanceAnalysis,
   getAccountHealthSummary,
   getAiProfile,
   getAppState,
@@ -1940,6 +1943,18 @@ async function main() {
     return;
   }
 
+  if (command === 'growth-policy') {
+    result(getGrowthProductPolicyView());
+    return;
+  }
+  if (command === 'growth-analysis') {
+    result(getGrowthPerformanceAnalysis() || { measuredPosts: 0, recommendations: ['No analysis yet; collect Account Analytics and run growth-analysis-refresh.'] });
+    return;
+  }
+  if (command === 'growth-analysis-refresh') {
+    result(refreshGrowthPerformanceAnalysis());
+    return;
+  }
   if (command === 'analytics-record') {
     if (payload.confirmRecord !== true) throw new Error('analytics-record requires confirmRecord=true for the explicit local measurement write.');
     const capturedAt = payload.capturedAt == null ? Date.now() : Number(payload.capturedAt);
@@ -1951,7 +1966,9 @@ async function main() {
       if (!Array.isArray(payload.posts) || payload.posts.length === 0) throw new Error('analytics-record content requires a non-empty posts array.');
       const posts = payload.posts.map(normalizeAccountAnalyticsPost);
       recordPerformanceSnapshot({ posts, capturedAt, metricSource: 'account_analytics' });
+      const analysis = refreshGrowthPerformanceAnalysis();
       result({
+        analysis: { revision: analysis.revision || null, measuredPosts: analysis.measuredPosts || 0, recommendations: analysis.recommendations || [] },
         recorded: { kind, contentType, capturedAt, count: posts.length },
         analytics: getAccountAnalyticsSnapshot({ limit: Number(payload.limit || Math.max(30, posts.length)), audienceLimit: Number(payload.audienceLimit || 24) }),
       });

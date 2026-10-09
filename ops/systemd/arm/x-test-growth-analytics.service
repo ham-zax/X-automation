@@ -1,0 +1,14 @@
+[Unit]
+Description=XGrowth independent historical engagement analytics collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/repo/x_test
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/node growth_analytics_runner.js
+TimeoutStartSec=35min
+TimeoutStopSec=15s
+KillMode=control-group
+Restart=no

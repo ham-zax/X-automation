@@ -2410,3 +2410,57 @@ export function useViralResearchStop() {
     },
   })
 }
+
+// ---------------------------------------------------------------------------
+// Product-wide growth preferences and measured learning
+// ---------------------------------------------------------------------------
+export interface GrowthProductPolicy {
+  version: number
+  activity: { timeZone: string; sleepStart: string; sleepEnd: string; discoveryIntervalMinutes: number }
+  lanes: Record<'reply'|'quote'|'original', { enabled: boolean; priority: number; editorialMinimum: number; dailyLimit: number|null }>
+  editorial: {
+    interests: Record<'code_demos'|'ai_breakthroughs'|'tool_discoveries'|'builder_lessons'|'industry_commentary', number>
+    voiceGuidance: string
+    prioritizeReplies: boolean
+  }
+  breakthrough: Record<string, number|boolean>
+  audience: { followerExpansion: boolean; milestones: number[]; feedSelectivityByTier: number[] }
+  learning: { enabled: boolean; lookbackDays: number; minimumSample: number; allowWeakEvidenceToAdjustVolume: boolean }
+}
+export interface GrowthPolicyView {
+  policy: GrowthProductPolicy
+  audience: { tier: number; selectivity: number; observedFollowers: number|null }
+  accountMetricsCapturedAt: number|null
+  personaModel: { settingsRoute: string; source: string }
+}
+export interface GrowthPerformanceAnalysis {
+  generatedAt?: number
+  revision?: number
+  measuredPosts: number
+  verifiedStyleGroups?: number
+  recommendations: string[]
+  analyticsFreshness?: number|null
+  provenance?: string
+  groups?: { dimension: string; label: string; sample: number; medianImpressions: number|null; medianLikes: number|null; medianReplies: number|null; medianEngagementRate: number|null; verified: boolean }[]
+  topPosts?: { tweetId: string; pipeline: string; style: string; impressions: number; likes: number; replies: number; reposts: number; engagementRate: number|null; outputUrl: string|null }[]
+}
+export function useGrowthPolicy() {
+  return useQuery({ queryKey: ['growth-policy'], queryFn: () => fetchApi<GrowthPolicyView>('/growth-policy') })
+}
+export function useSaveGrowthPolicy() {
+  const qc = useQueryClient()
+  return useMutation<GrowthPolicyView, Error, Partial<GrowthProductPolicy>>({
+    mutationFn: (policy) => postApi('/growth-policy', { policy, confirmChange: true }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['growth-policy'] }); void qc.invalidateQueries({ queryKey: ['growth-operator'] }) },
+  })
+}
+export function useGrowthAnalysis() {
+  return useQuery({ queryKey: ['growth-analysis'], queryFn: () => fetchApi<GrowthPerformanceAnalysis>('/growth-analysis') })
+}
+export function useRefreshGrowthAnalysis() {
+  const qc = useQueryClient()
+  return useMutation<GrowthPerformanceAnalysis, Error, void>({
+    mutationFn: () => postApi('/growth-analysis/refresh', { confirmRefresh: true }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['growth-analysis'] }) },
+  })
+}

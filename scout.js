@@ -4,6 +4,7 @@
 // readScoutInput gathers that data from the store and performs no writes.
 
 import { activityWindow, observedBreakout } from './growth_activity_policy.js';
+import { classifyContentStyle } from './growth_performance_learning.js';
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
@@ -58,7 +59,8 @@ export function buildScoutCards(input = {}) {
   const now = Number(input.now);
   if (!Number.isFinite(now)) throw new Error('buildScoutCards requires a numeric now.');
   const limit = clampLimit(input.limit);
-  const window = activityWindow({ now, env: input.env || process.env });
+  const policy = input.productPolicy || undefined;
+  const window = activityWindow({ now, env: input.env || process.env, policy });
   const ownHandle = String(input.ownHandle || SCOUT_DEFAULTS.ownHandle).replace(/^@/, '').toLowerCase();
   const attempts = input.attempts || [];
   const candidates = input.candidates || [];
@@ -75,12 +77,20 @@ export function buildScoutCards(input = {}) {
     lastMainFeedAt,
     nextOriginalAt: null, // No timing or daily publication quota: retained for older consumers.
     policy: 'opportunity_led_with_rest_and_breakout_override',
-    activity: window,
+    activity: { ...window,
+      fullDiscoveryIntervalMinutes: policy?.activity?.discoveryIntervalMinutes ?? 5,
+      lastObservationAt: input.lastForYouObservationAt || null,
+    },
+    audience: input.audience || null,
+    lanes: policy?.lanes || null,
+    contentInterests: policy?.editorial?.interests || null,
+    learning: input.analysis ? { revision: input.analysis.revision, generatedAt: input.analysis.generatedAt,
+      recommendations: input.analysis.recommendations || [] } : null,
   };
 
   const replyCards = [];
   for (const candidate of candidates) {
-    if (candidate.source !== 'x') continue;
+    if (candidate.source !== 'x' || policy?.lanes?.reply?.enabled === false) continue;
     const url = candidate.url || candidate.key;
     const { author, tweetId } = parseStatusUrl(url);
     if (!author || !tweetId) continue;
@@ -92,11 +102,21 @@ export function buildScoutCards(input = {}) {
     const nicheScore = Number.isFinite(Number(candidate.nicheScore)) ? Number(candidate.nicheScore) : 0;
     const viewsPerHour = Math.max(0, Number(candidate.viewsPerHour) || 0);
     const engagementsPerHour = Math.max(0, Number(candidate.engagementsPerHour) || 0);
-    const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72 });
+    const contentStyle = classifyContentStyle(candidate.text || '');
+    const interestKey = {
+      code_and_builds: 'code_demos', launch_and_breaking: 'ai_breakthroughs',
+      tools_and_discoveries: 'tool_discoveries',
+      conversation_questions: 'builder_lessons',
+      builder_notes_and_opinions: 'builder_lessons',
+    }[contentStyle];
+    const topicWeight = policy?.editorial?.interests?.[interestKey] ?? 50;
+    const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72 })
+      + (topicWeight - 50) / 25;
     replyCards.push({
       tier: 'T1',
       action: 'reply', // Default transport; the operator can choose quote after reading context.
-      eligibleActions: ['reply', 'quote'],
+      eligibleActions: policy?.lanes?.quote?.enabled === false ? ['reply'] : ['reply', 'quote'],
+      contentStyle,
       urgent: candidate.urgent || null,
       candidateKey: candidate.key,
       url,
@@ -144,7 +164,7 @@ export function buildScoutCards(input = {}) {
     .sort((a, b) => Number(b.score) - Number(a.score))
     .slice(0, SCOUT_DEFAULTS.inspirationLimit)
     .map((item) => ({ url: item.url, title: item.title }));
-  cards.push({
+  if (policy?.lanes?.original?.enabled !== false) cards.push({
     tier: 'T2',
     action: 'original',
     candidateKey: null,
@@ -160,6 +180,10 @@ export function buildScoutCards(input = {}) {
         : 'Independent original editorial review, NOT a posting task. Prefer replies. Only publish when a timely first-hand insight, specific reader benefit, distinct angle and verified sources make it worth space on a small personal timeline. Otherwise skip without drafting. No quota.',
       inspiration,
       requiresEditorialEvidence: true,
+      audienceSelectivity: input.audience?.selectivity ?? 100,
+      editorialMinimum: policy?.lanes?.original?.editorialMinimum ?? 80,
+      contentGuidance: policy?.editorial?.voiceGuidance || null,
+      learningRecommendations: input.analysis?.recommendations || [],
       emergencyOnly: window.rest,
       recentMainFeedAt: lastMainFeedAt,
     },
@@ -172,6 +196,10 @@ export function buildScoutCards(input = {}) {
 // Gathers buildScoutCards input from the store. Read-only: no inserts, updates or sends.
 export function readScoutInput(store, { now = Date.now() } = {}) {
   const ownHandle = String(process.env.X_ACCOUNT || SCOUT_DEFAULTS.ownHandle).replace(/^@/, '');
+  const productPolicy = store.getGrowthProductPolicy();
+  const audience = store.getGrowthProductPolicyView().audience;
+  const analysis = store.getGrowthPerformanceAnalysis();
+  const lastForYouObservationAt = store.getDiscoverSnapshot('x_for_you').fetchedAt;
   const candidates = store.listCandidates({ source: 'x', sort: 'recent', limit: SCOUT_DEFAULTS.candidateReadLimit })
     .map((candidate) => {
       const url = candidate.url || candidate.key;
@@ -200,7 +228,7 @@ export function readScoutInput(store, { now = Date.now() } = {}) {
           const streams = ['x_for_you', 'x_creator_latest'];
           const observations = streams.map((kind) => store.getSourceMomentum(candidate.key, kind))
             .filter((entry) => entry.current).sort((a, b) => b.current.observedAt - a.current.observedAt);
-          return observedBreakout({ momentum: observations[0], postCreatedAt: candidate.timestamp, now });
+          return observedBreakout({ momentum: observations[0], postCreatedAt: candidate.timestamp, now, policy: productPolicy });
         })(),
       };
     });
@@ -222,5 +250,6 @@ export function readScoutInput(store, { now = Date.now() } = {}) {
     targetUrl: a.targetUrl,
   }));
 
-  return { now, ownHandle, candidates, inspirationCandidates, attempts };
+  return { now, ownHandle, candidates, inspirationCandidates, attempts,
+    productPolicy, audience, analysis, lastForYouObservationAt };
 }
