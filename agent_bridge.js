@@ -82,7 +82,6 @@ import {
   acceptLearnedRule,
   assignExperimentVariant,
   candidateKey,
-  ActSpacingBlockedError,
   claimActPublication,
   claimAutonomousReplyDecision,
   claimQueueItemForPublication,
@@ -1732,23 +1731,16 @@ async function main() {
       }
     }
     const intentUrl = actModule.buildIntentUrl(validated);
-    let claim;
-    try {
-      claim = claimActPublication({
-        action: validated.action,
-        text: validated.text,
-        targetTweetId: validated.targetTweetId,
-        targetUrl: validated.targetUrl,
-        targetUsername: author,
-        candidateKey: validated.candidateKey || card.cardId || null,
-        runId: payload.runId || null,
-        claimHolder: String(payload.sessionId || 'act_bridge'),
-      });
-    } catch (error) {
-      if (!(error instanceof ActSpacingBlockedError)) throw error;
-      result({ status: 'spacing_blocked', ...error.refusal, action: validated.action });
-      return;
-    }
+    const claim = claimActPublication({
+      action: validated.action,
+      text: validated.text,
+      targetTweetId: validated.targetTweetId,
+      targetUrl: validated.targetUrl,
+      targetUsername: author,
+      candidateKey: validated.candidateKey || card.cardId || null,
+      runId: payload.runId || null,
+      claimHolder: String(payload.sessionId || 'act_bridge'),
+    });
     const drive = await actModule.driveBrowserSend({
       intentUrl,
       expectedText: validated.text,

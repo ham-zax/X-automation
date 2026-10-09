@@ -105,7 +105,7 @@ printf '%s\n' '{"limit":10}' | npm run agent -- scout
 printf '%s\n' '{"action":"reply","text":"<text>","targetTweetId":"<id>","candidateKey":"<key>","runId":"<run-id>","sessionId":"<session>"}' | npm run agent -- act
 ```
 
-`scout` is read-only. Its `pace` block reports confirmed replies in the last 24 hours against the floor (15) and target (20); when behind, the niche and velocity floors relax. Its `cards` are: a T0 mentions check first; at most one T2 original when the last original is at least 90 minutes old, the main feed is free, and fewer than four originals were posted in 24 hours; then T1 reply cards ranked by velocity, niche, and freshness, with at most one quote of a breakout post whose author has not been replied to in 24 hours.
+`scout` is read-only and opportunity-led. Its `pace` fields describe observed publication counts and recent main-feed activity; these are not action limits, daily targets, or timing gates. Its `cards` are: T0 mentions first, a T2 original-writing idea independent of reply/quote opportunities, then up to one read batch of ranked T1 source conversations. Every T1 card has `eligibleActions: ["reply", "quote"]`: Luna checks the full post/context and chooses a purposeful direct Reply, a genuinely additive Quote for its own audience, or a skip. Measured reach, relevance, momentum, tier and age are **priority evidence**, not minimum thresholds or account categories. The page size controls how many cards are read at once; it does not cap how many distinct worthwhile replies can be published across re-reads/runs.
 
 Before drafting a reply/quote, the agent may call the read-only
 `act-target-status` command with `{"targetTweetId":"<source tweet ID>",
@@ -119,7 +119,7 @@ control the public mutation.
 
 The outcomes are `confirmed_published`, `confirmed_not_sent`, or `closed_unresolved`. A confirmed send records the candidate action and relationship event inside `act`. A `closed_unresolved` result is never retried; the exact action stays duplicate-fenced.
 
-Main-feed spacing is applied when `scout` chooses cards. `act` re-checks it atomically at claim time and returns `spacing_blocked` without writing anything, so a refused act leaves no attempt or queue row.
+No numerical original/quote/reply quota or fixed 30/90-minute spacing is imposed by `scout`, `act`, or the main-feed scheduler. Separate content merits, current source/context, active delegation, run resource/time ceilings and atomic duplicate fencing decide what can proceed. The bounded run mutation ceiling is for lease/recovery safety, **not** an account posting cadence: a subsequent run may consider additional worthwhile distinct sources.
 
 ## Personalized For You sensing
 

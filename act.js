@@ -1,7 +1,5 @@
 import { whBrowserTransport } from './ops/browser_publish_transport.js';
-import { MAIN_FEED_SPACING_MINUTES, ORIGINAL_SPACING_MINUTES } from './scheduler.js';
 
-const MINUTE_MS = 60_000;
 export const ACT_ACTIONS = Object.freeze(['reply', 'quote', 'original']);
 export const ACT_MAX_TEXT_LEN = 280;
 const TWEET_ID_RE = /^\d{5,25}$/;
@@ -83,39 +81,6 @@ export function checkAttributionNeedsRewrite(text, { action = '', sourceText = '
     }
   }
   return null;
-}
-
-function latestPublishedAt(posts) {
-  const times = posts.map((post) => Number(post?.publishedAt)).filter((at) => Number.isFinite(at) && at > 0);
-  return times.length ? Math.max(...times) : null;
-}
-
-// Owner rule (2026-10-08): >= 90 min between Originals, >= 30 min between any two main-feed posts. Replies have no spacing.
-// recentPosts are published main-feed rows (store listRecentMainFeedPublications); only publishedAt and pipeline are read.
-// Returns null when the action may proceed, else the refusal with the gate that holds longest.
-export function checkMainFeedSpacing({ action = '', recentPosts = [], now = Date.now() } = {}) {
-  const kind = String(action || '').trim().toLowerCase();
-  if (kind !== 'original' && kind !== 'quote') return null;
-  const mainFeedAt = latestPublishedAt(recentPosts);
-  const originalAt = latestPublishedAt(recentPosts.filter((post) => post?.pipeline === 'original'));
-  const gates = [];
-  if (mainFeedAt != null) {
-    gates.push({
-      reason: 'main_feed_spacing',
-      detail: `Owner rule: ${MAIN_FEED_SPACING_MINUTES} min between main-feed posts; the last main-feed post was published at ${new Date(mainFeedAt).toISOString()}.`,
-      allowedAtMs: mainFeedAt + MAIN_FEED_SPACING_MINUTES * MINUTE_MS,
-    });
-  }
-  if (kind === 'original' && originalAt != null) {
-    gates.push({
-      reason: 'original_spacing',
-      detail: `Owner rule: ${ORIGINAL_SPACING_MINUTES} min between Originals; the last Original was published at ${new Date(originalAt).toISOString()}.`,
-      allowedAtMs: originalAt + ORIGINAL_SPACING_MINUTES * MINUTE_MS,
-    });
-  }
-  const blocking = gates.filter((gate) => gate.allowedAtMs > now).sort((a, b) => b.allowedAtMs - a.allowedAtMs)[0];
-  if (!blocking) return null;
-  return { reason: blocking.reason, detail: blocking.detail, allowedAtMs: blocking.allowedAtMs };
 }
 
 export function validateActInput(input = {}) {

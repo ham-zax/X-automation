@@ -1,9 +1,6 @@
 import { applyAcceptedLearnedRules } from './learning.js';
 
 const HOUR_MS = 3_600_000;
-const MINUTE_MS = 60_000;
-export const ORIGINAL_SPACING_MINUTES = 90;
-export const MAIN_FEED_SPACING_MINUTES = 30;
 const MAIN_FEED_LANES = new Set(['main', 'main_feed']);
 const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
 const AUTOMATED_MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'thread', 'repost']);
@@ -12,22 +9,10 @@ const SEMANTIC_CONFLICT_THRESHOLD = 0.50;
 
 export const SCHEDULER_EMPIRICAL_ASSUMPTIONS = Object.freeze([
   Object.freeze({
-    code: 'ORIGINAL_SPACING',
+    code: 'OPPORTUNITY_LED_CADENCE',
     classification: 'EMPIRICAL_VARIABLE',
-    minutes: ORIGINAL_SPACING_MINUTES,
-    note: 'Owner-set coverage preference (2026-10-08) between Originals. Not an X platform rule or enforcement threshold.',
-  }),
-  Object.freeze({
-    code: 'MAIN_FEED_SPACING',
-    classification: 'EMPIRICAL_VARIABLE',
-    minutes: MAIN_FEED_SPACING_MINUTES,
-    note: 'Owner-set coverage preference (2026-10-08) between any two main-feed posts. Not an X platform rule or enforcement threshold.',
-  }),
-  Object.freeze({
-    code: 'VIRAL_HARD_FLOOR',
-    classification: 'EMPIRICAL_VARIABLE',
-    hours: null,
-    note: 'No hard minimum interval is inferred for approved viral content with short shelf-life.',
+    minutes: null,
+    note: 'Publishing timing follows each distinct post and the editorial evidence, not a fixed original/quote/reply interval or daily quota.',
   }),
 ]);
 
@@ -157,15 +142,6 @@ function topicSet(item) {
 
 function stableKey(item) {
   return String(item?.id ?? item?.candidateKey ?? item?.candidate_key ?? item?.key ?? '');
-}
-
-function isOriginal(post) {
-  return String(post?.pipeline || '') === 'original';
-}
-
-function pairSpacingMs(item, previousPost = null) {
-  const minutes = isOriginal(item) && isOriginal(previousPost) ? ORIGINAL_SPACING_MINUTES : MAIN_FEED_SPACING_MINUTES;
-  return minutes * MINUTE_MS;
 }
 
 function latestPublishedPost(recentPosts = [], lastMainFeedPostAt = null) {
@@ -371,18 +347,11 @@ export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
   });
 
   const strongest = matches[0] || null;
-  if (!strongest) return { conflict: false, delay: false, intentionalContinuation, matches: [] };
+  if (!strongest) return { conflict: false, delay: false, needsDistinctAngle: false, intentionalContinuation, matches: [] };
 
   const blockingMatches = matches.filter((match) => match.recentPriority == null || currentPriority <= match.recentPriority);
-  const delay = !intentionalContinuation && blockingMatches.length > 0;
-  let delayUntil = null;
-  if (delay) {
-    for (const match of blockingMatches) {
-      if (match.publishedAt == null) continue;
-      const candidateDelay = match.publishedAt + pairSpacingMs(item, match.recent);
-      delayUntil = delayUntil == null ? candidateDelay : Math.max(delayUntil, candidateDelay);
-    }
-  }
+  // Content similarity calls for a distinct idea, not a clock delay.
+  const needsDistinctAngle = !intentionalContinuation && blockingMatches.length > 0;
   const controlling = (blockingMatches.length ? blockingMatches : matches)
     .slice()
     .sort((a, b) => {
@@ -395,8 +364,9 @@ export function evaluateSemanticConflict(item, recentPosts = [], context = {}) {
 
   return {
     conflict: true,
-    delay,
-    delayUntil,
+    delay: false,
+    delayUntil: null,
+    needsDistinctAngle,
     intentionalContinuation,
     currentPriority,
     strongest: {
@@ -438,8 +408,9 @@ export function recommendMainFeedSchedule(item, context = {}) {
       code: 'SEMANTIC_OVERLAP',
       message: `High semantic/topic overlap detected with recent item ${semantic.strongest.recentKey || 'unknown'}.`,
       ...semantic.strongest,
-      delayRecommended: semantic.delay,
-      delayUntil: semantic.delayUntil,
+      delayRecommended: false,
+      delayUntil: null,
+      needsDistinctAngle: semantic.needsDistinctAngle,
       intentionalContinuation: semantic.intentionalContinuation,
     });
   }
@@ -496,55 +467,17 @@ export function recommendMainFeedSchedule(item, context = {}) {
   }
 
   const latest = latestPublishedPost(context.recentPosts || [], context.lastMainFeedPostAt ?? context.last_main_feed_post_at);
-  const latestOriginal = latestPublishedPost((context.recentPosts || []).filter(isOriginal));
-  const spacingGates = [];
-  if (latest.publishedAt != null) spacingGates.push(latest.publishedAt + MAIN_FEED_SPACING_MINUTES * MINUTE_MS);
-  if (isOriginal(item) && latestOriginal.publishedAt != null) spacingGates.push(latestOriginal.publishedAt + ORIGINAL_SPACING_MINUTES * MINUTE_MS);
-  let recommendedAt = Math.max(now, ...spacingGates);
-
-  if (spacingGates.length && recommendedAt > now) {
-    const originalClause = isOriginal(item) ? `, and ${ORIGINAL_SPACING_MINUTES} min after the previous Original` : '';
-    addIssue(warnings, 'COVERAGE_SPACING', `Main-feed coverage spacing suggests waiting until ${new Date(recommendedAt).toISOString()}: ${MAIN_FEED_SPACING_MINUTES} min after the previous main-feed post${originalClause}.`);
-  }
+  let recommendedAt = now;
   if (latest.post?.accelerating === true || latest.post?.isAccelerating === true) {
-    addIssue(warnings, 'PREVIOUS_POST_ACCELERATING', 'The most recent supplied main-feed post is still accelerating; spacing remains an editorial coverage preference.');
-  }
-
-  const viralPreemption = urgency === 'viral'
-    && (missionBreakout(item) || item?.accelerating === true || item?.isAccelerating === true || (expiresAt != null && expiresAt - now <= 3 * HOUR_MS));
-  if (viralPreemption && recommendedAt > now) {
-    recommendedAt = now;
-    addIssue(warnings, 'VIRAL_PREEMPTION', 'Approved viral content with observed breakout momentum or short shelf-life is recommended now despite advisory coverage spacing.');
-    if (latest.publishedAt != null) {
-      addIssue(warnings, 'COVERAGE_OVERLAP', 'Immediate viral publication overlaps the ordinary coverage-spacing window.');
-    }
-  } else if (expiresAt != null && recommendedAt >= expiresAt) {
-    recommendedAt = now;
-    addIssue(warnings, 'EXPIRY_PREEMPTS_SPACING', 'Item would expire before the advisory spacing target, so expiry pressure overrides that timing preference.');
+    addIssue(warnings, 'PREVIOUS_POST_ACCELERATING', 'The previous post is still accelerating; consider whether a new post contributes distinct value. This is not a timing gate.');
   }
 
   if (semantic.conflict) {
     if (semantic.intentionalContinuation) {
       addIssue(warnings, 'INTENTIONAL_CONTINUATION', 'Semantic overlap is retained because the caller explicitly marked this item as an intentional continuation.');
-    } else if (semantic.delay && semantic.delayUntil != null && semantic.delayUntil > recommendedAt) {
-      if (expiresAt != null && semantic.delayUntil >= expiresAt) {
-        addIssue(blockers, 'SEMANTIC_CONFLICT_EXPIRES', 'Delaying the weaker overlapping item past the conflicting post would reach or exceed its expiry.');
-        return {
-          item,
-          eligible: false,
-          recommendedAt: null,
-          priority: priorityBreakdown.priority,
-          priorityBreakdown,
-          reason: 'Blocked: high semantic overlap makes the weaker item stale before a reasonable coverage slot.',
-          blockers,
-          warnings,
-          conflicts,
-          empiricalAssumptions,
-        };
-      }
-      recommendedAt = semantic.delayUntil;
-      addIssue(warnings, 'SEMANTIC_DELAY', 'High semantic/topic overlap delays the weaker or unranked item to reduce self-cannibalization.');
-    } else if (!semantic.delay) {
+    } else if (semantic.needsDistinctAngle) {
+      addIssue(warnings, 'SEMANTIC_OVERLAP_REVIEW', 'High overlap with a recent post: publish only when the content adds a distinct angle; no automatic cooldown can establish originality.');
+    } else {
       addIssue(warnings, 'STRONGER_OVERLAP_ITEM', 'High overlap is visible, but this item has higher supplied/computed editorial priority than the conflicting recent item.');
     }
   }

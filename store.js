@@ -1,5 +1,4 @@
 import { DomainValidationError } from './errors.js';
-import { checkMainFeedSpacing } from './act.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
 import { legacyBehaviorDecision, normalizeBehaviorDecision } from './behavior.js';
@@ -1149,7 +1148,7 @@ export function getCandidate(key) {
   return decodeCandidate(db.prepare('SELECT * FROM candidates WHERE key = ?').get(key));
 }
 
-export function listCandidates({ source, saved, viralOnly = false, withinHours, resolution, limit = 100 } = {}) {
+export function listCandidates({ source, saved, viralOnly = false, withinHours, resolution, sort, limit = 100 } = {}) {
   const where = [];
   const params = [];
   if (source) {
@@ -1190,7 +1189,8 @@ export function listCandidates({ source, saved, viralOnly = false, withinHours, 
         (SELECT MAX(q.published_at) FROM queue_items q WHERE q.candidate_key = candidates.key),
         candidates.updated_at
       ) DESC`
-    : (viralOnly ? 'viral_score DESC, published_at DESC' : 'saved DESC, score DESC, updated_at DESC');
+    : sort === 'recent' ? 'published_at DESC, updated_at DESC'
+      : (viralOnly ? 'viral_score DESC, published_at DESC' : 'saved DESC, score DESC, updated_at DESC');
   const sql = `SELECT * FROM candidates ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY ${orderBy} LIMIT ?`;
   params.push(limit);
@@ -1683,15 +1683,6 @@ export function getBlockingActAttemptForTarget(targetTweetId) {
     ORDER BY id DESC LIMIT 1`).get(id));
 }
 
-// Thrown inside claimActPublication's transaction so the rollback removes every write made before the check.
-export class ActSpacingBlockedError extends DomainValidationError {
-  constructor(refusal) {
-    super(refusal.detail, { code: 'spacing_blocked' });
-    this.name = 'ActSpacingBlockedError';
-    this.refusal = refusal;
-  }
-}
-
 export function claimActPublication({
   action,
   text,
@@ -1800,8 +1791,6 @@ export function claimActPublication({
       }
     }
     assertPublicationRunCapacity(runId, holder, timestamp);
-    const spacing = checkMainFeedSpacing({ action: pipeline, recentPosts: listRecentMainFeedPublications({ limit: 20 }), now: timestamp });
-    if (spacing) throw new ActSpacingBlockedError(spacing);
     const attemptId = randomUUID();
     db.prepare(`INSERT INTO publication_attempts(
       attempt_id, queue_item_id, candidate_key, run_id, lane, pipeline, action_type, action_fingerprint,

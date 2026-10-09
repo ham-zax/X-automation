@@ -11,7 +11,7 @@ pipeline hid the exit code.
 `growth_agent_runner.js` sends one of two prompts to each unattended pass,
 chosen by `GROWTH_AGENT_MODE`:
 
-- `executor` (default): a compact scout, write, act loop. It runs `scout`,
+- `executor` (default): a compact scout, write, act loop with opportunity-led, independently evaluated Reply/Quote/Original decisions. It runs `scout`,
   handles the T0 mentions check, T1 reply/quote cards and T2 originals, and
   sends each post through `act` with the run ID and session ID. It does not
   embed this document. Both modes embed `docs/GROWTH_CONTEXT_RECOVERY.md` for

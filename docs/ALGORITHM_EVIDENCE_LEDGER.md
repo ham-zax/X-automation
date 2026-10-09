@@ -458,7 +458,7 @@ Measure:
 
 ### Main-feed spacing
 
-The initial 3-6 hour heuristic is superseded as of 2026-10-08: current spacing is about 30 minutes between any two main-feed posts and about 90 minutes between Originals (`scheduler.js`, `scout.js`). The scheduler must still learn from our own outcomes.
+The initial 3-6 hour heuristic was superseded on 2026-10-08 by 30/90-minute intervals. **That interval policy was superseded again on 2026-10-09:** `scheduler.js`, `scout.js` and the delegated `act` claim now impose no numerical publishing cooldown or daily per-lane cap. Recency, observed momentum, semantic overlap and conversions remain empirical diagnostics for determining the value of each distinct publication—not automatic gates. The scheduler must still learn from our own outcomes.
 
 Measure:
 
