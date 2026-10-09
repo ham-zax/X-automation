@@ -3,6 +3,7 @@
 // does not close its page. This lease owns ONLY the page it creates; it never
 // closes pre-existing tabs, the authenticated Chrome process, or other sessions.
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -10,6 +11,24 @@ const TARGET_ID = /^[a-fA-F0-9]{32}$/;
 const PORT = /^\d{2,5}$/;
 const READ_TIMEOUT_MS = 3000;
 const COMMAND_TIMEOUT_MS = 12000;
+const MIN_AVAILABLE_BYTES = 4 * 1024 ** 3;
+// Allow legacy orphan tabs temporarily after the October 9 OOM, while the
+// memory gate and exact ownership checks prevent unbounded new allocations.
+const PAGE_CEILING = 24;
+
+export function assertBrowserResourceBudget({ pageCount, maxPages = PAGE_CEILING, availableBytes }) {
+  if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 64) throw Error('Invalid Chrome tab ceiling');
+  if (pageCount >= maxPages) throw Error(`Shared Chrome already has ${pageCount} pages (limit ${maxPages}); refusing another page`);
+  if (!Number.isFinite(availableBytes) || availableBytes < MIN_AVAILABLE_BYTES) {
+    throw Error(`Shared Chrome preflight requires at least 4 GiB MemAvailable; observed ${Math.floor(availableBytes / (1024 ** 2))} MiB`);
+  }
+}
+
+function availableMemoryBytes() {
+  const match = readFileSync('/proc/meminfo', 'utf8').match(/^MemAvailable:\s+(\d+) kB/m);
+  if (!match) throw Error('Cannot verify Linux MemAvailable before browser allocation');
+  return Number(match[1]) * 1024;
+}
 
 async function chromeJson(port, endpoint) {
   const response = await fetch(`http://127.0.0.1:${port}/json/${endpoint}`, {
@@ -74,7 +93,7 @@ async function closeExactTarget(browserWs, targetId) {
 }
 
 export async function leaseAgentBrowserTab({
-  cli, cdpPort, sessionId, maxPages = 16,
+  cli, cdpPort, sessionId, maxPages = PAGE_CEILING,
 } = {}) {
   const port = String(cdpPort || '');
   if (!PORT.test(port) || Number(port) > 65535) throw new Error('Invalid Chrome CDP port');
@@ -82,9 +101,7 @@ export async function leaseAgentBrowserTab({
     throw new Error('Agent Browser tab lease requires its exact CLI and unique run session ID');
   }
   const before = await snapshot(port);
-  if (before.pages.size >= maxPages) {
-    throw new Error(`Shared Chrome already has ${before.pages.size} pages (limit ${maxPages}); refusing to add another page. Diagnose or reconcile idle tabs before launching Luna.`);
-  }
+  assertBrowserResourceBudget({ pageCount: before.pages.size, maxPages, availableBytes: availableMemoryBytes() });
   let newPageId = '';
   try {
     const { stdout } = await cliCommand(cli, port, sessionId, '--pin-tab', 'tab', 'list', '--json');

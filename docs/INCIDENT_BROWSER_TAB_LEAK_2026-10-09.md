@@ -35,7 +35,7 @@ The runtime contract previously passed a new random `sessionId` for every unatte
 New `ops/agent_browser_session.js`:
 
 1. Reads `/json/version` and `/json/list` via loopback only.
-2. Refuses another session at **16 Chrome page targets**, preventing uncontrolled growth during remaining diagnostics.
+2. Originally refused another session at 16 page targets. After verifying the separate WebHarness provider fix, production's historical baseline remained at 20 owner-ambiguous pages, so the temporary ceiling is now **24 page targets plus a hard 4 GiB minimum Linux MemAvailable**. It never deletes unknown pre-existing tabs.
 3. Calls the installed Agent Browser CLI with `--pin-tab` and a unique run ID.
 4. Requires the new page to be exactly one previously absent `about:blank` CDP target, and verifies that it is the active tab; ambiguous ownership is a fail-closed blocker.
 5. Gives Luna the exact owned page ID, requiring navigation on that tab rather than taking over an existing X tab.
@@ -49,7 +49,7 @@ Only the scheduled Linux Agent Browser path is given this provisioned lease; sep
 
 The above fix closes **the proven one-page-per-new-Agent-Browser-session leak**, not every possible browser leak.
 
-- **WebHarness browser-fast provider** also creates session-specific pages when pinning to a particular external tab, and can retain these pages. The correct follow-up is to implement its own recorded exact-target ownership/cleanup in the WebHarness repository. Do not automatically close unrelated CDP targets based on URL, age, or browser process count.
+- **WebHarness browser-fast provider** pinned-session bootstrap leak was repaired separately in `ham-zax/webharness` commit `7fc9aef`. Provider tests passed 36/36; disposable Chrome full observe/new/close/shutdown returned to its initial page count; a live read-only pinned observe and provider shutdown preserved the 20-page historical baseline unchanged. Historical pages with unproven owners remain untouched. The remaining cleanup is ownership reconciliation, not speculative deletion.
 - Browser UI `click` can open a legitimate new tab; inspect opener relationships and close only if the tab's current run ownership is proven. The new prompt favors `open` navigation within one pinned owned tab.
 - `act.js` composer cleanup is best-effort; instrument failed `tab_close` and implement an exact composer-tab fallback only after verifying the backend and target mapping. Never retry an uncertain publication click.
 - Existing tabs from prior runs are deliberately untouched. They should be reconciled and closed in a controlled maintenance window after confirming no active owners, unsent drafts, or unfinished mutations.
