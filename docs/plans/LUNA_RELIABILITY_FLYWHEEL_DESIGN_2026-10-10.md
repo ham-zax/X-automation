@@ -1,139 +1,156 @@
-# Luna Reliability Flywheel — Design Specification
+# Luna Reliability Flywheel — Revised Design (Oracle Review R1)
 
-**Status:** Proposed architecture; not enabled in production.  
-**Date:** 2026-10-10 (Asia/Kolkata)  
-**Baseline:** XGrowth `5c5e542`; persistent authenticated ARM Chrome CDP 9222; Claive Codex gpt-6-luna.  
-**Review requirement:** Independent Agent R review of a stable implementation candidate **before** merging to `main` or enabling a new execution transport.
+**Status:** Revised after independent architecture review on 2026-10-10; feature branch only, not deployed.
+**Baseline:** `5c5e542` on `main`.
+**Implementation branch:** `feat/luna-reliability-flywheel` (A1 originally `af6ec50`).
+**Integration gate:** Separate independent **implementation** review required before merge; separate permission required for live deployment.
 
-## 1. Problem, evidence, and non-goals
+## 1. Decision and evidence
 
-Luna is successfully publishing but often reports `degraded` because the runner marks any nonzero Claive tool-failure count as degraded. A read-only audit of 20 recent sessions found 78 nonzero command results: 31 relationship profiles absent at lookup time, 12 Chrome target IDs accidentally used as commands, 8 bridge-schema/input errors, 8 stale browser refs, 6 shell quoting failures, 3 SQLite locks, and 10 other causes. This is an observational baseline, **not** a controlled performance benchmark. All 22 examined sessions retrieved the Agent Browser core skill at least once.
+**Design verdict adopted: major redesign of A2–A4; retain and finish A1.** XGrowth already has authoritative delegated Growth Runs, publication claims, social-action ledgers, tab lifecycle, persona, and bounded editorial learning. This project must not create a competing operator or ownership state machine.
 
-Crucially, three traced missing-profile lookups preceded successful replies that *created* the corresponding relationship records. An existing relationship profile is not a prerequisite for engaging a new X account. The existing `relationship-inspect` contract incorrectly makes normal absence a failed CLI command.
+A first read-only audit classified **78 nonzero command results across 20 sessions** (31 missing relationship profiles, 12 wrong browser target syntax, 8 incomplete bridge inputs, 8 stale refs, 6 shell quoting errors, 3 SQLite locks, 10 other). The independent Oracle review used a **different** 20-session sample: 2,043 commands, 56 nonzero, 11 target-as-command failures, 19 missing-profile failures and 7 stale-reference failures. **These samples are not controlled before/after measurements.** They show recurring error classes, not model-specific culpability or a causal improvement.
 
-Goals:
-1. Make read-only relationship discovery tolerate not-yet-tracked people.
-2. Gradually remove free-form shell/JSON/browser grammar from Luna's critical execution path.
-3. Keep raw failures visible while distinguishing policy blocks, absence, operator errors, browser errors, and infrastructure errors.
-4. Capture bounded, evidence-checked operational lessons across Claive sessions.
-5. Analyze historical traces recursively and evaluate prompt revisions **offline**, without access to public X mutation.
-6. Keep the live account, owner preferences, server-owned browser tabs and publication claims safe throughout rollout.
+The leading explanation is **unnecessarily free-form command construction across inconsistent interfaces**, plus the strict relationship lookup treating the expected absence of a new account as failure. Correct documentation alone cannot ensure correct shell argument assembly. `degraded` currently means any reported Claive tool failure; it does not differentiate safety, contract errors or useful completion.
 
-Non-goals: fine-tuning Luna, silently switching browser providers, forcing quotas, editing owner personality, weakening sleep/quality fences, clearing Chrome, reviving `automation.js`, auto-approving code or prompts, or auto-sending after uncertain outcomes.
+## 2. Relationship context: A1 contract
 
-## 2. Existing authority and proposed trust boundaries
+A new X author is **not required** to have a pre-existing relationship. Existing confirmed replies can generate relationship events and materialize their profiles. `relationship-inspect` remains the strict legacy lookup. The new `relationship-context` operation accepts `{"username":" @Example ","limit":20}` and returns:
+
+- Tracked: `{username:"example",tracked:true,status:"tracked",profile:{...},events:[...]}`
+- Untracked: `{username:"example",tracked:false,status:"not_tracked",profile:null,events:[]}`
+
+Normalize by **trimming before** removing the optional `@`, then lowercasing. Enforce a valid X handle (1–15 letters, digits or underscores), integer limit 1–200, reject malformed input. `not_tracked` is not an error, not a low score, and not a reason to avoid meaningful engagement.
+
+**Database nuance:** `readRelationshipContext()` uses `getStoredRelationshipProfile` plus the existing event SELECT and does not refresh/materialize relationship data. But importing `store.js` performs schema initialization under `BEGIN IMMEDIATE`, so the **whole CLI is not a read-only SQLite connection and can fail under a concurrent write lock**. This is documented and covered by isolated tests. Do not add a separate database connection or migration architecture solely to obscure this issue; first measure real contention.
+
+## 3. Owners and trust boundaries
 
 ```text
-User policy / persona / growth delegation
-              |
-         Luna decision maker -- chooses intent, source, text, skip
-              |
-    strict gateway (typed request + preflight)
-         /                     \
-read-only relationship       browser observation/preparation
-context / ordinary bridge    bound to ONE launcher-owned CDP tab
-         \                     /
-       existing Growth OS bridge claims and ledger
-              |
-    ONLY canonical act/send reconciliation
-              |
-        public X mutation (exactly once)
+Owner policy / growth focus / persona
+            |
+      Luna judges what/why
+       /             \
+canonical Growth OS    existing launcher-bound browser observation
+bridge and store         (selected transport; typed if safe)
+       \             /
+      Structured outcomes (additive)
+            |
+  sanitized deterministic evaluation
+            |
+ offline proposed fix / small verified lesson
+            |
+ independent review + explicit promotion
 ```
 
-**Safety:** the gateway never grants a new mutation privilege. Publishing remains the current `act` authority; Follow/Like/Repost remain behind `social-status → claim → start → exact browser action → resolve`. Unknown dispatch is never retryable. The gateway can initially support read-only operations only; adding a social click or any public send is a separate review-gated contract, not a minor enum extension. Chrome CDP is the *existing* authenticated browser; never spawn another browser/profile. The launcher and exact CDP target ownership remain authoritative.
+- **Growth OS bridge** owns relationship records, Account Health, delegation, duplicate/send fences, `act`, and the Follow/Like/Repost `social-claim → social-start → exact action → social-resolve` ledger.
+- **Launcher** (`ops/agent_browser_session.js`) owns the authenticated Chrome browser identity, CDP tab allocation, exact target ID, lifecycle cleanup and resource limits.
+- **Browser interface** transports observation / carefully bounded pre-send preparation; it cannot grant publication authority or choose a foreign target.
+- **Reasoning model** owns source selection, editorial judgment and public wording; it does not own command escaping, session/tab selection, credential handling or execution policy.
+- **Telemetry and learning** observe evidence but have no ability to publish, edit production code, change policy, or approve themselves.
 
-Untrusted inputs: page/DOM/X text, model-generated JSON, generated reflections, trace excerpts, AI reviewer feedback, and suggested new prompts. Treat these as data, never instructions. No scraped social text may change delegated authority or tool allowlists.
+Any new interface must be explicit about whether it is a **convenience** or a **security enforcement boundary**. A helper advertised to Luna is bypassable when the Claive runtime retains unrestricted shell access (`CLAIVE_CODEX_YOLO=1`). Do not claim an enforceable boundary unless actual tool permissions/process isolation enforce it. Growth OS hard gates remain independent.
 
-## 3. Relationship context (first deliverable)
+## 4. Measure first: execution and safety as separate dimensions
 
-Implement `npm run --silent agent -- relationship-context`, consuming stdin:
+Preserve the existing `toolFailures`, `operationalStatus`, Growth Run lifecycle, and publication attempt records. Add **observational** structured events before changing browser transport.
+
+Minimum event record (versioned, sanitized, and attributable to one session/operation):
 
 ```json
-{"username":"@example","limit":20}
+{
+  "schemaVersion": 1,
+  "sessionId": "session-id",
+  "operationId": "bounded-id",
+  "operation": "relationship-context",
+  "transport": "bridge-cli",
+  "outcome": "completed | rejected | failed | unknown",
+  "failureCause": "none | contract_error | stale_reference | database_contention | provider_error | browser_error | unknown",
+  "safetyState": "not_applicable | guard_enforced | permitted | violated | unknown",
+  "dispatchState": "not_applicable | not_dispatched | confirmed | uncertain",
+  "recoveryState": "none | recovered | blocked | unresolved",
+  "toolVersion": "version-string"
+}
 ```
 
-Response when tracked:
-```json
-{"username":"example","tracked":true,"profile":{ "...": "existing profile object" },"events":[],"status":"tracked"}
-```
+Expected `not_tracked` is a successful domain outcome, not an execution exception; a deliberately refused policy violation is `outcome=rejected` with `safetyState=guard_enforced`, even when the agent's attempted action was inappropriate. `uncertain` mutation evidence remains critical regardless of tool exit code. Unknown attribution stays `unknown`; never infer a clean result from missing trace data or convert a refusal into harmless success without evidence.
 
-Response when unknown:
-```json
-{"username":"example","tracked":false,"profile":null,"events":[],"status":"not_tracked"}
-```
+Two distinct top-level diagnostics:
+- **Execution reliability:** valid command rate, preventable contract/grammar errors per 100 relevant calls and per matched run, recovery and cost.
+- **Safety/outcome integrity:** wrong-target attempts, guard enforcement, uncertain sends, verified useful actions, quality/conversion trends.
 
-Normalize account names using the same algorithm as existing store readers (trim, strip leading @, lowercase). **Do not call `getRelationshipProfile()`**: it can persist a refreshed audience-derived profile. Add a dedicated snapshot reader in `store.js` that uses the existing private stored-row reader and event query only. Explicitly reject empty/invalid usernames, out-of-range numeric limits and malformed JSON as invalid requests (do not conceal programming mistakes). Keep `relationship-inspect` behavior unchanged for compatibility. An unknown profile is neither a low TargetScore nor a reason to skip a worthwhile observed conversation; record a relationship event through current owner code only after a confirmed action or verified real interaction. This lookup must be pure read-only and may not fabricate a profile, make a network request, or send.
+If a source trace cannot be reliably tied to the Growth Run, do not force attribution. Log source and sampling limits. Count raw nonzero commands independently from Claive's `Task failures reported` summary; they may be different populations.
 
-Update `docs/GROWTH_CONTEXT_RECOVERY.md`, `docs/AGENT_WORKFLOW.md` and active operator prompt to use the new read-only command for people encountered on X. The old inspect command remains documented as an optional strict lookup for already-known profiles.
+## 5. Browser repair: smallest existing-owner solution
 
-## 4. Typed tool boundary (second deliverable)
+**First evaluate the existing `webharness-mcp` typed `observe/execute` interface** against the *same* existing authenticated browser, current launcher-owned exact CDP target and unchanged publication fencing. If it meets ownership, pre-run and lifecycle requirements, reuse it. Do not invent `operator_tool_contract.js`, a general-purpose gateway or a second lease-file authority just for symmetry.
 
-Introduce a narrow `ops/operator_tool_gateway.js`, invoked via a declared `operator-tool` command/subprocess with one JSON object, never an arbitrary shell command string. The interface should provide:
-- `v:1`, `operation` from a finite allowlist, `runId`, `sessionId`, `args`.
-- Deterministic validation with field-specific machine-readable `error.code` and `retryable` flags. No generated `eval`, templated shell, arbitrary subprocess executable, raw local path, JavaScript injection, or undocumented command alias.
-- `relationship.context` as a read-only pass-through to the canonical bridge owner.
-- Browser observation operations initially: `browser.snapshot`, `browser.navigate` (only https X pages and approved read-only sources), `browser.current_url`, `browser.element_attribute` (fresh ref), `browser.scroll` and `browser.press` only where no consequential mutation or draft loss could occur. Do **not** enable button clicking, posting, approving or publishing through this gateway in the first migration.
-- Idempotent request logging with truncated/redacted arguments, stable categories and sanitized outcomes; no cookies, auth headers, DMs, raw token-bearing URLs or entire message bodies.
-- Fail closed for stale ownership, unknown operation, invalid run/session, CDP identity change, tab mismatch or ambiguous effect. Do not silently open a new tab, reconnect another profile, retry an uncertain browser mutation, or change transport.
+If typed MCP **cannot** bind the launcher's tab securely, add the smallest trusted **observation-only adapter** adjacent to `ops/agent_browser_session.js`, using fixed `spawn/execFile` argv and the launcher-supplied target identity. Initially support only `snapshot`, `get url`, `get attr`; defer navigation, Escape, clicks and all public or draft-state mutations until separately analyzed. `--pin-tab` is a valueless flag; the actual tab is selected only by a documented exact `tab <targetId>` command under launcher control.
 
-Ownership: the launcher currently creates a tab lease in `ops/agent_browser_session.js`. In a later approved milestone, serialize a minimal short-lived lease proof (`sessionId`, `runId`, exact target ID, CDP browser identity, issue/expiry) under private runtime state mode 0600; verify against the live run/lease, current CDP identity and target before *each* gateway browser operation. The model must not choose the target ID. The gateway constructs a fixed argv array, including `--cdp`, `--session`, `--pin-tab`, then selects the **owned** target with the documented `tab <targetId>` command, never treating a target ID as the command after the flag. The gateway must not close unowned pages or terminate persistent Chrome.
+### Pre-run bootstrap sequence (explicitly resolves Oracle F01)
 
-Migration remains OFF by default until an independent review; legacy CLI continues in production in the meantime.
+1. Launcher allocates and pins one X browser tab, records browser WebSocket identity and exact target in its trusted session context.
+2. A **pre-run bootstrap read** (authentication observation only, no public mutation) uses the session/target without a nonexistent Growth Run ID. It may report unverified authentication; it cannot grant action authority.
+3. Once authentication and runtime prerequisites are checked, normal `growth-run-begin` establishes run and lease identity.
+4. Run-bound actions must supply the actual run/lease; any browser restart, target disappearance or ownership mismatch fails closed. Bootstrap identity is **not** a valid authorization to publish.
 
-## 5. Error taxonomy and reporting (third deliverable)
+Do not materialize an extra model-readable `0600` lease file and call it authority when the model shares the same Unix user. All ownership claims must be grounded in launcher-controlled state.
 
-Add a stable, non-destructive `ops/operational_failure_taxonomy.js` classifier. Preserve raw Claive `Task failures reported: N` and existing growth run status; add `failureSummary` with category counts and evidence/sampling reference. Categories:
+Observation is not synonymous with harmlessness: navigation can discard an unsent composer, and Escape can close a draft/dialog. Exclude these from the first typed surface. Do not silently switch transports during an active run or after an uncertain public action.
 
-| Category | Example | Meaning |
-| --- | --- | --- |
-| `expected_absence` | relationship `not_tracked` | Normal read-only outcome; not a failed command |
-| `policy_blocked` | rest-hours guard | Correct safety response; not infra degradation |
-| `contract_error` | missing key, bad JSON, shell quoting | Operator or interface defect |
-| `browser_reference` | stale ref after navigation | Recover with fresh observation, no blind retry |
-| `browser_ownership` | unknown tab/session | Stop/fail closed; potential safety issue |
-| `database_contention` | SQLITE_BUSY | Infrastructure failure requiring trace evidence |
-| `provider_error` | runtime child 429/5xx | Infrastructure/service issue |
-| `uncertain_mutation` | public send outcome unknown | Safety-critical regardless of other counts |
+## 6. Stale references and structured validation
 
-Do not simply subtract errors from `toolFailures` or relabel a run as clean to improve metrics. Initially report raw and categorized diagnostics alongside old `operationalStatus` unchanged. Change the dashboard's semantic health field only after reviewers agree on exact severity rules and data migration. `completed` and `budget_exhausted` remain independent from health.
+Treat stale DOM refs as invalidation of *observation*, not permission to repeat an action. A stale read may request a fresh snapshot and re-resolve the element. Any click/send/like/follow/repost with uncertain dispatch is governed by existing claim/reconciliation fences; no model-driven blind retry. Contract failures need stable field-specific error messages and a single authoritative CLI grammar reference. Do not copy tool schemas into parallel prompts.
 
-## 6. Durable operational memory (fourth deliverable)
+## 7. Modest verified operational learning
 
-Use a separate `ops/operational_lessons.js` owner and versioned bounded JSON file in `~/.local/state/x_test/` (NOT in user-facing persona memories or content-learning `learning.js`).
+**Only after real telemetry and browser fixes are evaluated**, store at most a handful of relevant verified correction notes across sessions (conceptually Reflexion-style episodic memory). A note requires:
+- exact tool/contract fingerprint and context;
+- reproducible failed input and verified successful comparison;
+- counterexample/falsification evidence;
+- trusted human/reviewer approval and expiration/retirement rules;
+- explicit denial of permission to modify owner policy, execution allowlists, publication paths or persona.
 
-Lesson schema: `id`, `errorCode`, `toolVersion`, `scenario`, `rootCause`, `verifiedCorrection`, `evidenceRefs`, `confidence`, `createdAt`, `expiresAt`, `status` (`candidate|verified|retired`) and `reviewer`. A lesson may be injected only when `status=verified` and tool version/context match; cap injected lessons (e.g. 3-5 small rules) and never interpret a lesson as policy authority. Candidates remain inert until approved by a separate trusted process.
+Candidates remain inert. Retire conflicts and version mismatches; never store page text/cookies/auth tokens as instructions. Keep this separate from `learning.js` content-performance learning. Do not claim memory updates model weights.
 
-No automated modification of code, systemd, deployment, privileged settings, browser safety, delegation, owner voice, or acceptance gates. Version bumps, contradictory evidence and tool contract changes retire stale lessons.
+**RLM** is optional long-context analysis of exceptional trace volumes, not a runtime dependency. **GEPA** and prompt evolution remain offline research until a frozen, representative replay corpus and independently adjudicated holdout scores exist. No dedicated recursive-agent subsystem is warranted now.
 
-## 7. Offline recursive trace review / prompt evolution (fifth deliverable)
+## 8. Verification, rollout and rollback
 
-The term RLM here means recursively decomposing **long context** into bounded evidence queries/subcalls; it is not automatic model-weight training. Reflexion-style episodic memory adds linguistic learning from verified feedback; GEPA-style evolution proposes prompt variants and evaluates them on traces.
+**Phase 0:** finish A1 normalization and tests; document startup-lock limitation and canonical relationship contract. First deployable unit may be A1 only after independent implementation review and owner authorization.
 
-Offline review process:
-1. Load redacted, immutable tool events from existing Claive traces using cursor/range selectors rather than stuffing them into one prompt.
-2. Group failures and successes by exact operation, version and causal category; sample both counterexamples and clean trajectories.
-3. For each proposed root cause, require at least one observed failed input, the executable contract, a working comparison and a falsification attempt.
-4. Produce *candidate* lessons and/or prompt diffs, never mutate production.
-5. Evaluate variants on a frozen replay corpus with a holdout set and invariants for publication/lease safety; reject metric gaming.
-6. Send a stable candidate to an independent read-only reviewer. The reviewer cannot author the code being reviewed.
-7. After explicit approval, promote a signed/versioned prompt or verified lesson and monitor; revert if performance or safety worsens.
+**Phase 1:** additive telemetry over the current operator path; classify a frozen mixed sample without losing or double-counting raw events. No change in live status semantics.
 
-Research grounding: Recursive Language Models (arXiv:2512.24601), Reflexion (arXiv:2303.11366), and GEPA (arXiv:2507.19457).
+**Phase 2:** compare existing typed MCP; if ownership fails, minimally adapt CLI observation under launcher control. Prove bootstrap, wrong-tab, stale-target, browser restart and no second profile.
 
-## 8. Reviewable staged rollout
+**Phase 3:** narrow stale-reference/input feedback and safe read recovery.
 
-- **A1** — relationship-context + documentation only. No change to live browser/prod schema, no publication mutation.
-- **A2** — typed read-only gateway and explicit ownership binding, disabled by default. Require reviewer agreement on target ownership and process lifetime before enabling.
-- **A3** — categorized telemetry, inert lessons and offline replay; keep safety authority unchanged.
-- **R1** — independent reviewer examines A1+A2+A3 cohesive candidate and reports all blocking issues. Remediate then R2.
-- **Deployment** — only after approval: enable read-only gateway for one controlled operator, compare to baseline, retain rollback flag, then consider broader adoption. No mutation gateway until a separate security review.
+**Phase 4:** optional versioned reviewed lessons.
 
-Rollback must be configuration-only: disable the new gateway/lesson injection; retain exact publication ledgers and historical events. Do not delete or rewrite existing relationship profiles.
+**Phase 5:** optional offline prompt experiments using frozen/holdout trajectories with content-quality and action-coverage balancing measures.
 
-## 9. Success criteria, risks, and reviewers
+Acceptance targets: zero normal untracked-profile errors; zero ID-as-command construction on evaluated fixtures; no new wrong-target actions or unknown-send retries; under 1 preventable operator error/comparable run as an initial goal; report per-operation exposure, resource/time/cost and useful engagement; no loss of quality or safeguards. A 20-session pilot is exploratory, not evidence of rare-event safety.
 
-Baseline diagnostic: 78 nonzero results / 20 sessions (3.9 per session), not a controlled experiment. Proposed acceptance window: at least 20 comparable completed sessions, fewer than 1 avoidable operator input error/session, zero ID-as-command errors, zero normal missing-profile lookup errors, no increase in uncertain sends, no unauthorized public mutations or wrong-target browser actions, and no account-content quality deterioration. Keep time-to-action, provider cost, valid source coverage and meaningful engagements as balancing metrics.
+Rollback is **one wave at a time**: revert A1 additive command/recipe without deleting relationship records; disable telemetry without altering old `degraded` fields; restore the selected browser interface only at a new clean run boundary; disable lesson injection and revert the pinned prompt version. Never delete or rewrite publication ledgers.
 
-Reviewer must scrutinize: trust boundary between Claive shell and gateway, live lease identity binding, what `--pin-tab` actually protects, subprocess lifecycle cleanup, whether "not tracked" can accidentally be interpreted as "blocked", whether categorization hides errors, safe data retention/redaction, relation to `AGENTS.md` and current Growth OS owner policy, and whether rollback preserves sent-attempt state.
+**Review policy:** The Oracle architecture review is input, **not** implementation approval. A separate independent read-only code review must inspect the stable branch with tests, exact SHAs and all blocking issues before merge. Production service remains on `main` until separately authorized.
 
-**Integration gate:** an independent R1 review with no blocking findings (and R2 if repaired) is required before merge to `main`; separate explicit production rollout permission is required before enabling a new runtime path.
+## Appendix: Oracle findings disposition
+
+| Finding | Resolution / required follow-up |
+| --- | --- |
+| F01 Bootstrap dependency | Resolved **in design** by launcher-bound pre-run auth read without Run ID; Phase 2 must verify real transport. |
+| F02 Gateway bypass | No claim of enforced isolation while broad shell remains exposed; Phase 2 audits actual permissions. |
+| F03 Duplicate ownership | Drop separate persisted lease-proof owner; reuse launcher target and browser identity. |
+| F04 Telemetry late | Move additive telemetry to Phase 1, ahead of browser interface selection. |
+| F05 Unsafe read operations | First typed surface excludes navigation, Escape, clicks and public actions. |
+| F06 Handle normalization | Correct `trim → optional @ removal → lowercase`; isolated tests cover whitespace. |
+| F07 SQLite startup lock | Document `BEGIN IMMEDIATE` and preserve a deterministic isolated writer-lock check; do not pretend CLI is read-only. |
+| F08 Missing tests | Add dedicated isolated `tests/relationship_context.test.mjs` regression tests. |
+| F09 Canonical docs | Update `docs/RELATIONSHIP_INTELLIGENCE.md` with command and startup limitation. |
+| F10 Inadequate lesson evidence | Require failing fixture, working comparison, falsifier, version, approval and retirement; defer feature. |
+| F11 Conflated errors | Add orthogonal outcome / cause / safety / dispatch / recovery fields, preserving raw counters. |
+| F12 Overengineering | Cancel generic gateway, contract and lease-proof modules; optional tiny memory after measurements. |
+| F13 Whitespace hygiene | Remove Markdown trailing metadata spaces and run `git diff --check`. |
+
+**Limit:** A design resolution is not implementation evidence. F01–F05 and F10–F12 remain subject to future specific verification and independent code review.
