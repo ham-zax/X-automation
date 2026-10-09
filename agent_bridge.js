@@ -1738,6 +1738,7 @@ async function main() {
       targetUrl: validated.targetUrl,
       targetUsername: author,
       candidateKey: validated.candidateKey || card.cardId || null,
+      editorial: payload.editorial || null,
       runId: payload.runId || null,
       claimHolder: String(payload.sessionId || 'act_bridge'),
     });

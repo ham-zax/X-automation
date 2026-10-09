@@ -3,6 +3,8 @@
 // buildScoutCards is pure: every input arrives as data; it reads no clock and no DB.
 // readScoutInput gathers that data from the store and performs no writes.
 
+import { activityWindow, observedBreakout } from './growth_activity_policy.js';
+
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 const MENTIONS_URL = 'https://x.com/notifications/mentions';
@@ -56,6 +58,7 @@ export function buildScoutCards(input = {}) {
   const now = Number(input.now);
   if (!Number.isFinite(now)) throw new Error('buildScoutCards requires a numeric now.');
   const limit = clampLimit(input.limit);
+  const window = activityWindow({ now, env: input.env || process.env });
   const ownHandle = String(input.ownHandle || SCOUT_DEFAULTS.ownHandle).replace(/^@/, '').toLowerCase();
   const attempts = input.attempts || [];
   const candidates = input.candidates || [];
@@ -71,7 +74,8 @@ export function buildScoutCards(input = {}) {
     quotesLast24h,
     lastMainFeedAt,
     nextOriginalAt: null, // No timing or daily publication quota: retained for older consumers.
-    policy: 'opportunity_led',
+    policy: 'opportunity_led_with_rest_and_breakout_override',
+    activity: window,
   };
 
   const replyCards = [];
@@ -93,6 +97,7 @@ export function buildScoutCards(input = {}) {
       tier: 'T1',
       action: 'reply', // Default transport; the operator can choose quote after reading context.
       eligibleActions: ['reply', 'quote'],
+      urgent: candidate.urgent || null,
       candidateKey: candidate.key,
       url,
       tweetId,
@@ -111,8 +116,10 @@ export function buildScoutCards(input = {}) {
       reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. Inspect real context and choose reply, quote, or skip; no metric is a publishing threshold.`,
     });
   }
-  replyCards.sort((a, b) => b.score - a.score || a.candidateKey.localeCompare(b.candidateKey));
-  const topReplies = replyCards.slice(0, limit);
+  replyCards.sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))
+    || b.score - a.score || a.candidateKey.localeCompare(b.candidateKey));
+  const topReplies = (window.rest ? replyCards.filter((card) => card.urgent) : replyCards).slice(0, limit);
+  pace.urgentCandidates = replyCards.filter((card) => card.urgent).length;
 
   const cards = [{
     tier: 'T0',
@@ -124,7 +131,9 @@ export function buildScoutCards(input = {}) {
     text: null,
     metrics: null,
     score: null,
-    reason: `Open ${MENTIONS_URL} and reply to new replies to our posts before anything else.`,
+    reason: window.rest
+      ? `Rest hours (${window.localTime} ${window.timeZone}): read mentions for critical breakthroughs only; do not make routine replies.`
+      : `Open ${MENTIONS_URL} and reply to worthwhile new replies to our posts.`,
   }];
 
   // Original work is a separate lane. One editorial idea card per scout read is
@@ -146,8 +155,12 @@ export function buildScoutCards(input = {}) {
     metrics: null,
     score: null,
     reason: {
-      summary: 'Independent original-writing opportunity. Publish only with a distinct verified insight worth putting on the main feed; otherwise skip. No daily or spacing quota.',
+      summary: window.rest
+        ? 'Rest window: no ordinary original. Only a genuinely verified major launch/breakthrough with explicit recent primary-source evidence may interrupt sleep.'
+        : 'Independent original editorial review, NOT a posting task. Prefer replies. Only publish when a timely first-hand insight, specific reader benefit, distinct angle and verified sources make it worth space on a small personal timeline. Otherwise skip without drafting. No quota.',
       inspiration,
+      requiresEditorialEvidence: true,
+      emergencyOnly: window.rest,
       recentMainFeedAt: lastMainFeedAt,
     },
   });
@@ -182,6 +195,13 @@ export function readScoutInput(store, { now = Date.now() } = {}) {
         hasAction: store.listCandidateActions(candidate.key).length > 0,
         dispositionActive: Boolean(store.getCandidateDisposition(candidate.key, { now })?.active),
         blockingAttempt: Boolean(tweetId && store.getBlockingActAttemptForTarget(tweetId)),
+        urgent: (() => {
+          if (!tweetId) return null;
+          const streams = ['x_for_you', 'x_creator_latest'];
+          const observations = streams.map((kind) => store.getSourceMomentum(candidate.key, kind))
+            .filter((entry) => entry.current).sort((a, b) => b.current.observedAt - a.current.observedAt);
+          return observedBreakout({ momentum: observations[0], postCreatedAt: candidate.timestamp, now });
+        })(),
       };
     });
 

@@ -33,6 +33,7 @@ import {
   transitionLearnedRule,
 } from './learning.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { evaluateActivity } from './growth_activity_policy.js';
 import {
   CANDIDATE_CLASSIFIER_VERSION,
   GROWTH_FOCUS_OBJECTIVES,
@@ -1606,6 +1607,25 @@ function assertPublicationRunCapacity(runId, claimHolder, now, { sending = false
   if (sending ? reserved > limit : reserved >= limit) throw new DomainValidationError('Growth Run public mutation ceiling reached.');
 }
 
+function observedActivityMomentum(candidateKeyText) {
+  const key = String(candidateKeyText || '').trim();
+  const candidate = key ? getCandidate(key) : null;
+  if (!candidate || candidate.source !== 'x') return { momentum: null, postCreatedAt: null };
+  const streams = ['x_for_you', 'x_creator_latest'];
+  const candidates = streams.map((stream) => getSourceMomentum(key, stream)).filter((item) => item.current);
+  candidates.sort((a, b) => b.current.observedAt - a.current.observedAt);
+  return { momentum: candidates[0] || null, postCreatedAt: candidate.timestamp };
+}
+
+function requireAutonomousActivity({ action, now, runId, editorial, candidateKey }) {
+  if (!runId) return;
+  const observed = observedActivityMomentum(candidateKey);
+  const decision = evaluateActivity({ action, now, editorial,
+    ...observed, runBound: true });
+  if (!decision.allowed) throw new DomainValidationError(`Autonomous ${action} blocked by activity policy: ${decision.reason} (${decision.window.localTime} ${decision.window.timeZone}; rest ${decision.window.sleepStart}–${decision.window.sleepEnd}).`);
+  return decision;
+}
+
 function insertPublicationAttempt(queueItem, {
   runId = null,
   transport = '',
@@ -1624,6 +1644,12 @@ function insertPublicationAttempt(queueItem, {
   if (!Number.isFinite(timestamp)) throw new DomainValidationError('Publication attempt timestamp must be numeric.');
   if (!PUBLICATION_ATTEMPT_STATE_SET.has(state)) throw new DomainValidationError(`Invalid publication attempt state: ${state}.`);
   assertPublicationRunCapacity(runId, claimHolder, timestamp);
+  // Queue approval already owns editorial quality; the shared claim boundary
+  // enforces rest for automated sends, with independent measured urgency.
+  const approvalAuthority = authoritySnapshot || queueItem.approvalSnapshot?.authority || {};
+  if (approvalAuthority.type !== 'human') {
+    requireAutonomousActivity({ action: 'reply', now: timestamp, runId, candidateKey: queueItem.candidateKey });
+  }
   const candidate = getCandidate(queueItem.candidateKey);
   const draft = queueItem.pipeline === 'repost' ? null : getDraftByCandidate(queueItem.candidateKey);
   const resolvedApprovedContent = approvedContent == null
@@ -1690,6 +1716,7 @@ export function claimActPublication({
   targetUrl = '',
   targetUsername = '',
   candidateKey = null,
+  editorial = null,
   runId = null,
   claimHolder = '',
   now = Date.now(),
@@ -1735,6 +1762,8 @@ export function claimActPublication({
   const approvedContentHash = hashCanonical(body);
 
   return runStoreTransaction(() => {
+    const activityDecision = requireAutonomousActivity({ action: pipeline, now: timestamp, runId,
+      editorial, candidateKey: String(targetUrl || '').trim() || key });
     if (!getCandidate(key)) {
       upsertCandidates([{
         key,
@@ -1812,7 +1841,12 @@ export function claimActPublication({
       approvedContentHash,
       targetId || null,
       targetUrl || null,
-      JSON.stringify({ candidateKey: queueItem.candidateKey, sourceUrl: String(targetUrl || '') }),
+      JSON.stringify({ candidateKey: queueItem.candidateKey, sourceUrl: String(targetUrl || ''),
+        editorial: editorial && typeof editorial === 'object' ? editorial : null,
+        activityDecision: activityDecision ? {
+          reason: activityDecision.reason, urgent: activityDecision.urgent,
+          window: activityDecision.window,
+        } : null }),
       'browser_agent',
       holder,
       'claimed',

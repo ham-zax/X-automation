@@ -119,7 +119,11 @@ control the public mutation.
 
 The outcomes are `confirmed_published`, `confirmed_not_sent`, or `closed_unresolved`. A confirmed send records the candidate action and relationship event inside `act`. A `closed_unresolved` result is never retried; the exact action stays duplicate-fenced.
 
-No numerical original/quote/reply quota or fixed 30/90-minute spacing is imposed by `scout`, `act`, or the main-feed scheduler. Separate content merits, current source/context, active delegation, run resource/time ceilings and atomic duplicate fencing decide what can proceed. The bounded run mutation ceiling is for lease/recovery safety, **not** an account posting cadence: a subsequent run may consider additional worthwhile distinct sources.
+No numerical original/quote/reply quota or fixed 30/90-minute spacing is imposed by `scout`, `act`, or the main-feed scheduler. **Ordinary automated publication** observes an eight-ish-hour owner rest interval, default **01:00–08:30 Asia/Kolkata**, adjustable through `X_GROWTH_OWNER_TIMEZONE`, `X_GROWTH_SLEEP_START`, and `X_GROWTH_SLEEP_END`. Replies are the default interaction during waking hours. Originals and Quotes require independent, source-grounded editorial evidence (`act.editorial`: `whyNow`, `distinctContribution`, `intendedAudience`, `whyNotReply`, `sourceUrls`) and must never be produced merely because scout displays T2. Multiple truly distinct posts may be made during one active conversation/research session, or none: there is no bot-like enforced interval.
+
+**Emergency opportunity override:** rest and ordinary schedule yield immediately to a credible first-hand major release/research breakthrough or independently measured engagement acceleration on a recent post. Measured acceleration uses consecutive `source_observations`, or high combined likes+replies on a post observed while still young: no static viral tier is necessary. A source-led launch emergency requires `act.editorial.urgency` with `kind=verified_major_launch|verified_breakthrough`, actual `verifiedAt`, specific `whatChanged` and `whyImmediate`, and real primary-source `sourceUrls`. The agent must read/verify the exact primary source; self-declared urgency without the required evidence fails. Emergencies **never** bypass fact/source validation, the active lease/delegation, Account Health, near-copy/duplicate fences, uncertain-send recovery or publication verification. The claim transaction is the final authority; read-only scout priority alone never grants a send. Human manual publishing outside a Growth Run is not governed by inferred sleep hours.
+
+The bounded run mutation ceiling is for lease/recovery safety, **not** an account posting cadence: a subsequent run may consider additional worthwhile distinct sources.
 
 ## Personalized For You sensing
 
@@ -264,7 +268,7 @@ selects Pi with its existing model. Stop recurring work
 with `systemctl --user disable --now x-test-growth-agent.timer`; also stop
 `x-test-growth-agent.service` to end an in-flight worker.
 
-The systemd timer wakes the runner roughly every 15 minutes. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
+The systemd timer wakes the runner roughly every 5 minutes for fresher breaking-event discovery. This does not imply 5-minute publishing: the rest/editorial claim policy decides whether any public action is permitted. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
 
 The background `automation.js` service remains separate and must not automate browser/X mutation surfaces. It may continue source refresh, measurement, preparation, and compliant official-X-API work.
 
