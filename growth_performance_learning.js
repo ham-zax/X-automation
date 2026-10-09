@@ -57,20 +57,27 @@ export function analyzeGrowthPerformance({ metrics = [], attempts = [], policy, 
         verified:items.length>=policy.learning.minimumSample});
     }
   }
-  const verified=groups.filter(g=>g.dimension==='style' && g.verified && Number.isFinite(g.medianEngagementRate))
+  const verified=groups.filter(g=>g.dimension==='style' && g.verified
+    && Number.isFinite(g.medianEngagementRate) && g.medianEngagementRate>0
+    && Number.isFinite(g.medianImpressions) && g.medianImpressions>0)
     .sort((a,b)=>b.medianEngagementRate-a.medianEngagementRate);
   const recommendations=[];
-  if (verified.length>=2) {
+  const latestCapturedAt=posts.length?Math.max(...posts.map(p=>p.capturedAt)):null;
+  const analyticsAgeDays=latestCapturedAt==null?null:round((now-latestCapturedAt)/86_400_000);
+  if (analyticsAgeDays==null || analyticsAgeDays>7) {
+    recommendations.push(`Post analytics are ${analyticsAgeDays==null?'unavailable':`${analyticsAgeDays} days old`}; collect recent owned-post impressions and engagement before changing publishing strategy.`);
+  }
+  if (verified.length>=2 && analyticsAgeDays!=null && analyticsAgeDays<=7) {
     recommendations.push(`Observed ${verified[0].label} posts have the strongest median engagement rate (${verified[0].medianEngagementRate}%) across ${verified[0].sample} measured posts. Consider more distinct, source-grounded examples in this style; do not copy winning wording.`);
   } else {
-    recommendations.push('Insufficient comparable measured posts to recommend a stronger content style. Collect fresh Account Analytics instead of inferring virality from a single example.');
+    recommendations.push('No reliable current winning style: enough comparable fresh posts with nonzero engagement have not been observed. Do not overfit a 0% median or a single viral outlier.');
   }
   if (posts.some(p=>p.newFollows!=null)) recommendations.push('Follower-conversion fields are available; prioritize qualifying follows and meaningful conversations over impressions alone.');
   else recommendations.push('Post-level new-follower attribution is not available in the current snapshots. Do not claim that impressions or likes translated into follower growth.');
   const best=posts.filter(p=>p.impressions>0).sort((a,b)=>b.engagement-a.engagement).slice(0,12);
   return {generatedAt:now,lookbackDays:policy.learning.lookbackDays,minimumSample:policy.learning.minimumSample,
     measuredPosts:posts.length,verifiedStyleGroups:verified.length,groups,topPosts:best,
-    recommendations,analyticsFreshness:posts.length?Math.max(...posts.map(p=>p.capturedAt)):null,
+    recommendations,analyticsFreshness:latestCapturedAt,analyticsAgeDays,
     provenance:'stored_post_metrics_only',
     caution:'Style classification is heuristic; small samples and unknown follower attribution do not justify automatic volume increases.'};
 }
