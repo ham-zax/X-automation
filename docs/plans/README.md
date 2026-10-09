@@ -312,6 +312,13 @@ Owns the new cross-system integration front exposed by current prototype review:
 
 This plan preserves Phase 1-6 authority boundaries and the UX/HCI participant-research gates. Backend correctness/provenance work can start before final IA wording is validated; final labels such as `Learn`, Growth Focus wording, and strategy display labels remain research-sensitive.
 
+## Luna Reliability Flywheel — review-gated feature work (October 2026)
+
+- [Design specification](LUNA_RELIABILITY_FLYWHEEL_DESIGN_2026-10-10.md) — documented relationship lookup semantics, read-only typed gateway trust boundary, operational failure taxonomy, verified lessons, offline RLM/GEPA review, and rollback constraints.
+- [Implementation plan](LUNA_RELIABILITY_FLYWHEEL_IMPLEMENTATION_2026-10-10.md) — exact files, contracts, dependency waves, A1 progress and independent third-party review gate.
+
+This work is isolated on branch `feat/luna-reliability-flywheel`; it is **not yet merged or enabled** in the live Luna agent. No new public-mutation path is authorized by these plans.
+
 ## Cross-cutting source-of-truth docs
 
 - [`../PRODUCT_ARCHITECTURE.md`](../PRODUCT_ARCHITECTURE.md) — canonical end-to-end product map, current/planned phase state, final Discover -> Research -> Editorial AI -> Human -> Writer -> Human -> Publish -> Measure -> Learn loop, and AI/human authority boundaries.
