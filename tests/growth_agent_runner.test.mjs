@@ -135,7 +135,7 @@ try {
     assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
     assert.equal(args.includes('--web'), true);
     for (const flag of ['--max-model-steps', '--provider', '--session-id', '--output-schema', '--fallback-models']) assert.equal(args.includes(flag), false);
-    assert.deepEqual(command.env, { CLAIVE_CODEX_YOLO: '1' });
+    assert.deepEqual(command.env, { CLAIVE_CODEX_YOLO: '1', CLAIVE_CODEX_USE_USER_CONFIG: '1' });
   });
   await test('Claive Muse and Pi commands carry no yolo env', () => {
     for (const engine of ['muse', 'pi']) {
@@ -376,7 +376,7 @@ test('default executor prompt is a compact scout and act loop with run and sessi
   const recovery = await readFile(path.join(root, 'docs/GROWTH_CONTEXT_RECOVERY.md'), 'utf8');
   for (const prompt of [executor, legacy]) assert.ok(prompt.includes(recovery));
   for (const text of ['scout', 'act', 'record-disposition', 'runId', 'sessionId `claive-s1`', 'https://x.com/notifications/mentions',
-    'growth-run-begin', 'adapterType `claive_unattended`', 'ceilings.maxPublicMutations=8', 'ceilings.maxDurationMinutes=15']) {
+    'growth-run-begin', 'adapterType `claive_unattended`', 'ceilings.maxPublicMutations=25', 'ceilings.maxDurationMinutes=15']) {
     assert.ok(executor.includes(text), text);
   }
   assert.ok(executor.length < legacy.length);

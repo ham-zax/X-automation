@@ -54,6 +54,18 @@ async function snapshot(port) {
   };
 }
 
+// Chrome acknowledges Target.closeTarget before its target list necessarily
+// reflects the deletion. Poll only the *owned* target, never another page.
+export async function verifyOwnedTabClosed({ browserWs, targetId, readSnapshot, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), attempts = 6 }) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const state = await readSnapshot();
+    if (state.browserWs !== browserWs) return 'browser_restarted';
+    if (!state.pages.has(targetId)) return 'closed';
+    if (attempt + 1 < attempts) await wait(120);
+  }
+  return 'still_present';
+}
+
 async function cliCommand(cli, port, sessionId, ...args) {
   return execFileAsync(cli, ['--cdp', String(port), '--session', sessionId, ...args], {
     timeout: COMMAND_TIMEOUT_MS, maxBuffer: 1024 * 1024,
@@ -153,8 +165,11 @@ export async function leaseAgentBrowserTab({
           warnings.push('Shared Chrome restarted; exact page was not closed in the new browser');
         } else if (current.pages.has(newPageId)) {
           await closeExactTarget(before.browserWs, newPageId);
-          const verified = await snapshot(port);
-          if (verified.pages.has(newPageId)) warnings.push('Owned tab still present after Chrome acknowledged close');
+          const closure = await verifyOwnedTabClosed({
+            browserWs: before.browserWs, targetId: newPageId, readSnapshot: () => snapshot(port),
+          });
+          if (closure === 'browser_restarted') warnings.push('Shared Chrome restarted while verifying owned tab cleanup');
+          else if (closure === 'still_present') warnings.push('Owned tab still present after bounded Chrome target cleanup verification');
         }
         const remaining = [...current.pages.keys()].filter(id => !before.pages.has(id) && id !== newPageId);
         if (remaining.length) warnings.push(`${remaining.length} extra tabs remain from this run or concurrent browser clients; no unowned tabs were closed`);

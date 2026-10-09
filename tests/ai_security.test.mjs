@@ -142,10 +142,13 @@ test('timed out CLI process groups are killed even when they ignore SIGTERM', as
   const pidFile = path.join(dir, 'child.pid');
   const source = `const fs = require('fs'); fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);`;
   const started = Date.now();
-  await assert.rejects(cli.runProcess(process.execPath, ['-e', source], { timeoutMs: 150 }), error => error.code === 'timeout');
+  // Under concurrent suites and an active Chromium renderer load, Node startup can
+  // exceed 150 ms before the child has written its PID. Give startup room while
+  // still asserting the entire SIGTERM -> SIGKILL deadline stays bounded.
+  await assert.rejects(cli.runProcess(process.execPath, ['-e', source], { timeoutMs: 1200 }), error => error.code === 'timeout');
   const pid = Number(await fs.readFile(pidFile, 'utf8'));
   assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH');
-  assert.ok(Date.now() - started < 2500);
+  assert.ok(Date.now() - started < 5000);
 });
 
 

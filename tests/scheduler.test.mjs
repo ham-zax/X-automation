@@ -40,17 +40,16 @@ function coverageWarning(decision) {
   return decision.warnings.find((warning) => warning.code === 'COVERAGE_SPACING') || null;
 }
 
-test('an Original 60 minutes after the last Original is not due', () => {
+test('recent Original does not impose a fixed 90-minute delay', () => {
   const decision = recommendMainFeedSchedule(approvedItem(), {
     now: NOW,
     recentPosts: [publishedPost('original', 60, 'orig-a')],
   });
 
   assert.equal(decision.eligible, true);
-  assert.equal(decision.recommendedAt, NOW + 30 * MINUTE_MS);
-  assert.ok(decision.recommendedAt > NOW);
-  assert.ok(coverageWarning(decision));
-  assert.equal(decision.empiricalAssumptions.find((item) => item.code === 'ORIGINAL_SPACING').minutes, 90);
+  assert.equal(decision.recommendedAt, NOW);
+  assert.equal(coverageWarning(decision), null);
+  assert.ok(decision.empiricalAssumptions.some(item => item.code === 'OPPORTUNITY_LED_CADENCE'));
 });
 
 test('an Original 95 minutes after the last Original is due', () => {
@@ -64,15 +63,14 @@ test('an Original 95 minutes after the last Original is due', () => {
   assert.equal(coverageWarning(decision), null);
 });
 
-test('a repost 20 minutes after the last main-feed post is not due', () => {
+test('Repost is not delayed by an arbitrary gap after Quote', () => {
   const decision = recommendMainFeedSchedule(approvedItem({ pipeline: 'repost' }), {
     now: NOW,
     recentPosts: [publishedPost('quote', 20, 'quote-a')],
   });
 
   assert.equal(decision.eligible, true);
-  assert.equal(decision.recommendedAt, NOW + 10 * MINUTE_MS);
-  assert.ok(decision.recommendedAt > NOW);
+  assert.equal(decision.recommendedAt, NOW);
 });
 
 test('a repost 35 minutes after the last main-feed post is due', () => {
@@ -85,13 +83,13 @@ test('a repost 35 minutes after the last main-feed post is due', () => {
   assert.equal(decision.recommendedAt, NOW);
 });
 
-test('an Original still waits for the 30-minute main-feed gap after a recent Quote', () => {
+test('a recent Quote does not enforce a fixed gap before a distinct Original', () => {
   const decision = recommendMainFeedSchedule(approvedItem(), {
     now: NOW,
     recentPosts: [publishedPost('quote', 20, 'quote-a'), publishedPost('original', 200, 'orig-a')],
   });
 
-  assert.equal(decision.recommendedAt, NOW + 10 * MINUTE_MS);
+  assert.equal(decision.recommendedAt, NOW);
 });
 
 test('replies are not held by main-feed spacing', () => {

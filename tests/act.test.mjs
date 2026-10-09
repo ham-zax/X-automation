@@ -493,96 +493,66 @@ await test('driveBrowserSend sleeps only between scan rounds over non-fresh page
   });
   assert.equal(result.outcome, 'unresolved');
   assert.equal(result.reason, 'no_confirmatory_evidence');
-  // 2500 after tab_new, 4000 after click, then 1500 between the 3 rounds (none after the last).
-  assert.deepEqual(sleeps, [2500, 4000, 1500, 1500]);
+  // 1500 after tab_new, 4000 after click, then 1500 between the 3 scan rounds (none after last).
+  assert.deepEqual(sleeps, [1500, 4000, 1500, 1500]);
   assert.equal(result.evidence.scan.pages.length, 3);
 });
 
-const SPACING_NOW = Date.UTC(2026, 9, 8, 12, 0, 0);
 const MIN = 60_000;
-const mainFeedPost = (pipeline, minutesAgo) => ({ pipeline, publishedAt: SPACING_NOW - minutesAgo * MIN });
 
-await test('checkMainFeedSpacing refuses an Original 60 min after the last Original and passes at 95 min', () => {
-  const refused = act.checkMainFeedSpacing({ action: 'original', recentPosts: [mainFeedPost('original', 60)], now: SPACING_NOW });
-  assert.equal(refused.reason, 'original_spacing');
-  assert.equal(refused.allowedAtMs, SPACING_NOW - 60 * MIN + 90 * MIN);
-  assert.match(refused.detail, /90 min between Originals/);
-  assert.equal(act.checkMainFeedSpacing({ action: 'original', recentPosts: [mainFeedPost('original', 95)], now: SPACING_NOW }), null);
-});
-
-await test('checkMainFeedSpacing refuses a Quote 20 min after a main-feed post and passes at 35 min', () => {
-  const refused = act.checkMainFeedSpacing({ action: 'quote', recentPosts: [mainFeedPost('quote', 20)], now: SPACING_NOW });
-  assert.equal(refused.reason, 'main_feed_spacing');
-  assert.equal(refused.allowedAtMs, SPACING_NOW - 20 * MIN + 30 * MIN);
-  assert.equal(act.checkMainFeedSpacing({ action: 'quote', recentPosts: [mainFeedPost('quote', 35)], now: SPACING_NOW }), null);
-});
-
-await test('checkMainFeedSpacing counts thread and repost as main-feed posts for Originals and Quotes', () => {
-  assert.equal(act.checkMainFeedSpacing({ action: 'quote', recentPosts: [mainFeedPost('repost', 10)], now: SPACING_NOW }).reason, 'main_feed_spacing');
-  assert.equal(act.checkMainFeedSpacing({ action: 'original', recentPosts: [mainFeedPost('thread', 10)], now: SPACING_NOW }).reason, 'main_feed_spacing');
-});
-
-await test('checkMainFeedSpacing reports the gate that holds longest', () => {
-  const refused = act.checkMainFeedSpacing({ action: 'original', recentPosts: [mainFeedPost('original', 20)], now: SPACING_NOW });
-  assert.equal(refused.reason, 'original_spacing');
-  assert.equal(refused.allowedAtMs, SPACING_NOW - 20 * MIN + 90 * MIN);
-});
-
-await test('checkMainFeedSpacing leaves replies unaffected and ignores rows without a publish time', () => {
-  assert.equal(act.checkMainFeedSpacing({ action: 'reply', recentPosts: [mainFeedPost('original', 1)], now: SPACING_NOW }), null);
-  assert.equal(act.checkMainFeedSpacing({ action: 'original', recentPosts: [{ pipeline: 'original', publishedAt: null }], now: SPACING_NOW }), null);
-  assert.equal(act.checkMainFeedSpacing({ action: 'quote', recentPosts: [], now: SPACING_NOW }), null);
-});
-
-// Claims use explicit `now` on a timeline 10h in the past, so rows from later tests cannot fall inside a spacing window.
+// Claims use explicit historical timestamps to verify cadence-free distinct
+// publication claims while retaining the objective claim/duplicate fences.
 const SPACING_TIMELINE = Date.now() - 10 * 60 * MIN;
 const rowCounts = () => ({
   attempts: store.listPublicationAttempts({ limit: 500 }).length,
   queue: store.listQueueItems({ limit: 10_000 }).length,
 });
 
-await test('claimActPublication refuses an Original 60 min after the last Original with no rows written, and allows 95 min', () => {
+await test('claimActPublication permits distinct originals without historical spacing quotas', () => {
   store.startGrowthOperatorDelegation({ actor: 'human' });
   store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
   const first = store.claimActPublication({
-    action: 'original', text: 'First original on the spacing timeline.', candidateKey: 'spacing-original-first',
+    action: 'original', text: 'First original on the historical spacing timeline.', candidateKey: 'spacing-original-first',
     claimHolder: 'test-session', now: SPACING_TIMELINE,
   });
   store.markQueuePublished(first.queueItem.id, '777001', 'https://x.com/ham_zax/status/777001', { publishedAt: SPACING_TIMELINE });
   const before = rowCounts();
-  assert.throws(() => store.claimActPublication({
-    action: 'original', text: 'Second original, one hour after the first.', candidateKey: 'spacing-original-refused',
+  const second = store.claimActPublication({
+    action: 'original', text: 'Second distinct original one hour after the first.', candidateKey: 'spacing-original-second',
     claimHolder: 'test-session', now: SPACING_TIMELINE + 60 * MIN,
-  }), (error) => error instanceof store.ActSpacingBlockedError && error.refusal.reason === 'original_spacing');
-  assert.deepEqual(rowCounts(), before, 'refused original wrote no publication_attempts or queue_items row');
-  assert.equal(store.getCandidate('spacing-original-refused'), null, 'refused original left no candidate row');
-  const allowed = store.claimActPublication({
-    action: 'original', text: 'Third original, 95 min after the first.', candidateKey: 'spacing-original-allowed',
+  });
+  assert.equal(second.attempt.state, 'claimed');
+  assert.equal(rowCounts().attempts, before.attempts + 1);
+  assert.equal(rowCounts().queue, before.queue + 1);
+  store.markQueuePublished(second.queueItem.id, '777003', 'https://x.com/ham_zax/status/777003', { publishedAt: SPACING_TIMELINE + 60 * MIN });
+  const third = store.claimActPublication({
+    action: 'original', text: 'Third distinct original 95 minutes after the first.', candidateKey: 'spacing-original-allowed',
     claimHolder: 'test-session', now: SPACING_TIMELINE + 95 * MIN,
   });
-  assert.equal(allowed.attempt.state, 'claimed');
-  store.markQueuePublished(allowed.queueItem.id, '777002', 'https://x.com/ham_zax/status/777002', { publishedAt: SPACING_TIMELINE + 95 * MIN });
+  assert.equal(third.attempt.state, 'claimed');
+  store.markQueuePublished(third.queueItem.id, '777002', 'https://x.com/ham_zax/status/777002', { publishedAt: SPACING_TIMELINE + 95 * MIN });
 });
 
-await test('claimActPublication refuses a Quote 20 min after a main-feed post with no rows written, and a reply still claims', () => {
+await test('claimActPublication permits a distinct Quote after an Original and independent reply', () => {
   const quoteAt = SPACING_TIMELINE + 115 * MIN;
   const before = rowCounts();
-  assert.throws(() => store.claimActPublication({
-    action: 'quote', text: 'Quoting a source 20 minutes after the last post.', targetTweetId: '666001',
-    targetUrl: 'https://x.com/builder/status/666001', candidateKey: 'spacing-quote-refused',
+  const quote = store.claimActPublication({
+    action: 'quote', text: 'A distinct value-adding Quote twenty minutes after a post.', targetTweetId: '666001',
+    targetUrl: 'https://x.com/builder/status/666001', candidateKey: 'spacing-quote-allowed',
     claimHolder: 'test-session', now: quoteAt,
-  }), (error) => error instanceof store.ActSpacingBlockedError && error.refusal.reason === 'main_feed_spacing');
-  assert.deepEqual(rowCounts(), before, 'refused quote wrote no publication_attempts or queue_items row');
-  assert.equal(store.getCandidate('spacing-quote-refused'), null, 'refused quote left no candidate row');
+  });
+  assert.equal(quote.attempt.state, 'claimed');
+  assert.equal(rowCounts().attempts, before.attempts + 1);
+  store.markQueuePublished(quote.queueItem.id, '777004', 'https://x.com/ham_zax/status/777004', { publishedAt: quoteAt });
   const reply = store.claimActPublication({
-    action: 'reply', text: 'A reply inside the main-feed spacing window still claims.', targetTweetId: '666002',
+    action: 'reply', text: 'A useful reply near a main-feed publication still claims.', targetTweetId: '666002',
     targetUrl: 'https://x.com/builder/status/666002', claimHolder: 'test-session', now: quoteAt,
   });
   assert.equal(reply.attempt.state, 'claimed');
   assert.equal(reply.attempt.pipeline, 'reply');
 });
 
-await test('listRecentMainFeedPublications includes a published act Quote, so the spacing gate sees act posts', async () => {
+await test('listRecentMainFeedPublications retains a published act Quote without creating a spacing gate', async () => {
   const delegation = store.startGrowthOperatorDelegation({ actor: 'human' });
   assert.equal(delegation.state, 'running');
   store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
@@ -597,9 +567,6 @@ await test('listRecentMainFeedPublications includes a published act Quote, so th
   assert.ok(found, 'published act quote is a main-feed publication row');
   assert.equal(found.pipeline, 'quote');
   assert.equal(found.publishedAt, publishedAt);
-  const refused = act.checkMainFeedSpacing({ action: 'original', recentPosts: recent, now: Date.now() });
-  assert.equal(refused.reason, 'main_feed_spacing');
-  assert.equal(refused.allowedAtMs, publishedAt + 30 * MIN);
 });
 
 process.chdir(previousCwd);
