@@ -210,7 +210,7 @@ npm run agent -- relationship-inspect <<<'{"username":"example","limit":20}'
 npm run agent -- relationship-events <<<'{"username":"example","limit":50}'
 ```
 
-The existing profile readers relationship-targets and relationship-inspect may refresh cached audience-derived scores as a side effect. Prefer `relationship-context` for a guaranteed no-write lookup. It returns `{username, tracked, status, profile, events}`; an unseen X handle yields `status: "not_tracked"`, `profile: null`, and `events: []` with a successful exit. The input `username` must be a valid X handle and `limit` must be an integer from 1 through 200. Never create a relationship profile just to make a lookup succeed. Phase 1C records relationship events internally only when it observes a real target response or after an explicitly approved reply is successfully sent.
+The existing profile readers relationship-targets and relationship-inspect may refresh cached audience-derived scores as a side effect. Prefer `relationship-context` when the relationship may not exist. Its SELECT-only reader does not refresh relationship rows, but bridge process startup opens a SQLite migration transaction and can fail under writer contention. It returns `{username, tracked, status, profile, events}`; an unseen X handle yields `status: "not_tracked"`, `profile: null`, and `events: []` with a successful exit. The input `username` must be a valid X handle and `limit` must be an integer from 1 through 200. Never create a relationship profile just to make a lookup succeed. Phase 1C records relationship events internally only when it observes a real target response or after an explicitly approved reply is successfully sent.
 
 ### Engage Next — implemented
 

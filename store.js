@@ -3742,7 +3742,7 @@ function decodeRelationshipProfile(row) {
 }
 
 function normalizeRelationshipUsername(username) {
-  return String(username || '').replace(/^@/, '').trim().toLowerCase();
+  return String(username || '').trim().replace(/^@/, '').toLowerCase();
 }
 
 function getStoredRelationshipProfile(username) {
