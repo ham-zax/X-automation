@@ -54,7 +54,7 @@ function originalCard(result) {
   return result.cards.find((card) => card.tier === 'T2');
 }
 
-test('excludes own, stale, already-acted, blocked, and below-floor candidates', () => {
+test('excludes own, acted, blocked and disposed candidates, not stale or below a score floor', () => {
   const result = build({
     attempts: replies(16),
     candidates: [
@@ -69,8 +69,8 @@ test('excludes own, stale, already-acted, blocked, and below-floor candidates', 
       cand(9),
     ],
   });
-
-  assert.deepEqual(replyCards(result).map((card) => card.author), ['author9', 'author8']);
+  assert.deepEqual(new Set(replyCards(result).map(card => card.author)),
+    new Set(['author2', 'author6', 'author7', 'author8', 'author9']));
 });
 
 test('ranks higher velocity first when other factors match', () => {
@@ -85,36 +85,16 @@ test('ranks higher velocity first when other factors match', () => {
   assert.deepEqual(replyCards(result).map((card) => card.author), ['author10', 'author11']);
 });
 
-test('3 replies in 24h is behind and relaxed, admitting a 600/h candidate that default floors drop', () => {
+test('reply counts are descriptive and do not change discovery eligibility', () => {
   const candidate = cand(20, { viewsPerHour: 600, nicheScore: 30 });
-
-  const relaxed = build({ attempts: replies(3), candidates: [candidate] });
-  assert.equal(relaxed.pace.repliesLast24h, 3);
-  assert.equal(relaxed.pace.behind, true);
-  assert.equal(relaxed.pace.relaxed, true);
-  assert.equal(relaxed.pace.nicheFloor, 25);
-  assert.equal(relaxed.pace.velocityFloor, 500);
-  assert.deepEqual(replyCards(relaxed).map((card) => card.author), ['author20']);
-
-  const defaults = build({ attempts: replies(16), candidates: [candidate] });
-  assert.equal(defaults.pace.relaxed, false);
-  assert.equal(defaults.pace.nicheFloor, 40);
-  assert.equal(defaults.pace.velocityFloor, 2000);
-  assert.deepEqual(replyCards(defaults), []);
-});
-
-test('16 replies uses default floors and is still behind the target of 20', () => {
-  const result = build({ attempts: replies(16) });
-
-  assert.equal(result.pace.repliesLast24h, 16);
-  assert.equal(result.pace.relaxed, false);
-  assert.equal(result.pace.behind, true);
-});
-
-test('20 replies is not behind the target', () => {
-  const result = build({ attempts: replies(20) });
-
-  assert.equal(result.pace.behind, false);
+  for (const count of [3, 16, 20]) {
+    const result = build({ attempts: replies(count), candidates: [candidate] });
+    assert.equal(result.pace.repliesLast24h, count);
+    assert.equal(result.pace.policy, 'opportunity_led_with_rest_and_breakout_override');
+    assert.equal(Object.hasOwn(result.pace, 'behind'), false);
+    assert.equal(Object.hasOwn(result.pace, 'relaxed'), false);
+    assert.deepEqual(replyCards(result).map(card => card.author), ['author20']);
+  }
 });
 
 test('original card is present when the last original was 120 min ago', () => {
@@ -124,30 +104,20 @@ test('original card is present when the last original was 120 min ago', () => {
   assert.equal(result.pace.nextOriginalAt, null);
 });
 
-test('original card is absent at 60 min with nextOriginalAt 90 min after the last original', () => {
-  const result = build({ attempts: [attempt('original', 60)] });
-
-  assert.equal(originalCard(result), undefined);
-  assert.equal(result.pace.nextOriginalAt, NOW + 30 * MIN);
+test('Original editorial review is not suppressed by fixed intervals or a daily count', () => {
+  for (const attempts of [
+    [attempt('original', 60)],
+    [attempt('original', 60), attempt('original', 120), attempt('original', 180), attempt('original', 240)],
+    [attempt('repost', 10)],
+  ]) {
+    const result = build({ attempts });
+    assert.ok(originalCard(result), 'editorial review remains possible');
+    assert.equal(originalCard(result).reason.requiresEditorialEvidence, true);
+    assert.equal(result.pace.nextOriginalAt, null);
+  }
 });
 
-test('original card is absent with 4 originals in 24h, and nextOriginalAt is the 4th-most-recent plus 24h', () => {
-  const result = build({
-    attempts: [attempt('original', 60), attempt('original', 120), attempt('original', 180), attempt('original', 240)],
-  });
-
-  assert.equal(originalCard(result), undefined);
-  assert.equal(result.pace.nextOriginalAt, NOW + 20 * 60 * MIN);
-});
-
-test('original card is absent when the last main-feed post was 10 min ago', () => {
-  const result = build({ attempts: [attempt('repost', 10)] });
-
-  assert.equal(originalCard(result), undefined);
-  assert.equal(result.pace.nextOriginalAt, NOW + 20 * MIN);
-});
-
-test('at most one quote card is emitted per batch', () => {
+test('source cards expose Reply and Quote choices without an automatic Quote quota', () => {
   const result = build({
     attempts: replies(16),
     candidates: [
@@ -156,34 +126,34 @@ test('at most one quote card is emitted per batch', () => {
       cand(32, { viralTier: 'breakout', viewsPerHour: 7000 }),
     ],
   });
-
-  const quotes = replyCards(result).filter((card) => card.action === 'quote');
-  assert.equal(quotes.length, 1);
-  assert.equal(quotes[0].author, 'author30');
+  const cards = replyCards(result);
+  assert.equal(cards.length, 3);
+  assert.equal(cards[0].author, 'author30');
+  for (const card of cards) {
+    assert.equal(card.action, 'reply');
+    assert.deepEqual(card.eligibleActions, ['reply', 'quote']);
+  }
 });
 
-test('quote skips an author we already replied to in 24h', () => {
+test('a prior reply to an author does not unilaterally disqualify a new distinct source', () => {
   const result = build({
-    attempts: [
-      ...replies(16),
-      attempt('reply', 40, { candidateKey: 'https://x.com/author30/status/9' }),
-    ],
+    attempts: [...replies(16), attempt('reply', 40, { candidateKey: 'https://x.com/author30/status/9' })],
     candidates: [
       cand(30, { viralTier: 'breakout', viewsPerHour: 9000 }),
       cand(31, { viralTier: 'breakout', viewsPerHour: 8000 }),
     ],
   });
-
-  const quotes = replyCards(result).filter((card) => card.action === 'quote');
-  assert.equal(quotes.length, 1);
-  assert.equal(quotes[0].author, 'author31');
+  assert.deepEqual(replyCards(result).map(card => card.author), ['author30', 'author31']);
 });
 
-test('no quote card when the last main-feed post was 10 min ago', () => {
+test('recent Quote does not disqualify another distinct source from Reply or Quote', () => {
   const result = build({
     attempts: [...replies(16), attempt('quote', 10)],
     candidates: [cand(40, { viralTier: 'breakout', viewsPerHour: 9000 })],
   });
 
-  assert.equal(replyCards(result).filter((card) => card.action === 'quote').length, 0);
+  const card = replyCards(result)[0];
+  assert.equal(card.author, 'author40');
+  assert.equal(card.action, 'reply');
+  assert.deepEqual(card.eligibleActions, ['reply', 'quote']);
 });
