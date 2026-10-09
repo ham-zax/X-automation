@@ -31,6 +31,48 @@ db.exec(`CREATE TABLE IF NOT EXISTS social_action_attempts (
 );
 CREATE INDEX IF NOT EXISTS idx_social_action_time ON social_action_attempts(action,created_at); `);
 
+// SQLite cannot alter a CHECK constraint in place. Upgrade old follow/like
+// ledgers transactionally, preserving attempt IDs and unresolved send fences.
+function ensureSocialSchemaVersion2() {
+  const sql=String(db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='social_action_attempts'").get()?.sql||'');
+  if(sql.includes("'repost'") && sql.includes('repost_menu_evidence_json')) return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`CREATE TABLE social_action_attempts_migrating_v2 (
+      attempt_id TEXT PRIMARY KEY,
+      action TEXT NOT NULL CHECK(action IN ('follow','like','repost')),
+      target_key TEXT NOT NULL,
+      target_url TEXT NOT NULL,
+      run_id TEXT NOT NULL,
+      session_id TEXT NOT NULL,
+      state TEXT NOT NULL CHECK(state IN ('claimed','mutation_started','repost_confirmation_started','confirmed','confirmed_not_applied','closed_unresolved')),
+      reason TEXT NOT NULL,
+      context_json TEXT NOT NULL,
+      pre_evidence_json TEXT,
+      repost_menu_evidence_json TEXT,
+      post_evidence_json TEXT,
+      created_at INTEGER NOT NULL,
+      started_at INTEGER,
+      finished_at INTEGER,
+      UNIQUE(action,target_key)
+    )`);
+    db.exec(`INSERT INTO social_action_attempts_migrating_v2
+      (attempt_id,action,target_key,target_url,run_id,session_id,state,reason,context_json,
+       pre_evidence_json,post_evidence_json,created_at,started_at,finished_at)
+      SELECT attempt_id,action,target_key,target_url,run_id,session_id,state,reason,context_json,
+       pre_evidence_json,post_evidence_json,created_at,started_at,finished_at
+      FROM social_action_attempts`);
+    db.exec('DROP TABLE social_action_attempts');
+    db.exec('ALTER TABLE social_action_attempts_migrating_v2 RENAME TO social_action_attempts');
+    db.exec('CREATE INDEX idx_social_action_time ON social_action_attempts(action,created_at)');
+    db.exec('COMMIT');
+  } catch(error) {
+    db.exec('ROLLBACK');
+    throw new DomainValidationError(`Social engagement schema migration failed; no action permitted: ${error.message}`);
+  }
+}
+ensureSocialSchemaVersion2();
+
 const validName = (value) => /^[A-Za-z0-9_]{1,15}$/.test(value);
 const validId = (value) => /^\d{5,25}$/.test(value);
 const source = (targetUrl) => String(targetUrl||'').match(/^https:\/\/(?:www\.)?x\.com\/([A-Za-z0-9_]{1,15})\/status\/(\d{5,25})(?:[/?#]|$)/i);
