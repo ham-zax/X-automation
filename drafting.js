@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { evaluateTechDiscoveryEvidence } from './discovery_verification.js';
 import {
   behaviorDecisionRequiresFactualEvidence,
   behaviorDecisionSupportsSocialOnly,
@@ -147,6 +148,7 @@ export function buildWriterPacket({
   draft,
   recentPosts = [],
   evidence = [],
+  sourceCandidates = [],
   profileProof = {},
   editorialRecommendation = null,
   relationship = null,
@@ -197,6 +199,10 @@ export function buildWriterPacket({
     pipeline,
     behavior: behaviorValidation.behavior,
     persona: getPersonaSlice('writer'),
+    discoveryVerification: evaluateTechDiscoveryEvidence({
+      pipeline, candidate, sourceCandidates, evidence,
+      usedEvidenceIds: draft?.editor?.evidenceUsed || [],
+    }),
     patternContext: {
       freshness: getCurrentPatternFreshness(),
       historical: writingStrategy

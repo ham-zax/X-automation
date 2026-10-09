@@ -516,7 +516,14 @@ export interface DiscoveredCandidate {
   timestamp: number | null
   score: number
   saved: boolean
-  sourceStyle: { hookLabels: string[]; styleLabels: string[]; bookmarksPerThousandViews: number | null } | null
+  sourceStyle?: {
+    hookLabels: string[]
+    styleLabels: string[]
+    bookmarksPerThousandViews: number | null
+    mediaType?: 'image' | 'video' | 'mixed' | null
+    classifierVersion?: number
+    observation?: { source: string; observedAt: number } | null
+  } | null
   sourceKinds: string[]
   metrics: Record<string, number | string> & { kind: string }
   niche: {

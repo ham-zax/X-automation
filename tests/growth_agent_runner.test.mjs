@@ -46,6 +46,19 @@ function harness({ minutes = 120, stopReason = 'resource_ceiling_reached', mutat
 }
 
 try {
+  await test('default executor carries verified discovery-to-Original/Thread path and preserves claim fences', () => {
+    const defaultPrompt = runner.buildOperatorPrompt({ runtime: 'claive', sessionId: 'discovery-check', maxDurationMinutes: 20 });
+    const legacyPrompt = runner.buildOperatorPrompt({ mode: 'legacy', runtime: 'claive', sessionId: 'discovery-check', maxDurationMinutes: 20 });
+    for (const needle of ['useful-tech discovery', 'xDiscoveryInspirations', 'primary_supported', 'writer-packet',
+      'mission-approve', 'browser-publish-claim', 'publication-attempt-send-start', 'record-action',
+      'no synonym', 'existing candidate key']) {
+      assert.ok(defaultPrompt.toLowerCase().includes(needle.toLowerCase()), 'Default executor missing: ' + needle);
+    }
+    assert.match(defaultPrompt, /quick act cannot attach media or publish a multi-part Thread/i);
+    assert.match(defaultPrompt, /not another feed/i);
+    assert.doesNotMatch(defaultPrompt, /Only the bridge .*act.* publishes\./i);
+    assert.ok(legacyPrompt.includes('Owner-selected discovery angle'));
+  });
   await test('runtime selection bounds the window and Claude uses explicit noninteractive permissions', () => {
     assert.equal(runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claude' }).windowMinutes, 20);
     for (const value of ['0', '-1', '481', 'NaN']) assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_WINDOW_MINUTES: value }));

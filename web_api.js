@@ -51,7 +51,7 @@ import {
   stopAutonomousReplies,
 } from './autonomous_reply.js';
 import { assessStrategicRelevance, getActiveContentGroups, getAudienceNicheLabels, getNicheLabels, isOpportunityCandidate } from './strategy.js';
-import { extractViralStyleFeatures } from './viral_style.js';
+import { extractViralStyleFeatures, VIRAL_STYLE_CLASSIFIER_VERSION } from './viral_style.js';
 import { getAudienceAiReview, reviewAudienceFollowing, syncAudience, unfollowAudienceUser } from './audience.js';
 import { CONTENT_METRICS, EXPERIMENT_DIMENSIONS, NETWORK_METRICS } from './experiments.js';
 import {
@@ -892,10 +892,16 @@ export function requireEngagementSendAllowed() {
 function formatCandidate(candidate, { includeQueue = true, sourceKind = null, editorialRecommendation = null, objective = null } = {}) {
   const metrics = candidate.metrics || {};
   const niche = candidate.niche || {};
-  const sourceShape = candidate.source === 'x' ? extractViralStyleFeatures({ text: candidate.text || '' }) : null;
-  const observedViews = Number(metrics.views);
-  const observedBookmarks = Number(metrics.bookmarks);
-  const bookmarksPerThousandViews = metrics.views != null && metrics.bookmarks != null
+  const sourceShape = candidate.source === 'x' ? extractViralStyleFeatures({
+    text: candidate.text || '', mediaType: metrics.mediaType,
+  }) : null;
+  // Prefer a matched source-snapshot numerator/denominator. A stale candidate
+  // metric must not be mislabelled with a newer feed-observation timestamp.
+  const sourceMomentum = sourceKind ? getSourceMomentum(candidate.key, sourceKind) : null;
+  const rateMetrics = sourceMomentum?.current ? sourceMomentum.current.metrics : metrics;
+  const observedViews = Number(rateMetrics.views);
+  const observedBookmarks = Number(rateMetrics.bookmarks);
+  const bookmarksPerThousandViews = rateMetrics.views != null && rateMetrics.bookmarks != null
     && Number.isFinite(observedViews) && observedViews > 0 && Number.isFinite(observedBookmarks) && observedBookmarks >= 0
     ? Math.round(observedBookmarks / observedViews * 10_000) / 10 : null;
   let queueItem = includeQueue ? getQueueItemByCandidate(candidate.key) : null;
@@ -918,7 +924,6 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
       }, queueItem)
     : null;
   const completion = actionViews[0] || publishedWithoutAction;
-  const sourceMomentum = sourceKind ? getSourceMomentum(candidate.key, sourceKind) : null;
   return {
     key: candidate.key,
     title: candidate.title || candidate.text?.slice(0, 80) || 'Untitled',
@@ -933,6 +938,11 @@ function formatCandidate(candidate, { includeQueue = true, sourceKind = null, ed
       hookLabels: sourceShape.hookLabels,
       styleLabels: sourceShape.styleLabels,
       bookmarksPerThousandViews,
+      mediaType: ['image', 'video', 'mixed'].includes(metrics.mediaType) ? metrics.mediaType : null,
+      classifierVersion: VIRAL_STYLE_CLASSIFIER_VERSION,
+      observation: sourceMomentum?.current?.observedAt ? {
+        source: sourceKind, observedAt: sourceMomentum.current.observedAt,
+      } : metrics.mediaObservedAt ? { source: 'candidate_media_observation', observedAt: metrics.mediaObservedAt } : null,
     } : null,
     sourceKinds: getCandidateSourceKinds(candidate.key),
     metrics: candidate.source === 'github'

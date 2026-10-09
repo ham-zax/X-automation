@@ -40,8 +40,9 @@ function candidateMetricLine(candidate: DiscoveredCandidate): string {
     const author = metrics.by ? ` · by ${metrics.by}` : ''
     return `${formatNumber(metrics.points as number)} points · ${formatNumber(metrics.comments as number)} comments${author}${metrics.kind === 'hn_legacy' ? ' · historical collected candidate' : ''}`
   }
-  const bookmarks = metrics.bookmarks == null ? '' : ` · ${formatNumber(metrics.bookmarks as number)} bookmarks`
-  return `${formatNumber(metrics.views as number)} views · ${formatNumber(metrics.likes as number)} likes · ${formatNumber(metrics.retweets as number)} reposts · ${formatNumber(metrics.replies as number)} replies${bookmarks}`
+  const observed = (key: string) => metrics[key] == null ? 'unavailable' : formatNumber(metrics[key] as number)
+  const bookmarks = metrics.bookmarks == null ? '' : ` · ${observed('bookmarks')} bookmarks`
+  return `${observed('views')} views · ${observed('likes')} likes · ${observed('retweets')} reposts · ${observed('replies')} replies${bookmarks}`
 }
 
 function sourceMomentumLine(candidate: DiscoveredCandidate): string | null {
@@ -222,8 +223,11 @@ function CandidateDetail({ candidate, index }: { candidate: DiscoveredCandidate;
         || candidate.sourceStyle.bookmarksPerThousandViews != null) && (
         <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
           <strong>Observed hook/format:</strong> {candidate.sourceStyle.hookLabels.filter((label) => label !== 'plain_declarative').join(', ').replaceAll('_', ' ')} · {candidate.sourceStyle.styleLabels.filter((label) => label !== 'general_observation').join(', ').replaceAll('_', ' ')}
-          {candidate.sourceStyle.bookmarksPerThousandViews != null && <span> · {candidate.sourceStyle.bookmarksPerThousandViews} saves / 1,000 views</span>}
-          <span className="block mt-1">Heuristic source structure; not proof of the claim, media rights, or predicted virality.</span>
+          {candidate.sourceStyle.bookmarksPerThousandViews != null && <span> · {candidate.sourceStyle.bookmarksPerThousandViews} observed bookmarks / 1,000 views</span>}
+          {candidate.sourceStyle.mediaType && <span> · observed {candidate.sourceStyle.mediaType}</span>}
+          <span className="block mt-1">Classifier v{candidate.sourceStyle.classifierVersion ?? 'unknown'} · {candidate.sourceStyle.observation
+            ? `${candidate.sourceStyle.observation.source} observed ${formatDateTime(candidate.sourceStyle.observation.observedAt)}`
+            : 'observation time/source unavailable'} · heuristic, not verified truth, media rights, or predicted virality.</span>
         </div>
       )}
       <GrowthFitPanel growthFit={candidate.growthFit} candidateKey={candidate.key} />

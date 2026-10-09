@@ -723,6 +723,9 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
             const url = statusLink?.href || '';
             const id = url.match(/status\/(\d+)/)?.[1];
             const username = authorLink?.getAttribute('href')?.split('/').filter(Boolean)[0];
+            const photo = Boolean(article.querySelector('[data-testid="tweetPhoto"]'));
+            const video = Boolean(article.querySelector('video, [data-testid="videoPlayer"]'));
+            const mediaType = photo && video ? 'mixed' : video ? 'video' : photo ? 'image' : null;
             return {
               id,
               username,
@@ -732,6 +735,7 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
               retweets: metric(groupLabel, 'reposts?'),
               replies: metric(groupLabel, 'repl(?:y|ies)'),
               views: metric(groupLabel, 'views?'),
+              mediaType,
               url,
             };
           }).filter((post) => post.id && post.username && post.text);
@@ -769,6 +773,7 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
       retweets: post.retweets,
       replies: post.replies,
       views: post.views,
+      mediaType: post.mediaType,
       timestamp: post.timestamp ? Date.parse(post.timestamp) : 0,
       url: post.url,
     }));
@@ -782,9 +787,9 @@ async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4)
   }
 }
 
-function selectRotatingXQueryGroups(kind, now = Date.now()) {
+export function selectRotatingXQueryGroups(kind, now = Date.now()) {
   const profile = getActiveNicheProfile();
-  const all = getXSearchQueryGroups();
+  const all = getXSearchQueryGroups({ includeFormatLenses: true });
   const configuredBudget = kind === 'momentum'
     ? profile.discovery?.momentumQueryBudget
     : profile.discovery?.latestQueryBudget;
@@ -793,10 +798,11 @@ function selectRotatingXQueryGroups(kind, now = Date.now()) {
 
   const rotationMinutes = Math.max(1, Number(profile.discovery?.rotationMinutes || 15));
   const slot = Math.floor(Number(now) / (rotationMinutes * 60_000));
-  const formatLenses = all.filter((item) => item.chunk === 'utility_lens' || item.chunk === 'capability_lens');
-  // Reuse an existing query slot for one concrete, useful-discovery search.
-  // Keep the other slots for configured Growth Focus rather than flooding X.
-  const reserved = budget >= 3 && formatLenses.length ? [formatLenses[slot % formatLenses.length]] : [];
+  const formatLenses = all.filter((item) => typeof item.chunk === 'string' && item.chunk.endsWith('_lens'));
+  // Probe one of the existing query slots every other rotation only when
+  // owner-enabled target groups support it. Never expand the fetch budget.
+  const reserved = budget >= 3 && slot % 2 === 0 && formatLenses.length
+    ? [formatLenses[Math.floor(slot / 2) % formatLenses.length]] : [];
   const byTag = new Map();
   for (const group of (reserved.length ? all.filter((item) => !formatLenses.includes(item)) : all)) {
     const bucket = byTag.get(group.tag) || [];
@@ -960,7 +966,8 @@ export function rankXViralPosts(xPosts = []) {
         score,
         timestamp: post.timestamp,
         niche,
-        metrics: { likes, retweets, replies, views },
+        metrics: { likes, retweets, replies, views,
+          ...(post.mediaType ? { mediaType: post.mediaType, mediaObservedAt: Date.now() } : {}) },
         viral: {
           score,
           tier,
@@ -1031,7 +1038,8 @@ export function rankNews({ hnStories = [], ghRepos = [], xPosts = [] }, topics =
         timestamp: post.timestamp,
         score: Math.round(Math.min(100, momentum + niche.score + freshnessScore(post.timestamp))),
         niche,
-        metrics: { likes: post.likes, retweets: post.retweets, replies: post.replies, views: post.views },
+        metrics: { likes: post.likes, retweets: post.retweets, replies: post.replies, views: post.views,
+          ...(post.mediaType ? { mediaType: post.mediaType, mediaObservedAt: Date.now() } : {}) },
       });
     }
   }

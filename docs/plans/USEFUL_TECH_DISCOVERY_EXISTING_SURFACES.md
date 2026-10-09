@@ -22,7 +22,7 @@
 
 **Input/output:** Current configured Growth Focus -> existing X Latest and Momentum query groups -> current source snapshots and Viral Styles seed search.
 
-**Work:** Append two cross-topic search patterns for verified useful software/open-source finds and unexpected computing capabilities. Rotate one variant through the existing query budget when it has capacity. Leave the other query slots available for the configured topics, honoring disabled groups. Do not add a feed or persist an owner-profile override.
+**Work (independently reviewed correction):** Opt operational search into four distinct query lenses: utility/open-source, curated resources, unexpected capabilities, and demonstrable projects. Alternate one existing slot every other rotation when its configured budget is at least three and at least one matching owner-enabled Growth Focus group has nonzero target share. All other slots remain configured-topic opportunities. Historical Viral Styles retains the baseline query set by default via `getXSearchQueryGroups({ includeFormatLenses: false })`; `selectRotatingXQueryGroups` opts in. Historical sweeps must not silently change study cohorts. Search parser support and recall remain live-validation tasks; do not claim they have been verified.
 
 **Acceptance:** The standard discovery loop now searches this class of post in addition to broad technical keywords without additional slots or a new collection service.
 
@@ -32,7 +32,7 @@
 
 **Input/output:** Observed X text/media/metrics -> existing hook/style classification and Scout cards.
 
-**Work:** Identify unexpected-capability hooks, free-resource promises, website/app lists, and visual demonstrations. Show the discovered hook and style as *hypotheses*, not voice instructions. Compute observed bookmarks per 1,000 views only when both measures are present; apply a capped soft selection hint, not a publishing gate.
+**Work (independently reviewed correction):** Identify unexpected-capability hooks, free-resource promises, website/app lists, and visual demonstrations. Separate `first_person_build` from `first_person_test`. Report current classifier version and explicitly label historical style features `recomputed_current`; original samples store the version at collection. Visual-demo classification requires explicitly observed media metadata (For You or X search), never a guess from source text. Bookmarks/1,000 views are **descriptive only**, calculated when both metrics are known; because sensor coverage is uneven, there is **no bookmark-derived ranking bonus**.
 
 **Acceptance:** The CarPlay-like example can be recognized as an unexpected capability, a 50-sites list as a curated resource. Unavailable saves do not become zero, and no structure label authorizes publication.
 
@@ -44,7 +44,7 @@
 
 **Work:** Assess the hook's true promise; name the actual reader payoff, real source, prerequisites, compatibility, cost and limitation, and distinct contribution. Use an Original only when it stands on its own with something new; a Quote if the demo/creator context is material; a real Thread when multiple nonredundant steps justify one; a Repost for unchanged sharing. Include a direct project link when utility requires it. Do not treat a clip or image displayed on X as reusable media. Perform up to two internal passes reviewing hook clarity, truth, originality and persona; existing independent gates remain authoritative.
 
-**Acceptance:** The operator distinguishes inspiration from source truth, keeps Hamza's persona, and does not claim that the quick text-only act path has working image or thread upload.
+**Acceptance (expanded):** The default `executorPrompt`, not merely legacy `operatorPrompt`, recognizes T1 useful discoveries and T2 source-linked `xDiscoveryInspirations` with exact candidate keys, routes source-grounded Originals/Threads through the existing main-feed draft and delegated approval lane, and preserves direct `act` vs queued `browser-publish-claim` authority. `discovery_verification.js` is a pure adapter over **existing** editorial evidence; on autonomous standalone X-tech discoveries it requires a cited, stored `primary_supported` material implementation document (`github_readme`, `github_release`, or explicitly verified official documentation) before mission-agent approval. This is a minimum provenance requirement, not blanket proof of every assertion: exact content review still checks claimed facts. A creator-only claim or GitHub metadata cannot be silently treated as independently verified. Human decisions and unrelated content routes retain existing authority.
 
 ## B. Upgrade existing visible experiences — Discover evidence display integrated; further polish proposed
 
@@ -54,7 +54,7 @@
 
 **Interfaces:** Existing candidate cards, virality report, hook/style tags, observed media and metrics.
 
-**Work:** Display source-linked capability/demo tags, observed bookmark rate with denominator, visual media indicators and a route to the existing saved/draft workflow. Preserve evidence class, author-matched comparison and actual metric age in Viral Styles. Never display a synthetic probability of going viral.
+**Work:** Existing Discover candidate cards now include hook/style evidence, actual observed media type when present, classifier version, available observation time/source, and bookmark rate with a denominator. Missing X metrics display `unavailable` rather than fabricated zero. The optional `sourceStyle` type allows staged API/UI deployment. The already-existing save/route actions remain intact. Future Viral Styles enhancements may improve explicit matched-author filtering; preserve the current cohort/evidence-class method. Never display a synthetic probability of going viral.
 
 **Acceptance:** Someone seeing an interesting For You or viral post can trace its hook, inspect its source, and choose the existing content route without visiting a new section.
 
@@ -66,7 +66,7 @@
 
 **Work:** Collect or make legally usable evidence media, save an immutable approved attachment and alt text, and publish only after the exact artifact and text pass gates. When no lawful/usable asset exists, provide the project's link, choose a source-dependent Quote, or defer. For meaningful multi-step instructions, use approved Thread parts with distinct content and verify their sequence. Unsupported remote videos do not become successful attachments.
 
-**Acceptance:** A publication's claimed media and each Thread part match the approved snapshot, source attribution, and reconciled live output.
+**Acceptance for a *later* independently validated media/Thread increment:** Confirm image upload against a controlled live/sandbox X session, capture reuse rights/license or owner's original production alongside the SHA-256-bound JPEG/PNG/WebP/GIF artifact, and verify *every* rendered Thread child's approved text as well as ID/parent chain. Current local controls already protect attachment identity and Thread structure, but did not prove real browser upload or per-child text fidelity; video is **not** a supported end-to-end path. Partial, ambiguous sends remain fenced for reconciliation; never resend the root/child blindly. These claims are explicitly excluded from the corrected initial text/link rollout.
 
 ## C. Evidence-backed, bounded continuous improvement — proposed
 
@@ -79,6 +79,35 @@
 **Cycle:** Observe source and audience -> research and verify -> choose a purposeful format -> draft -> critique in bounded passes -> publish through existing authority -> measure at comparable post ages -> compare with the account's own baselines -> suggest one narrow change -> accept only with repeated eligible evidence. If actual bookmarks, profile visits, follower quality, author-cohort data or comparable owned samples are absent, say so and do not claim causality.
 
 **Acceptance:** Strategy evolves only through auditable current experiment/learning records and existing authority. No self-rewriting prompts, infinite critique, one-post overfit or bypass of persona and review gates.
+
+## Independent review remediation and exact interface contract (2026-10-10)
+
+The independent reviewer assigned REQUEST CHANGES (F01–F13). These are the **first-increment corrections**, not a promise of live-media/video operation:
+
+| Review finding | Correction and executable owner |
+|---|---|
+| F01 / F03 — inactive instructions / missing X-to-Original route | Default `executorPrompt` explicitly evaluates T1/T2 useful-tech sources with exact candidate keys and directs the existing `editorial-select` / `route` / Writer / delegated approval path. `scout.js` exposes candidate-key-specific `xDiscoveryInspirations` without changing reply/quote permission or inventing another lane. |
+| F02 / F05 / F06 — historical contamination, unbounded lens allocation, narrow queries | `strategy.js` selects format lenses only by explicit opt-in; historical `viral_style_sweep.js` uses unchanged default selectors, preserving baseline 42/84/112 job counts in deterministic fixtures. `tech_news.js` probes within owner-enabled Growth Focus and existing budgets; four diverse query variants alternate with regular topics. Actual X search parsing and search recall still need live read-only evaluation. |
+| F04 — not independently verified | Pure `discovery_verification.js` consumes already-linked X source(s) and stored `Editorial` evidence; `drafting.js` / `agent_bridge.js` exposes status and source IDs inside the Writer packet. `pipeline.js` mission-agent approval for discovery Originals/Threads rejects absent **actually cited** material `primary_supported` implementation evidence. A quoted X claim or repository metadata is insufficient. This is a minimum provenance gate; per-claim verification still belongs to exact-content review. |
+| F07 / F09 — visual claims, inaccurate hooks, unversioned studies | Optional explicit For You/X-search `mediaType` observations flow through existing candidate metrics; no inferred video label. `viral_style.js` separates built vs tested, exposes classifier v2, and reports historical labels as recomputed; collection records the version at sampling. |
+| F08 — sensor-coverage ranking bias | Remove bookmark score boost. Bookmark/1,000 views is an optional observation, never a gate or automatic ranking advantage. |
+| F11 — UI/source context | Existing Discover sourceStyle is optional in the TypeScript contract, includes available classifier/observation/media metadata and displays unavailable X metrics as unavailable. No new tab. |
+| F10 / F12 / F13 — deferred | Controlled live image/Thread checks, every-child text reconciliation, media-rights proof, more concise prompt factoring, and experimental learning detail remain separate follow-ups. No video upload or recursive prompt rewrite is claimed. |
+
+### Deterministic offline acceptance fixtures
+
+- `tests/useful_tech_discovery.test.mjs` — query budget and historical cohort identity, positive and negative hooks, media observation dependency, bookmark neutrality, stored primary-evidence status and citation requirements, mission approval rejection, X candidate → editorial selection → exact source/evidence → Writer packet.
+- `tests/growth_agent_runner.test.mjs` — active default executor receives discovery-selection, evidence and governed claim instructions; legacy remains available.
+- `tests/x_discovery.test.mjs` — real observed-media provenance survives For You ingestion; invalid media is rejected without losing last-good data.
+- Existing discover/scout/viral/runner suites must remain green; UI TS/Vite build must succeed.
+
+### Rollback and live validation
+
+The **review branch is not merged or deployed** by these changes. Rollback of a staged merge means reverting to a verified build or disabling operational format probes; do not reset production SQLite or delete a potentially unresolved publication attempt. Preserve run/session/claim and measurement history across rollback. Before enabling live automation, inspect real X query syntax and relevance, compare per-query cost and error/rate-limit signals to baseline, verify For You source provenance, and perform a controlled **read-only** candidate-to-draft rehearsal. Production image attachment, video, and exact multi-post Thread verification require independent controlled tests and rights attestations; do not claim them based on the draft metadata alone.
+
+### Current verification evidence and limitations
+
+The 76 focused discovery/runner/Scout/viral/For You tests passed; JavaScript syntax, TypeScript compile and the existing UI Vite build passed. Full `npm test` executed 187 tests: 182 passed, **five failed during the configured 01:00–08:30 IST rest window** in existing run/repost suites (one failure polluted the next lease fixture). This is a wall-clock-dependent baseline test weakness; it is not a green full suite. Deterministic test-clock fixtures must be provided separately before calling the entire suite consistently passing. No live X search, media upload, video, public post, or Thread publication was performed.
 
 ## Rollout
 

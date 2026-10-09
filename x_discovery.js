@@ -77,7 +77,7 @@ function candidateMetrics(observedMetrics = {}) {
   return metrics;
 }
 
-function normalizeForYouPost(post, diagnostics, index) {
+function normalizeForYouPost(post, diagnostics, index, observedAt) {
   if (!post || typeof post !== 'object' || Array.isArray(post)) throw new Error('Post entry must be an object.');
   if (post.promoted === true) return { skipped: true, reason: 'PROMOTED' };
 
@@ -90,6 +90,10 @@ function normalizeForYouPost(post, diagnostics, index) {
   const rank = Number(post.rank);
   if (!Number.isInteger(rank) || rank < 1) throw new Error('Post rank must be a positive integer.');
   const observedMetrics = normalizeObservedMetrics(post.metrics);
+  const mediaType = post.mediaType == null ? null : String(post.mediaType);
+  if (mediaType != null && !['none', 'image', 'video', 'mixed'].includes(mediaType)) {
+    throw new Error('Post mediaType must be none, image, video or mixed when explicitly observed.');
+  }
   const derivedTimestamp = deriveXTimestampFromTweetId(tweetId);
   let timestamp = derivedTimestamp;
   if (post.timestamp != null && post.timestamp !== '') {
@@ -111,6 +115,10 @@ function normalizeForYouPost(post, diagnostics, index) {
 
   const url = `https://x.com/${username}/status/${tweetId}`;
   const metrics = candidateMetrics(observedMetrics);
+  if (mediaType != null) {
+    metrics.mediaType = mediaType;
+    metrics.mediaObservedAt = observedAt;
+  }
   const [momentum] = rankXViralPosts([{ url, author: `@${username}`, text, timestamp, ...metrics }]);
   return {
     skipped: false,
@@ -120,6 +128,7 @@ function normalizeForYouPost(post, diagnostics, index) {
     rank,
     timestamp,
     observedMetrics,
+    mediaType,
     candidate: {
       key: url,
       source: 'x',
@@ -182,7 +191,7 @@ export function ingestXForYouObservation(payload = {}) {
   for (let index = 0; index < payload.posts.length; index++) {
     const post = payload.posts[index];
     try {
-      const normalized = normalizeForYouPost(post, diagnostics, index);
+      const normalized = normalizeForYouPost(post, diagnostics, index, observedAt);
       if (normalized.skipped) {
         skippedCount++;
         diagnostics.push({ code: normalized.reason, index, message: 'Promoted post skipped.' });
@@ -201,13 +210,18 @@ export function ingestXForYouObservation(payload = {}) {
       const nextCompleteness = metricCompleteness(normalized.observedMetrics);
       const base = normalized.rank < existing.rank ? normalized : existing;
       const metricsSource = nextCompleteness > existingCompleteness ? normalized : existing;
+      const mediaSource = normalized.mediaType != null ? normalized : existing;
       deduped.set(normalized.tweetId, {
         ...base,
         rank: bestRank,
         observedMetrics: metricsSource.observedMetrics,
+        mediaType: mediaSource.mediaType,
         candidate: {
           ...base.candidate,
-          metrics: candidateMetrics(metricsSource.observedMetrics),
+          metrics: {
+            ...candidateMetrics(metricsSource.observedMetrics),
+            ...(mediaSource.mediaType != null ? { mediaType: mediaSource.mediaType, mediaObservedAt: observedAt } : {}),
+          },
         },
       });
     } catch (error) {

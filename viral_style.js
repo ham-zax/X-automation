@@ -1,3 +1,5 @@
+export const VIRAL_STYLE_CLASSIFIER_VERSION = 2;
+
 const WORD_RE = /[A-Za-z0-9][A-Za-z0-9'’._+-]*/g;
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
 
@@ -62,7 +64,8 @@ function hookLabels(text, first) {
   const labels = [];
   const add = (label, condition) => { if (condition && !labels.includes(label)) labels.push(label); };
 
-  add('first_person_test', /\b(?:i|we)\s+(?:tested|tried|ran|used|built|tracked|measured|benchmarked|spent|kept|turned|max(?:ed)? out|found)\b/i.test(first));
+  add('first_person_test', /\b(?:i|we)\s+(?:tested|tried|ran|used|tracked|measured|benchmarked|spent|kept|max(?:ed)? out)\b/i.test(first));
+  add('first_person_build', /\b(?:i|we)\s+(?:built|created|shipped|made|developed)\b/i.test(first));
   add('quantified_claim', /(?:\b\d+(?:\.\d+)?(?:x|%|k|m|b)?\b|\$\s?\d)/i.test(first)
     && /\b(?:more|less|faster|slower|better|worse|higher|lower|cheaper|cost|accuracy|performance|usage|tokens?|requests?|stars?|hours?|days?|models?|billion|million)\b/i.test(first));
   add('release_announcement', /\b(?:introducing|launching|released?|releasing|now (?:live|available)|is live|new\s+[A-Za-z0-9._-]+)\b/i.test(first));
@@ -130,6 +133,7 @@ export function extractViralStyleFeatures(post = {}) {
   const emojiCount = (text.match(EMOJI_RE) || []).length;
 
   const features = {
+    classifierVersion: VIRAL_STYLE_CLASSIFIER_VERSION,
     mediaType: ['image', 'video', 'mixed'].includes(post.mediaType) ? post.mediaType : 'none',
     charCount: text.length,
     wordCount: tokenList.length,
@@ -296,6 +300,8 @@ export function buildViralStyleReportRows(posts = [], snapshots = [], threads = 
         : null
       : null;
     const thread = threadByRoot.get(tweetId) || null;
+    // Labels are computed with the current version; expose it rather than
+    // pretending old collections and new reports used identical classifiers.
     const styleFeatures = extractViralStyleFeatures(post);
     return {
       tweetId,
@@ -333,6 +339,8 @@ export function buildViralStyleReportRows(posts = [], snapshots = [], threads = 
       hookLabels: styleFeatures.hookLabels,
       styleLabels: styleFeatures.styleLabels,
       styleFeatures,
+      styleClassifierVersion: VIRAL_STYLE_CLASSIFIER_VERSION,
+      styleClassificationBasis: 'recomputed_current',
     };
   });
 

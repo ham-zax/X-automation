@@ -12,9 +12,12 @@ pipeline hid the exit code.
 chosen by `GROWTH_AGENT_MODE`:
 
 - `executor` (default): a compact scout, write, act loop with opportunity-led, independently evaluated Reply/Quote/Original decisions. It runs `scout`,
-  handles the T0 mentions check, T1 reply/quote cards and T2 originals, and
-  sends each post through `act` with the run ID and session ID. It does not
-  embed this document. Both modes embed `docs/GROWTH_CONTEXT_RECOVERY.md` for
+  handles T0 mentions, T1 conversations and source-linked T2 Original/Thread opportunities.
+  Direct text Reply/Quote/Original actions use `act` with the run/session ID;
+  governed multi-part Thread or media publication uses the existing queue,
+  main-feed approval, browser claim/send-start and reconciliation recipe below.
+  Useful-tech discoveries require material primary evidence IDs for delegated
+  standalone Original/Thread approval. It does not embed this entire document. Both modes embed `docs/GROWTH_CONTEXT_RECOVERY.md` for
   startup and post-compaction recovery; executor reads "Recover an unfinished
   publication" below when `growth-run-next` recommends `recover_attempt`.
 - `legacy` (`GROWTH_AGENT_MODE=legacy`): the previous multi-step prompt, which

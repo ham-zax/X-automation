@@ -95,6 +95,7 @@ function sourceObservation(kind, candidate, observedAt) {
       reposts: numericMetric(metrics.retweets ?? metrics.reposts),
       replies: numericMetric(metrics.replies),
       bookmarks: numericMetric(metrics.bookmarks),
+      mediaType: ['image', 'video', 'mixed', 'none'].includes(metrics.mediaType) ? metrics.mediaType : null,
       sourceTimestamp: Number(candidate.timestamp || 0) || null,
     },
   };

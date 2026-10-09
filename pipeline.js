@@ -4,6 +4,7 @@ import { createDraftScaffold, scoreDraft } from './drafting.js';
 import { selectBehaviorDecision } from './persona.js';
 import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { scoreOpportunity } from './opportunity.js';
+import { evaluateTechDiscoveryEvidence } from './discovery_verification.js';
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { authorizeReplyBrowserContent, postTweetBrowser } from './x_browser_publish.js';
 import { assessActionRelevance, assessStrategicRelevance, recommendDistributionAction } from './strategy.js';
@@ -957,6 +958,16 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
     draft = getDraftByCandidate(key);
     if (!draft) throw new DomainValidationError(`Draft required for ${queueItem.pipeline}.`);
     requireMissionEvidenceProvenance(queueItem, draft, provenance);
+    const discoveryVerification = evaluateTechDiscoveryEvidence({
+      pipeline: queueItem.pipeline,
+      candidate,
+      sourceCandidates: listQueueSources(queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
+      evidence: editorialEvidenceForQueue(queueItem),
+      usedEvidenceIds: draft.editor?.evidenceUsed || [],
+    });
+    if (!discoveryVerification.satisfied) {
+      throw new DomainValidationError(`Verified tech discovery requires cited material primary-source evidence before delegated ${queueItem.pipeline} approval (${discoveryVerification.status}). Choose a sourced Quote/research route or attach the verified documentation through existing Editorial evidence.`);
+    }
     requireCurrentStrategyDecision(queueItem, draft);
     analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, { requireContentReview: true }));
     draft = saveDraft({ ...draft, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' });

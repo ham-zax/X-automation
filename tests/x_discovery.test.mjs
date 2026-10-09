@@ -522,3 +522,31 @@ test('agent bridge exposes canonical For You ingest and signal-watchlist command
   assert.equal(ingested.ingest.snapshotReplaced, true)
   assert.equal(store.getDiscoverSnapshot('x_for_you').fetchedAt, observedAt)
 })
+
+test('For You only records explicitly observed media and preserves its observation provenance', async () => {
+  const discovery = await loadXDiscovery()
+  const observedAt = Date.now() - 1000
+  const tweetId = tweetIdForTimestamp(observedAt - 20_000, 44n)
+  const post = {
+    tweetId, url: 'https://x.com/toolmaker/status/' + tweetId,
+    username: '@toolmaker', text: 'You can now turn Android into a developer workstation.',
+    rank: 1, metrics: { views: 8000, likes: 123, bookmarks: 51 }, mediaType: 'video',
+  }
+  const result = discovery.ingestXForYouObservation({
+    kind: 'x_for_you', observedAt, accountHandle: 'ham_zax', posts: [post],
+  })
+  assert.equal(result.acceptedCount, 1)
+  const candidate = store.getCandidate(post.url)
+  assert.equal(candidate.metrics.mediaType, 'video')
+  assert.equal(candidate.metrics.mediaObservedAt, observedAt)
+  const observation = store.getSourceMomentum(post.url, 'x_for_you')
+  assert.equal(observation.current.observedAt, observedAt)
+  assert.equal(observation.current.metrics.bookmarks, 51)
+  const invalid = discovery.ingestXForYouObservation({
+    kind: 'x_for_you', observedAt: observedAt + 100,
+    accountHandle: 'ham_zax', posts: [{ ...post, mediaType: 'guess' }],
+  })
+  assert.equal(invalid.acceptedCount, 0)
+  assert.equal(invalid.preservedLastGood, true)
+  assert.equal(store.getCandidate(post.url).metrics.mediaType, 'video')
+})

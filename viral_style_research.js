@@ -10,6 +10,7 @@ import {
   buildViralStyleReportRows,
   deriveViralPerformance,
   extractViralStyleFeatures,
+  VIRAL_STYLE_CLASSIFIER_VERSION,
   summarizeViralStyleDataset,
 } from './viral_style.js';
 
@@ -177,6 +178,7 @@ function postRecord(tweet, { sampleKind, sourceQuery, observedAt }) {
     createdAt,
     conversationId: String(tweet?.conversationId || ''),
     sampleKind,
+    styleClassifierVersionAtCollection: VIRAL_STYLE_CLASSIFIER_VERSION,
     sourceQuery: String(sourceQuery || ''),
     isReply: Boolean(tweet?.isReply),
     isQuote: Boolean(tweet?.isQuote),

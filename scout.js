@@ -109,11 +109,12 @@ export function buildScoutCards(input = {}) {
     const viewsPerHour = Math.max(0, Number(candidate.viewsPerHour) || 0);
     const engagementsPerHour = Math.max(0, Number(candidate.engagementsPerHour) || 0);
     const contentStyle = classifyContentStyle(candidate.text || '');
-    const sourceShape = extractViralStyleFeatures({ text: candidate.text || '' });
+    const sourceShape = extractViralStyleFeatures({ text: candidate.text || '', mediaType: candidate.mediaType });
     const observed = candidate.observedMetrics || {};
     const views = Number(observed.views);
     const bookmarks = Number(observed.bookmarks);
-    // A small, optional save-intent signal. Missing snapshots are unknown, not zero.
+    // Descriptive only: search and For You sensors expose different metric sets.
+    // An unavailable bookmark count must never rank below an otherwise identical source.
     const bookmarksPerThousandViews = observed.views != null && observed.bookmarks != null
       && Number.isFinite(views) && views > 0 && Number.isFinite(bookmarks) && bookmarks >= 0
       ? Math.round((bookmarks / views) * 1_000 * 10) / 10 : null;
@@ -125,8 +126,7 @@ export function buildScoutCards(input = {}) {
     }[contentStyle];
     const topicWeight = policy?.editorial?.interests?.[interestKey] ?? 50;
     const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72 })
-      + (topicWeight - 50) / 25
-      + (bookmarksPerThousandViews == null ? 0 : Math.min(1.25, bookmarksPerThousandViews / 20));
+      + (topicWeight - 50) / 25;
     replyCards.push({
       tier: 'T1',
       action: eligibleActions.includes('reply') ? 'reply' : 'quote',
@@ -134,6 +134,9 @@ export function buildScoutCards(input = {}) {
       contentStyle,
       hookLabels: sourceShape.hookLabels,
       styleLabels: sourceShape.styleLabels,
+      // A source can inspire standalone research without changing the
+      // existing T1 Reply/Quote authority contract.
+      independentResearchFormats: policy?.lanes?.original?.enabled === false ? [] : ['original', 'thread'],
       urgent: candidate.urgent || null,
       candidateKey: candidate.key,
       url,
@@ -151,13 +154,20 @@ export function buildScoutCards(input = {}) {
         bookmarksPerThousandViews,
       },
       score,
-      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. ${bookmarksPerThousandViews == null ? 'Bookmark rate unavailable.' : `Observed ${bookmarksPerThousandViews} bookmarks per 1,000 views.`} Source shape: ${sourceShape.hookLabels.join(', ')} / ${sourceShape.styleLabels.join(', ')} (heuristic, not proof). Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; a source-backed Original/Thread through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.`,
+      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. ${bookmarksPerThousandViews == null ? 'Bookmark rate unavailable.' : `Observed ${bookmarksPerThousandViews} bookmarks per 1,000 views.`} Source shape: ${sourceShape.hookLabels.join(', ')} / ${sourceShape.styleLabels.join(', ')} (heuristic, not proof). Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; for source-backed Original/Thread inspect and route the exact candidate key through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.`,
     });
   }
   replyCards.sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))
     || b.score - a.score || a.candidateKey.localeCompare(b.candidateKey));
   const topReplies = (window.rest ? replyCards.filter((card) => card.urgent) : replyCards).slice(0, limit);
   pace.urgentCandidates = replyCards.filter((card) => card.urgent).length;
+  const xDiscoveryInspirations = topReplies
+    .filter((card) => card.styleLabels.includes('useful_tech_discovery')
+      || card.styleLabels.includes('curated_resource_thread')
+      || card.hookLabels.includes('unexpected_capability'))
+    .slice(0, SCOUT_DEFAULTS.inspirationLimit)
+    .map((card) => ({ candidateKey: card.candidateKey, url: card.url,
+      hookLabels: card.hookLabels, styleLabels: card.styleLabels }));
 
   const cards = [{
     tier: 'T0',
@@ -197,6 +207,7 @@ export function buildScoutCards(input = {}) {
         ? 'Rest window: no ordinary original. Only a genuinely verified major launch/breakthrough with explicit recent primary-source evidence may interrupt sleep.'
         : 'Independent original editorial review, NOT a posting task. Prefer replies. Only publish when a timely first-hand insight, specific reader benefit, distinct angle and verified sources make it worth space on a small personal timeline. Otherwise skip without drafting. No quota.',
       inspiration,
+      xDiscoveryInspirations, // advisory: exact existing candidate keys, not new queue cards
       requiresEditorialEvidence: true,
       audienceSelectivity: input.audience?.selectivity ?? 100,
       editorialMinimum: policy?.lanes?.original?.editorialMinimum ?? 80,
@@ -229,6 +240,7 @@ export function readScoutInput(store, { now = Date.now() } = {}) {
         text: candidate.text,
         publishedAt: candidate.timestamp,
         nicheScore: candidate.niche?.score ?? null,
+        mediaType: candidate.metrics?.mediaType ?? null,
         nicheTags: candidate.niche?.tags || [],
         viralTier: candidate.viral?.tier ?? null,
         viewsPerHour: candidate.viral?.viewsPerHour ?? (Number(candidate.metrics?.views || 0)

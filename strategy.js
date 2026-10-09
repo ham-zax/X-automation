@@ -500,7 +500,7 @@ function roundRobinGroupTerms(groups) {
   return output;
 }
 
-export function getXSearchQueryGroups() {
+export function getXSearchQueryGroups({ includeFormatLenses = false } = {}) {
   const groups = [];
   const activeContentGroups = getActiveContentGroups();
   for (const group of activeContentGroups.filter((item) => item.discover !== false)) {
@@ -514,19 +514,27 @@ export function getXSearchQueryGroups() {
     }));
   }
 
-  // Search existing X Latest/Momentum/Viral Styles for useful software discoveries.
-  // These are cross-topic retrieval lenses, not new niches or publishing grants.
-  // Owner-disabled content groups remain disabled.
-  const discoverableTags = new Set(activeContentGroups.filter((item) => item.discover !== false).map((item) => item.tag));
-  if (discoverableTags.has('devtools') || discoverableTags.has('builders')) {
+  // Opt-in operational retrieval lenses: historical style sweeps must not
+  // silently change their sample composition or query costs.
+  const discoverableTags = new Set(activeContentGroups.filter((item) => item.discover !== false
+    && Number(item.targetShare || 0) > 0).map((item) => item.tag));
+  if (includeFormatLenses && (discoverableTags.has('devtools') || discoverableTags.has('builders'))) {
     groups.push({ tag: discoverableTags.has('devtools') ? 'devtools' : 'builders', label: 'Useful software discoveries', targetShare: 0,
       query: '("open source" OR "github repo" OR "free tool") ("you can now" OR "I built" OR "how to" OR "just released")',
       chunk: 'utility_lens', exploratory: false });
+    groups.push({ tag: discoverableTags.has('devtools') ? 'devtools' : 'builders',
+      label: 'Free developer resources and curated websites', targetShare: 0,
+      query: '("free websites" OR "useful developer tools" OR "bookmark these" OR "open source alternatives")',
+      chunk: 'resources_lens', exploratory: false });
   }
-  if (['devtools', 'infra', 'systems'].some((tag) => discoverableTags.has(tag))) {
+  if (includeFormatLenses && ['devtools', 'infra', 'systems'].some((tag) => discoverableTags.has(tag))) {
     groups.push({ tag: ['devtools', 'infra', 'systems'].find((tag) => discoverableTags.has(tag)), label: 'Unexpected software capabilities', targetShare: 0,
       query: '("android app" OR "ios app" OR "browser extension" OR "linux tool") ("run on" OR "turn into" OR "now possible" OR "open source")',
       chunk: 'capability_lens', exploratory: false });
+    groups.push({ tag: ['devtools', 'infra', 'systems'].find((tag) => discoverableTags.has(tag)),
+      label: 'Working developer tool demonstrations', targetShare: 0,
+      query: '("working demo" OR "I built" OR "just shipped") ("developer tool" OR "open source" OR "github")',
+      chunk: 'demo_lens', exploratory: false });
   }
 
   if (ACTIVE_NICHE_PROFILE.exploration.enabled && ACTIVE_NICHE_PROFILE.exploration.maxSearchQueries > 0) {
