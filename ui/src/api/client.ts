@@ -2416,6 +2416,7 @@ export function useViralResearchStop() {
 // ---------------------------------------------------------------------------
 export interface GrowthProductPolicy {
   version: number
+  social: Record<'follow'|'like', { enabled: boolean; maxPer24Hours: number; minimumObservedPosts: number; preference: number }>
   activity: { timeZone: string; sleepStart: string; sleepEnd: string; discoveryIntervalMinutes: number }
   lanes: Record<'reply'|'quote'|'original', { enabled: boolean; priority: number; editorialMinimum: number; dailyLimit: number|null }>
   editorial: {

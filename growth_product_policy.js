@@ -13,6 +13,10 @@ export const DEFAULT_GROWTH_POLICY = Object.freeze({
     quote: { enabled: true, priority: 55, editorialMinimum: 65, dailyLimit: null },
     original: { enabled: true, priority: 35, editorialMinimum: 80, dailyLimit: null },
   },
+  social: {
+    follow: { enabled: true, maxPer24Hours: 4, minimumObservedPosts: 2, preference: 80 },
+    like: { enabled: true, maxPer24Hours: 20, minimumObservedPosts: 1, preference: 85 },
+  },
   editorial: {
     // These are topic preferences, not a restrictive whitelist.
     interests: { code_demos: 90, ai_breakthroughs: 90, tool_discoveries: 85,
@@ -80,6 +84,12 @@ export function validateGrowthPolicy(input) {
     score(p.lanes[lane].priority, `${lane}.priority`);
     score(p.lanes[lane].editorialMinimum, `${lane}.editorialMinimum`);
     if (p.lanes[lane].dailyLimit !== null) positiveInt(p.lanes[lane].dailyLimit, `${lane}.dailyLimit`, 1, 500);
+  }
+  for (const action of ['follow', 'like']) {
+    boolean(p.social[action].enabled, `social.${action}.enabled`);
+    positiveInt(p.social[action].maxPer24Hours, `social.${action}.maxPer24Hours`, 1, 100);
+    positiveInt(p.social[action].minimumObservedPosts, `social.${action}.minimumObservedPosts`, 1, 8);
+    score(p.social[action].preference, `social.${action}.preference`);
   }
   for (const [key, value] of Object.entries(p.editorial.interests)) score(value, `interests.${key}`);
   if (typeof p.editorial.voiceGuidance !== 'string' || p.editorial.voiceGuidance.length > 2000) throw new DomainValidationError('voiceGuidance must be text under 2000 characters.');

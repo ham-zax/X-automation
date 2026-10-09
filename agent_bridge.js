@@ -1675,6 +1675,28 @@ async function main() {
     throw new Error('publication-attempt-resolve supports confirmed_not_sent or closed_unresolved. Confirmed publication must use record-action with positive structural verification.');
   }
 
+  if (['social-discover','social-status','social-list','social-claim','social-start','social-resolve'].includes(command)) {
+    const social = await import('./social_engagement.js');
+    if (command === 'social-discover') {
+      result(social.discoverSocialCandidates({limit: payload.limit}));
+      return;
+    }
+    if (command === 'social-list') {
+      result({ attempts: social.listSocialAttempts({limit:payload.limit}),
+        policy: (await import('./store.js')).getGrowthProductPolicy().social });
+      return;
+    }
+    if (command === 'social-status') {
+      result(social.socialStatus(payload));
+      return;
+    }
+    requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
+    if (command === 'social-claim') result(social.claimSocialAction(payload));
+    else if (command === 'social-start') result(social.startSocialAction(payload));
+    else result(social.resolveSocialAction(payload));
+    return;
+  }
+
   if (command === 'scout') {
     const scoutModule = await import('./scout.js');
     const store = await import('./store.js');
@@ -2969,7 +2991,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

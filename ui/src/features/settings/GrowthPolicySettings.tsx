@@ -75,6 +75,19 @@ function Editor({ initial }: { initial: GrowthPolicyView }) {
       </div>
     </section>
     <section className={sectionClass}>
+      <h3 className="font-semibold text-slate-900">Follows & likes</h3>
+      <p className="text-sm text-slate-600">Autonomous follows require repeated useful posts and a verified account. Likes acknowledge specific good posts. These are safety ceilings, never daily engagement targets. Unfollows remain manual-only.</p>
+      <div className="grid gap-4 md:grid-cols-2">
+        {(['follow','like'] as const).map(action=><div key={action} className="space-y-3 rounded-lg border border-slate-200 p-4">
+          <strong className="capitalize">{action === 'follow' ? 'Follow accounts' : 'Like posts'}</strong>
+          <div>{toggle('Autonomous actions enabled',['social',action,'enabled'],draft.social[action].enabled)}</div>
+          {field('Maximum in rolling 24 hours',['social',action,'maxPer24Hours'],draft.social[action].maxPer24Hours,1,100)}
+          {field('Minimum distinct observed posts',['social',action,'minimumObservedPosts'],draft.social[action].minimumObservedPosts,1,8)}
+          {field('Discovery priority',['social',action,'preference'],draft.social[action].preference,0,100)}
+        </div>)}
+      </div>
+    </section>
+    <section className={sectionClass}>
       <h3 className="font-semibold text-slate-900">Topics, code & voice</h3>
       <p className="text-sm text-slate-600">Show useful code and emerging projects, not just announcements. Topic scores rank discovery; they do not authorize fabricated experiences.</p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
