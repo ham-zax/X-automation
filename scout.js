@@ -90,7 +90,12 @@ export function buildScoutCards(input = {}) {
 
   const replyCards = [];
   for (const candidate of candidates) {
-    if (candidate.source !== 'x' || policy?.lanes?.reply?.enabled === false) continue;
+    if (candidate.source !== 'x') continue;
+    const eligibleActions = [
+      ...(policy?.lanes?.reply?.enabled === false ? [] : ['reply']),
+      ...(policy?.lanes?.quote?.enabled === false ? [] : ['quote']),
+    ];
+    if (!eligibleActions.length) continue;
     const url = candidate.url || candidate.key;
     const { author, tweetId } = parseStatusUrl(url);
     if (!author || !tweetId) continue;
@@ -114,8 +119,8 @@ export function buildScoutCards(input = {}) {
       + (topicWeight - 50) / 25;
     replyCards.push({
       tier: 'T1',
-      action: 'reply', // Default transport; the operator can choose quote after reading context.
-      eligibleActions: policy?.lanes?.quote?.enabled === false ? ['reply'] : ['reply', 'quote'],
+      action: eligibleActions.includes('reply') ? 'reply' : 'quote',
+      eligibleActions,
       contentStyle,
       urgent: candidate.urgent || null,
       candidateKey: candidate.key,
@@ -133,7 +138,7 @@ export function buildScoutCards(input = {}) {
         observed: candidate.observedMetrics || {},
       },
       score,
-      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. Inspect real context and choose reply, quote, or skip; no metric is a publishing threshold.`,
+      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; a Repost via social-discover when the original deserves unchanged sharing. No score/viral label is an action threshold.`,
     });
   }
   replyCards.sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))

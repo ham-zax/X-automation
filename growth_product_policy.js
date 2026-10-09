@@ -16,6 +16,7 @@ export const DEFAULT_GROWTH_POLICY = Object.freeze({
   social: {
     follow: { enabled: true, maxPer24Hours: 4, minimumObservedPosts: 2, preference: 80 },
     like: { enabled: true, maxPer24Hours: 20, minimumObservedPosts: 1, preference: 85 },
+    repost: { enabled: true, maxPer24Hours: 5, minimumObservedPosts: 1, preference: 60 },
   },
   editorial: {
     // These are topic preferences, not a restrictive whitelist.
@@ -85,7 +86,7 @@ export function validateGrowthPolicy(input) {
     score(p.lanes[lane].editorialMinimum, `${lane}.editorialMinimum`);
     if (p.lanes[lane].dailyLimit !== null) positiveInt(p.lanes[lane].dailyLimit, `${lane}.dailyLimit`, 1, 500);
   }
-  for (const action of ['follow', 'like']) {
+  for (const action of ['follow', 'like', 'repost']) {
     boolean(p.social[action].enabled, `social.${action}.enabled`);
     positiveInt(p.social[action].maxPer24Hours, `social.${action}.maxPer24Hours`, 1, 100);
     positiveInt(p.social[action].minimumObservedPosts, `social.${action}.minimumObservedPosts`, 1, 8);

@@ -1675,7 +1675,7 @@ async function main() {
     throw new Error('publication-attempt-resolve supports confirmed_not_sent or closed_unresolved. Confirmed publication must use record-action with positive structural verification.');
   }
 
-  if (['social-discover','social-status','social-list','social-claim','social-start','social-resolve'].includes(command)) {
+  if (['social-discover','social-status','social-list','social-claim','social-start','social-repost-menu-start','social-resolve'].includes(command)) {
     const social = await import('./social_engagement.js');
     if (command === 'social-discover') {
       result(social.discoverSocialCandidates({limit: payload.limit}));
@@ -1693,6 +1693,7 @@ async function main() {
     requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
     if (command === 'social-claim') result(social.claimSocialAction(payload));
     else if (command === 'social-start') result(social.startSocialAction(payload));
+    else if (command === 'social-repost-menu-start') result(social.startRepostConfirmation(payload));
     else result(social.resolveSocialAction(payload));
     return;
   }
@@ -1739,7 +1740,19 @@ async function main() {
       requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
     }
     const card = payload.card && typeof payload.card === 'object' ? payload.card : {};
-    const author = String(card.author || payload.targetUsername || '').replace(/^@/, '');
+    const author = String(card.author || payload.targetUsername ||
+      (String(validated.targetUrl || '').match(/^https:\/\/x\.com\/([A-Za-z0-9_]+)\/status\//) || [])[1] || '').replace(/^@/, '');
+    if (validated.action === 'quote') {
+      const social = await import('./social_engagement.js');
+      const sourceUrl = validated.targetUrl
+        || (validated.text.match(/https:\/\/x\.com\/[A-Za-z0-9_]+\/status\/\d+/i) || [])[0] || '';
+      const sourceAuthor = author || (sourceUrl.match(/^https:\/\/x\.com\/([A-Za-z0-9_]+)\/status\//i) || [])[1] || '';
+      if (!sourceUrl || !sourceAuthor) throw new Error('Quote needs a matching exact source status URL for repost/quote duplicate fencing.');
+      const competing = social.socialStatus({action:'repost',username:sourceAuthor,targetUrl:sourceUrl});
+      if (competing.existing && competing.existing.state !== 'confirmed_not_applied') {
+        throw new Error('Quote blocked: a prior Repost attempt for this source is confirmed or unresolved. Choose one distribution path.');
+      }
+    }
     const sourceText = String(card.sourceText || '');
     const rewrite = actModule.checkAttributionNeedsRewrite(validated.text, { action: validated.action, sourceText });
     if (rewrite) {
@@ -2991,7 +3004,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {
