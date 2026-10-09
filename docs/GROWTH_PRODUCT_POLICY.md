@@ -12,7 +12,7 @@ Use **Settings → Publishing strategy** (`#/settings/publishing`) or the authen
 - `audience`: optional follower milestones and tier-specific editorial selectivity. Tiers update only from reasonably fresh **observed account follower metrics** or owner-profile follower counts recorded by the independent collector (`growth-followers-record`, account and capture-time validated). Increased reach lowers the evidence-completeness bar for useful standalone posts; it does not generate posts or assume followers were caused by any individual post.
 - `learning`: measured analytics lookback and minimum comparable sample size. Learning is descriptive; weak data cannot silently rewrite persona or change product policy.
 
-The claim path is transactionally authoritative for owner-enabled lane gates and user-set rolling limits. The prompt and scout provide opportunity judgments and factual review; numeric completeness cannot prove a claim true. Human manual actions outside a Growth Run are not restricted by inferred sleep hours. The operator run mutation ceiling remains separate for atomic resource accounting.
+The claim path is transactionally authoritative for owner-enabled lane gates and user-set rolling limits. The prompt and scout provide opportunity judgments and factual review; numeric completeness cannot prove a claim true. Human manual actions outside a Growth Run are not restricted by inferred sleep hours. The operator run ceiling historically named `maxPublicMutations` counts publication attempts only; social-ledger Follow/Like/Repost actions have separate owner-policy safety ceilings. This run ceiling is also independent of optional daily publication limits.
 
 ## Second agent: historical engagement collector
 

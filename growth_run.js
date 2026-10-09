@@ -138,29 +138,30 @@ function ensureRunLease(run, { adapterType = null, sessionId = null, now = Date.
   return { run: next, lease };
 }
 
-function mutationCount(runId) {
+// Legacy maxPublicMutations counts only publication attempts; social actions use their own ledger.
+function publicationAttemptCount(runId) {
   const counts = getPublicationAttemptCounts({ runId });
   return counts.claimed + counts.send_started + counts.investigating + counts.confirmed_published + counts.closed_unresolved;
 }
 
 function ceilingState(run, now, readiness = null) {
   const elapsedMinutes = Math.max(0, (Number(now) - Number(run.startedAt)) / 60_000);
-  const mutations = mutationCount(run.runId);
+  const publicationAttempts = publicationAttemptCount(run.runId);
   const sensorProvenance = readiness?.sensors?.xForYou?.provenance || null;
   const observations = String(sensorProvenance?.runId || '') === String(run.runId)
     ? Number(sensorProvenance?.acceptedCount || 0)
     : 0;
   const observationCeiling = Number(run.ceilings.maxObservations || 50);
   const hitDuration = elapsedMinutes >= Number(run.ceilings.maxDurationMinutes || 20);
-  const hitMutations = mutations >= Number(run.ceilings.maxPublicMutations || 10);
+  const hitPublicationAttempts = publicationAttempts >= Number(run.ceilings.maxPublicMutations || 10);
   return {
     elapsedMinutes,
     observations,
     observationCeiling,
     observationCeilingReached: observations >= observationCeiling,
-    publicMutationAttempts: mutations,
-    hit: hitDuration || hitMutations,
-    reason: hitDuration ? 'max_duration' : hitMutations ? 'max_public_mutations' : null,
+    publicMutationAttempts: publicationAttempts, // Stable existing bridge field.
+    hit: hitDuration || hitPublicationAttempts,
+    reason: hitDuration ? 'max_duration' : hitPublicationAttempts ? 'max_public_mutations' : null,
   };
 }
 
