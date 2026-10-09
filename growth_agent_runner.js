@@ -232,7 +232,7 @@ Writing:
 
 Stop:
 - Stop only after the available distinct sources have been meaningfully explored and two separately observed, successfully ingested discovery passes yield no worthwhile opportunities or new mentions. If collection is forbidden by run ceilings, finish with that actual reason instead of inferring no worthwhile work.
-- Also stop about 3 minutes before the time budget ends, or at a blocker (authentication, constrained account health, or a lease rejected by act).
+- Finish about 3 minutes before this run's execution deadline to leave time for recording and reconciliation. This is a session time boundary, not evidence that money, tokens, daily action allowance, or worthwhile opportunities are exhausted. Also finish at an actual blocker (authentication, constrained account health, or a lease rejected by act).
 
 Hard rules:
 - Never set or fake human approval fields; never click dashboard approval or config controls; never start automation.js.
@@ -244,6 +244,7 @@ Hard rules:
 
 Finish:
 - Call \`npm run --silent agent -- growth-run-finish\` with JSON \`{"runId":"<actual runId>","status":"completed","stopReason":"no_worthwhile_eligible_work","stopDetail":"No worthwhile eligible actions remain."}\` after a healthy empty pass. Supported stopReason values: ${GROWTH_RUN_STOP_REASONS.join(", ")}. If growth-run-next offers the permitted operation \`finish\`, prefer it to derive the reason. Never invent stop reasons: status and stopReason are different fields.
+- If finishing because the execution window is closing, use the existing compatible stopReason \`budget_exhausted\` with a precise stopDetail stating \`execution_window_safety_margin\`, elapsed time, run deadline, and whether worthwhile candidates remain. Never infer token or financial exhaustion from this reason. Use \`resource_ceiling_reached\` only when the bridge reports a hard run ceiling. Do not claim \`no_worthwhile_eligible_work\` if candidates were left unexamined.
 - Final response: published URLs (from \`outputUrl\`), skipped count, unresolved attempt IDs, and any blocker.
 ${experimentNote}`;
 }

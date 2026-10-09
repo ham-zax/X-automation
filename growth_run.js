@@ -30,7 +30,7 @@ export const GROWTH_RUN_STOP_REASONS = Object.freeze([
   'delegation_revised',
   'capability_unavailable',
   'reconciliation_scope_blocked',
-  'budget_exhausted',
+  'budget_exhausted', // Legacy wire/storage identifier: agent-reported execution-window stop; not proof of token or financial exhaustion.
   'manual_intervention_required',
 ]);
 const STOP_REASONS = new Set(GROWTH_RUN_STOP_REASONS);

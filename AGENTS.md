@@ -4,6 +4,10 @@ This repository is the operating system for the `@ham_zax` X account.
 
 The strategic architecture is **network-first and behavior-aware**: use research to find purposeful conversations, select a plausible Hamza role before writing, build recurring relevant relationships, convert profile visits with owned work and recognizable identity, and learn which purpose/mode/affect/depth decisions recruit the target audience.
 
+## Run-stop terminology for reasoning agents
+
+Interpret stop reasons as operational evidence, not ordinary-language assumptions. The persisted `budget_exhausted` label is a legacy agent-reported stop reason; it is **not** evidence of depleted money, tokens, daily quotas, or opportunities. When ending early to preserve the three-minute execution-deadline safety margin, record `execution_window_safety_margin` and concrete timing in `stopDetail`, and explicitly say if eligible candidates remain. `resource_ceiling_reached` is reserved for a bridge-detected hard run ceiling. `no_worthwhile_eligible_work` means a sufficiently refreshed exploration found no worthwhile eligible action, not merely that this session ran out of time. Per-run execution ceilings are safety boundaries, not publishing goals or daily growth-policy quotas. Never rename persisted stop-reason identifiers without a coordinated compatibility migration.
+
 ## Product interaction model
 
 Growth OS is primarily operated by an AI agent on Hamza's behalf. The human interface supports occasional analysis, post/source selection, inspection, and intervention; it is not the required route for routine agent work. Another ChatGPT/Codex session should resume from the repository's durable persona, candidates, queue, approvals, relationships, and measurements instead of depending on this conversation's memory.

@@ -53,6 +53,8 @@ Structured stop reasons:
 - `budget_exhausted`
 - `manual_intervention_required`
 
+`budget_exhausted` is a legacy compatibility identifier for an agent-reported execution-window stop. It does **not** establish that money, tokens, or an action quota ran out. For the planned three-minute safety margin, state `execution_window_safety_margin` and the actual timing in `stopDetail`; identify remaining candidates rather than claiming the work was exhausted. `resource_ceiling_reached` instead means the bridge observed a hard run duration or public-mutation ceiling. An observation ceiling restricts further collection but does not itself prove the whole run is finished. `no_worthwhile_eligible_work` requires a genuinely exhausted, sufficiently refreshed opportunity pass.
+
 Bounds are ceilings, not targets. A run may stop before any public action. A healthy no-action run is valid when no worthwhile eligible opportunity remains.
 
 ## Public agent bridge
