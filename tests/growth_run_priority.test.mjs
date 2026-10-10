@@ -16,7 +16,7 @@ const growthRun = await import('../growth_run.js');
 try {
   await test('a due approved main-feed claim precedes stale For You discovery', () => {
     const key = 'https://x.com/builder/status/808080';
-    store.upsertCandidates([{ key, url: key, source: 'x', title: '@builder',
+    store.upsertCandidates([{ key, url: key, source: 'owner', title: '@builder',
       timestamp: Date.now(), metrics: { views: 20000, likes: 300, retweets: 30, replies: 10 },
       text: 'Agent API recovery should preserve valid state. Separate retry attempts from committed transactions so transient failures do not corrupt developer workflow.' }]);
     const behavior = { decision: 'ACT', primaryPurpose: 'technical_value', socialMode: 'explainer', informationDepth: 'compact_reason',

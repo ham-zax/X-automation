@@ -202,6 +202,8 @@ export function buildWriterPacket({
     discoveryVerification: evaluateTechDiscoveryEvidence({
       pipeline, candidate, sourceCandidates, evidence,
       usedEvidenceIds: draft?.editor?.evidenceUsed || [],
+      review: draft?.editor?.contentReview,
+      publicUnits: pipeline === 'thread' ? draft?.threadParts || [] : [draft?.body || ''],
     }),
     patternContext: {
       freshness: getCurrentPatternFreshness(),

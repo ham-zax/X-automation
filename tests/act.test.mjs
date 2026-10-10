@@ -508,32 +508,20 @@ const rowCounts = () => ({
   queue: store.listQueueItems({ limit: 10_000 }).length,
 });
 
-await test('claimActPublication permits distinct originals without historical spacing quotas', () => {
+await test('atomic direct act refuses even unsourced Originals rather than guessing factual independence', () => {
   store.startGrowthOperatorDelegation({ actor: 'human' });
   store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
-  const first = store.claimActPublication({
-    action: 'original', text: 'First original on the historical spacing timeline.', candidateKey: 'spacing-original-first',
-    claimHolder: 'test-session', now: SPACING_TIMELINE,
-  });
-  store.markQueuePublished(first.queueItem.id, '777001', 'https://x.com/ham_zax/status/777001', { publishedAt: SPACING_TIMELINE });
   const before = rowCounts();
-  const second = store.claimActPublication({
-    action: 'original', text: 'Second distinct original one hour after the first.', candidateKey: 'spacing-original-second',
-    claimHolder: 'test-session', now: SPACING_TIMELINE + 60 * MIN,
-  });
-  assert.equal(second.attempt.state, 'claimed');
-  assert.equal(rowCounts().attempts, before.attempts + 1);
-  assert.equal(rowCounts().queue, before.queue + 1);
-  store.markQueuePublished(second.queueItem.id, '777003', 'https://x.com/ham_zax/status/777003', { publishedAt: SPACING_TIMELINE + 60 * MIN });
-  const third = store.claimActPublication({
-    action: 'original', text: 'Third distinct original 95 minutes after the first.', candidateKey: 'spacing-original-allowed',
-    claimHolder: 'test-session', now: SPACING_TIMELINE + 95 * MIN,
-  });
-  assert.equal(third.attempt.state, 'claimed');
-  store.markQueuePublished(third.queueItem.id, '777002', 'https://x.com/ham_zax/status/777002', { publishedAt: SPACING_TIMELINE + 95 * MIN });
+  for (const key of ['spacing-original-first', 'https://x.com/builder/status/888123']) {
+    assert.throws(() => store.claimActPublication({
+      action: 'original', text: 'Android tooling can debug every iOS version without configuration.',
+      candidateKey: key, claimHolder: 'test-session', now: SPACING_TIMELINE,
+    }), /existing reviewed main-feed queue/);
+  }
+  assert.deepEqual(rowCounts(), before, 'denial must occur before persisted claim or queue changes');
 });
 
-await test('claimActPublication permits a distinct Quote after an Original and independent reply', () => {
+await test('claimActPublication still permits a distinct Quote and independent reply', () => {
   const quoteAt = SPACING_TIMELINE + 115 * MIN;
   const before = rowCounts();
   const quote = store.claimActPublication({

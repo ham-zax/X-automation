@@ -793,41 +793,64 @@ export function selectRotatingXQueryGroups(kind, now = Date.now()) {
   const configuredBudget = kind === 'momentum'
     ? profile.discovery?.momentumQueryBudget
     : profile.discovery?.latestQueryBudget;
-  const budget = Math.max(1, Math.min(all.length || 1, Number(configuredBudget || 1)));
-  if (all.length <= budget) return all;
-
+  const budget = Math.max(1, Math.min(30, Number(configuredBudget || 1)));
   const rotationMinutes = Math.max(1, Number(profile.discovery?.rotationMinutes || 15));
   const slot = Math.floor(Number(now) / (rotationMinutes * 60_000));
-  const formatLenses = all.filter((item) => typeof item.chunk === 'string' && item.chunk.endsWith('_lens'));
-  // Probe one of the existing query slots every other rotation only when
-  // owner-enabled target groups support it. Never expand the fetch budget.
-  const reserved = budget >= 3 && slot % 2 === 0 && formatLenses.length
-    ? [formatLenses[Math.floor(slot / 2) % formatLenses.length]] : [];
+
+  const formatLenses = all.filter(item => typeof item.chunk === 'string' && item.chunk.endsWith('_lens'));
+  const standard = all.filter(item => !formatLenses.includes(item));
   const byTag = new Map();
-  for (const group of (reserved.length ? all.filter((item) => !formatLenses.includes(item)) : all)) {
+  const exploration = [];
+  for (const group of standard) {
+    if (Number(group.targetShare) <= 0) {
+      exploration.push(group);
+      continue;
+    }
     const bucket = byTag.get(group.tag) || [];
     bucket.push(group);
     byTag.set(group.tag, bucket);
   }
+
+  // Growth Focus owns distribution: zero-share groups are never core picks.
+  // Exploration has its own explicit, low-frequency allowance; disabling it
+  // means zero-share groups receive *no* operational search slots.
+  const eligibleExploration = profile.exploration?.enabled !== false
+    && Number(profile.exploration?.weight || 0) > 0
+    && Number(profile.exploration?.maxSearchQueries || 0) > 0;
+  const exploreEvery = eligibleExploration
+    ? Math.max(2, Math.ceil(100 / Number(profile.exploration.weight)))
+    : Infinity;
+  const selected = [];
+  if (budget >= 3 && slot % 2 === 0 && formatLenses.length) {
+    selected.push(formatLenses[Math.floor(slot / 2) % formatLenses.length]);
+  }
+  if (slot % exploreEvery === 0 && exploration.length && selected.length < budget) {
+    selected.push(exploration[Math.floor(slot / exploreEvery) % exploration.length]);
+  }
+
   const tags = [...byTag.keys()];
-  if (!tags.length) return reserved;
-  const sourceOffset = kind === 'momentum' ? Math.floor(tags.length / 2) : 0;
-  const start = ((slot * budget) + sourceOffset) % tags.length;
-  const orderedTags = Array.from({ length: tags.length }, (_, index) => tags[(start + index) % tags.length]);
-  const selected = [...reserved];
-  for (let depth = 0; selected.length < budget; depth++) {
-    let added = false;
-    for (const tag of orderedTags) {
-      const bucket = byTag.get(tag) || [];
-      if (depth >= bucket.length) continue;
-      const index = bucket.length > 1 ? (slot + depth) % bucket.length : 0;
-      const query = bucket[index];
-      if (selected.some((item) => item.query === query.query)) continue;
-      selected.push(query);
-      added = true;
-      if (selected.length >= budget) break;
+  const totalShare = tags.reduce((total, tag) => total + Math.max(0, Number(byTag.get(tag)[0]?.targetShare || 0)), 0);
+  if (!tags.length || totalShare <= 0) return selected;
+
+  // Golden-ratio stepping gives deterministic, well-distributed samples at
+  // any timestamp without replaying all previous slots. Cumulative weights
+  // are owner target shares, not the number of query chunks per group.
+  const sourceOffset = kind === 'momentum' ? 0.5 : 0;
+  const cursor = slot * budget + sourceOffset;
+  const maxAttempts = Math.max(24, standard.length * 3);
+  for (let offset = 0; selected.length < budget && offset < maxAttempts; offset++) {
+    const position = cursor + offset;
+    const weightedPoint = ((position * 0.6180339887498949) % 1) * totalShare;
+    let sum = 0;
+    let tag = tags.at(-1);
+    for (const candidate of tags) {
+      sum += Number(byTag.get(candidate)[0].targetShare);
+      if (weightedPoint < sum) { tag = candidate; break; }
     }
-    if (!added) break;
+    const bucket = byTag.get(tag);
+    const choice = bucket[Math.floor(slot + offset / Math.max(1, tags.length)) % bucket.length];
+    if (selected.some(item => item.query === choice.query)) continue;
+    selected.push(choice);
   }
   return selected;
 }

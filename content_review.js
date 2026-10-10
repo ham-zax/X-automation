@@ -42,6 +42,16 @@ export function checkReviewClaims(review, { units, candidate, evidence = [], own
       failures.push('A reviewed claim is absent from the exact draft.');
       continue;
     }
+    if (claim.status === 'interpretation') {
+      // Opinions are not a loophole for omitted product facts or numbers.
+      // The discovery-specific gate additionally checks full sentence coverage.
+      if (!/^(?:i (?:think|believe|prefer|would)|my take|to me|the (?:real|interesting|useful|important) (?:part|lesson|bit|point)|worth (?:noting|watching)|why i (?:care|like)|this (?:feels|looks)|what matters)/i.test(assertion)
+        || factualQuantities(assertion).length > 0
+        || /\b(?:supports?|compatible|works? (?:on|with)|can run|runs? on|requires?|includes?|free|paid|costs?|version|all devices|every device)\b/i.test(assertion)) {
+        failures.push('A material assertion cannot be classified as subjective interpretation.');
+      }
+      continue;
+    }
     if (claim.status === 'illustrative') {
       if (!/^(?:if|suppose|hypothetical|for example|e\.g\.|use|set|limit|stop|retry|wait)\b/i.test(assertion)
           || /\b(?:measured|achieved|delivers|benchmark results|our results|my results)\b/i.test(assertion)) {

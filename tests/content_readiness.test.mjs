@@ -154,7 +154,9 @@ test('cached eligible replies lose eligibility when the current source or review
 
 test('mission-agent approval fails before approval when no current content review exists', () => {
   const key = 'https://x.com/builder/status/818181';
-  store.upsertCandidates([{ ...candidate, key, url: key }]);
+  // This fixture tests ordinary independent-review authority, not the
+  // external-X discovery gate exercised in useful_tech_discovery.test.mjs.
+  store.upsertCandidates([{ ...candidate, key, url: key, source: 'owner' }]);
   const queue = pipeline.routeCandidate(key, 'original', { actor: 'agent', routeContext: { behavior } });
   assert.deepEqual(store.listQueueSources(queue.id), [{ queueItemId: queue.id, candidateKey: key, role: 'primary' }]);
   pipeline.setBehaviorDecision(key, behavior, { actor: 'agent' });

@@ -21,6 +21,7 @@ import {
   getCandidate,
   getDraftByCandidate,
   getEditorialRecommendation,
+  getEditorialEvidenceForQueue,
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
@@ -129,15 +130,7 @@ function sourceTweetId(candidate) {
 }
 
 export function editorialEvidenceForQueue(queueItem) {
-  if (!queueItem) return [];
-  const selection = getLatestEditorialSelectionForQueueItem(queueItem.id);
-  if (!selection) return [];
-  const recommendation = getEditorialRecommendation(selection.editorialRecommendationId);
-  if (!recommendation) return [];
-  const evidence = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
-  if (recommendation.decision === 'RESEARCH_MORE') return evidence;
-  const linkedIds = new Set((recommendation.evidenceIds || []).map((id) => String(id)));
-  return evidence.filter((item) => linkedIds.has(String(item.id)));
+  return getEditorialEvidenceForQueue(queueItem);
 }
 
 function relationshipContext(candidate) {
@@ -964,9 +957,11 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
       sourceCandidates: listQueueSources(queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
       evidence: editorialEvidenceForQueue(queueItem),
       usedEvidenceIds: draft.editor?.evidenceUsed || [],
+      review: draft.editor?.contentReview,
+      publicUnits: queueItem.pipeline === 'thread' ? draft.threadParts : [draft.body],
     });
     if (!discoveryVerification.satisfied) {
-      throw new DomainValidationError(`Verified tech discovery requires cited material primary-source evidence before delegated ${queueItem.pipeline} approval (${discoveryVerification.status}). Choose a sourced Quote/research route or attach the verified documentation through existing Editorial evidence.`);
+      throw new DomainValidationError(`Source-dependent Original/Thread lacks a complete claim-to-primary-evidence review: ${discoveryVerification.issues.join(', ')}. Route to research or a clearly attributed Quote instead; never treat an evidence ID alone as factual proof.`);
     }
     requireCurrentStrategyDecision(queueItem, draft);
     analysis = scoreDraft(draft, candidate, contentGateContext(key, queueItem.pipeline, { requireContentReview: true }));

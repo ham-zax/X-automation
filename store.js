@@ -33,6 +33,7 @@ import {
   transitionLearnedRule,
 } from './learning.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { evaluateTechDiscoveryEvidence, requiresTechDiscoveryVerification } from './discovery_verification.js';
 import { evaluateActivity } from './growth_activity_policy.js';
 import { DEFAULT_GROWTH_POLICY, validateGrowthPolicy, mergeGrowthPolicy, audienceTier } from './growth_product_policy.js';
 import { analyzeGrowthPerformance } from './growth_performance_learning.js';
@@ -1424,14 +1425,35 @@ function canonicalPublicationMaterial(queueItem, draft, candidate = null) {
   return { content: contentMaterial, media: mediaMaterial };
 }
 
+// Reuse the selected Editorial evidence identity; no parallel fact database.
+export function getEditorialEvidenceForQueue(queueItem) {
+  if (!queueItem?.id) return [];
+  const selected = getLatestEditorialSelectionForQueueItem(queueItem.id);
+  if (!selected) return [];
+  const recommendation = getEditorialRecommendation(selected.editorialRecommendationId);
+  if (!recommendation) return [];
+  const rows = listResearchEvidence({ editorialRunId: recommendation.editorialRunId, storyKey: recommendation.storyKey });
+  if (recommendation.decision === 'RESEARCH_MORE') return rows;
+  const linked = new Set((recommendation.evidenceIds || []).map(value => String(value)));
+  return rows.filter(item => linked.has(String(item.id)));
+}
+
 export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
   const material = canonicalPublicationMaterial(queueItem, draft, candidate);
   const gateMaterial = draft?.gates || {};
   const writingSelection = queueItem?.id ? getLatestWritingStrategySelectionForQueueItem(queueItem.id) : null;
+  const evidenceIds = [...new Set((Array.isArray(draft?.editor?.evidenceUsed) ? draft.editor.evidenceUsed : [])
+    .map(value => String(value || '').trim()).filter(Boolean))].sort();
+  const evidenceById = new Map(getEditorialEvidenceForQueue(queueItem).map(row => [String(row.id), row]));
+  const evidenceReviewHash = hashCanonical({ evidenceIds,
+    evidence: evidenceIds.map(id => evidenceById.get(id) || { id, unavailable: true }),
+    contentReview: draft?.editor?.contentReview || null,
+  });
   return {
     contentHash: hashCanonical(material.content),
     mediaHash: hashCanonical(material.media),
     gateHash: hashCanonical(gateMaterial),
+    evidenceReviewHash,
     writingStrategySelectionId: writingSelection?.id ?? null,
     material,
   };
@@ -1743,6 +1765,14 @@ export function claimActPublication({
   const pipeline = String(action || '').trim().toLowerCase();
   if (!['reply', 'quote', 'original'].includes(pipeline)) {
     throw new DomainValidationError(`act supports reply|quote|original; received ${action || 'missing'}.`);
+  }
+  // This transport does not run the independent Writer factual review. The
+  // operator cannot prove a standalone post is merely an opinion from free
+  // text or caller-supplied editorial labels. Fail closed for *all* direct
+  // Originals, not only those whose viral hook heuristic happens to match.
+  // Existing approved queue Original/Thread transport remains available.
+  if (pipeline === 'original') {
+    throw new DomainValidationError('Direct act Originals require the existing reviewed main-feed queue. Route the candidate through Writer, independent review and approval; do not use the unreviewed act transport.');
   }
   const body = String(text || '').trim();
   if (!body) throw new DomainValidationError('act requires non-empty text.');
@@ -2203,6 +2233,7 @@ export function buildApprovalSnapshot(queueItem, draft, candidate = null, { auth
     contentHash: fp.contentHash,
     mediaHash: fp.mediaHash,
     gateHash: fp.gateHash,
+    evidenceReviewHash: fp.evidenceReviewHash,
     writingStrategySelectionId: fp.writingStrategySelectionId,
     growthFocusRevision: getNicheProfileRevision(),
     approvedAt: Date.now(),
@@ -2340,9 +2371,17 @@ function buildMainFeedScheduleItem(queueItem) {
       approvalMismatchReason = `APPROVAL_INVALIDATED: ${queueItem.approvalInvalidationReason || 'content changed after approval'}`;
     } else if (snapshot && snapshot.contentHash) {
       currentFingerprint = computeApprovalFingerprint(queueItem, draft, candidate);
-      if (currentFingerprint.contentHash !== snapshot.contentHash || currentFingerprint.mediaHash !== snapshot.mediaHash || currentFingerprint.gateHash !== snapshot.gateHash) {
+      if (currentFingerprint.contentHash !== snapshot.contentHash || currentFingerprint.mediaHash !== snapshot.mediaHash || currentFingerprint.gateHash !== snapshot.gateHash
+        || (snapshot.evidenceReviewHash && snapshot.evidenceReviewHash !== currentFingerprint.evidenceReviewHash)) {
         approvalSnapshotMismatch = true;
-        approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISMATCH: current publication material or approval gates differ from approved snapshot';
+        approvalMismatchReason = 'APPROVAL_SNAPSHOT_MISMATCH: current publication material, approval gates or evidence review differ from approved snapshot';
+      } else if (approvalAuthority.type === 'mission_agent'
+        && requiresTechDiscoveryVerification({
+          pipeline: queueItem.pipeline, candidate,
+          sourceCandidates: listQueueSources(queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
+        }) && !snapshot.evidenceReviewHash) {
+        approvalSnapshotMismatch = true;
+        approvalMismatchReason = 'APPROVAL_EVIDENCE_SNAPSHOT_MISSING: reapprove this source-dependent standalone discovery';
       } else if (snapshot.writingStrategySelectionId != null) {
         const currentSelection = getLatestWritingStrategySelectionForQueueItem(queueItem.id);
         if (!currentSelection || Number(currentSelection.id) !== Number(snapshot.writingStrategySelectionId)) {
@@ -2776,6 +2815,19 @@ export function claimQueueItemForPublication(id, {
         return null;
       }
       if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') return null;
+      const draft = scheduleCheck?.draft;
+      const sourceCandidates = listQueueSources(preItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean);
+      if (requiresTechDiscoveryVerification({ pipeline: preItem.pipeline, candidate: scheduleCheck?.candidate, sourceCandidates })) {
+        if (!preItem.approvalSnapshot?.evidenceReviewHash || !draft) return null;
+        const verification = evaluateTechDiscoveryEvidence({
+          pipeline: preItem.pipeline, candidate: scheduleCheck.candidate, sourceCandidates,
+          evidence: getEditorialEvidenceForQueue(preItem),
+          usedEvidenceIds: draft.editor?.evidenceUsed || [],
+          review: draft.editor?.contentReview,
+          publicUnits: preItem.pipeline === 'thread' ? draft.threadParts : [draft.body],
+        });
+        if (!verification.satisfied) return null;
+      }
     }
 
     const fingerprint = computePublicationActionFingerprint(preItem);
@@ -5609,6 +5661,9 @@ function draftApprovalInvalidationReason(queueItem, draft) {
   if (fingerprint.contentHash !== snapshot.contentHash) return 'draft text or thread changed after approval';
   if (fingerprint.mediaHash !== snapshot.mediaHash) return 'draft media changed after approval';
   if (fingerprint.gateHash !== snapshot.gateHash) return 'draft approval gates changed after approval';
+  if (snapshot.evidenceReviewHash && fingerprint.evidenceReviewHash !== snapshot.evidenceReviewHash) {
+    return 'draft cited evidence or content review changed after approval';
+  }
   return '';
 }
 

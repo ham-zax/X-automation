@@ -109,6 +109,25 @@ The **review branch is not merged or deployed** by these changes. Rollback of a 
 
 The 76 focused discovery/runner/Scout/viral/For You tests passed; JavaScript syntax, TypeScript compile and the existing UI Vite build passed. Full `npm test` executed 187 tests: 182 passed, **five failed during the configured 01:00–08:30 IST rest window** in existing run/repost suites (one failure polluted the next lease fixture). This is a wall-clock-dependent baseline test weakness; it is not a green full suite. Deterministic test-clock fixtures must be provided separately before calling the entire suite consistently passing. No live X search, media upload, video, public post, or Thread publication was performed.
 
+## Second independent review corrective contract (2026-10-10)
+
+**Review input:** Second independent audit of `cf6f83b` found P1 claim/evidence semantic gaps (XG2-01), unreviewed direct act Originals (XG2-02), and a verification trigger tied to unreliable viral hook labels (XG2-03); it also identified nonfaithful Growth Focus target shares (XG2-04) and an evidence/review approval fingerprint gap (XG2-05).
+
+**This revision remains limited to existing surfaces and existing ownership.**
+
+| Boundary | Enforced behavior |
+| --- | --- |
+| Verification trigger | All **X source-linked** autonomous Originals/Threads require material verification, irrespective of opening hook or viral classifier label. This deliberately fails closed for source-dependent standalone work that cannot identify the underlying project. A Quote can remain explicitly attributed rather than pretending to be a separately verified discovery. |
+| Project and claim support | `discovery_verification.js` checks a linked GitHub repository identity, a cited material README/release excerpt, a complete per-public-sentence factual claim inventory, and independent review support judgments for project match, contradictions, and limitations. Missing or altered claims and unsupported or mismatched evidence are rejected before delegated approval. This is a *conservative mechanical/evidence contract*, **not** deterministic natural-language entailment or a guarantee that an AI review cannot err. |
+| Atomic publication | The unreviewed `act` Original path is denied for **all** single-text Originals because the atomic claim cannot establish whether free-form text is source-dependent. Reply and Quote remain available. Standalone Originals/Threads use the existing Writer + current independent review + mission-agent or human approval + `browser-publish-claim` path. The queue atomic claim rechecks the discovery contract for delegated originals. |
+| Approval freshness | The existing queue approval snapshot now records `evidenceReviewHash` over the actually used Editorial evidence rows, their IDs and the bound content-review object. Reference-only or review-only edits invalidate a newly approved item; atomic queue claims reject mismatched snapshots. Older delegated X-discovery snapshots lacking this field are not automatically grandfathered in. |
+| Discovery preferences | `tech_news.js` uses configured positive target shares for operational query-slot allocation and only permits zero-share group probes through explicitly enabled exploration. Query budget and historical `getXSearchQueryGroups()` remain distinct; historical Viral Styles jobs and query identity stay baseline-equivalent. |
+| Offline acceptance | Tests cover missing/fabricated content review, mismatched projects, contradiction/negation, unsourced nonquantitative facts, source-grounded approval, act claim denial, approval evidence-only invalidation and weighted query allocation; existing focused and UI checks must remain green. |
+
+**Intentional compatibility change:** a short, genuinely first-party Original no longer uses the direct `act` transport. It must go through the already-existing approved queue too. This sacrifices the fastest Original path to remove an otherwise unauditable publication bypass, without imposing a posting quota or adding another publisher.
+
+**Limitations:** The current automatic source-project matching validates explicit GitHub URLs in the observed post or linked selected sources; shortlinks/indirect project identities may correctly end in research-only until grounded. `official_documentation` may require separately verified source identity for non-GitHub projects and is not claimed fully supported. The independent content reviewer assesses semantic support but its judgments are still fallible; overlapping words and a model declaration do not *prove* an assertion. Full agent-operator behavior, live read-only X recall, video, media rights, and per-child live Thread text verification still require further controlled evidence. No new database, browser transport, or background AI orchestration was introduced.
+
 ## Rollout
 
 **Review branch:** Phase A plus source-shape/bookmark evidence shown in existing Discover cards; no live X actions, no production main change, no UI new tab. Check syntax and diff before merge.

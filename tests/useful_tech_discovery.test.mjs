@@ -58,6 +58,35 @@ try {
       });
       assert.equal(strategy.getXSearchQueryGroups({ includeFormatLenses: true })
         .some(group => String(group.chunk).endsWith('_lens')), false);
+      const sequences = [];
+      for (const selectedTag of ['devtools', 'models']) {
+        strategy.setActiveNicheProfile({ ...original,
+          discovery: { ...original.discovery, latestQueryBudget: 2 },
+          exploration: { ...original.exploration, enabled: false },
+          contentGroups: original.contentGroups.map(group => ({ ...group,
+            discover: group.tag === selectedTag, targetShare: group.tag === selectedTag ? 100 : 0 })),
+        });
+        const tags = Array.from({ length: 16 }, (_, i) =>
+          selectRotatingXQueryGroups('latest', i * original.discovery.rotationMinutes * 60_000)
+            .map(group => group.tag));
+        assert.ok(tags.every(selection => selection.length >= 1 && selection.length <= 2 && selection.every(tag => tag === selectedTag)),
+          '100% owner share cannot be replaced by zero-share groups');
+        sequences.push(JSON.stringify(tags));
+      }
+      assert.notEqual(sequences[0], sequences[1], 'different owner preferences produce different searches');
+      strategy.setActiveNicheProfile({ ...original,
+        discovery: { ...original.discovery, latestQueryBudget: 1 },
+        exploration: { ...original.exploration, enabled: false },
+        contentGroups: original.contentGroups.map(group => ({ ...group,
+          discover: ['devtools', 'models'].includes(group.tag),
+          targetShare: group.tag === 'devtools' ? 80 : group.tag === 'models' ? 20 : 0 })),
+      });
+      const weighted = Array.from({ length: 256 }, (_, i) =>
+        selectRotatingXQueryGroups('latest', i * original.discovery.rotationMinutes * 60_000)[0]?.tag);
+      const devtoolsShare = weighted.filter(tag => tag === 'devtools').length / weighted.length;
+      assert.ok(devtoolsShare > 0.73 && devtoolsShare < 0.87,
+        'weighted discovery must honor configured shares rather than equal group rotation');
+      assert.ok(weighted.every(tag => ['devtools', 'models'].includes(tag)));
     } finally {
       strategy.setActiveNicheProfile(original);
     }
@@ -106,18 +135,44 @@ try {
     assert.equal(observed.cards.find(card => card.tier === 'T2').reason.xDiscoveryInspirations[0].candidateKey, source.key);
   });
 
-  await test('verification separates creator claims and metadata from cited implementation evidence', () => {
-    const source = xPost('You can now turn Android into an iPhone companion with this open-source tool.');
-    const base = { candidate: source, pipeline: 'original' };
-    const id = 81;
-    const readme = { id, status: 'primary_supported', sourceKind: 'github_readme',
-      summary: 'README details required versions and usage.', claimType: 'implementation' };
-    assert.equal(evaluateTechDiscoveryEvidence(base).status, 'unverified_source_claim');
-    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [readme] }).status, 'primary_evidence_not_cited');
-    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [{ ...readme, sourceKind: 'github_api' }], usedEvidenceIds: [id] }).satisfied, false);
-    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [{ ...readme, status: 'source_claim' }], usedEvidenceIds: [id] }).satisfied, false);
-    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [readme], usedEvidenceIds: [id] }).satisfied, true);
-    assert.equal(evaluateTechDiscoveryEvidence({ ...base, pipeline: 'quote' }).satisfied, true);
+  await test('claim-to-evidence validation rejects missing, unrelated, contradicted and omitted material assertions', () => {
+    const source = xPost('I built a CLI that lets Android developers debug iOS tools. https://github.com/example/bridge');
+    const claimText = 'Android 14 requires a bridge to debug iOS applications.';
+    const evidence = { id: 81, status: 'primary_supported', sourceKind: 'github_readme',
+      sourceFamily: 'github:example/bridge', requestedUrl: 'https://api.github.com/repos/example/bridge/readme',
+      summary: claimText, claimType: 'implementation' };
+    const claim = { text: claimText, status: 'supported', sourceId: '81',
+      sourceQuote: claimText, attributed: false,
+      supportAssessment: { support: 'supported', projectMatch: true, contradictionChecked: true, limitationsChecked: true } };
+    const review = { passed: true, factualClaims: [claim] };
+    const base = { candidate: source, pipeline: 'original', publicUnits: [claimText], review };
+    assert.equal(evaluateTechDiscoveryEvidence(base).satisfied, false);
+    assert.ok(evaluateTechDiscoveryEvidence({ ...base, evidence: [evidence] }).issues.includes('MISSING_CITED_MATERIAL_PRIMARY'));
+    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [{ ...evidence, sourceKind: 'github_api' }], usedEvidenceIds: ['81'] }).satisfied, false);
+    assert.equal(evaluateTechDiscoveryEvidence({ ...base, evidence: [{ ...evidence, status: 'source_claim' }], usedEvidenceIds: ['81'] }).satisfied, false);
+    const valid = { ...base, evidence: [evidence], usedEvidenceIds: ['81'] };
+    assert.equal(evaluateTechDiscoveryEvidence(valid).satisfied, true);
+    assert.ok(evaluateTechDiscoveryEvidence({ ...valid, review: { passed: true, factualClaims: [] } })
+      .issues.includes('UNREVIEWED_PUBLIC_ASSERTION'), 'an unquantified false claim cannot be omitted');
+    assert.equal(evaluateTechDiscoveryEvidence({ ...valid, publicUnits: [claimText, 'Every phone is compatible.'] }).satisfied, false);
+    assert.ok(evaluateTechDiscoveryEvidence({ ...valid, evidence: [{
+      ...evidence, sourceFamily: 'github:other/project',
+      requestedUrl: 'https://api.github.com/repos/other/project/readme',
+    }] }).issues.includes('PRIMARY_PROJECT_IDENTITY_MISMATCH'));
+    assert.ok(evaluateTechDiscoveryEvidence({ ...valid, evidence: [{
+      ...evidence, summary: 'Android 14 does not support debugging iOS applications.',
+    }], review: { passed: true, factualClaims: [{
+      ...claim, sourceQuote: 'Android 14 does not support debugging iOS applications.',
+    }] } }).issues.includes('ASSERTION_NOT_SUPPORTED_BY_CITED_EXCERPT'));
+    assert.equal(evaluateTechDiscoveryEvidence({ ...valid, review: { passed: true,
+      factualClaims: [{ ...claim, supportAssessment: { ...claim.supportAssessment, support: 'contradicted' } }] } }).satisfied, false);
+    assert.equal(evaluateTechDiscoveryEvidence({ ...valid, pipeline: 'quote' }).satisfied, true);
+    for (const text of ['I built a CLI that lets developers debug iOS apps from Android.',
+      'Introducing a developer CLI for debugging iOS applications.']) {
+      assert.equal(evaluateTechDiscoveryEvidence({
+        candidate: xPost(text), pipeline: 'thread',
+      }).required, true, 'hook wording must never decide verification authority');
+    }
   });
 
   await test('delegated standalone discovery approval rejects unsourced creator claims before quality gates', () => {
@@ -135,15 +190,26 @@ try {
     assert.throws(() => pipeline.approveQueueItemAsMissionAgent(source.key, {
       grantRevision: grant.revision,
       verificationProvenance: { authorityType: 'mission_agent', sourceReferences: [source.url], evidenceReferences: [] },
-    }), /requires cited material primary-source evidence/i);
+    }), /claim-to-primary-evidence review/i);
     assert.equal(store.getQueueItemByCandidate(source.key).status, 'needs_review');
   });
 
   await test('an X discovery retains source identity through governed editorial selection and Writer evidence packet', () => {
-    const source = xPost('You can now run a useful developer tool on Android using this open-source CLI.', '2109000000000000099');
+    const source = xPost('You can now run a useful developer tool on Android using this open-source CLI. https://github.com/example/useful-tool', '2109000000000000099');
     store.upsertCandidates([source]);
     const original = store.getCandidate(source.key);
     assert.equal(original.source, 'x');
+    // Drive the real Source Snapshot → Editorial Context seam before supplying
+    // the independently controlled final recommendation in this offline test.
+    const observedAt = Date.now() - 45_000;
+    store.saveDiscoverSnapshot('x_for_you', [source], observedAt);
+    store.recordSourceObservations([{
+      candidateKey: source.key, snapshotKind: 'x_for_you', observedAt,
+      rank: 1, metrics: { views: 12000, likes: 200 },
+    }]);
+    const context = editorial.buildEditorialContext({ objective: 'qualified_growth', now: Date.now() });
+    assert.ok(context.scanCandidates.some(item => item.key === source.key
+      && item.snapshotKinds.includes('x_for_you')), 'live editorial scan input contains the observed For You key');
     const run = store.createEditorialRun({ objective: 'qualified_growth' });
     const storyKey = 'useful-tool-check';
     const evidence = store.saveResearchEvidence({
@@ -152,7 +218,7 @@ try {
       sourceFamily: 'github:example/useful-tool',
       requestedUrl: 'https://api.github.com/repos/example/useful-tool/readme',
       resolvedUrl: 'https://api.github.com/repos/example/useful-tool/readme',
-      title: 'Useful tool README', summary: 'Android requires an explicit CLI bridge and supported version.',
+      title: 'Useful tool README', summary: 'Android requires an explicit CLI bridge and supported version. The setup requires a supported Android device before deploying the developer CLI. Check compatibility before installing this tool.',
       observedAt: Date.now(),
     });
     const rec = store.saveEditorialRecommendation({
@@ -177,24 +243,31 @@ try {
       sourceCandidates: queueSources, evidence: storedEvidence,
     });
     assert.equal(packet.discoveryVerification.required, true);
-    assert.equal(packet.discoveryVerification.status, 'primary_evidence_not_cited');
+    assert.equal(packet.discoveryVerification.status, 'missing_cited_material_primary');
     assert.ok(packet.discoveryVerification.materialPrimaryEvidenceIds.includes(String(evidence.id)));
-    const satisfied = evaluateTechDiscoveryEvidence({
-      pipeline: 'original', candidate: selected.candidate, sourceCandidates: queueSources,
-      evidence: storedEvidence, usedEvidenceIds: [evidence.id],
-    });
-    assert.equal(satisfied.satisfied, true);
+    assert.equal(packet.discoveryVerification.required, true);
+    assert.ok(packet.discoveryVerification.issues.includes('MISSING_CITED_MATERIAL_PRIMARY'));
 
     // Complete the existing guarded route, not a mock publisher.
     const existingDraft = store.getDraftByCandidate(selected.candidate.key);
     const draft = { ...existingDraft,
-      body: 'The project README describes a CLI bridge for Android developers. Check the supported version and device setup before relying on this workflow. The extra setup step matters more than a one-line viral shortcut.',
+      body: 'Android requires an explicit CLI bridge and supported version. The setup requires a supported Android device before deploying the developer CLI. Check compatibility before installing this tool.',
       editor: { ...existingDraft.editor, pipeline: 'original', decision: 'POST',
         behavior: selected.queueItem.behavior, evidenceUsed: [evidence.id],
         media: { type: 'none', required: false } },
     };
+    const claimAssessment = { support: 'supported', projectMatch: true,
+      contradictionChecked: true, limitationsChecked: true };
+    const factualClaims = [
+      'Android requires an explicit CLI bridge and supported version.',
+      'The setup requires a supported Android device before deploying the developer CLI.',
+    ].map(text => ({ text, status: 'supported', sourceId: String(evidence.id), sourceQuote: text,
+      attributed: false, supportAssessment: claimAssessment }));
+    factualClaims.push({ text: 'Check compatibility before installing this tool.', status: 'supported',
+      sourceId: String(evidence.id), sourceQuote: 'Check compatibility before installing this tool.',
+      attributed: false, supportAssessment: claimAssessment });
     draft.editor.contentReview = contentReview.bindContentReview({
-      passed: true, factualClaims: [], ownerClaims: [], voiceIssues: [], issues: [],
+      passed: true, factualClaims, ownerClaims: [], voiceIssues: [], issues: [],
     }, drafting.draftReviewContext(draft, selected.candidate, { pipeline: 'original',
       behavior: selected.queueItem.behavior, evidence: storedEvidence }));
     store.saveDraft(draft);
@@ -209,6 +282,21 @@ try {
     });
     assert.equal(approved.queueItem.status, 'approved');
     assert.equal(approved.approvalSnapshot.authority.type, 'mission_agent');
+    assert.ok(approved.approvalSnapshot.evidenceReviewHash, 'approval must bind specific evidence and review');
+    const sameTextDraft = store.getDraftByCandidate(source.key);
+    const alternativeReview = { ...sameTextDraft, editor: { ...sameTextDraft.editor,
+      contentReview: { ...sameTextDraft.editor.contentReview, issues: ['Now unresolved.'] } } };
+    assert.notEqual(store.computeApprovalFingerprint(approved.queueItem, alternativeReview).evidenceReviewHash,
+      approved.approvalSnapshot.evidenceReviewHash, 'review-only changes must alter the approval fingerprint');
+    const tampered = store.saveQueueItem({ ...approved.queueItem,
+      approvalSnapshot: { ...approved.approvalSnapshot, evidenceReviewHash: 'stale-attestation' } });
+    assert.equal(store.getMainFeedScheduleItem(source.key).approvalSnapshotMismatch, true);
+    assert.equal(store.claimQueueItemForPublication(tampered.id), null, 'atomic queue claim rejects stale evidence fingerprint');
+    store.saveQueueItem({ ...tampered, approvalSnapshot: approved.approvalSnapshot });
+    const currentDraft = store.getDraftByCandidate(source.key);
+    store.saveDraft({ ...currentDraft, editor: { ...currentDraft.editor, evidenceUsed: [] } });
+    assert.equal(store.getQueueItemByCandidate(source.key).status, 'needs_review',
+      'changing ONLY cited evidence after approval invalidates it');
   });
 } finally {
   process.chdir(previousCwd);
