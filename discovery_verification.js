@@ -30,6 +30,40 @@ function githubFamily(value) {
       ? `github:${owner.toLowerCase()}/${repo.replace(/\.git$/i, '').toLowerCase()}` : null;
   } catch { return null; }
 }
+const SHARED_DOCUMENT_HOSTS = ['github.io', 'readthedocs.io', 'notion.site', 'docs.google.com',
+  'medium.com', 'vercel.app', 'pages.dev', 'netlify.app', 'gitbook.io',
+  'sites.google.com', 'blogspot.com', 'wordpress.com'];
+// Official-host identity is *not* a claim that the vendor owns every page;
+// the separate trusted reviewer still checks the actual product/claim.
+// It prevents cross-vendor substitutions while allowing non-GitHub products.
+export function officialDocumentationFamily(inputUrl) {
+  try {
+    const u = new URL(String(inputUrl || ''));
+    const host = u.hostname.toLowerCase().replace(/\.$/, '');
+    if (u.protocol !== 'https:' || u.username || u.password || !host.includes('.')
+      || SHARED_DOCUMENT_HOSTS.some(suffix => host === suffix || host.endsWith('.' + suffix))) return null;
+    const docsHost = /^(?:docs|developer|developers|documentation|api)\./.test(host);
+    const docsPath = /^\/(?:docs|documentation|developers?|reference|guides?|manual|api\/docs)(?:\/|$)/i.test(u.pathname);
+    return docsHost || docsPath ? 'official:' + host : null;
+  } catch { return null; }
+}
+function referencedProjectFamilies(source) {
+  return [githubFamily(source.url || ''), officialDocumentationFamily(source.url || ''),
+    ...quotedUrls(source.text || '').flatMap(url => [githubFamily(url), officialDocumentationFamily(url)])]
+    .filter(Boolean);
+}
+function primaryEvidenceFamily(row) {
+  const url = row.resolvedUrl || row.requestedUrl || '';
+  if (row.sourceKind === 'official_documentation') {
+    const family = officialDocumentationFamily(url);
+    const asserted = String(row.sourceFamily || '').trim().toLowerCase();
+    return family && (asserted === family || asserted === family.slice('official:'.length))
+      ? family : null;
+  }
+  const family = githubFamily(url);
+  return family && String(row.sourceFamily || '').trim().toLowerCase() === family ? family : null;
+}
+
 function quotedUrls(text) {
   return (String(text || '').match(/https:\/\/[^\s<>()\[\]{}"']+/gi) || [])
     .map(value => value.replace(/[.,;:!?]+$/, ''));
@@ -49,6 +83,9 @@ function quoteSupportsSurface(assertion, quote) {
   // the broader semantics; this only stops a common deterministic inversion.
   const negative = /\b(?:not|never|cannot|can't|doesn't|unsupported|incompatible|unavailable|not supported)\b/i;
   if (negative.test(quote) !== negative.test(assertion)) return false;
+  const qualifier = /\b(?:except|excluding|unless|only\s+(?:if|on|for|with)|limited\s+to|restricted\s+to)\b/i;
+  if (qualifier.test(quote) && !qualifier.test(assertion)) return false;
+  if (/\bpaid\b/i.test(quote) && /\bfree\b/i.test(assertion) && !/\bpaid\b/i.test(assertion)) return false;
   return claimTerms.length > 0
     && claimTerms.filter(word => cited.has(word)).length >= Math.ceil(claimTerms.length * 0.7);
 }
@@ -89,10 +126,7 @@ export function evaluateTechDiscoveryEvidence({
     return [...features.hookLabels, ...features.styleLabels];
   })).sort();
   const required = requiresTechDiscoveryVerification({ pipeline, candidate, sourceCandidates });
-  const referencedProjects = new Set(sources.flatMap(item => [
-    githubFamily(item.url || ''),
-    ...quotedUrls(item.text || '').map(githubFamily),
-  ]).filter(Boolean));
+  const referencedProjects = new Set(sources.flatMap(referencedProjectFamilies));
   const rows = Array.isArray(evidence) ? evidence : [];
   const primary = rows.filter(item => item?.status === 'primary_supported'
     && MATERIAL_PRIMARY_KINDS.has(String(item.sourceKind || '')) && item.id != null);
@@ -133,9 +167,8 @@ export function evaluateTechDiscoveryEvidence({
         failures.push('ASSERTION_NOT_LINKED_TO_CITED_PRIMARY');
         continue;
       }
-      const family = githubFamily(row.resolvedUrl || row.requestedUrl || '');
-      const claimedFamily = String(row.sourceFamily || '').toLowerCase();
-      if (!family || family !== claimedFamily || !referencedProjects.has(family)) {
+      const family = primaryEvidenceFamily(row);
+      if (!family || !referencedProjects.has(family)) {
         failures.push('PRIMARY_PROJECT_IDENTITY_MISMATCH');
       }
       if (!quote || !clean(row.summary).includes(quote) || !quoteSupportsSurface(segment, quote)) {

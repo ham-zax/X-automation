@@ -354,8 +354,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     next.editor.contentReview = bindContentReview(writerOutput.contentReview, draftReviewContext(next, writerPacket.candidate, {
       pipeline, behavior: writerPacket.behavior, evidence: writerPacket.evidence,
       personaVersion: writerPacket.persona?.version,
-    }), { reviewer: writerOutput.contentReview.reviewer === 'writer_runtime' ? 'writer_runtime' : 'external_agent',
-      execution: writerOutput.contentReview.execution || null });
+    }), { reviewer: 'external_agent', execution: null });
   }
   return next;
 }

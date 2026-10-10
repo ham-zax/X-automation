@@ -14,7 +14,7 @@ import {
 } from './behavior.js';
 import { applyWriterOutput, buildWriterPacket, scoreDraft } from './drafting.js';
 import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
-import { generateWriterOutput } from './writer_runtime.js';
+import { generateWriterOutput, independentlyReviewAndSaveDraft } from './writer_runtime.js';
 import { calculateProfileProofCoverage } from './profile_proof.js';
 import { matchResearchTopics } from './research_topics.js';
 import {
@@ -118,6 +118,7 @@ import {
   listPublishedMainFeedContent,
   listPersonaStanceEvents,
   listQueueItems,
+  listQueueSources,
   listRecentMainFeedPublications,
   listRecentPublishedContent,
   listResearchEvidence,
@@ -700,25 +701,15 @@ function writerEditorialContext(candidate, queueItem) {
   };
 }
 
-export async function generateDraftCandidate(current) {
-  const candidate = getCandidate(current.candidateKey);
-  if (!candidate) throw validationError('Draft source candidate not found.');
-  const queueItem = getQueueItemByCandidate(candidate.key) || ensureCandidateWorkflow(candidate.key).queueItem;
-  if (current.status === 'published' || queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId) {
-    throw validationError('Published text is historical record and cannot be regenerated.');
-  }
-  const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
+// Shared with autonomous preparation: the UI and mission runner must build
+// the *same* evidence/source-aware packet, including editorial aggregate X
+// sources whose canonical draft candidate is not itself a source post.
+export function buildGeneratedWriterPacket({ candidate, queueItem, draft, strategyGeneration, editorialContext }) {
   const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
-  const editorialContext = writerEditorialContext(candidate, queueItem);
-  const strategyGeneration = getWritingStrategyGenerationContext(queueItem.id);
-  if (pipeline !== 'reply' && (!strategyGeneration.selectionId || !strategyGeneration.mode)) {
-    throw validationError('Choose and save No influence, Advice only, or Use for this draft before generating.');
-  }
-  const packet = buildWriterPacket({
-    candidate,
-    queueItem,
-    draft: current,
+  return buildWriterPacket({
+    candidate, queueItem, draft,
     evidence: editorialContext.evidence,
+    sourceCandidates: listQueueSources(queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
     profileProof: editorialContext.profileProof,
     editorialRecommendation: editorialContext.recommendation,
     relationship: username ? getRelationshipProfile(username) : null,
@@ -727,8 +718,25 @@ export async function generateDraftCandidate(current) {
     health: getAccountHealthSummary().health,
     writingStrategy: strategyGeneration.writingStrategy,
   });
+}
+
+export async function generateDraftCandidate(current) {
+  const candidate = getCandidate(current.candidateKey);
+  if (!candidate) throw validationError('Draft source candidate not found.');
+  const queueItem = getQueueItemByCandidate(candidate.key) || ensureCandidateWorkflow(candidate.key).queueItem;
+  if (current.status === 'published' || queueItem.status === 'published' || queueItem.publishedAt || queueItem.outputTweetId) {
+    throw validationError('Published text is historical record and cannot be regenerated.');
+  }
+  const pipeline = CONTENT_PIPELINES.has(queueItem.pipeline) ? queueItem.pipeline : 'original';
+  const editorialContext = writerEditorialContext(candidate, queueItem);
+  const strategyGeneration = getWritingStrategyGenerationContext(queueItem.id);
+  if (pipeline !== 'reply' && (!strategyGeneration.selectionId || !strategyGeneration.mode)) {
+    throw validationError('Choose and save No influence, Advice only, or Use for this draft before generating.');
+  }
+  const packet = buildGeneratedWriterPacket({ candidate, queueItem, draft: current,
+    strategyGeneration, editorialContext });
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
-  const output = await generateWriterOutput(packet, promptDocumentText);
+  const output = await generateWriterOutput(packet, promptDocumentText, { skipReview: true });
   const latestDraft = getDraft(current.id);
   const latestQueue = getQueueItem(queueItem.id);
   if (!latestDraft || latestDraft.updatedAt !== current.updatedAt || latestDraft.status !== current.status || !latestQueue || latestQueue.status !== queueItem.status || latestQueue.pipeline !== queueItem.pipeline) {
@@ -744,10 +752,18 @@ export async function generateDraftCandidate(current) {
     writerExecutionSource: 'writer_runtime',
   });
   const next = applyWriterOutput(writerBase, output, { generationProvenance, writerPacket: packet });
-  const analysis = evaluateDraftQuality(candidate, next, pipeline, {
+  let analysis = evaluateDraftQuality(candidate, next, pipeline, {
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });
-  const saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' }, { expectedUpdatedAt: current.updatedAt });
+  let saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' }, { expectedUpdatedAt: current.updatedAt });
+  // The server executes the independent review; browser/API input cannot
+  // mint its attestation. A failed review leaves the draft editable.
+  const reviewed = await independentlyReviewAndSaveDraft(saved, packet, output);
+  saved = reviewed.draft;
+  analysis = evaluateDraftQuality(candidate, saved, pipeline, {
+    relevanceOverride: queueItem.relevance?.humanOverride || null,
+  });
+  saved = saveDraft({ ...saved, gates: analysis.gates, qualityScore: analysis.score });
   if (queueItem.status !== 'drafting' || queueItem.pipeline !== pipeline) {
     routeCandidate(candidate.key, pipeline, { actor: 'agent' });
   }

@@ -3,6 +3,7 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import { fetchXPostContext } from './tech_news.js';
+import { officialDocumentationFamily } from './discovery_verification.js';
 import {
   getEditorialRecommendation,
   saveResearchEvidence,
@@ -620,10 +621,22 @@ async function enrichX(editorialRunId, storyKey, candidate) {
     }
     const page = await safeFetchResearchPage(linkedUrl);
     if (page.ok) {
+      // First-party HTTPS documentation explicitly linked by the X source is
+      // observed primary source material. The independent reviewer still must
+      // establish actual project identity, claim support and limitations.
+      const requestedFamily = officialDocumentationFamily(linkedUrl);
+      const resolvedFamily = officialDocumentationFamily(page.resolvedUrl);
+      const official = requestedFamily && requestedFamily === resolvedFamily;
       rows.push(persistEvidence(editorialRunId, storyKey, candidate, {
-        claim: `Page explicitly linked from the X source post.`, claimType: 'other', status: 'source_claim',
-        sourceKind: 'generic_page', sourceFamily: family, requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
-        title: page.title, summary: boundedSummary(page.text), metadata: { contentType: page.contentType },
+        claim: 'Page explicitly linked from the X source post.', claimType: 'other',
+        status: official ? 'primary_supported' : 'source_claim',
+        sourceKind: official ? 'official_documentation' : 'generic_page',
+        sourceFamily: official ? resolvedFamily.slice('official:'.length) : family,
+        requestedUrl: page.requestedUrl, resolvedUrl: page.resolvedUrl,
+        title: page.title, summary: boundedSummary(page.text),
+        metadata: { contentType: page.contentType,
+          ...(official ? { identityBasis: 'observed_https_documentation_explicitly_linked_by_source',
+            requiresIndependentProductIdentityReview: true } : {}) },
       }));
     } else {
       rows.push(failedEvidence(editorialRunId, storyKey, candidate, { sourceKind: 'generic_page', sourceFamily: family, requestedUrl: linkedUrl, result: page }));

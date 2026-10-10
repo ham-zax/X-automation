@@ -22,6 +22,7 @@ import {
   getDraftByCandidate,
   getEditorialRecommendation,
   getEditorialEvidenceForQueue,
+  hasTrustedIndependentWriterReview,
   getAccountHealthSummary,
   getAutonomousReplyDecision,
   getAutonomousReplyGrantState,
@@ -960,6 +961,9 @@ export function approveQueueItemAsMissionAgent(key, { grantRevision, verificatio
       review: draft.editor?.contentReview,
       publicUnits: queueItem.pipeline === 'thread' ? draft.threadParts : [draft.body],
     });
+    if (discoveryVerification.required && !hasTrustedIndependentWriterReview(queueItem, draft)) {
+      throw new DomainValidationError('INDEPENDENT_REVIEW_AUTHORITY_MISSING: caller-supplied review data cannot authorize delegated X-discovery publication; run the independent server Writer reviewer on this exact draft.');
+    }
     if (!discoveryVerification.satisfied) {
       throw new DomainValidationError(`Source-dependent Original/Thread lacks a complete claim-to-primary-evidence review: ${discoveryVerification.issues.join(', ')}. Route to research or a clearly attributed Quote instead; never treat an evidence ID alone as factual proof.`);
     }

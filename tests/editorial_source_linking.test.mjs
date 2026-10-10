@@ -51,6 +51,44 @@ try {
     assert.deepEqual(again.queueSources, selected.queueSources);
   });
 
+  await test('automated Writer preparation sees the exact linked X sources for an aggregated editorial Original', async () => {
+    const sources = ['2111000000000000001', '2111000000000000002'].map((id, index) => ({
+      key: 'https://x.com/toolbuilder/status/' + id,
+      source: 'x', title: '@toolbuilder',
+      text: index === 0
+        ? 'Introducing the Acme Android SDK. Read https://docs.acme.dev/reference'
+        : 'This SDK supports Android 14 according to https://docs.acme.dev/reference',
+      url: 'https://x.com/toolbuilder/status/' + id,
+      timestamp: Date.now() - 100000,
+      metrics: { views: 5000, likes: 45 },
+    }));
+    store.upsertCandidates(sources);
+    const run = store.createEditorialRun({ objective: 'qualified_growth' });
+    const rec = store.saveEditorialRecommendation({
+      editorialRunId: run.id, storyKey: 'acme-sdk', rank: 1, decision: 'PREPARE',
+      pipeline: 'original', objective: 'qualified_growth', title: 'Acme SDK setup and requirements',
+      thesis: 'Android setup prerequisites are more useful than the claim of instant compatibility.',
+      whyNow: 'Developers are asking about the new SDK.',
+      candidateKeys: sources.map(row => row.key),
+      potentials: { objectiveFit: 85, reachPotential: 50, followPotential: 60, candidateKey: sources[0].key },
+      behavior: { decision: 'ACT', primaryPurpose: 'technical_value', socialMode: 'explainer',
+        informationDepth: 'compact_reason', affectStrategy: 'neutral', affectProvenance: 'none',
+        reasonToExist: 'Explain SDK installation and compatibility.' },
+    });
+    const selected = editorial.selectEditorialRecommendation(rec.id);
+    assert.equal(selected.candidate.key, 'editorial:' + rec.id);
+    const { buildGeneratedWriterPacket } = await import(pathToFileURL(path.join(root, 'web_api.js')));
+    const packet = buildGeneratedWriterPacket({
+      candidate: selected.candidate, queueItem: selected.queueItem,
+      draft: store.getDraftByCandidate(selected.candidate.key),
+      strategyGeneration: { writingStrategy: null },
+      editorialContext: { evidence: [], profileProof: {}, recommendation: rec },
+    });
+    assert.equal(packet.discoveryVerification.required, true,
+      'automated Writer packet must observe the X original sources despite the synthetic editorial key');
+    assert.deepEqual(packet.discoveryVerification.sourceUrls.sort(), sources.map(row => row.url).sort());
+  });
+
   await test('delegated Thread selection uses the same real-source links', () => {
     store.configureGrowthOperatorDelegation({ mode: 'live' }, { actor: 'human' });
     const grant = store.startGrowthOperatorDelegation({ actor: 'human' });

@@ -1438,6 +1438,50 @@ export function getEditorialEvidenceForQueue(queueItem) {
   return rows.filter(item => linked.has(String(item.id)));
 }
 
+// Only the server can create this state after an independent Writer review
+// invocation. Caller-provided reviewer labels and execution JSON have no
+// authority and cannot create it through agent/web commands.
+const TRUSTED_WRITER_REVIEW_KEY = 'trusted_writer_review_v1:';
+function independentReviewMaterial(queueItem, draft) {
+  return {
+    queueItemId: queueItem?.id ?? null,
+    draftId: draft?.id ?? null,
+    candidateKey: String(draft?.candidateKey || ''),
+    units: queueItem?.pipeline === 'thread' ? draft?.threadParts || [] : [draft?.body || ''],
+    evidenceUsed: draft?.editor?.evidenceUsed || [],
+    evidence: getEditorialEvidenceForQueue(queueItem)
+      .filter(item => (draft?.editor?.evidenceUsed || []).map(String).includes(String(item.id))),
+    contentReview: draft?.editor?.contentReview || null,
+  };
+}
+export function hasTrustedIndependentWriterReview(queueItem, draft) {
+  if (!queueItem?.id || !draft?.id || draft.editor?.contentReview?.reviewer !== 'writer_runtime'
+    || draft.editor.contentReview.passed !== true) return false;
+  const row = db.prepare('SELECT value FROM app_state WHERE key = ?')
+    .get(TRUSTED_WRITER_REVIEW_KEY + draft.id)?.value;
+  if (!row) return false;
+  try {
+    const recorded = JSON.parse(row);
+    return recorded.version === 1 && recorded.hash === hashCanonical(independentReviewMaterial(queueItem, draft));
+  } catch { return false; }
+}
+export function recordServerIndependentWriterReview(draft) {
+  const queueItem = getQueueItemByCandidate(draft?.candidateKey);
+  if (!queueItem?.id || !draft?.id || draft.editor?.contentReview?.reviewer !== 'writer_runtime'
+    || draft.editor.contentReview.passed !== true) {
+    throw new DomainValidationError('Only a completed server-run independent Writer review may be attested.');
+  }
+  const persisted = getDraft(draft.id);
+  if (!persisted || JSON.stringify(persisted.editor?.contentReview) !== JSON.stringify(draft.editor.contentReview)) {
+    throw new DomainValidationError('Independent review must be persisted on the exact current draft before attestation.');
+  }
+  const record = { version: 1, hash: hashCanonical(independentReviewMaterial(queueItem, persisted)),
+    attestedAt: Date.now() };
+  db.prepare('INSERT INTO app_state(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(TRUSTED_WRITER_REVIEW_KEY + persisted.id, JSON.stringify(record));
+  return { attested: true, draftId: persisted.id, attestedAt: record.attestedAt };
+}
+
 export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
   const material = canonicalPublicationMaterial(queueItem, draft, candidate);
   const gateMaterial = draft?.gates || {};
@@ -2826,7 +2870,7 @@ export function claimQueueItemForPublication(id, {
           review: draft.editor?.contentReview,
           publicUnits: preItem.pipeline === 'thread' ? draft.threadParts : [draft.body],
         });
-        if (!verification.satisfied) return null;
+        if (!verification.satisfied || !hasTrustedIndependentWriterReview(preItem, draft)) return null;
       }
     }
 

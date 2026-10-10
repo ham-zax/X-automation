@@ -1,6 +1,7 @@
 import { runStructuredAI } from './ai_runtime.js';
-import { validateWriterEvidenceReferences } from './drafting.js';
-import { contentSources } from './content_review.js';
+import { validateWriterEvidenceReferences, draftReviewContext } from './drafting.js';
+import { contentSources, bindContentReview } from './content_review.js';
+import { saveDraft, recordServerIndependentWriterReview } from './store.js';
 
 const OUTPUT_SCHEMA = {
   type: 'object',
@@ -82,7 +83,29 @@ export async function reviewWriterOutput(packet, output, { timeoutMs = 60_000, r
   return { ...result.output, reviewer: 'writer_runtime', execution: result.execution };
 }
 
-export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = 120_000, runAI = runStructuredAI } = {}) {
+// This is the only trusted automated review-writing path: the server invokes
+// a fresh independent reviewer itself, binds the result to exact draft content,
+// persists it, then attests the persisted record. No caller-submitted review
+// object or reviewer name can mint this authority through the bridge.
+export async function independentlyReviewAndSaveDraft(draft, packet, writerOutput, { timeoutMs = 60_000, runAI = runStructuredAI } = {}) {
+  let result;
+  try {
+    result = await reviewWriterOutput(packet, writerOutput, { timeoutMs, runAI });
+  } catch {
+    // A failed reviewer leaves an editable but non-authorized draft.
+    result = { passed: false, available: false, factualClaims: [], ownerClaims: [],
+      voiceIssues: [], issues: ['Independent Writer review unavailable; retry before autonomous approval.'] };
+  }
+  const bound = bindContentReview(result, draftReviewContext(draft, packet.candidate, {
+    pipeline: packet.pipeline, behavior: packet.behavior, evidence: packet.evidence,
+    personaVersion: packet.persona?.version,
+  }), { reviewer: 'writer_runtime', execution: result.execution || null });
+  const saved = saveDraft({ ...draft, editor: { ...draft.editor, contentReview: bound } });
+  if (bound.passed) recordServerIndependentWriterReview(saved);
+  return { draft: saved, contentReview: bound };
+}
+
+export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = 120_000, runAI = runStructuredAI, skipReview = false } = {}) {
   const deadline = Date.now() + timeoutMs;
   const prompt = [
     'Generate one publication candidate for the supplied writer packet.',
@@ -106,6 +129,7 @@ export async function generateWriterOutput(packet, promptDocumentText, { timeout
     metadata: { consumer: 'writer_runtime', dailyTone: packet.persona?.dailyTone || null },
   });
   validateWriterEvidenceReferences(result.output, packet);
+  if (skipReview) return { ...result.output, execution: result.execution };
   let contentReview;
   try {
     const remainingMs = deadline - Date.now();

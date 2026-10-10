@@ -824,7 +824,7 @@ export function selectRotatingXQueryGroups(kind, now = Date.now()) {
   if (budget >= 3 && slot % 2 === 0 && formatLenses.length) {
     selected.push(formatLenses[Math.floor(slot / 2) % formatLenses.length]);
   }
-  if (slot % exploreEvery === 0 && exploration.length && selected.length < budget) {
+  if (eligibleExploration && slot % exploreEvery === 0 && exploration.length && selected.length < budget) {
     selected.push(exploration[Math.floor(slot / exploreEvery) % exploration.length]);
   }
 

@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
+import { independentlyReviewAndSaveDraft } from './writer_runtime.js';
+import { requiresTechDiscoveryVerification } from './discovery_verification.js';
 import { getPersonaModelSummary, getPersonaSlice } from './persona.js';
 import { isMeaningfulOutboundInteraction } from './relationship.js';
 import { refreshEngagementOpportunities } from './engagement.js';
@@ -1480,7 +1482,17 @@ async function main() {
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
       writingStrategy: strategyGeneration.writingStrategy,
     });
-    const next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance, writerPacket });
+    let next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance, writerPacket });
+    const verificationNeeded = requiresTechDiscoveryVerification({ pipeline, candidate,
+      sourceCandidates: listQueueSources(workflow.queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
+    });
+    if (verificationNeeded && payload.output?.decision !== 'DO_NOT_POST') {
+      // Save the submitted draft as editable first. The server, not the caller,
+      // invokes the independent reviewer. Any failure remains non-authorizing.
+      const unreviewed = saveDraft({ ...next, status: 'draft' });
+      const reviewed = await independentlyReviewAndSaveDraft(unreviewed, writerPacket, payload.output || {});
+      next = reviewed.draft;
+    }
     const analysis = scoreDraft(next, candidate, {
       pipeline,
       evidence: editorialEvidenceForQueue(workflow.queueItem),

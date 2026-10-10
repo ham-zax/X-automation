@@ -21,7 +21,7 @@ const store = await import(pathToFileURL(path.join(repo, 'store.js')).href);
 const pipeline = await import(pathToFileURL(path.join(repo, 'pipeline.js')).href);
 const editorial = await import(pathToFileURL(path.join(repo, 'editorial.js')).href);
 const drafting = await import(pathToFileURL(path.join(repo, 'drafting.js')).href);
-const contentReview = await import(pathToFileURL(path.join(repo, 'content_review.js')).href);
+const writerRuntime = await import(pathToFileURL(path.join(repo, 'writer_runtime.js')).href);
 
 const NOW = Date.parse('2026-10-10T12:00:00Z');
 const xPost = (text, id = '2109000000000000001') => ({
@@ -87,6 +87,8 @@ try {
       assert.ok(devtoolsShare > 0.73 && devtoolsShare < 0.87,
         'weighted discovery must honor configured shares rather than equal group rotation');
       assert.ok(weighted.every(tag => ['devtools', 'models'].includes(tag)));
+      assert.ok(selectRotatingXQueryGroups('latest', 0).every(item => item.tag !== 'agents'),
+        'disabled exploration cannot leak a zero-share query at slot zero');
     } finally {
       strategy.setActiveNicheProfile(original);
     }
@@ -166,6 +168,17 @@ try {
     }] } }).issues.includes('ASSERTION_NOT_SUPPORTED_BY_CITED_EXCERPT'));
     assert.equal(evaluateTechDiscoveryEvidence({ ...valid, review: { passed: true,
       factualClaims: [{ ...claim, supportAssessment: { ...claim.supportAssessment, support: 'contradicted' } }] } }).satisfied, false);
+    const universal = 'All Android devices support this CLI.';
+    const except = 'All Android devices support this CLI except Pixel devices.';
+    assert.equal(evaluateTechDiscoveryEvidence({ ...valid, publicUnits: [universal],
+      evidence: [{ ...evidence, summary: except }],
+      review: { passed: true, factualClaims: [{ ...claim, text: universal, sourceQuote: except }] },
+    }).satisfied, false, 'a qualified exception cannot support an unqualified universal claim');
+    assert.equal(evaluateTechDiscoveryEvidence({ ...valid, publicUnits: ['This service is free.'],
+      evidence: [{ ...evidence, summary: 'This service is free locally but paid when hosted.' }],
+      review: { passed: true, factualClaims: [{ ...claim, text: 'This service is free.',
+        sourceQuote: 'This service is free locally but paid when hosted.' }] },
+    }).satisfied, false, 'paid hosted tiers must not disappear under a generic free claim');
     assert.equal(evaluateTechDiscoveryEvidence({ ...valid, pipeline: 'quote' }).satisfied, true);
     for (const text of ['I built a CLI that lets developers debug iOS apps from Android.',
       'Introducing a developer CLI for debugging iOS applications.']) {
@@ -173,6 +186,35 @@ try {
         candidate: xPost(text), pipeline: 'thread',
       }).required, true, 'hook wording must never decide verification authority');
     }
+  });
+
+  await test('official first-party documentation qualifies without a GitHub repository but unrelated vendors do not', () => {
+    const source = xPost('Introducing our new developer SDK. Documentation: https://docs.acme.dev/reference');
+    const assertion = 'Acme SDK requires a supported Android device.';
+    const docs = { id: 'doc-17', status: 'primary_supported', sourceKind: 'official_documentation',
+      sourceFamily: 'docs.acme.dev', requestedUrl: 'https://docs.acme.dev/reference',
+      resolvedUrl: 'https://docs.acme.dev/reference', summary: assertion };
+    const review = { passed: true, factualClaims: [{ text: assertion, status: 'supported',
+      sourceId: 'doc-17', sourceQuote: assertion, attributed: false,
+      supportAssessment: { support: 'supported', projectMatch: true,
+        contradictionChecked: true, limitationsChecked: true } }] };
+    const input = { candidate: source, pipeline: 'original', evidence: [docs],
+      usedEvidenceIds: ['doc-17'], review, publicUnits: [assertion] };
+    assert.equal(evaluateTechDiscoveryEvidence(input).satisfied, true);
+    assert.equal(evaluateTechDiscoveryEvidence({
+      ...input, evidence: [{ ...docs, sourceFamily: 'docs.other.dev',
+        requestedUrl: 'https://docs.other.dev/reference', resolvedUrl: 'https://docs.other.dev/reference' }],
+    }).satisfied, false, 'another first-party documentation domain is not this project');
+    assert.equal(evaluateTechDiscoveryEvidence({
+      ...input, evidence: [{ ...docs, sourceKind: 'generic_page' }],
+    }).satisfied, false, 'generic pages are not independently verified primary documents');
+    assert.equal(evaluateTechDiscoveryEvidence({
+      ...input, evidence: [{ ...docs, requestedUrl: 'http://docs.acme.dev/reference',
+        resolvedUrl: 'http://docs.acme.dev/reference' }],
+    }).satisfied, false, 'non-HTTPS documentation does not acquire primary identity');
+    assert.equal(evaluateTechDiscoveryEvidence({
+      ...input, evidence: [{ ...docs, sourceFamily: 'docs.other.dev' }],
+    }).satisfied, false, 'self-declared source families must match the actual URL');
   });
 
   await test('delegated standalone discovery approval rejects unsourced creator claims before quality gates', () => {
@@ -190,11 +232,11 @@ try {
     assert.throws(() => pipeline.approveQueueItemAsMissionAgent(source.key, {
       grantRevision: grant.revision,
       verificationProvenance: { authorityType: 'mission_agent', sourceReferences: [source.url], evidenceReferences: [] },
-    }), /claim-to-primary-evidence review/i);
+    }), /INDEPENDENT_REVIEW_AUTHORITY_MISSING/i);
     assert.equal(store.getQueueItemByCandidate(source.key).status, 'needs_review');
   });
 
-  await test('an X discovery retains source identity through governed editorial selection and Writer evidence packet', () => {
+  await test('an X discovery retains source identity through governed editorial selection and Writer evidence packet', async () => {
     const source = xPost('You can now run a useful developer tool on Android using this open-source CLI. https://github.com/example/useful-tool', '2109000000000000099');
     store.upsertCandidates([source]);
     const original = store.getCandidate(source.key);
@@ -266,15 +308,42 @@ try {
     factualClaims.push({ text: 'Check compatibility before installing this tool.', status: 'supported',
       sourceId: String(evidence.id), sourceQuote: 'Check compatibility before installing this tool.',
       attributed: false, supportAssessment: claimAssessment });
-    draft.editor.contentReview = contentReview.bindContentReview({
-      passed: true, factualClaims, ownerClaims: [], voiceIssues: [], issues: [],
-    }, drafting.draftReviewContext(draft, selected.candidate, { pipeline: 'original',
-      behavior: selected.queueItem.behavior, evidence: storedEvidence }));
-    store.saveDraft(draft);
+    const rawReview = { passed: true, factualClaims, ownerClaims: [], voiceIssues: [], issues: [] };
+    const writerOutput = {
+      decision: 'POST', pipeline: 'original', finalText: draft.body, threadParts: [],
+      evidenceUsed: [String(evidence.id)], media: { type: 'none', required: false },
+      contentReview: { ...rawReview, reviewer: 'writer_runtime',
+        execution: { fabricated: 'untrusted external claim' } },
+    };
+    const forged = drafting.applyWriterOutput(draft, writerOutput, { writerPacket: packet });
+    assert.equal(forged.editor.contentReview.reviewer, 'external_agent',
+      'a caller-provided runtime label has no authority');
+    assert.equal(forged.editor.contentReview.execution, null,
+      'caller-supplied reviewer execution metadata is discarded');
+    store.saveDraft(forged);
     store.recordWritingStrategySelection({ queueItemId: selected.queueItem.id, mode: 'off',
       selectionSource: 'manual', selectedBy: 'human' });
     pipeline.requestQueueReview(selected.candidate.key);
     const grant = store.getGrowthOperatorDelegation();
+    assert.throws(() => pipeline.approveQueueItemAsMissionAgent(selected.candidate.key, {
+      grantRevision: grant.revision,
+      verificationProvenance: { authorityType: 'mission_agent',
+        sourceReferences: [source.url], evidenceReferences: [String(evidence.id)] },
+    }), /INDEPENDENT_REVIEW_AUTHORITY_MISSING/,
+    'forged review must leave the draft editable but not approvable');
+
+    let independentRuns = 0;
+    const reviewed = await writerRuntime.independentlyReviewAndSaveDraft(
+      store.getDraftByCandidate(source.key), packet, writerOutput,
+      { runAI: async () => {
+        independentRuns += 1;
+        return { output: rawReview, execution: { consumer: 'writer_content_review', fixture: true } };
+      } },
+    );
+    assert.equal(independentRuns, 1, 'independent reviewer executes server-side');
+    assert.equal(reviewed.contentReview.reviewer, 'writer_runtime');
+    assert.equal(store.hasTrustedIndependentWriterReview(
+      store.getQueueItemByCandidate(source.key), reviewed.draft), true);
     const approved = pipeline.approveQueueItemAsMissionAgent(selected.candidate.key, {
       grantRevision: grant.revision,
       verificationProvenance: { authorityType: 'mission_agent',
