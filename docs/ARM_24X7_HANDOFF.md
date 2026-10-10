@@ -1,4 +1,4 @@
-# ARM 24/7 operator handoff — 2026-10-07, updated 2026-10-08
+# ARM 24/7 operator handoff — current as of 2026-10-10
 
 Written for the next agent (any model) to take over. This file lives in a public repository: it names no secrets, addresses or key paths. Server access details are in Hamza's private `myservers` repository.
 
@@ -6,12 +6,12 @@ Written for the next agent (any model) to take over. This file lives in a public
 
 Hamza wants `@ham_zax` operated continuously by an unattended reasoning agent on a small always-on server (the **ARM** host, Oracle Cloud, Ubuntu 24.04 aarch64, **claive runtime with the Codex engine, model `gpt-6-luna`**; see Current deployment). The WSL workstation is **not** the operator host any more: Hamza said it will not run the operator. Never start a second operator elsewhere against another copy of the database (duplicate posts).
 
-Hamza asked that no extra code or review effort be spent on the supervision layer for now; the watchdog below is deliberately a hack made of existing parts.
+The operator is not a deployment target for implementation experiments. Historical Pi/watchdog notes below are retained as an archive, **not live runtime instructions**. Use the Current deployment section and `ops/systemd/arm/` for operative configuration.
 
-## Current deployment (2026-10-08)
+## Current deployment (verified 2026-10-10)
 
 - **Only operator host: ARM.** WSL is development/test; its `x-test-growth-agent` timer and service are stopped. Never run two operators or two live copies of the database (duplicate posts). Access is over ssh with the alias `arm`; host details stay in Hamza's private `myservers` repository.
-- **Runtime: claive with the Codex engine.** `growth_agent_runner.js` runs `claive run --engine codex --model gpt-6-luna --reasoning-effort max --web` with `CLAIVE_CODEX_YOLO=1` set for the child (runner commit `70de8c7`, claive commit `388652d`). claive then passes `--dangerously-bypass-approvals-and-sandbox` to Codex. Read-only turns stay sandboxed.
+- **Runtime: claive with the Codex engine.** `growth_agent_runner.js` runs `claive run --engine codex --model gpt-6-luna --reasoning-effort max --web` with `CLAIVE_CODEX_YOLO=1` set for the child (runner commit `70de8c7`, claive commit `388652d`). claive then passes `--dangerously-bypass-approvals-and-sandbox` to Codex. The worker runs with Codex sandbox bypass; read-only *intent* does not imply an OS-enforced read-only process.
 - **Why yolo.** Codex's bwrap sandbox fails on ARM (`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`), and `workspace-write` also blocks localhost TCP to the Chromium CDP port 9222. So, as with Pi before, the prompt is the only guard. The run is unprivileged and executes as the `ubuntu` user. Codex auth lives in the `ubuntu` user's Codex configuration on ARM.
 - **Model is locked.** With claive+codex the runner refuses any `X_GROWTH_AGENT_MODEL` other than `gpt-6-luna`. Reasoning effort is hard-coded to `max` in `commandFor`.
 - **Unit environment** (`x-test-growth-agent.service`, description `XGrowth unattended reasoning operator (claive codex gpt-6-luna, yolo)`): `X_GROWTH_AGENT_RUNTIME=claive`, `X_GROWTH_CLAIVE_ENGINE=codex`, `CODEX_WORKER_BINARY=/home/ubuntu/.local/bin/codex` (codex 0.161 is not on the default PATH), plus the unchanged `X_GROWTH_AGENT_SCHEDULED=1`, `X_GROWTH_BROWSER_TARGET=linux`, `X_GROWTH_BROWSER_CDP_PORT=9222`, `X_GROWTH_AGENT_WINDOW_MINUTES=480`, `AI_ALLOW_RUNTIME_MANAGED=true` and `PATH`.
@@ -20,7 +20,8 @@ Hamza asked that no extra code or review effort be spent on the supervision laye
 - **Watchdog.** `x-test-watch.timer` (the Pi/opencode2api watchdog that rewrote `model.conf`) is stopped and does not apply to the codex runtime. Do not restart it without rewriting it. `claive-serve.service` and the dashboard stay active.
 - **Browser.** Codex reads X with the Agent Browser CLI (`~/.local/bin/agent-browser --cdp 9222`), but `act` sends and confirms through `wh-browser` (`fast` observe/execute and `devtools` page/network reads). ARM has no GUI, so `~/.local/bin/wh-browser` there (installed 2026-10-08, not in git) is a copy of the WSL CLI with the WSLg display/audio env removed, the providers path set to `/home/ubuntu/repo/webharness/providers`, `DISPLAY=:99`, the `fast` tier given the `AGENT_BROWSER_*` env from `~/.config/mcp-dev-bridge/local-servers.json`, and no `jev` tier. Both tiers attach to the persistent Chromium on CDP 9222 (`webharness-chrome.service` on Xvfb) through `~/.config/mcp-dev-bridge/browser-fast.json`. Without it `act` fails before sending with `spawnSync wh-browser ENOENT`.
 - **Browser transport selection (2026-10-09).** For the ARM Claive Codex worker, `X_GROWTH_BROWSER_INTERFACE=agent-browser-cli` is the pre-Lightpanda production default for X observation; guarded `wh-browser` still owns publishing. An explicit selection of `webharness-mcp` enables typed `xgrowth_browser.observe/execute` for read-only observation and pre-send navigation. The service sets `X_GROWTH_BROWSER_MCP_SERVER=xgrowth_browser` and `X_GROWTH_BROWSER_FAST_BACKEND=clearcote`: the latter is the name used by the **legacy V1 WebHarness external-CDP configuration** (`~/.config/mcp-dev-bridge/browser-fast.json`) even though the actual persistent browser is Chromium. Do **not** switch the typed call to backend `chrome` on this host: in this V1 configuration it launches a separate browser rather than attaching to CDP 9222. This is a browser-interface label, not the `browserBackend="chrome"` observation provenance used by XGrowth ingestion. To switch a future provider, change the transport/back-end flags and `ops/browser_operator_contract.js` only; do not change the `scout → act` bridge or the immutable attempt handling. `X_GROWTH_BROWSER_INTERFACE=agent-browser-cli` selects the named-CDP CLI fallback; the operator loads `agent-browser skills get core` before use and cannot blindly retry an uncertain send.
-- **Codex typed browser tool and skill setup (2026-10-09).** `codex mcp add xgrowth_browser --env DISPLAY=:99 --env XDG_RUNTIME_DIR=/run/user/$(id -u) -- /usr/local/bin/node /home/ubuntu/repo/webharness/providers/browser-fast/server.mjs` registers the provider (ARM may require browser-runtime environment variables described in systemd/webharness runtime settings). Codex's user skill directories `~/.agents/skills/agent-browser/` and `~/.codex/skills/agent-browser/` contain a small discoverable skill that directs the worker to the version-aligned `agent-browser skills get core` guide (currently 0.38.2). Claive's Codex adapter normally starts with `--ignore-user-config`; `CLAIVE_CODEX_USE_USER_CONFIG=1` is set **only** for this selected MCP mode by the XGrowth runner, so Codex can discover the registered typed tools and user skills. Claive's default isolation for other workers is unchanged. The WebHarness `providers/browser-fast` pin is now Agent Browser 0.38.2 (matching ARM's global CLI), and the browser-fast service must be restarted after deploying the dependency. `act` still sends through the existing guarded bridge and the extracted `ops/browser_publish_transport.js` WebHarness adapter (injectable behind `driveBrowserSend`); no MCP UI call is permitted to bypass publication claims or retries.
+- **Codex typed browser tool and skill setup (2026-10-09).** `codex mcp add xgrowth_browser --env DISPLAY=:99 --env XDG_RUNTIME_DIR=/run/user/$(id -u) -- /usr/local/bin/node /home/ubuntu/repo/webharness/providers/browser-fast/server.mjs` registers the provider (ARM may require browser-runtime environment variables described in systemd/webharness runtime settings). Codex's user skill directories `~/.agents/skills/agent-browser/` and `~/.codex/skills/agent-browser/` contain a small discoverable skill that directs the worker to the version-aligned `agent-browser skills get core` guide (currently 0.38.2). Claive's Codex adapter normally starts with `--ignore-user-config`; the XGrowth runner supplies `CLAIVE_CODEX_USE_USER_CONFIG=1` for its Codex child, so selected typed tools and user skills can be discovered. This setting alone does **not** switch the browser mode. Claive's default isolation for other workers is unchanged. WebHarness `providers/browser-fast` has a pinned Agent Browser dependency. Deploy/restart that provider separately **only** when its installed runtime is actually changed; this integration requires neither a dependency update nor a service restart. `act` still sends through the existing guarded bridge and the extracted `ops/browser_publish_transport.js` WebHarness adapter (injectable behind `driveBrowserSend`); no MCP UI call is permitted to bypass publication claims or retries.
+- **Luna reliability integration (2026-10-10).** `relationship-context` is the safe known/unknown relationship read (its SQL is SELECT-only; a new CLI process may still contend during SQLite initialization). `lastInvocationResult.executionDiagnostics` is additive, versioned Claive shell-event telemetry, not a verified publication or a replacement for `toolFailures`. The default browser remains `agent-browser-cli`. The `webharness-mcp` opt-in now allocates an exact launcher-owned tab, passes its CDP target ID on every typed call and fails closed on mismatch; switch only at a fresh-run boundary after a nonpublishing pilot. No extra browser gateway or second lease owner is installed.
 - **Prompt.** The operator prompt defaults to the scout → act executor (`GROWTH_AGENT_MODE`, default `executor`). `GROWTH_AGENT_MODE=legacy` restores the old prompt.
 - **Backoff.** After a `rate_limited` or `provider_error` child result, the runner waits 2^n minutes (n = consecutive failures, capped at 30) before its next pass. State is kept in `$XDG_STATE_HOME/x_test/growth-runner-backoff.json` (default `~/.local/state/x_test/`). `X_GROWTH_AGENT_BACKOFF_FILE` overrides the path. `X_GROWTH_AGENT_BACKOFF=off` disables the gate.
 - **Deploying code.** Run `git pull --ff-only` in `/home/ubuntu/repo/x_test` and `/home/ubuntu/repo/claive` (claive is a symlinked install from that checkout). Units live in `~/.config/systemd/user/`; then run `systemctl --user daemon-reload`. Restart `x-test-dashboard.service` only when dashboard or server code changed. Over non-interactive ssh, export `XDG_RUNTIME_DIR=/run/user/$(id -u)` and put `~/.local/bin` on `PATH`.
@@ -32,7 +33,7 @@ Hamza asked that no extra code or review effort be spent on the supervision laye
   5. Restart the destination dashboard and confirm the maximum `publication_attempts.id` matches the source.
   6. Start the operator only on the destination.
 
-## What runs on ARM (user systemd units, linger on)
+## Historical archive: Pi-era unit inventory (not deployment instructions)
 
 *Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
 
@@ -50,7 +51,7 @@ Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config
 
 `automation.js` is retired and must not run. `AUTO_POST=true` is set in ARM's `.env` but only requests background publication through the official X API, which has no `X_API_ACCESS_TOKEN`, so it does nothing. Public posting happens through the browser operator.
 
-## How a pass works
+## Historical archive: Pi-era pass behavior (not the current Claive flow)
 
 *Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
 
@@ -58,11 +59,11 @@ Copies of every unit are in `ops/systemd/arm/`. Install paths on ARM: `~/.config
 
 Runner changes this session (`origin/main`): `a2346fb` (Pi runtime, portable paths, `X_GROWTH_BROWSER_TARGET`), `55eed51` (default model `opencode2api/exo-free`). Env knobs: `X_GROWTH_AGENT_RUNTIME`, `X_GROWTH_AGENT_MODEL` (`provider/model`), `X_GROWTH_PI_BIN`, `X_GROWTH_PI_THINKING`, `X_GROWTH_BROWSER_TARGET`, `X_GROWTH_BROWSER_CDP_PORT`, `X_GROWTH_AGENT_BROWSER_CLI`, `X_GROWTH_REPO`. See `ops/systemd/README.md`.
 
-## X login on ARM
+## Historical record: X authentication setup on ARM
 
-ARM's Chromium was signed in by setting the `auth_token` and `ct0` cookies (values from ARM's private `.env`, keys `AUTH_TOKEN`, `CT0`) with `agent-browser --cdp 9222 cookies set ... --domain .x.com --expires <+1y>`, then verified by reading the profile link (`/ham_zax`) on `x.com/home`. If X invalidates the session, passes will record authentication blockers until the cookies are refreshed the same way. Never print the values.
+The persistent Chromium session was originally established using `auth_token` and `ct0` cookies (values from ARM's private `.env`, keys `AUTH_TOKEN`, `CT0`) with `agent-browser --cdp 9222 cookies set ... --domain .x.com --expires <+1y>`, then verified by reading the profile link (`/ham_zax`) on `x.com/home`. If authentication is lost, Luna must stop with an authentication blocker and must never print or enter credentials; session restoration is a separate owner-authorized operational task.
 
-## Models and the watchdog hack
+## Historical archive: Pi model rotation and watchdog (disabled)
 
 *Pi era (2026-10-07). Superseded by Current deployment wherever they conflict.*
 
@@ -85,7 +86,7 @@ Caveats: this was **not reviewed or load-tested**. The watchdog runs on a free m
 
 Runs 36–38 on ARM historically ended with zero public actions when no worthwhile work was found. As of 2026-10-09, `X_GROWTH_AGENT_EXPERIMENT=1` reinforces pursuing every independently worthwhile Reply/Quote/Original without a mandatory minimum or fixed daily maximum. The current default `executor` prompt shares that policy; historical legacy experiments are not posting-rate authority. The bridge hard gates (single publication claim, reconciliation, account health, duplicate fences, authentication, live delegation and run ceilings) still apply. Change the active `executorPrompt` in `growth_agent_runner.js` to adjust live operator judgment, not only the legacy `operatorPrompt`.
 
-## ARM application AI runtime repair — current state on 2026-10-07
+## Historical archive: application AI runtime repair on 2026-10-07
 
 The app-level structured-AI path used by `browser-reply-claim`, Writer review, writing-strategy recommendation and editorial refresh was the blocker behind runs 38–39's generic `AI execution failed`. This is separate from the Growth Operator's own Pi process.
 

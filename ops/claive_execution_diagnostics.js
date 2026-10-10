@@ -93,7 +93,7 @@ export function parseClaiveEvents(text, { traceId = 'unknown', reportedFailures 
   };
 }
 
-export function readClaiveExecutionDiagnostics(outputTail, { stateHome = path.join(homedir(), '.local/state'),
+export function readClaiveExecutionDiagnostics(outputTail, { stateHome = process.env.XDG_STATE_HOME || path.join(homedir(), '.local/state'),
   observedAt = Date.now() } = {}) {
   const reported = [...String(outputTail || '').matchAll(/Task failures reported:\s*(\d+)/g)];
   const rawClaiveReportedFailures = reported.length ? Number(reported.at(-1)[1]) : null;

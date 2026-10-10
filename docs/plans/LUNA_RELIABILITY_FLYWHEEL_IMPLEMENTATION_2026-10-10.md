@@ -12,13 +12,13 @@
 
 ## Non-negotiable constraints
 
-- Branch `feat/luna-reliability-flywheel`; isolated worktree `/home/ubuntu/work/luna_reliability_flywheel`. Never change the live `main` checkout, restart production Luna or touch authenticated browser state for this work.
+- Work in the integration branch `feat/luna-reliability-integration-20261010` and its isolated worktree until review-ready. The owner authorized a **Git-only merge** into `main` before a subsequent independent review; no daemon restart, deployment, production DB change or authenticated X mutation is authorized by that merge.
 - Existing Growth OS `act` and social claim/send/resolve ledgers, persona, policy, rest, account health, publication reconciliation and exact tab lease remain authoritative.
 - Neither a prompt, a dashboard statistic nor a local adapter grants public-mutation authority. No retry of uncertain sends.
 - Instrument before changing browser transport. A before/after claim requires matched command exposure, run duration, safety and content-quality measures.
 - Avoid duplicate browser ownership or unproven same-user `0600` authority artifacts. Address the pre-run authentication/bootstrap sequence explicitly.
 - Oracle's **architecture** review is not the later independent **implementation** review. Do not merge or deploy without the latter and explicit owner authorization.
-- Regression coverage and isolated contention reproduction are part of Oracle's acceptance requirements, and are authorized by this revised plan.
+- Phase 0 already has the prior regression coverage. For this integration the owner requested **no additional test cases**; existing suites and isolated read-only checks may be reused.
 
 ## Exact file ownership and boundaries
 
@@ -64,7 +64,7 @@ No `ops/operator_tool_gateway.js`, `ops/operator_tool_contract.js`, `ops/operati
 
 ## Phase 1 — Observe the existing runtime before adapting tools
 
-**Files:** Primarily `growth_agent_runner.js`, potentially `growth_agent_runtime.js`; reuse existing scheduler result state and Claive event files. Touch `tests/growth_agent_runner.test.mjs` only for the additive contract.
+**Files:** Primarily `growth_agent_runner.js`, potentially `growth_agent_runtime.js`; reuse existing scheduler result state and Claive event files. Reuse existing runner checks without adding new test cases (owner decision).
 
 **Tasks:**
 - [ ] Inventory actual Claive event shapes, session-to-run mapping, output-tail limitations, and existing attempt status; determine which data can be *reliably* attributed.
@@ -140,17 +140,20 @@ Mandatory focus: Phase 0 semantics and lock nuance, `store.js` startup, preserva
 
 A1 alone may be independently reviewed and then separately deployed. Later browser changes must pass their own gate; don't batch all features into one first production release.
 
-**Deployment:** Requires explicit user authorization after clean review. `main` and current ARM systemd services remain unchanged until then.
+**Deployment:** A source-code merge is owner-authorized before the independent follow-up review, but activation, systemd restarts, and browser mode switching remain separate deployment approvals. Do not confuse `main` HEAD with an already restarted long-lived service.
 
-## Progress / next frontier (2026-10-10)
+## Progress / integration disposition (2026-10-10)
 
-| Wave | Status | Owner |
+See [LUNA_RELIABILITY_IMPLEMENTATION_EVIDENCE_2026-10-10.md](LUNA_RELIABILITY_IMPLEMENTATION_EVIDENCE_2026-10-10.md) for the frozen observational sample, code owners, and explicit activation boundaries.
+
+| Wave | Integrated source state | Production activation |
 | --- | --- | --- |
-| Phase 0 A1 correction + tests | COMPLETE IN FEATURE BRANCH, awaiting review | Current implementation session |
-| Phase 1 additive telemetry baseline | READY NEXT, not implemented | Implementation session |
-| Phase 2 browser MCP comparison | BLOCKED ON PHASE 1 and ownership evaluation | Implementation session |
-| Phases 3–5 adaptive learning | DEFERRED pending measurements | Not assigned |
-| Independent implementation review | BLOCKS main integration | Separate reviewer |
-| Production merge/deployment | BLOCKED | Requires owner decision |
+| Phase 0 A1 | Complete; merges reviewed A1 semantics into the discovery baseline | Runs in next new process after a separately authorized deployment |
+| Phase 1 diagnostics | Implemented, additive versioned trace reading and baseline | Available in next new scheduled runner; no schema migration |
+| Phase 2 typed MCP | Existing Codex registration and provider target binding verified in source; exact launcher-owned tab wired | **Opt-in live read-only pilot still required.** CLI remains default |
+| Phase 3 stale-ref recovery | Documented fresh observation/target identity and no uncertain-click retry in canonical browser contract | Applies to whichever interface is selected for a fresh run |
+| Phase 4 verified lessons | One observed grammar lesson lives in the canonical existing contract; automated lesson promotion not justified | No background learner enabled |
+| Phase 5 offline optimization | Baseline recorded; **no-go** for optimizer until matched after-sample/holdout | No RLM, GEPA or autonomous prompt promotion |
+| Independent follow-up review | Invited on the merged source, per new owner instruction | Review does not itself restart services |
 
-**Repository handoff:** Keep the design and plan attached to the branch. Reviewer prompt: independently verify the implementation against the dated revised design and `AGENTS.md`, check the exact branch base/HEAD, confirm the isolated test evidence, identify *all* material blockers with line numbers, and do not edit or deploy.
+**Owner supersession:** The 2026-10-10 instruction authorizes merging the integration branch back into remote `main` after stabilization and existing checks, then independent review. This replaces the earlier source-merge prohibition but not the distinct permission required to restart Luna, migrate its database, interact with authenticated X or change the browser interface.
