@@ -15,6 +15,7 @@ import {
 import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
 import { leaseAgentBrowserTab } from './ops/agent_browser_session.js';
+import { readClaiveExecutionDiagnostics, combineClaiveDiagnostics } from './ops/claive_execution_diagnostics.js';
 import { finishGrowthRun, GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
 
@@ -619,10 +620,17 @@ export async function main(overrides = {}) {
     ? updateGrowthAgentSchedulerStatus(patch) : getGrowthAgentSchedulerStatus());
   const sessions = [];
   let toolFailures = 0;
+  const claiveDiagnostics = [];
+  const captureTrace = (tail, sessionId) => {
+    if (config.runtime !== 'claive') return;
+    claiveDiagnostics.push({ ...readClaiveExecutionDiagnostics(tail, { observedAt: now() }), sessionId });
+  };
   record({ configured: true, enabled: true, lastInvocationAt: startedAt,
     nextInvocationAt: startedAt + SCHEDULER_INTERVAL_MS, lastError: null });
   const finish = (result, activeRunId = '') => {
-    const outcome = { ...result, toolFailures, operationalStatus: toolFailures > 0 ? 'degraded' : (result.status === 'completed' ? 'clean' : result.status),
+    const outcome = { ...result, toolFailures,
+      ...(config.runtime === 'claive' ? { executionDiagnostics: combineClaiveDiagnostics(claiveDiagnostics) } : {}),
+      operationalStatus: toolFailures > 0 ? 'degraded' : (result.status === 'completed' ? 'clean' : result.status),
       windowMinutes: config.windowMinutes, startedAt,
       deadline, sessions };
     record({ lastInvocationResult: outcome, activeRunId });
@@ -685,7 +693,7 @@ export async function main(overrides = {}) {
       // Own exactly the new page, pin Luna to it, and close it after the child
       // exits. Never close the shared authenticated Chrome or pre-existing tabs.
       if (scheduledInvocation && config.browserTarget === 'linux'
-          && config.browserInterface === 'agent-browser-cli') {
+          && BROWSER_INTERFACES.includes(config.browserInterface)) {
         try {
           browserTabLease = await leaseAgentBrowserTab({
             cli: config.agentBrowserCli, cdpPort: config.cdpPort, sessionId,
@@ -696,7 +704,9 @@ export async function main(overrides = {}) {
           sessions.push({sessionId, status:'browser_preflight_blocked', detail});
           return finish({status:'blocked', reason:'capability_unavailable', detail});
         }
-        prompt += `\nBROWSER TAB OWNERSHIP: This unattended run owns the dedicated Chrome tab with exact CDP targetId ${browserTabLease.targetId}. Keep --pin-tab on EVERY agent-browser call. Select ONLY that tab, navigate it using open; do not switch to other sessions' tabs, create secondary tabs or close the shared Chrome. The launcher will close this run's exact tab after you exit. Never touch a pre-existing X tab.\n`;
+        prompt += config.browserInterface === 'webharness-mcp'
+          ? `\nBROWSER TAB OWNERSHIP: The launcher allocated exact CDP targetId ${browserTabLease.targetId} in the existing authenticated Chromium. Supply this exact value as tab on EVERY typed MCP observe/execute call, including your first pre-run authentication observation. Never omit tab, select another target, open a secondary browser/profile or publish through MCP. The launcher alone closes this exact tab after the child exits. If the typed interface rejects this tab, finish with a capability blocker; never switch transports in the current run.\n`
+          : `\nBROWSER TAB OWNERSHIP: This unattended run owns the dedicated Chrome tab with exact CDP targetId ${browserTabLease.targetId}. Keep --pin-tab on EVERY agent-browser call. Select ONLY that tab, navigate it using open; do not switch to other sessions' tabs, create secondary tabs or close the shared Chrome. The launcher will close this run's exact tab after you exit. Never touch a pre-existing X tab.\n`;
       }
       let promptFile;
       if (config.runtime === 'claive' || config.runtime === 'muse') {
@@ -717,10 +727,14 @@ export async function main(overrides = {}) {
             timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000),
             killGraceMs: config.runtime === 'claive' ? 15_000 : 5_000,
           });
-          if (config.runtime === 'claive') toolFailures += parseClaiveToolFailures(childResult?.outputTail);
+          if (config.runtime === 'claive') {
+            toolFailures += parseClaiveToolFailures(childResult?.outputTail);
+            captureTrace(childResult?.outputTail, sessionId);
+          }
         } catch (childError) {
           // Rethrown unchanged: the catch below closes the run or rethrows.
           // A failed child is never relaunched within this invocation.
+          captureTrace(childError?.outputTail, sessionId);
           persistChildKind(classifyChildResult({
             exitCode: childError?.exitCode,
             deadlineExpired: childError?.deadlineExpired,
