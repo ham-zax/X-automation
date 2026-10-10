@@ -645,15 +645,18 @@ Use these for learning, not filtering by default.
 
 ## 17. Agent contract
 
-Phase 1B exposes relationship intelligence without raw SQLite reads through these current read-only commands:
+Phase 1B exposes relationship intelligence without requiring agents to query raw SQLite:
 
 ```text
 relationship-targets
+relationship-context
 relationship-inspect
 relationship-events
 ```
 
-`relationship-targets` supports target-class, relationship-stage, minimum-TargetScore, and bounded-limit filters. `relationship-inspect` returns one strategic profile plus recent event history. `relationship-events` returns bounded append-only history for one username.
+`relationship-targets` lists ranked tracked profiles with class, stage and score filters. Use `relationship-context` to inspect an X author even when the relationship has not been materialized yet. It accepts JSON `{"username":" @Example ","limit":20}` (integer limit 1–200), trims whitespace before stripping an optional `@` and normalizes case. For an unknown valid handle, it exits successfully with `{"username":"example","tracked":false,"status":"not_tracked","profile":null,"events":[]}`. A known profile returns `tracked:true`, `status:"tracked"`, its stored profile and events. An untracked account is not a low-value account; a confirmed interaction can create its relationship record.
+
+`relationship-inspect` remains the strict existing-profile lookup and returns an error if there is no record. `relationship-events` returns bounded append-only history. The `relationship-context` *reader* does not change relationship rows, but the full `agent_bridge.js` CLI imports `store.js`, whose startup schema initialization opens a `BEGIN IMMEDIATE` transaction and can encounter SQLite writer contention. Older profile readers can refresh cached audience-derived scoring. Do not claim that all commands use a process-level read-only database connection.
 
 Phase 1C exposes these current engagement commands:
 

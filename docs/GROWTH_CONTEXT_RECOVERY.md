@@ -25,8 +25,13 @@ Chat summaries are working notes; Growth OS and live observations own truth.
    send before continuing; never resend it. Use the existing attempt identity
    and the recovery instructions in `docs/GROWTH_AGENT_EXECUTION.md`.
 4. Recover the selected candidate with `inspect`/`workflow` when saved, plus
-   relevant `relationship-inspect` history. Preserve existing drafts and exact
-   authority. If selection was not saved, select again from current state
+   `relationship-context` for the exact X author when useful. The stored-row
+   lookup returns `tracked: false, status: not_tracked` for a new person; that
+   is ordinary discovery, not an error or reason to fabricate a profile.
+   SQLite initialization can still fail due to concurrent writers; distinguish
+   that infrastructure error from a normal not-tracked author.
+   Keep `relationship-inspect` for callers requiring an *existing* record.
+   Preserve existing drafts and exact authority. If selection was not saved, select again from current state
    instead of inventing missing context. Re-observe the intended X account,
    exact source/thread and composer before any subsequent public mutation;
    discard old browser refs. Apply the current mode's claim/send protocol.

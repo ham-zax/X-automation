@@ -96,6 +96,7 @@ npm run agent -- decide
 npm run agent -- record-action
 npm run agent -- record-disposition
 npm run agent -- relationship-targets
+npm run agent -- relationship-context
 npm run agent -- relationship-inspect
 npm run agent -- relationship-events
 npm run agent -- persona-model
