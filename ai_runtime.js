@@ -21,6 +21,7 @@ import {
   listCliAiCatalog,
   runCliStructuredAI,
 } from './ai_cli.js';
+import { BoundedCliError, runBoundedCliStructuredAI } from './ai_bounded_cli.js';
 
 const SUPPORTED_SCHEMA_KEYWORDS = new Set([
   '$schema', '$id', '$ref', '$defs', 'definitions',
@@ -224,17 +225,22 @@ function invalidOutputError() {
 
 function normalizeExecutionError(error) {
   if (error instanceof AiRuntimeError) return error;
-  if (error instanceof AiDirectError || error instanceof AiCliError) {
-    return new AiRuntimeError(error.code || 'execution_error', error.message || 'AI execution failed.', {
+  if (error instanceof AiDirectError || error instanceof AiCliError || error instanceof BoundedCliError) {
+    const normalized = new AiRuntimeError(error.code || 'execution_error', error.message || 'AI execution failed.', {
       fallbackEligible: error.fallbackEligible === true,
     });
+    // Thread through known provider usage from a failed adapter call so the
+    // caller can reconcile it instead of settling the attempt as unknown.
+    if (error.failedAttemptUsage != null) normalized.failedAttemptUsage = error.failedAttemptUsage;
+    return normalized;
   }
   return new AiRuntimeError('execution_error', 'AI execution failed.');
 }
 
 function usageSum(first, second) {
-  if (first == null && second == null) return null;
-  return Number(first || 0) + Number(second || 0);
+  // An unknown request cannot contribute a fabricated zero to a total.
+  if (first == null || second == null) return null;
+  return Number(first) + Number(second);
 }
 
 function repairPrompt(originalPrompt, schema, invalidText, validationErrors) {
@@ -257,16 +263,68 @@ function repairPrompt(originalPrompt, schema, invalidText, validationErrors) {
   ].join('\n');
 }
 
-async function executeAdapter(profile, prompt, schema, deadline) {
+async function executeAdapter(profile, prompt, schema, deadline, adapterOpts = {}) {
   const timeoutMs = deadline - Date.now();
   if (timeoutMs <= 0) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
-  const result = await executeAdapterUnchecked(profile, prompt, schema, deadline);
-  if (Date.now() >= deadline) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
-  if (Buffer.byteLength(String(result.text || '')) > aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024)) throw new AiRuntimeError('response_limit', 'AI output exceeds deployment limit.');
+  const result = await executeAdapterUnchecked(profile, prompt, schema, deadline, adapterOpts);
+  // The adapter call completed: a post-return guard failure still consumed
+  // provider usage, so preserve it on the error for settlement reconciliation.
+  if (Date.now() >= deadline) {
+    const error = new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
+    error.failedAttemptUsage = failedUsageWithBoundedCounts(result);
+    throw error;
+  }
+  if (Buffer.byteLength(String(result.text || '')) > aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024)) {
+    const error = new AiRuntimeError('response_limit', 'AI output exceeds deployment limit.');
+    error.failedAttemptUsage = failedUsageWithBoundedCounts(result);
+    throw error;
+  }
   return result;
 }
 
-async function executeAdapterUnchecked(profile, prompt, schema, deadline) {
+function isBoundedAdapterOpts(adapterOpts = {}) {
+  const hasJob = adapterOpts.boundedSemanticJob != null;
+  const hasExecution = adapterOpts.runtimeExecution != null;
+  if (hasJob !== hasExecution) {
+    throw new AiRuntimeError('invalid_request', 'Bounded lane requires both boundedSemanticJob and runtimeExecution.');
+  }
+  return hasJob && hasExecution;
+}
+
+function boundedCountsOf(adapter = {}) {
+  const metadata = adapter?.metadata || {};
+  const modelCalls = finiteAdapterNumber(adapter.modelCalls ?? metadata.modelCalls ?? null);
+  const toolCalls = finiteAdapterNumber(adapter.toolCalls ?? metadata.toolCalls ?? null);
+  // Only surface when the bounded adapter actually measured them; generic
+  // adapters keep their historical shape without these fields.
+  if (adapter.modelCalls === undefined && adapter.toolCalls === undefined
+    && metadata.modelCalls === undefined && metadata.toolCalls === undefined) {
+    return {};
+  }
+  return { modelCalls, toolCalls };
+}
+
+function failedUsageWithBoundedCounts(adapter) {
+  const base = failedUsageOf(adapter);
+  const counts = boundedCountsOf(adapter);
+  if (Object.keys(counts).length === 0) return base;
+  return { ...base, ...counts };
+}
+
+async function executeAdapterUnchecked(profile, prompt, schema, deadline, adapterOpts = {}) {
+  if (isBoundedAdapterOpts(adapterOpts)) {
+    const timeoutMs = deadline - Date.now();
+    if (timeoutMs <= 0) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
+    return runBoundedCliStructuredAI(profile, {
+      prompt,
+      schema,
+      timeoutMs,
+      maxOutputTokens: adapterOpts.maxOutputTokens ?? null,
+      budget: adapterOpts.boundedSemanticJob?.budget ?? adapterOpts.boundedSemanticJob ?? null,
+      boundedSemanticJob: adapterOpts.boundedSemanticJob,
+      runtimeExecution: adapterOpts.runtimeExecution,
+    });
+  }
   if (profile.runtime === 'direct_api') {
     const apiKey = profile.secretRef ? await resolveAiSecret(profile.secretRef) : null;
     if (profile.secretRef && !apiKey) throw new AiRuntimeError('auth', 'Configured AI secret is unavailable.', { fallbackEligible: true });
@@ -275,30 +333,118 @@ async function executeAdapterUnchecked(profile, prompt, schema, deadline) {
     }
     const timeoutMs = deadline - Date.now();
     if (timeoutMs <= 0) throw new AiRuntimeError('timeout', 'AI invocation total deadline exceeded.');
-    return runDirectStructuredAI(profile, { apiKey, prompt, schema, timeoutMs });
+    return runDirectStructuredAI(profile, {
+      apiKey, prompt, schema, timeoutMs,
+      maxOutputTokens: adapterOpts.maxOutputTokens ?? null,
+      transport: adapterOpts.transport ?? null,
+    });
   }
   return runCliStructuredAI(profile, { prompt, schema, timeoutMs: deadline - Date.now() });
 }
 
-async function executeValidated(profile, prompt, schema, deadline) {
-  let requestCount = 0;
+function finiteAdapterNumber(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+// Only cache reads count as cached input. Cache writes (newly stored context)
+// are provider-internal accounting, not evidence of reused input.
+export function adapterUsageSummary(adapter = {}) {
+  const metadata = adapter.metadata || {};
+  return {
+    inputTokens: finiteAdapterNumber(adapter.inputTokens),
+    cachedInputTokens: finiteAdapterNumber(Object.hasOwn(metadata, 'cacheReadTokens')
+      ? metadata.cacheReadTokens : adapter.cachedInputTokens),
+    outputTokens: finiteAdapterNumber(adapter.outputTokens),
+    reasoningTokens: finiteAdapterNumber(Object.hasOwn(metadata, 'reasoningTokens')
+      ? metadata.reasoningTokens : metadata.thinkingTokens ?? adapter.reasoningTokens),
+  };
+}
+
+// Known provider usage from failed validation attempts, in the same
+// number-or-null shape as the success-path execution fields. Zeros are
+// preserved; any unknown contribution keeps its total unknown.
+function failedUsageOf(adapter) {
+  const usage = adapterUsageSummary(adapter);
+  return {
+    inputTokens: usage.inputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    outputTokens: usage.outputTokens,
+    reasoningTokens: usage.reasoningTokens,
+    costUsd: finiteAdapterNumber(adapter.costUsd),
+  };
+}
+
+function aggregatedFailedUsage(first, repaired) {
+  const firstUsage = adapterUsageSummary(first);
+  const repairedUsage = adapterUsageSummary(repaired);
+  return {
+    inputTokens: usageSum(firstUsage.inputTokens, repairedUsage.inputTokens),
+    cachedInputTokens: usageSum(firstUsage.cachedInputTokens, repairedUsage.cachedInputTokens),
+    outputTokens: usageSum(firstUsage.outputTokens, repairedUsage.outputTokens),
+    reasoningTokens: usageSum(firstUsage.reasoningTokens, repairedUsage.reasoningTokens),
+    costUsd: usageSum(finiteAdapterNumber(first.costUsd), finiteAdapterNumber(repaired.costUsd)),
+  };
+}
+
+function invalidOutputErrorWithUsage(usage) {
+  const error = invalidOutputError();
+  error.failedAttemptUsage = usage;
+  return error;
+}
+
+// A completed adapter receipt that fails a post-return guard (refusal/text
+// extraction, timeout, response limit) still counts as exactly one provider
+// request. Pre-dispatch failures carry no receipt and are never counted.
+async function invokeCountedAdapter(state, profile, prompt, schema, deadline, opts) {
+  try {
+    const result = await executeAdapter(profile, prompt, schema, deadline, opts);
+    state.requestCount += 1;
+    return result;
+  } catch (error) {
+    if (error?.failedAttemptUsage != null) state.requestCount += 1;
+    throw error;
+  }
+}
+
+async function executeValidated(profile, prompt, schema, deadline, { allowRepair = true, maxOutputTokens = null, transport = null, boundedSemanticJob = null, runtimeExecution = null } = {}) {
+  // Bounded semantic jobs never repair: exactly one adapter request per call.
+  if (boundedSemanticJob != null || runtimeExecution != null) allowRepair = false;
+  const boundedOpts = (boundedSemanticJob != null || runtimeExecution != null)
+    ? { boundedSemanticJob, runtimeExecution }
+    : {};
+  const state = { requestCount: 0 };
   let repairAttempted = false;
   try {
-    const first = await executeAdapter(profile, prompt, schema, deadline);
-    requestCount += 1;
+    const first = await invokeCountedAdapter(state, profile, prompt, schema, deadline, { maxOutputTokens, transport, ...boundedOpts });
     let parsed = parseStructuredText(first.text);
     let validation = parsed.parseError ? { valid: false, errors: [parsed.parseError] } : validateStructuredOutput(parsed.value, schema);
     if (validation.valid) {
-      return { output: parsed.value, adapter: first, requestCount, repairAttempted };
+      return { output: parsed.value, adapter: first, requestCount: state.requestCount, repairAttempted };
     }
-    if (first.nativeStructuredOutput) throw invalidOutputError();
+    // Bounded lanes disable automatic repair: one invalid response is a
+    // terminal invalid-output failure, never a silent second request.
+    if (!allowRepair || first.nativeStructuredOutput) throw invalidOutputErrorWithUsage(failedUsageWithBoundedCounts(first));
 
     repairAttempted = true;
-    const repaired = await executeAdapter(profile, repairPrompt(prompt, schema, first.text, validation.errors), schema, deadline);
-    requestCount += 1;
+    let repaired;
+    try {
+      repaired = await invokeCountedAdapter(state, profile, repairPrompt(prompt, schema, first.text, validation.errors), schema, deadline, { maxOutputTokens, transport });
+    } catch (error) {
+      // A completed repair request that then fails keeps both receipts: the
+      // first receipt is aggregated with the repair receipt, never dropped.
+      const normalized = normalizeExecutionError(error);
+      if (normalized.failedAttemptUsage != null) {
+        normalized.failedAttemptUsage = aggregatedFailedUsage(first, normalized.failedAttemptUsage);
+      }
+      throw normalized;
+    }
     parsed = parseStructuredText(repaired.text);
     validation = parsed.parseError ? { valid: false, errors: [parsed.parseError] } : validateStructuredOutput(parsed.value, schema);
-    if (!validation.valid) throw invalidOutputError();
+    if (!validation.valid) throw invalidOutputErrorWithUsage(aggregatedFailedUsage(first, repaired));
+    const firstUsage = adapterUsageSummary(first);
+    const repairedUsage = adapterUsageSummary(repaired);
     return {
       output: parsed.value,
       adapter: {
@@ -306,13 +452,18 @@ async function executeValidated(profile, prompt, schema, deadline) {
         inputTokens: usageSum(first.inputTokens, repaired.inputTokens),
         outputTokens: usageSum(first.outputTokens, repaired.outputTokens),
         costUsd: usageSum(first.costUsd, repaired.costUsd),
+        metadata: {
+          ...repaired.metadata,
+          cacheReadTokens: usageSum(firstUsage.cachedInputTokens, repairedUsage.cachedInputTokens),
+          reasoningTokens: usageSum(firstUsage.reasoningTokens, repairedUsage.reasoningTokens),
+        },
       },
-      requestCount,
+      requestCount: state.requestCount,
       repairAttempted,
     };
   } catch (error) {
     const normalized = normalizeExecutionError(error);
-    normalized.requestCount = requestCount;
+    normalized.requestCount = state.requestCount;
     normalized.repairAttempted = repairAttempted;
     throw normalized;
   }
@@ -331,6 +482,11 @@ async function runAttempt({
   schema,
   deadline,
   metadata,
+  allowRepair = true,
+  maxOutputTokens = null,
+  transport = null,
+  boundedSemanticJob = null,
+  runtimeExecution = null,
 }) {
   const startedAt = Date.now();
   const run = createAiRunAttempt({
@@ -350,27 +506,38 @@ async function runAttempt({
   });
   let requestCount = 0;
   let repairAttempted = false;
+  let result = null;
   try {
     if (profile.enabled === false) throw new AiRuntimeError('profile_disabled', 'Selected AI profile is disabled.');
-    const result = await executeValidated(profile, prompt, schema, deadline);
+    result = await executeValidated(profile, prompt, schema, deadline, { allowRepair, maxOutputTokens, transport, boundedSemanticJob, runtimeExecution });
     requestCount = result.requestCount;
     repairAttempted = result.repairAttempted;
     const completedAt = Date.now();
-    finishAiRunAttempt(run.id, {
-      status: 'complete',
-      completedAt,
-      model: result.adapter.model || profile.model,
-      reasoning: result.adapter.reasoning || profile.reasoning || '',
-      inputTokens: result.adapter.inputTokens,
-      outputTokens: result.adapter.outputTokens,
-      costUsd: result.adapter.costUsd,
-      metadata: {
-        ...(result.adapter.metadata || {}),
-        requestCount,
-        repairAttempted,
-        actualModel: result.adapter.model || profile.model,
-      },
-    });
+    try {
+      finishAiRunAttempt(run.id, {
+        status: 'complete',
+        completedAt,
+        model: result.adapter.model || profile.model,
+        reasoning: result.adapter.reasoning || profile.reasoning || '',
+        inputTokens: result.adapter.inputTokens,
+        outputTokens: result.adapter.outputTokens,
+        costUsd: result.adapter.costUsd,
+        metadata: {
+          ...(result.adapter.metadata || {}),
+          requestCount,
+          repairAttempted,
+          actualModel: result.adapter.model || profile.model,
+        },
+      });
+    } catch {
+      const error = new AiRuntimeError('telemetry_error', 'AI execution completed, but usage telemetry could not be persisted.');
+      error.requestCount = result.requestCount;
+      error.repairAttempted = result.repairAttempted;
+      error.failedAttemptUsage = failedUsageWithBoundedCounts(result.adapter);
+      throw error;
+    }
+    const usage = adapterUsageSummary(result.adapter);
+    const counts = boundedCountsOf(result.adapter);
     return {
       output: result.output,
       execution: {
@@ -385,26 +552,54 @@ async function runAttempt({
         fallbackUsed,
         startedAt,
         completedAt,
-        inputTokens: result.adapter.inputTokens ?? null,
-        outputTokens: result.adapter.outputTokens ?? null,
+        inputTokens: usage.inputTokens,
+        cachedInputTokens: usage.cachedInputTokens,
+        outputTokens: usage.outputTokens,
+        reasoningTokens: usage.reasoningTokens,
+        outputTokenLimit: finiteAdapterNumber(result.adapter.metadata?.outputTokenLimit),
         costUsd: result.adapter.costUsd ?? null,
+        // Actual bounded counts when the adapter measured them; null (unknown)
+        // otherwise. Generic adapters predate these fields and stay unchanged
+        // apart from the honest unknown.
+        modelCalls: counts.modelCalls ?? null,
+        toolCalls: counts.toolCalls ?? null,
       },
     };
   } catch (error) {
     const normalized = normalizeExecutionError(error);
+    if (result != null && normalized.failedAttemptUsage == null) {
+      normalized.failedAttemptUsage = failedUsageWithBoundedCounts(result.adapter);
+      normalized.requestCount = result.requestCount;
+    }
     requestCount = Number(normalized.requestCount || requestCount || 0);
     repairAttempted = normalized.repairAttempted === true || repairAttempted;
-    finishAiRunAttempt(run.id, {
-      status: 'failed',
-      completedAt: Date.now(),
-      errorCode: normalized.code,
-      metadata: { requestCount, repairAttempted },
-    });
+    try {
+      finishAiRunAttempt(run.id, {
+        status: 'failed',
+        completedAt: Date.now(),
+        errorCode: normalized.code,
+        metadata: {
+          requestCount,
+          repairAttempted,
+          // Durable copy of known provider usage from the failed attempt(s) for
+          // settlement reconciliation. Absent when nothing was reported.
+          ...(normalized.failedAttemptUsage != null ? { failedAttemptUsage: normalized.failedAttemptUsage } : {}),
+        },
+      });
+    } catch {
+      // A telemetry write failure must never replace the measured provider
+      // usage carried by the original execution error.
+    }
     throw normalized;
   }
 }
 
-export async function runStructuredAI({ role, profile = null, prompt, schema, timeoutMs = 120_000, metadata = {} } = {}) {
+// allowRepair/allowFallback default to the historical behavior (schema repair
+// plus provider fallback). Bounded lanes pass false/false for exactly one
+// adapter request per call; every request is then reserved individually.
+// maxOutputTokens/transport reach only the direct_api adapter; CLI adapters
+// cannot enforce per-call token caps, so bounded lanes refuse them instead.
+export async function runStructuredAI({ role, profile = null, prompt, schema, timeoutMs = 120_000, metadata = {}, allowRepair = true, allowFallback = true, maxOutputTokens = null, transport = null, boundedSemanticJob = null, runtimeExecution = null } = {}) {
   assertSchemaSupported(schema);
   const taskPrompt = String(prompt || '').trim();
   if (!taskPrompt) throw new AiRuntimeError('invalid_request', 'runStructuredAI requires a prompt.');
@@ -421,6 +616,9 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
   if (!resolution.profile) {
     throw new AiRuntimeError('profile_unconfigured', `No AI profile is configured for role ${resolution.role}.`, { invocationId });
   }
+  // Bounded semantic jobs never fall back: exactly one adapter request per
+  // call. Generic lanes keep their historical fallback behavior.
+  if (boundedSemanticJob != null || runtimeExecution != null) allowFallback = false;
 
   const attempts = [];
   try {
@@ -437,11 +635,16 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
       schema,
       deadline,
       metadata,
+      allowRepair,
+      maxOutputTokens,
+      transport,
+      boundedSemanticJob,
+      runtimeExecution,
     });
   } catch (error) {
     const primaryError = normalizeExecutionError(error);
     attempts.push({ attempt: 1, profileId: resolution.profile.id, code: primaryError.code });
-    if (!primaryError.fallbackEligible || !resolution.fallbackProfile) {
+    if (!primaryError.fallbackEligible || !allowFallback || !resolution.fallbackProfile) {
       primaryError.invocationId = invocationId;
       primaryError.attempts = attempts;
       throw primaryError;
@@ -462,6 +665,11 @@ export async function runStructuredAI({ role, profile = null, prompt, schema, ti
       schema,
       deadline,
       metadata,
+      allowRepair,
+      maxOutputTokens,
+      transport,
+      boundedSemanticJob,
+      runtimeExecution,
     });
   } catch (error) {
     const fallbackError = normalizeExecutionError(error);

@@ -16,33 +16,25 @@ const backoffDir = await mkdtemp(path.join(tmpdir(), 'growth-runner-backoff-'));
 after(() => rm(backoffDir, { recursive: true, force: true }));
 let harnessCount = 0;
 
-function harness({ minutes = 120, stopReason = 'resource_ceiling_reached', mutate } = {}) {
-  let clock = 100_000;
-  let grant = { state: 'running', mode: 'live', revision: 7 };
-  const calls = [], runs = new Map();
-  let heartbeatStops = 0;
+
+function tickMain({ config = null, env = null, tickImpl = null } = {}) {
+  // Ordinary-main harness: the controllerTick seam counts invocations and the
+  // child stub throws if anything ever tries to spawn a reasoning child.
+  const ticks = [];
+  let childCalls = 0;
   const dependencies = {
-    config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claude', X_GROWTH_AGENT_WINDOW_MINUTES: String(minutes) }),
-    now: () => clock,
-    delegation: () => grant,
-    lease: () => ({ active: false }),
-    health: () => ({ health: { state: 'normal' } }),
-    attempts: () => [],
+    config: config || runner.runtimeConfig(env || {}),
+    now: () => 100_000,
     record: () => {},
-    backoffStateFile: path.join(backoffDir, `harness-${++harnessCount}.json`),
-    runs: ({ status, sessionId }) => status ? [] : [runs.get(sessionId)].filter(Boolean),
-    heartbeat: () => () => { heartbeatStops++; },
-    child: async (command, options) => {
-      const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
-      const duration = Number(/maxDurationMinutes=(\d+)/.exec(command.stdinPrompt)[1]);
-      calls.push({ sessionId, duration, timeoutMs: options.timeoutMs });
-      clock += duration * 60_000;
-      runs.set(sessionId, { runId: `run-${calls.length}`, sessionId, status: 'completed', stopReason,
-        result: { investigating: 0, closedUnresolved: 0 } });
-      mutate?.({ calls, grant, setGrant: value => { grant = value; }, runs, sessionId, dependencies });
+    backoffStateFile: path.join(backoffDir, `tick-${++harnessCount}.json`),
+    controllerTick: async (options) => {
+      ticks.push(options);
+      if (tickImpl) return tickImpl(options);
+      return { status: 'blocked', reason: 'test-tick', jobId: null, attemptId: null, modelCalls: 0 };
     },
+    child: async () => { childCalls++; throw new Error('reasoning child must not spawn'); },
   };
-  return { dependencies, calls, heartbeatStops: () => heartbeatStops };
+  return { dependencies, ticks, childCalls: () => childCalls };
 }
 
 try {
@@ -94,36 +86,109 @@ try {
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_TARGET: 'mars' }), /X_GROWTH_BROWSER_TARGET/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_CDP_PORT: '9222; rm' }), /CDP_PORT/);
   });
-  await test('Claive pins Muse and cleans its operational prompt after a bounded pass', async () => {
-    const state = harness({ minutes: 20 });
-    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive' });
-    assert.equal(state.dependencies.config.model, 'muse-spark-1.3-contributor');
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_AGENT_MODEL: 'other' }), /require/);
-    let promptFile;
-    state.dependencies.child = async (command) => {
-      assert.equal(command.executable, path.join(process.env.HOME, '.local/bin/claive'));
-      assert.equal(command.args[0], 'run');
-      assert.equal(command.args[command.args.indexOf('--engine') + 1], 'muse');
-      assert.equal(command.args[command.args.indexOf('--reasoning-effort') + 1], 'xhigh');
-      assert.equal(command.args[command.args.indexOf('--model') + 1], 'muse-spark-1.3-contributor');
-      assert.equal(command.args.includes('--fallback-models'), false);
-      promptFile = command.args[command.args.indexOf('--prompt-file') + 1];
-      const prompt = await readFile(promptFile, 'utf8');
-      assert.match(prompt, /adapterType `claive_unattended`/);
-      assert.match(prompt, /publication-attempt-send-start/);
-    };
-    state.dependencies.runs = () => [{ runId: 'claive-run', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
+await test('default and executor wakes invoke exactly one finite tick and never continue', async () => {
+    for (const [label, env] of [['default', {}], ['executor', { GROWTH_AGENT_MODE: 'executor' }]]) {
+      const state = tickMain({ config: runner.runtimeConfig({ ...env, X_GROWTH_AGENT_WINDOW_MINUTES: '480' }) });
+      const result = await runner.main(state.dependencies);
+      assert.equal(state.ticks.length, 1, label);
+      assert.equal(state.childCalls(), 0, label);
+      assert.equal(result.status, 'blocked', label);
+      assert.equal(result.reason, 'test-tick', label);
+      assert.equal(result.controller.reason, 'test-tick', label);
+      assert.equal(result.windowMinutes, 480, label);
+      if (label === 'executor') assert.equal(result.agentModeNote, 'executor_alias_controller');
+      else assert.equal(result.agentModeNote, undefined);
+    }
+  });
+  await test('legacy mode is rejected with zero tick and zero child', async () => {
+    const state = tickMain({ config: runner.runtimeConfig({ GROWTH_AGENT_MODE: 'legacy' }) });
     const result = await runner.main(state.dependencies);
-    assert.equal(result.stopReason, 'no_worthwhile_eligible_work');
-    await assert.rejects(readFile(promptFile), { code: 'ENOENT' });
-    state.dependencies.child = async (command) => {
-      promptFile = command.args[command.args.indexOf('--prompt-file') + 1];
-      throw new Error('runtime unavailable');
-    };
-    state.dependencies.runs = () => [];
-    await assert.rejects(runner.main(state.dependencies), /runtime unavailable/);
-    await assert.rejects(readFile(promptFile), { code: 'ENOENT' });
-    assert.equal(state.heartbeatStops(), 2);
+    assert.equal(result.status, 'blocked');
+    assert.match(result.reason, /legacy_retired/);
+    assert.equal(state.ticks.length, 0);
+    assert.equal(state.childCalls(), 0);
+  });
+  await test('ordinary main runs the real controller tick with zero child', async () => {
+    // No controllerTick seam: the real tick runs against the scratch store
+    // (delegation not live) and no reasoning child may spawn.
+    const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' });
+    let childCalls = 0;
+    const result = await runner.main({
+      config, now: () => 100_000, record: () => {},
+      backoffStateFile: path.join(backoffDir, `real-tick-${++harnessCount}.json`),
+      child: async () => { childCalls++; throw new Error('reasoning child must not spawn'); },
+    });
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.controller.status, 'blocked');
+    assert.equal(childCalls, 0);
+  });
+  await test('Claive Codex selection forwards the ephemeral Luna profile and runtimeExecution', async () => {
+    const state = tickMain({ config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' }) });
+    await runner.main(state.dependencies);
+    assert.equal(state.ticks.length, 1);
+    const options = state.ticks[0];
+    assert.equal(options.profile?.runtime, 'codex');
+    assert.equal(options.profile?.model, 'gpt-6-luna');
+    assert.equal(options.profile?.reasoning, 'max');
+    assert.deepEqual(options.runtimeExecution, {
+      runtime: 'claive', engine: 'codex',
+      executable: state.dependencies.config.executable,
+      codexExecutable: state.dependencies.config.codexExecutable,
+    });
+  });
+  await test('native codex and unsupported selections forward without substitution', async () => {
+    const native = tickMain({ config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'codex' }) });
+    await runner.main(native.dependencies);
+    assert.equal(native.ticks[0].profile?.runtime, 'codex');
+    assert.equal(native.ticks[0].profile?.model, 'gpt-6-luna');
+    assert.equal(native.ticks[0].runtimeExecution?.runtime, 'codex');
+    assert.equal(native.ticks[0].runtimeExecution?.engine, 'codex');
+    const nativeExplicit = tickMain({ config: runner.runtimeConfig({
+      X_GROWTH_AGENT_RUNTIME: 'codex', X_GROWTH_AGENT_MODEL: 'gpt-6',
+    }) });
+    await runner.main(nativeExplicit.dependencies);
+    assert.equal(nativeExplicit.ticks[0].profile?.model, 'gpt-6');
+    assert.equal(nativeExplicit.ticks[0].runtimeExecution?.runtime, 'codex');
+    const pi = tickMain({ config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' }) });
+    await runner.main(pi.dependencies);
+    assert.equal(pi.ticks[0].profile?.runtime, 'pi');
+    assert.equal(pi.ticks[0].runtimeExecution, null);
+    const other = tickMain({ config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claude' }) });
+    await runner.main(other.dependencies);
+    assert.equal(other.ticks[0].profile?.runtime, 'claude');
+    assert.equal(other.ticks[0].runtimeExecution, null);
+  });
+  await test('explicit controller profile and runtimeExecution override the ephemeral defaults', async () => {
+    const custom = { name: 'custom', runtime: 'direct_api', providerKind: 'openai_compatible', protocol: 'responses', model: 'custom-model', baseUrl: 'https://example.invalid/v1' };
+    const state = tickMain({ config: runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' }) });
+    state.dependencies.controller = { profile: custom, runtimeExecution: { runtime: 'custom' } };
+    await runner.main(state.dependencies);
+    assert.equal(state.ticks[0].profile, custom);
+    assert.deepEqual(state.ticks[0].runtimeExecution, { runtime: 'custom' });
+  });
+  await test('controllerRuntimeProfile maps selections without touching saved state', () => {
+    const claiveCodex = runner.controllerRuntimeProfile(runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' }));
+    assert.equal(claiveCodex.profile.runtime, 'codex');
+    assert.equal(claiveCodex.profile.model, 'gpt-6-luna');
+    assert.equal(claiveCodex.profile.reasoning, 'max');
+    assert.equal(claiveCodex.runtimeExecution.runtime, 'claive');
+    assert.equal(claiveCodex.runtimeExecution.engine, 'codex');
+    assert.ok(String(claiveCodex.runtimeExecution.executable).length > 0);
+    assert.ok(String(claiveCodex.runtimeExecution.codexExecutable).length > 0);
+    const nativeExplicit = runner.controllerRuntimeProfile(runner.runtimeConfig({
+      X_GROWTH_AGENT_RUNTIME: 'codex', X_GROWTH_AGENT_MODEL: 'gpt-6',
+    }));
+    assert.equal(nativeExplicit.profile.model, 'gpt-6');
+    for (const env of [
+      { X_GROWTH_AGENT_RUNTIME: 'opencode' },
+      { X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_BIN: '/opt/pi' },
+      { X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' },
+      { X_GROWTH_AGENT_RUNTIME: 'claive' },
+    ]) {
+      const ephemeral = runner.controllerRuntimeProfile(runner.runtimeConfig(env));
+      assert.equal(ephemeral.runtimeExecution, null);
+      assert.ok(String(ephemeral.profile.runtime).length > 0);
+    }
   });
   await test('Claive Pi uses opencode2api and inherits the selected model without Muse flags', () => {
     const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
@@ -170,188 +235,6 @@ try {
     assert.match(runner.operatorPrompt({ ...base, agentBrowserCli: '/x/ab.js' }), /CLI at \/x\/ab\.js/);
     assert.match(windows, /adapterType `pi_unattended`/);
   });
-  await test('two-hour window creates sequential fresh sessions with bounded passes and deadlines', async () => {
-    const state = harness();
-    const outcome = await runner.main(state.dependencies);
-    assert.equal(outcome.reason, 'operation_window_elapsed');
-    assert.equal(state.calls.length, 6);
-    assert.equal(new Set(state.calls.map(call => call.sessionId)).size, 6);
-    assert.equal(state.heartbeatStops(), 6);
-    assert.deepEqual(state.calls.map(call => call.duration), [20, 20, 20, 20, 20, 20]);
-    assert.deepEqual(state.calls.map(call => call.timeoutMs), [22, 22, 22, 22, 22, 20].map(n => n * 60_000));
-    const remainder = harness({ minutes: 25 });
-    await runner.main(remainder.dependencies);
-    assert.deepEqual(remainder.calls.map(call => call.duration), [20, 5]);
-  });
-  await test('no worthwhile work ends the window without manufacturing additional sessions', async () => {
-    const state = harness({ stopReason: 'no_worthwhile_eligible_work' });
-    const result = await runner.main(state.dependencies);
-    assert.equal(state.calls.length, 1);
-    assert.equal(result.stopReason, 'no_worthwhile_eligible_work');
-  });
-  await test('continuation requires an explicitly clean completed run', () => {
-    const clean = { status: 'completed', stopReason: 'resource_ceiling_reached', result: { closedUnresolved: 0, investigating: 0 } };
-    assert.equal(runner.continuationAllowed(clean), true);
-    for (const run of [null, { ...clean, status: 'partial' }, { ...clean, result: {} },
-      { ...clean, result: { investigating: 1, closedUnresolved: 0 } },
-      { ...clean, result: { investigating: 0, closedUnresolved: 1 } }]) assert.equal(runner.continuationAllowed(run), false);
-  });
-  await test('revoked authority, constrained health and competing leases stop before another runtime', async () => {
-    for (const reason of ['delegation_not_live_or_revised', 'account_health_constrained',
-      'operator_lease_active']) {
-      let block = false;
-      const state = harness({ mutate: ({ setGrant, grant }) => {
-        block = true;
-        if (reason === 'delegation_not_live_or_revised') setGrant({ ...grant, revision: 8 });
-      } });
-      if (reason === 'account_health_constrained') state.dependencies.health = () => ({ health: { state: block ? 'constrained' : 'normal' } });
-      if (reason === 'operator_lease_active') state.dependencies.lease = () => ({ active: block, leaseId: 'other', runId: 'other-run' });
-      const outcome = await runner.main(state.dependencies);
-      assert.equal(outcome.reason, reason);
-      assert.equal(state.calls.length, 1);
-    }
-  });
-  await test('an orphaned active run does not block a fresh reasoning session when no lease is active', async () => {
-    const state = harness({ minutes: 20 });
-    const originalRuns = state.dependencies.runs;
-    state.dependencies.runs = (query) => query.status === 'active'
-      ? [{ runId: 'stale-run', sessionId: 'old-session', status: 'active', stopReason: '' }]
-      : originalRuns(query);
-    const result = await runner.main(state.dependencies);
-    assert.equal(state.calls.length, 1);
-    assert.equal(result.reason, 'operation_window_elapsed');
-  });
-  await test('normal incomplete exit closes the orphan and allows only one continuation before any claim', async () => {
-    const state = harness({ minutes: 20 });
-    let activeRun = null;
-    let finished = null;
-    let childCalls = 0;
-    state.dependencies.runs = ({ status, sessionId }) => {
-      if (status) return [];
-      return activeRun && activeRun.sessionId === sessionId ? [activeRun] : [];
-    };
-    state.dependencies.child = async (command) => {
-      childCalls++;
-      if (childCalls === 2) assert.match(command.stdinPrompt, /CONTINUATION: Run run-active/);
-      const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
-      activeRun = { runId: 'run-active', sessionId, status: 'active', stopReason: '' };
-    };
-    state.dependencies.finishRun = (runId, payload) => {
-      finished = { runId, payload };
-      activeRun = { ...activeRun, status: payload.status, stopReason: payload.stopReason, finishedAt: 123456 };
-      return activeRun;
-    };
-    const result = await runner.main(state.dependencies);
-    assert.equal(finished.runId, 'run-active');
-    assert.equal(finished.payload.status, 'partial');
-    assert.equal(finished.payload.stopReason, 'manual_intervention_required');
-    assert.equal(finished.payload.result.launcherRecovery.reason, 'normal_child_exit_with_active_run');
-    assert.equal(finished.payload.result.runtimeFailure, undefined);
-    assert.equal(result.status, 'partial');
-    assert.equal(result.reason, 'launcher_closed_orphaned_active_run');
-    assert.equal(result.stopReason, 'manual_intervention_required');
-    assert.equal(childCalls, 2);
-    assert.equal(state.heartbeatStops(), 2);
-    assert.equal(result.sessions.length, 2);
-  });
-  await test('an incomplete run with any publication attempt is not automatically restarted', async () => {
-    const state = harness({ minutes: 20 });
-    let activeRun = null;
-    let calls = 0;
-    state.dependencies.runs = ({ sessionId }) => activeRun?.sessionId === sessionId ? [activeRun] : [];
-    state.dependencies.child = async command => {
-      calls++;
-      activeRun = { runId: 'claimed-run', sessionId: /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1], status: 'active' };
-    };
-    state.dependencies.attempts = ({ runId, limit }) => {
-      assert.equal(runId, 'claimed-run');
-      assert.equal(limit, 1);
-      return [{ attemptId: 'existing-attempt', state: 'claimed' }];
-    };
-    state.dependencies.finishRun = (runId, payload) => ({ ...activeRun, ...payload });
-    const result = await runner.main(state.dependencies);
-    assert.equal(calls, 1);
-    assert.equal(result.reason, 'launcher_closed_orphaned_active_run');
-    assert.equal(state.heartbeatStops(), 1);
-  });
-  await test('Pi retains run and session across early ends and restricts uncertain sends to reconciliation', async () => {
-    const state = harness({ minutes: 20 });
-    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
-    let activeRun, engineId, count = 0;
-    state.dependencies.runs = ({ sessionId }) => activeRun?.sessionId === sessionId ? [activeRun] : [];
-    state.dependencies.attempts = () => [{ attemptId: 'owned', state: count === 1 ? 'claimed' : 'send_started' }];
-    state.dependencies.child = async command => {
-      const prompt = await readFile(command.args[command.args.indexOf('--prompt-file') + 1], 'utf8');
-      const id = command.args[command.args.indexOf('--session-id') + 1];
-      if (!count) {
-        engineId = id;
-        activeRun = { runId: 'same-run', sessionId: /sessionId `([^`]+)`/.exec(prompt)[1], status: 'active' };
-      } else {
-        assert.equal(id, engineId);
-        assert.match(prompt, /SAME Growth Run same-run/);
-        assert.match(prompt, /after every context compaction/);
-        assert.match(prompt, /Reload `persona-model`/);
-        assert.ok(prompt.includes(activeRun.sessionId));
-        assert.match(prompt, count === 1 ? /owned claimed attempt/ : /RECONCILIATION ONLY/);
-      }
-      count++;
-    };
-    let finishes = 0;
-    state.dependencies.finishRun = (id, payload) => { finishes++; return { ...activeRun, ...payload }; };
-    const result = await runner.main(state.dependencies);
-    assert.equal(count, 4);
-    assert.equal(finishes, 1);
-    assert.equal(state.heartbeatStops(), 1);
-    assert.equal(result.sessions.length, 1);
-  });
-  await test('Pi provider failure never launches a continuation', async () => {
-    const state = harness({ minutes: 20 });
-    state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi' });
-    let count = 0;
-    state.dependencies.child = async () => { count++; throw new Error('provider failed'); };
-    await assert.rejects(runner.main(state.dependencies), /provider failed/);
-    assert.equal(count, 1);
-  });
-  await test('runtime failure and a session without its own durable run cannot be reported as another run', async () => {
-    const state = harness();
-    state.dependencies.runs = () => [];
-    const result = await runner.main(state.dependencies);
-    assert.equal(result.reason, 'runtime_completed_without_growth_run');
-    assert.equal(state.calls.length, 1);
-    const failure = harness();
-    failure.dependencies.child = async () => { throw new Error('fixture failure'); };
-    await assert.rejects(runner.main(failure.dependencies), /fixture failure/);
-    assert.equal(failure.heartbeatStops(), 1);
-  });
-  await test('runtime failure after a durable run starts closes the run and releases recovery responsibility', async () => {
-    const state = harness();
-    let activeRun = null;
-    let finished = null;
-    state.dependencies.runs = ({ status, sessionId }) => {
-      if (status) return [];
-      return activeRun && activeRun.sessionId === sessionId ? [activeRun] : [];
-    };
-    state.dependencies.child = async (command) => {
-      const sessionId = /sessionId `([^`]+)`/.exec(command.stdinPrompt)[1];
-      activeRun = { runId: 'run-active', sessionId, status: 'active', stopReason: '' };
-      throw new Error('malformed server-sent event JSON');
-    };
-    state.dependencies.finishRun = (runId, payload) => {
-      finished = { runId, payload };
-      activeRun = { ...activeRun, status: payload.status, stopReason: payload.stopReason, finishedAt: 123456 };
-      return activeRun;
-    };
-    const result = await runner.main(state.dependencies);
-    assert.equal(finished.runId, 'run-active');
-    assert.equal(finished.payload.status, 'partial');
-    assert.equal(finished.payload.stopReason, 'capability_unavailable');
-    assert.match(finished.payload.stopDetail, /malformed server-sent event JSON/);
-    assert.equal(finished.payload.result.runtimeFailure.runtime, 'claude');
-    assert.equal(result.status, 'partial');
-    assert.equal(result.reason, 'runtime_provider_failure');
-    assert.equal(result.stopReason, 'capability_unavailable');
-    assert.equal(state.heartbeatStops(), 1);
-  });
   await test('deadline kills a runtime that ignores SIGTERM and cleans up signal listeners', async () => {
     const pidFile = path.join(scratch, 'runtime.pid');
     const beforeTerm = process.listenerCount('SIGTERM');
@@ -376,8 +259,9 @@ test('experiment mode is opt-in and only adds the experiment section to the prom
   assert.equal(runner.runtimeConfig({ X_GROWTH_AGENT_EXPERIMENT: 'true' }).experiment, true);
 });
 
-test('GROWTH_AGENT_MODE defaults to executor, accepts legacy, and rejects other values', () => {
-  assert.equal(runner.runtimeConfig({}).agentMode, 'executor');
+test('GROWTH_AGENT_MODE defaults to controller, keeps executor and legacy spellings, rejects others', () => {
+  assert.equal(runner.runtimeConfig({}).agentMode, 'controller');
+  assert.equal(runner.runtimeConfig({ GROWTH_AGENT_MODE: ' Executor ' }).agentMode, 'executor');
   assert.equal(runner.runtimeConfig({ GROWTH_AGENT_MODE: ' Legacy ' }).agentMode, 'legacy');
   assert.throws(() => runner.runtimeConfig({ GROWTH_AGENT_MODE: 'fast' }), /GROWTH_AGENT_MODE/);
 });
@@ -404,31 +288,6 @@ test('GROWTH_AGENT_MODE=legacy builds the previous operator prompt unchanged', (
   assert.ok(legacy.includes('You are the unattended reasoning operator for XGrowth'));
   assert.ok(legacy.includes('Before scanning, read operator-status and growth-run-next'));
   assert.equal(legacy.includes('growth-run-begin'), true);
-});
-
-test('the default executor prompt reaches the runtime child through main', async () => {
-  const state = harness({ minutes: 20 });
-  const prompts = [];
-  state.dependencies.child = async (command) => { prompts.push(command.stdinPrompt); };
-  state.dependencies.runs = () => [{ runId: 'run-1', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
-  await runner.main(state.dependencies);
-  assert.ok(prompts.length >= 1);
-  assert.match(prompts[0], /You are the unattended growth operator for XGrowth/);
-  assert.match(prompts[0], /adapterType `claude_unattended`/);
-  assert.match(prompts[0], /maxDurationMinutes=20/);
-  assert.equal(prompts[0].includes('Before scanning, read operator-status'), false);
-});
-
-test('GROWTH_AGENT_MODE=legacy sends the legacy prompt through main', async () => {
-  const state = harness({ minutes: 20 });
-  state.dependencies.config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claude', X_GROWTH_AGENT_WINDOW_MINUTES: '20', GROWTH_AGENT_MODE: 'legacy' });
-  const prompts = [];
-  state.dependencies.child = async (command) => { prompts.push(command.stdinPrompt); };
-  state.dependencies.runs = () => [{ runId: 'run-1', status: 'completed', stopReason: 'no_worthwhile_eligible_work' }];
-  await runner.main(state.dependencies);
-  assert.ok(prompts.length >= 1);
-  assert.ok(prompts[0].includes('You are the unattended reasoning operator for XGrowth'));
-  assert.ok(prompts[0].includes('Before scanning, read operator-status and growth-run-next'));
 });
 
 // Runs fn with a fresh state file path; the file holds `contents` when given.
@@ -492,21 +351,24 @@ test('deadline and other failures are logged without changing the counter or the
   }
 });
 
-test('a deadline-killed child through main leaves the persisted counter unchanged', async () => {
-  const state = harness({ minutes: 20 });
-  state.dependencies.runs = () => [];
-  state.dependencies.child = async () => {
-    throw Object.assign(new Error('Growth agent runtime deadline expired.'), { deadlineExpired: true });
-  };
+test('a wake with a stored non-gating counter still ticks once and leaves the file alone', async () => {
+  // No reasoning child runs anymore, so there is no child outcome to persist:
+  // a stored deadline/other counter passes the gate, the tick runs once, and
+  // the file is byte-identical afterwards.
+  const state = tickMain({});
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
-    await assert.rejects(runner.main(state.dependencies), /deadline expired/);
-    assert.deepEqual(await readState(file), { consecutiveFailures: 2, lastKind: 'deadline', lastAt: 100_000, notBefore: null });
-  }, JSON.stringify({ consecutiveFailures: 2, lastKind: 'rate_limited', lastAt: 1, notBefore: null }));
+    const before = await readFile(file, 'utf8');
+    const outcome = await runner.main(state.dependencies);
+    assert.equal(state.ticks.length, 1);
+    assert.equal(state.childCalls(), 0);
+    assert.equal(outcome.controller.reason, 'test-tick');
+    assert.equal(await readFile(file, 'utf8'), before);
+  }, JSON.stringify({ consecutiveFailures: 2, lastKind: 'deadline', lastAt: 1, notBefore: null }));
 });
 
-test('a future notBefore launches no child and reports the remaining wait', async () => {
-  const state = harness({ minutes: 20 });
+test('a future notBefore launches no tick and reports the remaining wait', async () => {
+  const state = tickMain({});
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
     const outcome = await runner.main(state.dependencies);
@@ -514,54 +376,62 @@ test('a future notBefore launches no child and reports the remaining wait', asyn
     assert.equal(outcome.reason, 'child_failure_backoff');
     assert.equal(outcome.lastKind, 'provider_error');
     assert.equal(outcome.remainingMs, 60_000);
-    assert.equal(state.calls.length, 0);
-    assert.equal(state.heartbeatStops(), 0);
+    assert.equal(state.ticks.length, 0);
+    assert.equal(state.childCalls(), 0);
   }, JSON.stringify({ consecutiveFailures: 1, lastKind: 'provider_error', lastAt: 99_000, notBefore: 160_000 }));
 });
 
-test('a corrupt backoff file means no backoff and the child launches', async () => {
-  const state = harness({ minutes: 20 });
+test('a corrupt backoff file means no backoff and the tick runs without repairing the file', async () => {
+  const state = tickMain({});
+  const corrupt = '{"consecutiveFailures": 4, "notBefore": ';
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
     const outcome = await runner.main(state.dependencies);
-    assert.equal(outcome.reason, 'operation_window_elapsed');
-    assert.equal(state.calls.length, 1);
-    assert.equal((await readState(file)).consecutiveFailures, 0);
-  }, '{"consecutiveFailures": 4, "notBefore": ');
+    assert.equal(outcome.controller.reason, 'test-tick');
+    assert.equal(state.ticks.length, 1);
+    assert.equal(state.childCalls(), 0);
+    assert.equal(await readFile(file, 'utf8'), corrupt);
+  }, corrupt);
 });
 
-test('a missing backoff file means no backoff and the child launches', async () => {
-  const state = harness({ minutes: 20 });
+test('a missing backoff file means no backoff and the tick runs without creating one', async () => {
+  const state = tickMain({});
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
-    state.dependencies.child = async () => { throw new Error('runtime unavailable'); };
-    await assert.rejects(runner.main(state.dependencies), /runtime unavailable/);
-    assert.deepEqual(await readState(file), { consecutiveFailures: 0, lastKind: 'other', lastAt: 100_000, notBefore: null });
+    const outcome = await runner.main(state.dependencies);
+    assert.equal(outcome.controller.reason, 'test-tick');
+    assert.equal(state.ticks.length, 1);
+    assert.equal(state.childCalls(), 0);
+    await assert.rejects(readFile(file), { code: 'ENOENT' });
   });
 });
 
-test('X_GROWTH_AGENT_BACKOFF=off launches despite a future notBefore and leaves the file alone', async () => {
-  const state = harness({ minutes: 20 });
+test('X_GROWTH_AGENT_BACKOFF=off ticks despite a future notBefore and leaves the file alone', async () => {
+  const state = tickMain({});
   const contents = JSON.stringify({ consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 99_000, notBefore: 900_000 });
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
     state.dependencies.env = { X_GROWTH_AGENT_BACKOFF: 'off' };
     const outcome = await runner.main(state.dependencies);
-    assert.equal(outcome.reason, 'operation_window_elapsed');
-    assert.equal(state.calls.length, 1);
+    assert.equal(outcome.controller.reason, 'test-tick');
+    assert.equal(state.ticks.length, 1);
+    assert.equal(state.childCalls(), 0);
     assert.equal(await readFile(file, 'utf8'), contents);
   }, contents);
 });
 
-test('a successful child after a backoff window resets the persisted counter', async () => {
-  const state = harness({ minutes: 20 });
+test('an expired backoff window ticks once without rewriting the counter', async () => {
+  // Retired with the elapsed loop: no child outcome means no 'ok' reset.
+  // The expired gate passes, exactly one tick runs, and the stored counter
+  // is left for the next real child outcome to update.
+  const state = tickMain({});
+  const contents = JSON.stringify({ consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 1, notBefore: 50_000 });
   await withStateFile(async file => {
     state.dependencies.backoffStateFile = file;
     await runner.main(state.dependencies);
-    assert.equal(state.calls.length, 1);
-    assert.equal((await readState(file)).consecutiveFailures, 0);
-    assert.equal((await readState(file)).lastKind, 'ok');
-  }, JSON.stringify({ consecutiveFailures: 3, lastKind: 'rate_limited', lastAt: 1, notBefore: 50_000 }));
+    assert.equal(state.ticks.length, 1);
+    assert.equal(await readFile(file, 'utf8'), contents);
+  }, contents);
 });
 
 // Records what the runner writes to this process's stdout and stderr. Nothing reaches the
@@ -589,31 +459,29 @@ test('backoff state writes create a 0700 parent, a 0600 file, and leave no temp 
   assert.deepEqual(await readState(file), state);
 });
 
-test('main persists to the default path under XDG_STATE_HOME when no explicit file is configured', async () => {
-  const state = harness({ minutes: 20 });
+test('a wake with no explicit backoff file runs its tick and writes nothing', async () => {
+  const state = tickMain({});
   const xdg = await mkdtemp(path.join(backoffDir, 'xdg-'));
   state.dependencies.backoffStateFile = undefined;
   state.dependencies.env = { XDG_STATE_HOME: xdg };
   await runner.main(state.dependencies);
-  assert.equal(state.calls.length, 1);
-  const persisted = await readState(path.join(xdg, 'x_test', 'growth-runner-backoff.json'));
-  assert.equal(persisted.consecutiveFailures, 0);
-  assert.equal(persisted.lastKind, 'ok');
+  assert.equal(state.ticks.length, 1);
+  assert.equal(state.childCalls(), 0);
+  await assert.rejects(readFile(path.join(xdg, 'x_test', 'growth-runner-backoff.json')), { code: 'ENOENT' });
 });
 
-test('a real child that prints a 429 is persisted as rate_limited through main, and its output is forwarded', async () => {
-  const state = harness({ minutes: 20 });
+test('a real child that prints a 429 forwards its output unchanged for classification', async () => {
+  // Retired through-main persistence: with no reasoning child, classification
+  // stays a pure helper (covered above) and runChild forwarding is verified
+  // directly here.
   const source = "process.stdout.write('fwd-out\\n');process.stderr.write('fwd-err HTTP 429 Too Many Requests\\n');process.exitCode = 1;";
   const stdout = sink();
   const stderr = sink();
-  state.dependencies.child = (command, options) => runner.runChild({ executable: process.execPath, args: ['-e', source] }, { ...options, stdout, stderr });
-  await withStateFile(async file => {
-    state.dependencies.backoffStateFile = file;
-    await assert.rejects(runner.main(state.dependencies), /exited with code 1/);
-    assert.equal(stdout.chunks.join(''), 'fwd-out\n');
-    assert.equal(stderr.chunks.join(''), 'fwd-err HTTP 429 Too Many Requests\n');
-    assert.deepEqual(await readState(file), { consecutiveFailures: 1, lastKind: 'rate_limited', lastAt: 100_000, notBefore: 220_000 });
-  });
+  const error = await runner.runChild({ executable: process.execPath, args: ['-e', source] }, { cwd: tmpdir(), timeoutMs: 10_000, stdout, stderr }).catch(caught => caught);
+  assert.equal(stdout.chunks.join(''), 'fwd-out\n');
+  assert.equal(stderr.chunks.join(''), 'fwd-err HTTP 429 Too Many Requests\n');
+  assert.equal(error.exitCode, 1);
+  assert.equal(runner.classifyChildResult({ exitCode: error.exitCode, tail: error.outputTail }), 'rate_limited');
 });
 
 test('runChild merges command env into the child environment', async () => {

@@ -918,6 +918,101 @@ for (const [name, sql] of [
 }
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS semantic_jobs (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    versions_json TEXT NOT NULL DEFAULT '{}',
+    input_json TEXT NOT NULL DEFAULT '{}',
+    observation_json TEXT NOT NULL DEFAULT '{}',
+    candidate_count INTEGER NOT NULL DEFAULT 0,
+    context_bytes INTEGER NOT NULL DEFAULT 0,
+    estimated_input_tokens INTEGER,
+    estimation_method TEXT NOT NULL DEFAULT 'caller_supplied',
+    budget_json TEXT NOT NULL DEFAULT '{}',
+    status TEXT NOT NULL DEFAULT 'active',
+    claimant TEXT NOT NULL DEFAULT '',
+    claimed_at INTEGER,
+    deadline_at INTEGER,
+    terminal_outcome TEXT NOT NULL DEFAULT '',
+    terminal_reason TEXT NOT NULL DEFAULT '',
+    revisit_condition TEXT NOT NULL DEFAULT '',
+    result_json TEXT NOT NULL DEFAULT '{}',
+    decided_at INTEGER,
+    used_model_calls INTEGER NOT NULL DEFAULT 0,
+    reserved_model_calls INTEGER NOT NULL DEFAULT 0,
+    used_input_tokens INTEGER NOT NULL DEFAULT 0,
+    reserved_input_tokens INTEGER NOT NULL DEFAULT 0,
+    used_output_tokens INTEGER NOT NULL DEFAULT 0,
+    reserved_output_tokens INTEGER NOT NULL DEFAULT 0,
+    used_tool_calls INTEGER NOT NULL DEFAULT 0,
+    reserved_tool_calls INTEGER NOT NULL DEFAULT 0,
+    used_wall_time_ms INTEGER NOT NULL DEFAULT 0,
+    repairs_used INTEGER NOT NULL DEFAULT 0,
+    attempts_count INTEGER NOT NULL DEFAULT 0,
+    has_unknown_usage INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(kind, fingerprint)
+  );
+  CREATE TABLE IF NOT EXISTS semantic_job_attempts (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL REFERENCES semantic_jobs(id),
+    seq INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'primary',
+    status TEXT NOT NULL DEFAULT 'reserved',
+    hypothesis TEXT NOT NULL DEFAULT '',
+    evidence_fingerprint TEXT NOT NULL DEFAULT '',
+    reserved_model_calls INTEGER NOT NULL DEFAULT 1,
+    reserved_input_tokens INTEGER NOT NULL DEFAULT 0,
+    reserved_output_tokens INTEGER NOT NULL DEFAULT 0,
+    reserved_tool_calls INTEGER NOT NULL DEFAULT 0,
+    actual_input_tokens INTEGER,
+    actual_cached_input_tokens INTEGER,
+    actual_output_tokens INTEGER,
+    actual_reasoning_tokens INTEGER,
+    actual_model_calls INTEGER,
+    actual_tool_calls INTEGER,
+    actual_wall_time_ms INTEGER,
+    usage_unknown INTEGER NOT NULL DEFAULT 0,
+    receipt_id TEXT UNIQUE,
+    reconcile_receipt_id TEXT,
+    created_at INTEGER NOT NULL,
+    settled_at INTEGER,
+    UNIQUE(job_id, seq)
+  );
+  CREATE INDEX IF NOT EXISTS idx_semantic_jobs_status_time ON semantic_jobs(status, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_semantic_job_attempts_job_seq ON semantic_job_attempts(job_id, seq);
+  CREATE INDEX IF NOT EXISTS idx_semantic_job_attempts_status ON semantic_job_attempts(job_id, status);
+`);
+
+const semanticJobColumns = new Set(db.prepare('PRAGMA table_info(semantic_jobs)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['observation_json', "ALTER TABLE semantic_jobs ADD COLUMN observation_json TEXT NOT NULL DEFAULT '{}'"],
+  ['deadline_at', 'ALTER TABLE semantic_jobs ADD COLUMN deadline_at INTEGER'],
+  ['result_json', "ALTER TABLE semantic_jobs ADD COLUMN result_json TEXT NOT NULL DEFAULT '{}'"],
+  ['reserved_output_tokens', 'ALTER TABLE semantic_jobs ADD COLUMN reserved_output_tokens INTEGER NOT NULL DEFAULT 0'],
+  ['used_input_tokens', 'ALTER TABLE semantic_jobs ADD COLUMN used_input_tokens INTEGER NOT NULL DEFAULT 0'],
+  ['reserved_input_tokens', 'ALTER TABLE semantic_jobs ADD COLUMN reserved_input_tokens INTEGER NOT NULL DEFAULT 0'],
+]) {
+  if (!semanticJobColumns.has(name)) db.exec(sql);
+}
+
+const semanticJobAttemptColumns = new Set(db.prepare('PRAGMA table_info(semantic_job_attempts)').all().map((row) => row.name));
+for (const [name, sql] of [
+  ['reserved_input_tokens', 'ALTER TABLE semantic_job_attempts ADD COLUMN reserved_input_tokens INTEGER NOT NULL DEFAULT 0'],
+  ['reserved_output_tokens', 'ALTER TABLE semantic_job_attempts ADD COLUMN reserved_output_tokens INTEGER NOT NULL DEFAULT 0'],
+  ['reconcile_receipt_id', 'ALTER TABLE semantic_job_attempts ADD COLUMN reconcile_receipt_id TEXT'],
+]) {
+  if (!semanticJobAttemptColumns.has(name)) db.exec(sql);
+}
+
+// After the column migrations above: receipt uniqueness for reconciliation.
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_semantic_job_attempts_reconcile_receipt ON semantic_job_attempts(reconcile_receipt_id);
+`);
+
+db.exec(`
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_priority ON queue_items(lane, status, priority DESC, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_engagement_source ON queue_items(target_tweet_id, engagement_kind, updated_at DESC);
   CREATE INDEX IF NOT EXISTS idx_queue_main_schedule ON queue_items(lane, status, scheduled_at, updated_at DESC);
@@ -2165,6 +2260,9 @@ export function createGrowthRun({
     timestamp,
     timestamp,
   );
+  setAppState(`growth_run_observations_v1:${id}`, JSON.stringify({
+    acceptedCount: 0, observationsRead: 0, rejectedCount: 0, skippedCount: 0, batches: {},
+  }));
   return getGrowthRun(id);
 }
 
@@ -2172,6 +2270,64 @@ export function getGrowthRun(runId) {
   const id = String(runId || '').trim();
   if (!id) return null;
   return decodeGrowthRun(db.prepare('SELECT * FROM growth_runs WHERE run_id = ?').get(id));
+}
+
+function growthRunObservationLedger(runId) {
+  const raw = getAppState(`growth_run_observations_v1:${runId}`);
+  if (raw == null) return null; // Existing runs have incomplete historical accounting.
+  const ledger = JSON.parse(raw);
+  if (!ledger || typeof ledger !== 'object' || !ledger.batches || typeof ledger.batches !== 'object' || Array.isArray(ledger.batches)
+      || ['acceptedCount', 'observationsRead', 'rejectedCount', 'skippedCount']
+        .some(key => !Number.isSafeInteger(ledger[key]) || ledger[key] < 0)) {
+    throw new DomainValidationError('Invalid persisted Growth Run observation budget.');
+  }
+  return ledger;
+}
+
+export function getGrowthRunObservationBudget(runId) {
+  const ledger = growthRunObservationLedger(runId);
+  return ledger ? {
+    acceptedCount: ledger.acceptedCount, observationsRead: ledger.observationsRead,
+    rejectedCount: ledger.rejectedCount, skippedCount: ledger.skippedCount,
+    batchCount: Object.keys(ledger.batches).length,
+  } : null;
+}
+
+// The receipt and snapshot writes share the caller's synchronous transaction.
+// Replayed batches do not consume the budget twice, including after a restart.
+export function recordGrowthRunObservationBatch({ runId, sessionId, batchId, observedAt, posts,
+  acceptedCount, rejectedCount, skippedCount } = {}) {
+  if (!runId) return null;
+  return runStoreTransaction(() => {
+    const run = getGrowthRun(runId);
+    if (!run || run.status !== 'active' || !sessionId || run.sessionId !== String(sessionId)) {
+      throw new DomainValidationError('Observation batch requires the current active Growth Run and session.');
+    }
+    if (!Array.isArray(posts) || [acceptedCount, rejectedCount, skippedCount]
+      .some(value => !Number.isSafeInteger(value) || value < 0)) {
+      throw new DomainValidationError('Invalid observation batch counts.');
+    }
+    const ledger = growthRunObservationLedger(runId);
+    if (!ledger) throw new DomainValidationError('Historical observation budget is unknown; finish this run before collecting again.');
+    const fingerprint = createHash('sha256').update(stableStringify({ observedAt, posts })).digest('hex');
+    const receiptId = String(batchId || fingerprint).trim();
+    if (!receiptId || receiptId.length > 128) throw new DomainValidationError('Invalid observation batch identity.');
+    if (Object.hasOwn(ledger.batches, receiptId)) {
+      if (ledger.batches[receiptId] !== fingerprint) throw new DomainValidationError('Observation batch identity was reused with different evidence.');
+      return { ...getGrowthRunObservationBudget(runId), batchId: receiptId, replayed: true };
+    }
+    const ceiling = Number(run.ceilings.maxObservations || 50);
+    if (ledger.observationsRead >= ceiling || Object.keys(ledger.batches).length >= ceiling) {
+      throw new DomainValidationError('Growth Run observation budget is exhausted.');
+    }
+    Object.defineProperty(ledger.batches, receiptId, { value: fingerprint, enumerable: true });
+    ledger.acceptedCount += acceptedCount;
+    ledger.observationsRead += posts.length;
+    ledger.rejectedCount += rejectedCount;
+    ledger.skippedCount += skippedCount;
+    setAppState(`growth_run_observations_v1:${runId}`, JSON.stringify(ledger));
+    return { ...getGrowthRunObservationBudget(runId), batchId: receiptId, replayed: false };
+  });
 }
 
 export function listGrowthRuns({ status = null, sessionId = null, limit = 20 } = {}) {
@@ -6116,8 +6272,7 @@ export function recordSourceObservations(observations = []) {
     candidate_key, snapshot_kind, observed_at, rank, metrics_json
   ) VALUES (?, ?, ?, ?, ?)`);
   const inserted = [];
-  db.exec('BEGIN');
-  try {
+  return runStoreTransaction(() => {
     for (const observation of values) {
       const key = String(observation?.candidateKey || '').trim();
       if (!key) throw new DomainValidationError('Source observation candidateKey is required.');
@@ -6129,12 +6284,8 @@ export function recordSourceObservations(observations = []) {
       statement.run(key, snapshotKind, observedAt, rank, JSON.stringify(observation.metrics || {}));
       inserted.push({ candidateKey: key, snapshotKind, observedAt, rank, metrics: observation.metrics || {} });
     }
-    db.exec('COMMIT');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    throw error;
-  }
-  return inserted;
+    return inserted;
+  });
 }
 
 function decodeSourceObservation(row) {
@@ -7047,6 +7198,93 @@ export function listAiRuns({ role = null, profileId = null, invocationId = null,
   params.push(Math.max(1, Math.min(1000, Number(limit || 100))));
   return db.prepare(`SELECT * FROM ai_runs ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY started_at DESC, id DESC LIMIT ?`).all(...params).map(decodeAiRun);
+}
+
+// Semantic jobs: thin record persistence only (schema lives in the serialized
+// startup migration above). The state machine, fingerprinting, budget
+// validation, and claim/reservation rules are owned by semantic_jobs.js.
+const SEMANTIC_JOB_RECORD_COLUMNS = new Set([
+  'id', 'kind', 'fingerprint', 'versions_json', 'input_json', 'observation_json',
+  'candidate_count', 'context_bytes', 'estimated_input_tokens', 'estimation_method',
+  'budget_json', 'status', 'claimant', 'claimed_at', 'deadline_at',
+  'terminal_outcome', 'terminal_reason', 'revisit_condition', 'result_json',
+  'decided_at', 'used_model_calls', 'reserved_model_calls',
+  'used_input_tokens', 'reserved_input_tokens',
+  'used_output_tokens', 'reserved_output_tokens',
+  'used_tool_calls', 'reserved_tool_calls', 'used_wall_time_ms',
+  'repairs_used', 'attempts_count', 'has_unknown_usage', 'created_at', 'updated_at',
+]);
+
+const SEMANTIC_JOB_ATTEMPT_RECORD_COLUMNS = new Set([
+  'id', 'job_id', 'seq', 'mode', 'status', 'hypothesis', 'evidence_fingerprint',
+  'reserved_model_calls', 'reserved_input_tokens', 'reserved_output_tokens',
+  'reserved_tool_calls', 'actual_input_tokens',
+  'actual_cached_input_tokens', 'actual_output_tokens', 'actual_reasoning_tokens',
+  'actual_model_calls', 'actual_tool_calls', 'actual_wall_time_ms',
+  'usage_unknown', 'receipt_id', 'reconcile_receipt_id', 'created_at', 'settled_at',
+]);
+
+export function insertSemanticJobRecord(record) {
+  const entries = Object.entries(record || {}).filter(([key]) => SEMANTIC_JOB_RECORD_COLUMNS.has(key));
+  const columns = entries.map(([key]) => key);
+  if (!columns.includes('id')) throw new DomainValidationError('Semantic job record id is required.');
+  db.prepare(`INSERT INTO semantic_jobs(${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+    .run(...entries.map(([, value]) => value ?? null));
+  return getSemanticJobRecord(record.id);
+}
+
+export function getSemanticJobRecord(id) {
+  if (!id) return null;
+  return db.prepare('SELECT * FROM semantic_jobs WHERE id = ?').get(String(id)) || null;
+}
+
+export function findSemanticJobRecord(kind, fingerprint) {
+  return db.prepare('SELECT * FROM semantic_jobs WHERE kind = ? AND fingerprint = ?')
+    .get(String(kind), String(fingerprint)) || null;
+}
+
+export function updateSemanticJobRecord(id, patch = {}) {
+  const entries = Object.entries(patch).filter(([key]) => SEMANTIC_JOB_RECORD_COLUMNS.has(key) && key !== 'id');
+  if (entries.length === 0) throw new DomainValidationError('Semantic job update is empty.');
+  const result = db.prepare(`UPDATE semantic_jobs SET ${entries.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`)
+    .run(...entries.map(([, value]) => value ?? null), String(id));
+  if (Number(result.changes || 0) !== 1) throw new DomainValidationError(`Semantic job not found: ${id}`);
+  return getSemanticJobRecord(id);
+}
+
+export function insertSemanticJobAttemptRecord(record) {
+  const entries = Object.entries(record || {}).filter(([key]) => SEMANTIC_JOB_ATTEMPT_RECORD_COLUMNS.has(key));
+  const columns = entries.map(([key]) => key);
+  if (!columns.includes('id') || !columns.includes('job_id')) {
+    throw new DomainValidationError('Semantic job attempt record id and job_id are required.');
+  }
+  db.prepare(`INSERT INTO semantic_job_attempts(${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`)
+    .run(...entries.map(([, value]) => value ?? null));
+  return getSemanticJobAttemptRecord(record.id);
+}
+
+export function getSemanticJobAttemptRecord(id) {
+  if (!id) return null;
+  return db.prepare('SELECT * FROM semantic_job_attempts WHERE id = ?').get(String(id)) || null;
+}
+
+export function updateSemanticJobAttemptRecord(id, patch = {}) {
+  const entries = Object.entries(patch).filter(([key]) => SEMANTIC_JOB_ATTEMPT_RECORD_COLUMNS.has(key) && key !== 'id' && key !== 'job_id');
+  if (entries.length === 0) throw new DomainValidationError('Semantic job attempt update is empty.');
+  const result = db.prepare(`UPDATE semantic_job_attempts SET ${entries.map(([key]) => `${key} = ?`).join(', ')} WHERE id = ?`)
+    .run(...entries.map(([, value]) => value ?? null), String(id));
+  if (Number(result.changes || 0) !== 1) throw new DomainValidationError(`Semantic job attempt not found: ${id}`);
+  return getSemanticJobAttemptRecord(id);
+}
+
+export function findSemanticJobAttemptByAnyReceipt(receiptId) {
+  if (!receiptId) return null;
+  const key = String(receiptId);
+  return db.prepare('SELECT * FROM semantic_job_attempts WHERE receipt_id = ? OR reconcile_receipt_id = ?').get(key, key) || null;
+}
+
+export function listSemanticJobAttemptRecords(jobId) {
+  return db.prepare('SELECT * FROM semantic_job_attempts WHERE job_id = ? ORDER BY seq ASC').all(String(jobId));
 }
 
 function migrateLegacyFiles() {

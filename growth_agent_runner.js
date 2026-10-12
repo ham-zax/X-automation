@@ -1,23 +1,17 @@
 import { socialOperatorPrompt } from './ops/social_operator_contract.js';
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   getGrowthAgentSchedulerStatus,
-  renewGrowthAgentRuntimeHeartbeat,
   updateGrowthAgentSchedulerStatus,
 } from './growth_agent_runtime.js';
-import { getOperatorLeaseStatus } from './operator_lease.js';
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
-import { leaseAgentBrowserTab } from './ops/agent_browser_session.js';
-import { readClaiveExecutionDiagnostics, combineClaiveDiagnostics } from './ops/claive_execution_diagnostics.js';
-import { finishGrowthRun, GROWTH_RUN_STOP_REASONS } from './growth_run.js';
-import { getAccountHealthSummary, getGrowthOperatorDelegation, listGrowthRuns, listPublicationAttempts } from './store.js';
+import { GROWTH_RUN_STOP_REASONS } from './growth_run.js';
+import { controllerTick } from './semantic_controller.js';
 
 const HOME = homedir();
 const REPO = path.resolve(process.env.X_GROWTH_REPO || path.dirname(fileURLToPath(import.meta.url)));
@@ -60,10 +54,15 @@ const BROWSER_TARGETS = ['windows', 'linux'];
 const RUNTIMES = ['opencode', 'codex', 'claude', 'pi', 'claive', 'muse'];
 const SCHEDULER_INTERVAL_MS = 5 * 60_000;
 
+// Ordinary operation is the finite controller: unset defaults to
+// 'controller'. An explicit 'executor' is retained as a deprecated alias for
+// the same one-tick path so existing settings keep working without the old
+// elapsed-time loop. 'legacy' is accepted here but rejected in main with a
+// retired-mode blocked result. Nothing here changes saved production settings.
 function growthAgentMode(env) {
-  const mode = String(env.GROWTH_AGENT_MODE || 'executor').trim().toLowerCase();
-  if (!['executor', 'legacy'].includes(mode)) {
-    throw new Error(`Unsupported GROWTH_AGENT_MODE=${mode}. Expected executor or legacy.`);
+  const mode = String(env.GROWTH_AGENT_MODE || 'controller').trim().toLowerCase();
+  if (!['executor', 'legacy', 'controller'].includes(mode)) {
+    throw new Error(`Unsupported GROWTH_AGENT_MODE=${mode}. Expected executor, legacy, or controller.`);
   }
   return mode;
 }
@@ -149,6 +148,61 @@ export function runtimeConfig(env = process.env) {
         : runtime === 'pi'
           ? resolvePiBin(env)
           : String(env.X_GROWTH_CLAUDE_BIN || 'claude'),
+    // Native codex executable for the ephemeral bounded-lane runtimeExecution
+    // (Claive->Codex passes both executables; native codex reuses its own).
+    codexExecutable: String(env.X_GROWTH_CODEX_BIN || DEFAULT_CODEX_BIN),
+  };
+}
+
+// Ephemeral bounded-lane identity derived from the configured runner
+// selection. The returned profile/runtimeExecution are passed to exactly one
+// controllerTick and never written to saved AI profiles, delegation, or
+// policy. Claive->Codex/Luna and native codex map to the codex lane with
+// reasoning max; every other configured selection still produces an explicit
+// profile so the controller reports a concrete capability_unavailable instead
+// of silently substituting another model or provider.
+export function controllerRuntimeProfile(config) {
+  const base = {
+    providerKind: 'runtime_managed',
+    protocol: 'runtime_native',
+    runtimeProfile: '',
+    secretRef: '',
+    settings: {},
+    enabled: true,
+  };
+  const engine = config.runtime === 'claive' ? config.claiveEngine : config.runtime;
+  if (engine === 'codex') {
+    return {
+      profile: {
+        ...base,
+        name: 'controller-ephemeral-codex',
+        runtime: 'codex',
+        // Claive Codex is pinned by runtimeConfig; native Codex preserves an
+        // explicit owner-selected model so the bounded adapter can reject an
+        // unsupported selection before dispatch instead of silently swapping it.
+        model: config.model || CLAIVE_CODEX_MODEL,
+        reasoning: 'max',
+      },
+      runtimeExecution: {
+        runtime: config.runtime === 'claive' ? 'claive' : 'codex',
+        engine: 'codex',
+        executable: config.executable,
+        codexExecutable: config.codexExecutable || config.executable,
+      },
+    };
+  }
+  // Unsupported bounded-lane selection (including Pi, which this adapter does
+  // not claim): explicit profile, no runtimeExecution, controller refuses it.
+  const runtime = config.runtime === 'claive' ? config.claiveEngine : config.runtime;
+  return {
+    profile: {
+      ...base,
+      name: `controller-ephemeral-${runtime}`,
+      runtime,
+      model: config.model || `unconfigured-${runtime}`,
+      reasoning: '',
+    },
+    runtimeExecution: null,
   };
 }
 
@@ -175,9 +229,14 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
   return `Browser: read X with browser-fast (wh-browser fast); if MCP is unavailable, use the named Agent Browser CLI at ${agentBrowserCli}. Observe with \`{"scope":"full","tab":"<tab>"}\` to see permalinks. Before the first observation and whenever navigation stalls, run \`node ops/windows-dialog-recovery.mjs --dismiss\`, then re-observe. Never retry a possibly dispatched send.`;
 }
 
-// Compact default prompt for the scout -> write -> act loop. operatorPrompt stays
-// reachable through GROWTH_AGENT_MODE=legacy. Keep the sessionId and
-// maxDurationMinutes lines: the launcher and tests read them from the prompt.
+// RETIRED FROM MAIN (kept as a nonexecuted compatibility helper): the
+// elapsed-time scout -> write -> act reasoning-child loop no longer runs —
+// ordinary wakes call controllerTick once and exit. These prompt builders
+// stay only so existing prompt-shape tests and external references keep
+// compiling; nothing in main invokes them. Retirement reason: the open-ended
+// "keep looping until the budget ends" assignment composed with
+// resource-ceiling continuation into window-filling unattended operation.
+// The finite controller owns admission, budgets, and stopping now.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
   browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
@@ -335,6 +394,9 @@ Do not optimize for a fixed number of posts/replies. Optimize for useful, releva
 ${experimentSection}`;
 }
 
+// RETIRED FROM MAIN (kept as a nonexecuted compatibility helper): builds
+// reasoning-child commands for the retired elapsed-time loop. Main no longer
+// spawns children; retained for command-shape tests only.
 export function commandFor(config, prompt, { promptFile, engineSessionId } = {}) {
   if (config.runtime === 'claive') {
     if (!promptFile) throw new Error('Claive requires a temporary operational prompt file.');
@@ -507,21 +569,12 @@ export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000, 
   });
 }
 
-function startRuntimeHeartbeatPump(adapterType, sessionId) {
-  const renew = () => {
-    try { renewGrowthAgentRuntimeHeartbeat({ adapterType, sessionId }); } catch {}
-  };
-  const timer = setInterval(renew, 60_000);
-  timer.unref();
-  return () => clearInterval(timer);
-}
-
-export function continuationAllowed(run) {
-  return !!run && run.status === 'completed'
-    && run.stopReason === 'resource_ceiling_reached'
-    && run.result?.closedUnresolved === 0
-    && run.result?.investigating === 0;
-}
+// Retired with the elapsed-time loop: the heartbeat pump, the automatic
+// resource-ceiling continuation gate (continuationAllowed), the incomplete-run
+// restart, and the retained-Pi multi-turn follow-up no longer exist. Ordinary
+// wakes run one finite controllerTick and exit; any further work needs a new
+// scheduler wake with fresh gates. (Helpers removed: startRuntimeHeartbeatPump,
+// continuationAllowed, parseClaiveToolFailures.)
 
 // Patterns are matched against the output tail that runChild captures from a failed child.
 export const CHILD_FAILURE_PATTERNS = Object.freeze({
@@ -536,13 +589,6 @@ export function classifyChildResult({ exitCode, deadlineExpired = false, tail = 
   if (CHILD_FAILURE_PATTERNS.rate_limited.test(tail)) return 'rate_limited';
   if (CHILD_FAILURE_PATTERNS.provider_error.test(tail)) return 'provider_error';
   return 'other';
-}
-
-// Claive can exit 0 while individual tool calls fail; retain the distinct
-// operational signal without changing Growth Run completion or retry policy.
-export function parseClaiveToolFailures(outputTail = '') {
-  const matches = [...String(outputTail || '').matchAll(/Task failures reported:\s*(\d+)/g)];
-  return matches.length ? Number(matches.at(-1)[1]) : 0;
 }
 
 export function backoffMinutes(consecutiveFailures) {
@@ -604,35 +650,17 @@ export function backoffGateEnabled(env = process.env) {
 export async function main(overrides = {}) {
   const config = overrides.config || runtimeConfig();
   const now = overrides.now || Date.now;
-  const deps = {
-    delegation: getGrowthOperatorDelegation, runs: listGrowthRuns,
-    lease: getOperatorLeaseStatus, health: getAccountHealthSummary,
-    child: runChild, attempts: listPublicationAttempts,
-    heartbeat: startRuntimeHeartbeatPump, finishRun: finishGrowthRun, ...overrides,
-  };
   const startedAt = now();
-  const deadline = startedAt + config.windowMinutes * 60_000;
   const scheduledInvocation = String(process.env.X_GROWTH_AGENT_SCHEDULED || '') === '1';
   const record = overrides.record || ((patch) => scheduledInvocation
     ? updateGrowthAgentSchedulerStatus(patch) : getGrowthAgentSchedulerStatus());
-  const sessions = [];
-  let toolFailures = 0;
-  const claiveDiagnostics = [];
-  const captureTrace = (tail, sessionId) => {
-    if (config.runtime !== 'claive') return;
-    claiveDiagnostics.push({ ...readClaiveExecutionDiagnostics(tail, { observedAt: now() }), sessionId });
+  const finish = (result) => {
+    const outcome = { ...result, windowMinutes: config.windowMinutes, startedAt };
+    record({ lastInvocationResult: outcome, activeRunId: '' });
+    return outcome;
   };
   record({ configured: true, enabled: true, lastInvocationAt: startedAt,
     nextInvocationAt: startedAt + SCHEDULER_INTERVAL_MS, lastError: null });
-  const finish = (result, activeRunId = '') => {
-    const outcome = { ...result, toolFailures,
-      ...(config.runtime === 'claive' ? { executionDiagnostics: combineClaiveDiagnostics(claiveDiagnostics) } : {}),
-      operationalStatus: toolFailures > 0 ? 'degraded' : (result.status === 'completed' ? 'clean' : result.status),
-      windowMinutes: config.windowMinutes, startedAt,
-      deadline, sessions };
-    record({ lastInvocationResult: outcome, activeRunId });
-    return outcome;
-  };
   const env = overrides.env || process.env;
   const backoffEnabled = backoffGateEnabled(env);
   const backoffFile = overrides.backoffStateFile ?? backoffStateFilePath(env);
@@ -643,232 +671,47 @@ export async function main(overrides = {}) {
         notBefore, remainingMs: notBefore - now() });
     }
   }
-  // Persisting backoff state must never mask the child outcome it describes.
-  const persistChildKind = (kind) => {
-    if (!backoffEnabled) return;
-    try {
-      writeBackoffState(backoffFile, nextBackoffState(readBackoffState(backoffFile), kind, now()));
-    } catch (error) {
-      console.error(`Growth agent backoff state not written: ${String(error?.message || error)}`);
-    }
-  };
-  const initialRevision = deps.delegation().revision;
-  let incompleteRestarts = 0;
-  let continuationCheckpoint = '';
-  while (deadline - now() >= 60_000) {
-    const delegation = deps.delegation();
-    if (delegation.state !== 'running' || delegation.mode !== 'live'
-      || delegation.revision !== initialRevision) {
-      return finish({ status: 'blocked', reason: 'delegation_not_live_or_revised' });
-    }
-    const lease = deps.lease({ now: now() });
-    if (lease.active) return finish({ status: 'coalesced', reason: 'operator_lease_active',
-      leaseId: lease.leaseId, runId: lease.runId || '' }, lease.runId || '');
-    if (deps.health({ now: now() }).health.state === 'constrained') {
-      return finish({ status: 'blocked', reason: 'account_health_constrained' });
-    }
-    // Do not block the launcher on unresolved publication state or an
-    // orphaned active Growth Run. beginGrowthRun() resumes an existing active
-    // run and ensureRunLease() safely reacquires an expired lease for the new
-    // reasoning session. A genuinely concurrent operator is already fenced by
-    // the active-lease check above. Launching here is therefore the recovery
-    // mechanism: the run state machine can enter recovery, reconcile from live
-    // browser evidence, or continue the interrupted run without a blind write.
-    const sessionId = `${config.runtime}-${randomUUID()}`;
-    const maxDurationMinutes = Math.min(20, Math.floor((deadline - now()) / 60_000));
-    let prompt = buildOperatorPrompt({ mode: config.agentMode, runtime: config.runtime, sessionId, maxDurationMinutes,
-      browserTarget: config.browserTarget, browserInterface: config.browserInterface, browserMcpServer: config.browserMcpServer, browserFastBackend: config.browserFastBackend,
-      agentBrowserCli: config.agentBrowserCli, cdpPort: config.cdpPort, experiment: config.experiment })
-      + (continuationCheckpoint ? `\nCONTINUATION: Run ${continuationCheckpoint} ended its model turn without finishing and before creating any publication attempt. The launcher closed that run and released its lease. Begin a new run with this session ID and resume its saved queue work. Your previous final statement describing the next action did not execute it. Call the supported tool now; do not end with another progress-only statement. Re-observe before any mutation and use only this new run's canonical claim.\n` : '');
-    continuationCheckpoint = '';
-    let promptDirectory;
-    let browserTabLease;
-    const stopHeartbeatPump = deps.heartbeat(`${config.runtime}_unattended`, sessionId);
-    try {
-      // Agent Browser creates a new page for each --cdp session, even on a
-      // read-only tab list. The daemon's close command leaves that page alive.
-      // Own exactly the new page, pin Luna to it, and close it after the child
-      // exits. Never close the shared authenticated Chrome or pre-existing tabs.
-      if (scheduledInvocation && config.browserTarget === 'linux'
-          && BROWSER_INTERFACES.includes(config.browserInterface)) {
-        try {
-          browserTabLease = await leaseAgentBrowserTab({
-            cli: config.agentBrowserCli, cdpPort: config.cdpPort, sessionId,
-          });
-        } catch (error) {
-          const detail = String(error?.message || error).slice(0, 350);
-          console.error(`Browser preflight blocked unattended run: ${detail}`);
-          sessions.push({sessionId, status:'browser_preflight_blocked', detail});
-          return finish({status:'blocked', reason:'capability_unavailable', detail});
-        }
-        prompt += config.browserInterface === 'webharness-mcp'
-          ? `\nBROWSER TAB OWNERSHIP: The launcher allocated exact CDP targetId ${browserTabLease.targetId} in the existing authenticated Chromium. Supply this exact value as tab on EVERY typed MCP observe/execute call, including your first pre-run authentication observation. Never omit tab, select another target, open a secondary browser/profile or publish through MCP. The launcher alone closes this exact tab after the child exits. If the typed interface rejects this tab, finish with a capability blocker; never switch transports in the current run.\n`
-          : `\nBROWSER TAB OWNERSHIP: This unattended run owns the dedicated Chrome tab with exact CDP targetId ${browserTabLease.targetId}. Keep --pin-tab on EVERY agent-browser call. Select ONLY that tab, navigate it using open; do not switch to other sessions' tabs, create secondary tabs or close the shared Chrome. The launcher will close this run's exact tab after you exit. Never touch a pre-existing X tab.\n`;
-      }
-      let promptFile;
-      if (config.runtime === 'claive' || config.runtime === 'muse') {
-        promptDirectory = await mkdtemp(path.join(tmpdir(), 'x-growth-claive-'));
-        promptFile = path.join(promptDirectory, 'operator.md');
-        await writeFile(promptFile, prompt, { mode: 0o600 });
-      }
-      const retainedPi = config.runtime === 'claive' && config.claiveEngine === 'pi';
-      const engineSessionId = retainedPi ? randomUUID() : undefined;
-      let run;
-      // A final progress sentence ends a headless model turn, not the mission.
-      // Keep the exact bridge authority and retained Pi history for bounded
-      // follow-ups instead of abandoning an owned claim in a closed run.
-      for (let turn = 0; turn < 4; turn++) {
-        const command = commandFor(config, prompt, { promptFile, engineSessionId });
-        try {
-          const childResult = await deps.child(command, {
-            timeoutMs: Math.min(deadline - now(), (maxDurationMinutes + 2) * 60_000),
-            killGraceMs: config.runtime === 'claive' ? 15_000 : 5_000,
-          });
-          if (config.runtime === 'claive') {
-            toolFailures += parseClaiveToolFailures(childResult?.outputTail);
-            captureTrace(childResult?.outputTail, sessionId);
-          }
-        } catch (childError) {
-          // Rethrown unchanged: the catch below closes the run or rethrows.
-          // A failed child is never relaunched within this invocation.
-          captureTrace(childError?.outputTail, sessionId);
-          persistChildKind(classifyChildResult({
-            exitCode: childError?.exitCode,
-            deadlineExpired: childError?.deadlineExpired,
-            tail: childError?.outputTail,
-          }));
-          throw childError;
-        }
-        persistChildKind('ok');
-        run = deps.runs({ sessionId, limit: 1 })[0] || null;
-        if (!retainedPi || run?.status !== 'active' || turn === 3
-          || deadline - now() < 60_000) break;
-        const currentGrant = deps.delegation();
-        if (currentGrant.state !== 'running' || currentGrant.mode !== 'live'
-          || currentGrant.revision !== initialRevision
-          || deps.health({ now: now() }).health.state === 'constrained') break;
-        const attempts = deps.attempts({ runId: run.runId, limit: 100 });
-        const uncertain = attempts.some(attempt => ['send_started', 'investigating'].includes(attempt.state));
-        const followup = `Continue the SAME Growth Run ${run.runId}, sessionId ${sessionId}. Retained history and all existing operational boundaries still apply. Do not begin a new run or obtain another claim for an existing attempt.
-${contextRecoveryPrompt()}
-Your previous progress sentence ended the model turn without executing the described action. Call the next supported tool now, or finish through growth-run-finish with a concrete blocker.
-${attempts.length ? 'First inspect the existing publication-attempts for this run.' : 'The launcher verified that this run has no publication attempts. Execute the pending operation from your previous turn now (for example x-for-you-ingest with the already observed posts), or execute the currently permitted growth-run-next operation. Apart from required context recovery, do not repeat queue/status/discovery inspection before completing that pending operation.'} ${uncertain
-          ? 'RECONCILIATION ONLY this turn: a send has started or is uncertain. Inspect exact live output and reconcile through the bridge. Never click Post/Reply/Repost again or dispatch any public mutation.'
-          : 'An owned claimed attempt may continue only under its exact current authority: re-observe the exact source/tab, use its existing attemptId, call send-start immediately before one send, then verify and reconcile. Unknown outcomes permit reconciliation only, never another send.'}
-Finish the durable run when done; do not end with another progress-only statement.
-`;
-        await writeFile(promptFile, followup, { mode: 0o600 });
-      }
-      // A reasoning child may exit 0 without finishing its durable Growth Run
-      // (production run 76 published a reply, then exited while status=active).
-      // Close the orphan through the canonical finish path so its lease is
-      // released and its runtime detached; publication accounting is preserved
-      // by finishGrowthRun and nothing is retried here. No runtimeFailure
-      // marker is recorded: a normal exit is not provider-failure evidence and
-      // must not trigger model failover.
-      if (run?.status === 'active') {
-        try {
-          const closed = deps.finishRun(run.runId, {
-            status: 'partial',
-            stopReason: 'manual_intervention_required',
-            stopDetail: 'Reasoning runtime exited normally without finishing its Growth Run; launcher closed the orphaned run via the canonical finish path without retrying any publication.',
-            result: {
-              launcherRecovery: {
-                reason: 'normal_child_exit_with_active_run',
-                runtime: config.runtime,
-                model: config.model,
-              },
-            },
-            now: now(),
-          });
-          sessions.push({
-            sessionId,
-            runId: run.runId,
-            status: closed?.status || closed?.run?.status || 'partial',
-            stopReason: closed?.stopReason || closed?.run?.stopReason || 'manual_intervention_required',
-            finishedAt: closed?.finishedAt || closed?.run?.finishedAt || now(),
-          });
-          // One fresh reasoning continuation is allowed only before the old
-          // run created any publication attempt. Never automatically restart
-          // a run that crossed a claim/send boundary or spin on repeated exits.
-          if (!retainedPi && incompleteRestarts === 0 && deadline - now() >= 60_000
-            && deps.attempts({ runId: run.runId, limit: 1 }).length === 0) {
-            incompleteRestarts++;
-            continuationCheckpoint = run.runId;
-            continue;
-          }
-          return finish({
-            status: closed?.status || closed?.run?.status || 'partial',
-            runId: run.runId,
-            stopReason: closed?.stopReason || closed?.run?.stopReason || 'manual_intervention_required',
-            reason: 'launcher_closed_orphaned_active_run',
-          });
-        } catch (recoveryError) {
-          const recoveryMessage = `Launcher could not close orphaned active run ${run.runId}: ${String(recoveryError?.message || recoveryError)}`;
-          record({ lastError: recoveryMessage });
-          sessions.push({ sessionId, runId: run.runId, status: 'launcher_recovery_failed' });
-          return finish({ status: 'blocked', reason: 'launcher_recovery_failed', runId: run.runId, stopDetail: recoveryMessage }, run.runId);
-        }
-      }
-      sessions.push({ sessionId, runId: run?.runId || '', status: run?.status || 'missing',
-        stopReason: run?.stopReason || null, finishedAt: run?.finishedAt || null });
-      if (!continuationAllowed(run)) return finish(run
-        ? { status: run.status, runId: run.runId, stopReason: run.stopReason || null }
-        : { status: 'blocked', reason: 'runtime_completed_without_growth_run' },
-      run?.status === 'active' ? run.runId : '');
-    } catch (error) {
-      const run = deps.runs({ sessionId, limit: 1 })[0] || null;
-      const message = String(error?.message || error);
-      record({ lastError: message });
-      if (run?.status === 'active') {
-        try {
-          const closed = deps.finishRun(run.runId, {
-            status: 'partial',
-            stopReason: 'capability_unavailable',
-            stopDetail: `Reasoning runtime exited before the Growth Run could finish: ${message}`,
-            result: {
-              runtimeFailure: {
-                runtime: config.runtime,
-                model: config.model,
-                error: message,
-              },
-            },
-            now: now(),
-          });
-          sessions.push({
-            sessionId,
-            runId: run.runId,
-            status: closed?.status || 'partial',
-            stopReason: closed?.stopReason || 'capability_unavailable',
-            finishedAt: closed?.finishedAt || now(),
-          });
-          return finish({
-            status: closed?.status || 'partial',
-            runId: run.runId,
-            stopReason: closed?.stopReason || 'capability_unavailable',
-            reason: 'runtime_provider_failure',
-          });
-        } catch (recoveryError) {
-          sessions.push({ sessionId, runId: run.runId, status: 'runtime_error_recovery_failed' });
-          record({ lastError: `${message}; recovery failed: ${String(recoveryError?.message || recoveryError)}` });
-          throw error;
-        }
-      }
-      sessions.push({ sessionId, runId: '', status: 'runtime_error' });
-      finish({ status: 'runtime_error', reason: message });
-      throw error;
-    } finally {
-      stopHeartbeatPump();
-      if (browserTabLease) {
-        const cleanup = await browserTabLease.release().catch(error => ({
-          cleaned:false, warnings:[String(error?.message || error)],
-        }));
-        console.log(`Growth browser tab cleanup: ${JSON.stringify(cleanup)}`);
-      }
-      if (promptDirectory) await rm(promptDirectory, { recursive: true, force: true });
-    }
+  // Retired elapsed-time loop: 'legacy' never runs unattended anymore. It is
+  // rejected here with zero reasoning-child spawn, zero browser lease, and
+  // zero heartbeat — there is no opt-in escape back to window-filling
+  // operation.
+  if (config.agentMode === 'legacy') {
+    return finish({ status: 'blocked', reason: 'legacy_retired: the elapsed-time executor loop is retired; ordinary wakes run one finite controllerTick and exit' });
   }
-  return finish({ status: 'completed', reason: 'operation_window_elapsed' });
+  // Every ordinary wake (the controller default and the deprecated executor
+  // alias alike) runs exactly one finite cache-fed controllerTick and exits
+  // here, before any browser lease, heartbeat, reasoning child, or
+  // open-ended while loop. There are no elapsed-time obligations, no
+  // automatic resource-ceiling continuation, and no incomplete-run restart
+  // through this path: further work needs a new scheduler wake with fresh
+  // gates. The tick never collects live observations, opens a browser,
+  // begins a Growth Run, or grants publication authority.
+  const runTick = overrides.controllerTick || controllerTick;
+  const controllerOverrides = overrides.controller || {};
+  let tickProfile = controllerOverrides.profile;
+  let tickRuntimeExecution = controllerOverrides.runtimeExecution;
+  if (tickProfile === undefined && tickRuntimeExecution === undefined) {
+    // Forward the actual configured runtime selection as an ephemeral
+    // explicit profile: Claive->Codex/Luna (or native codex) selects the
+    // codex lane; anything else reports a concrete capability_unavailable
+    // with no alternate-model fallback. Saved profiles, delegation, and
+    // policy are never mutated. Explicit test seams override both fields.
+    const ephemeral = controllerRuntimeProfile(config);
+    tickProfile = ephemeral.profile;
+    tickRuntimeExecution = ephemeral.runtimeExecution;
+  }
+  const tick = await runTick({
+    now: now(),
+    ...controllerOverrides,
+    profile: tickProfile,
+    runtimeExecution: tickRuntimeExecution,
+  });
+  return finish({
+    status: tick.status,
+    reason: tick.reason || tick.status,
+    controller: tick,
+    ...(config.agentMode === 'executor' ? { agentModeNote: 'executor_alias_controller' } : {}),
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

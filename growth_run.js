@@ -15,6 +15,7 @@ import { getOperatorReadiness } from './operator_readiness.js';
 import {
   createGrowthRun,
   getGrowthRun,
+  getGrowthRunObservationBudget,
   getGrowthOperatorDelegation,
   getPublicationAttemptCounts,
   runStoreTransaction,
@@ -141,9 +142,10 @@ function ceilingState(run, now, readiness = null) {
   const elapsedMinutes = Math.max(0, (Number(now) - Number(run.startedAt)) / 60_000);
   const mutations = mutationCount(run.runId);
   const sensorProvenance = readiness?.sensors?.xForYou?.provenance || null;
-  const observations = String(sensorProvenance?.runId || '') === String(run.runId)
+  const observationBudget = getGrowthRunObservationBudget(run.runId);
+  const observations = observationBudget?.acceptedCount ?? (String(sensorProvenance?.runId || '') === String(run.runId)
     ? Number(sensorProvenance?.acceptedCount || 0)
-    : 0;
+    : 0);
   const observationCeiling = Number(run.ceilings.maxObservations || 50);
   const hitDuration = elapsedMinutes >= Number(run.ceilings.maxDurationMinutes || 20);
   const hitMutations = mutations >= Number(run.ceilings.maxPublicMutations || 10);
@@ -151,7 +153,12 @@ function ceilingState(run, now, readiness = null) {
     elapsedMinutes,
     observations,
     observationCeiling,
-    observationCeilingReached: observations >= observationCeiling,
+    observationsRead: observationBudget?.observationsRead ?? null,
+    observationBatches: observationBudget?.batchCount ?? null,
+    observationAccountingComplete: observationBudget !== null,
+    observationCeilingReached: observationBudget === null
+      || observationBudget.observationsRead >= observationCeiling
+      || observationBudget.batchCount >= observationCeiling,
     publicMutationAttempts: mutations,
     hit: hitDuration || hitMutations,
     reason: hitDuration ? 'max_duration' : hitMutations ? 'max_public_mutations' : null,
@@ -193,7 +200,7 @@ function nextOperation(run, readiness, now) {
     return {
       stage: 'recovery',
       recommendedOperation: 'recover_attempt',
-      permittedOperations: ['recover_attempt', 'collect_for_you', 'inspect_candidate', 'finish'],
+      permittedOperations: ['recover_attempt', ...(!ceilings.observationCeilingReached ? ['collect_for_you'] : []), 'inspect_candidate', 'finish'],
       recovery: {
         command: 'publication-attempts',
         payload: { limit: 100 },
@@ -260,14 +267,14 @@ function nextOperation(run, readiness, now) {
     return {
       stage: 'selection',
       recommendedOperation: 'inspect_candidate',
-      permittedOperations: ['collect_for_you', 'inspect_candidate', 'select_behavior', 'prepare_main_feed', 'finish'],
+      permittedOperations: [...(!ceilings.observationCeilingReached ? ['collect_for_you'] : []), 'inspect_candidate', 'select_behavior', 'prepare_main_feed', 'finish'],
       ceilings,
     };
   }
   return {
     stage: 'selection',
     recommendedOperation: 'inspect_candidate',
-    permittedOperations: ['collect_for_you', 'inspect_candidate', 'select_behavior', 'finish'],
+    permittedOperations: [...(!ceilings.observationCeilingReached ? ['collect_for_you'] : []), 'inspect_candidate', 'select_behavior', 'finish'],
     ceilings,
   };
 }

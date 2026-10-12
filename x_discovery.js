@@ -3,6 +3,7 @@ import {
   getDiscoverSnapshot,
   recordDiscoverSnapshotError,
   recordSourceObservations,
+  recordGrowthRunObservationBatch,
   runStoreTransaction,
   saveDiscoverSnapshot,
   setAppState,
@@ -236,7 +237,15 @@ export function ingestXForYouObservation(payload = {}) {
   }
 
   const accepted = [...deduped.values()].sort((left, right) => left.rank - right.rank || left.tweetId.localeCompare(right.tweetId));
+  const recordBatch = () => recordGrowthRunObservationBatch({
+    runId: String(payload.runId || ''), sessionId: String(payload.sessionId || ''),
+    batchId: payload.observationBatchId, observedAt, posts: payload.posts,
+    acceptedCount: accepted.length, rejectedCount, skippedCount,
+  });
   if (!accepted.length) {
+    try { recordBatch(); } catch (error) {
+      return failureResult({ observedAt, rejectedCount, skippedCount, diagnostics, error });
+    }
     return failureResult({
       observedAt,
       rejectedCount,
@@ -247,31 +256,44 @@ export function ingestXForYouObservation(payload = {}) {
   }
 
   const candidates = accepted.map((item) => item.candidate);
-  upsertCandidates(candidates);
-  const snapshot = saveDiscoverSnapshot('x_for_you', candidates, observedAt);
-  setAppState(X_FOR_YOU_SENSOR_STATE_KEY, JSON.stringify({
-    observedAt,
-    accountHandle,
-    accountVerified: true,
-    adapterType: String(payload.adapterType || ''),
-    sessionId: String(payload.sessionId || ''),
-    runId: String(payload.runId || ''),
-    browserTarget: String(payload.browserTarget || ''),
-    browserBackend: String(payload.browserBackend || ''),
-    browserProfile: payload.browserProfile == null ? null : String(payload.browserProfile),
-    sensorVersion: String(payload.sensorVersion || 'x_for_you_v1'),
-    collectionStatus: String(payload.collectionStatus || 'complete'),
-    acceptedCount: accepted.length,
-    rejectedCount,
-    skippedCount,
-  }));
-  recordSourceObservations(accepted.map((item) => ({
-    candidateKey: item.candidate.key,
-    snapshotKind: 'x_for_you',
-    observedAt,
-    rank: item.rank,
-    metrics: item.observedMetrics,
-  })));
+  let snapshot;
+  let observationBudget;
+  try {
+    runStoreTransaction(() => {
+      observationBudget = recordBatch();
+      if (observationBudget?.replayed) {
+        snapshot = getDiscoverSnapshot('x_for_you');
+        return;
+      }
+      upsertCandidates(candidates);
+      snapshot = saveDiscoverSnapshot('x_for_you', candidates, observedAt);
+      setAppState(X_FOR_YOU_SENSOR_STATE_KEY, JSON.stringify({
+        observedAt,
+        accountHandle,
+        accountVerified: true,
+        adapterType: String(payload.adapterType || ''),
+        sessionId: String(payload.sessionId || ''),
+        runId: String(payload.runId || ''),
+        browserTarget: String(payload.browserTarget || ''),
+        browserBackend: String(payload.browserBackend || ''),
+        browserProfile: payload.browserProfile == null ? null : String(payload.browserProfile),
+        sensorVersion: String(payload.sensorVersion || 'x_for_you_v1'),
+        collectionStatus: String(payload.collectionStatus || 'complete'),
+        acceptedCount: accepted.length,
+        rejectedCount,
+        skippedCount,
+      }));
+      recordSourceObservations(accepted.map((item) => ({
+        candidateKey: item.candidate.key,
+        snapshotKind: 'x_for_you',
+        observedAt,
+        rank: item.rank,
+        metrics: item.observedMetrics,
+      })));
+    });
+  } catch (error) {
+    return failureResult({ observedAt, rejectedCount, skippedCount, diagnostics, error });
+  }
 
   return {
     kind: 'x_for_you',
@@ -279,9 +301,10 @@ export function ingestXForYouObservation(payload = {}) {
     acceptedCount: accepted.length,
     rejectedCount,
     skippedCount,
-    snapshotReplaced: true,
-    preservedLastGood: false,
+    snapshotReplaced: observationBudget?.replayed !== true,
+    preservedLastGood: observationBudget?.replayed === true,
     diagnostics,
+    ...(observationBudget ? { observationBudget } : {}),
     candidates: snapshot.candidates,
   };
 }
