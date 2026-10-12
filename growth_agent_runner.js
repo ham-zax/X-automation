@@ -18,7 +18,9 @@ const REPO = path.resolve(process.env.X_GROWTH_REPO || path.dirname(fileURLToPat
 const DEFAULT_RUNTIME = 'opencode';
 const DEFAULT_OPENCODE_BIN = path.join(HOME, '.opencode/bin/opencode');
 const DEFAULT_OPENCODE_MODEL = 'opencode/muse-spark-1.3-contributor-free';
-const DEFAULT_CODEX_BIN = path.join(HOME, '.nvm/versions/node/v24.19.0/bin/codex');
+const DEFAULT_CODEX_BIN = existsSync(path.join(HOME, '.local/bin/codex'))
+  ? path.join(HOME, '.local/bin/codex')
+  : path.join(HOME, '.nvm/versions/node/v24.19.0/bin/codex');
 const DEFAULT_CLAIVE_BIN = path.join(HOME, '.local/bin/claive');
 const CLAIVE_MODEL = 'muse-spark-1.3-contributor';
 const CLAIVE_CODEX_MODEL = 'gpt-6-luna';
