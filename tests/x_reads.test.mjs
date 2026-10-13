@@ -5,11 +5,14 @@ import { xRead } from '../x_reads.js';
 const tweet = (id, username, inReplyToStatusId, conversationId = '10000') => ({ id, username, text: `post ${id}`, inReplyToStatusId, conversationId, timeParsed: new Date(Number(id)) });
 function fakeScraper({ fail = false } = {}) {
   const queries = [];
+  const modes = [];
   return {
     queries,
+    modes,
     async getTweet(id) { return id === '10002' ? tweet('10002', 'someone', '10001') : null; },
-    async *searchTweets(query) {
+    async *searchTweets(query, count, mode) {
       queries.push(query);
+      modes.push(mode);
       if (fail) throw new Error('HTTP 404: Not Found');
       yield tweet('10003', 'ham_zax', '10002');
       yield tweet('10004', 'ham_zax', '10001');
@@ -32,4 +35,14 @@ test('x-read hands a failed read to the browser and rejects a malformed request'
   assert.equal((await xRead({ kind: 'post', id: '10009' }, { scraper: fakeScraper() })).fallback, 'browser');
   await assert.rejects(xRead({ kind: 'post' }, { scraper: fakeScraper() }), /requires a tweet id/);
   await assert.rejects(xRead({ kind: 'like' }, { scraper: fakeScraper() }), /kind must be one of/);
+});
+
+test('x-read search passes the query and mode through and rejects a malformed search', async () => {
+  const scraper = fakeScraper();
+  const read = await xRead({ kind: 'search', query: '  rust   cli min_faves:50 ', mode: 'latest', limit: 1 }, { scraper });
+  assert.equal(read.ok, true);
+  assert.deepEqual([read.query, read.mode, read.count], ['rust cli min_faves:50', 'Latest', 1]);
+  assert.deepEqual([scraper.queries, scraper.modes], [['rust cli min_faves:50'], ['Latest']]);
+  await assert.rejects(xRead({ kind: 'search', query: ' ' }, { scraper }), /requires a query/);
+  await assert.rejects(xRead({ kind: 'search', query: 'rust', mode: 'photos' }, { scraper }), /mode of top or latest/);
 });

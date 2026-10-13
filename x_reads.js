@@ -6,17 +6,19 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const X_READ_KINDS = Object.freeze(['mentions', 'post', 'thread', 'own-replies', 'replied']);
+export const X_READ_KINDS = Object.freeze(['mentions', 'post', 'thread', 'own-replies', 'replied', 'search']);
 const STATUS_STALE_MS = 48 * 60 * 60 * 1000;
 const READ_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 40;
+const MAX_QUERY_LENGTH = 300;
+const SEARCH_MODES = Object.freeze({ top: 'Top', latest: 'Latest' });
 
 export function xactionsHome(env = process.env) {
   return path.resolve(env.X_GROWTH_XACTIONS_HOME || '.xactions-upstream');
 }
 
 export function readXactionsStatus({ env = process.env, now = Date.now() } = {}) {
-  const use = 'x-read {"kind":"mentions|post|thread|own-replies|replied","id":"<tweetId>"}; on ok:false read through the browser.';
+  const use = 'x-read {"kind":"mentions|post|thread|own-replies|replied","id":"<tweetId>"} or {"kind":"search","query":"<X search query>","mode":"top|latest"}; on ok:false read through the browser. The For You feed is browser-only.';
   let status;
   try {
     status = JSON.parse(fs.readFileSync(path.join(xactionsHome(env), 'status.json'), 'utf8'));
@@ -69,6 +71,14 @@ function tweetId(value, label) {
   return id;
 }
 
+function searchRequest(payload) {
+  const query = String(payload.query || '').replace(/\s+/g, ' ').trim();
+  if (!query || query.length > MAX_QUERY_LENGTH) throw new Error(`x-read search requires a query of 1-${MAX_QUERY_LENGTH} characters.`);
+  const mode = SEARCH_MODES[String(payload.mode || 'top').toLowerCase()];
+  if (!mode) throw new Error('x-read search requires a mode of top or latest.');
+  return { query, mode };
+}
+
 function clampLimit(value, fallback) {
   const limit = Number(value);
   return Number.isFinite(limit) && limit >= 1 ? Math.min(MAX_LIMIT, Math.floor(limit)) : fallback;
@@ -91,9 +101,9 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
     await scraper.setCookies(cookies);
   }
 
-  async function search(query, limit) {
+  async function search(query, limit, mode = SEARCH_MODES.latest) {
     const posts = [];
-    for await (const tweet of scraper.searchTweets(query, limit)) {
+    for await (const tweet of scraper.searchTweets(query, limit, mode)) {
       const post = slimPost(tweet);
       if (post) posts.push(post);
       if (posts.length >= limit) break;
@@ -111,6 +121,7 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
     source,
     ownHandle,
     post,
+    search: (query, mode, limit) => search(query, clampLimit(limit, 10), mode),
     mentions: (limit) => search(`to:${ownHandle}`, clampLimit(limit, 20)),
     ownReplies: (limit) => search(`from:${ownHandle} filter:replies`, clampLimit(limit, 20)),
     async thread(id, limit) {
@@ -132,10 +143,16 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
 export async function xRead(payload = {}, options = {}) {
   const kind = String(payload.kind || '');
   if (!X_READ_KINDS.includes(kind)) throw new Error(`x-read kind must be one of: ${X_READ_KINDS.join(', ')}.`);
+  const request = kind === 'search' ? searchRequest(payload) : null;
   try {
-    if (kind !== 'mentions' && kind !== 'own-replies') tweetId(payload.id, `x-read ${kind}`);
+    if (!request && kind !== 'mentions' && kind !== 'own-replies') tweetId(payload.id, `x-read ${kind}`);
     const reader = await createXReader(options);
     const base = { ok: true, kind, source: reader.source };
+    // Search results are not personalized and are not For You observations.
+    if (request) {
+      const posts = await reader.search(request.query, request.mode, payload.limit);
+      return { ...base, ...request, count: posts.length, posts, note: 'Search finds, not For You observations. Results are unfiltered, so judge each post.' };
+    }
     if (kind === 'post') return { ...base, posts: [await reader.post(payload.id)] };
     if (kind === 'replied') {
       const { target, ourReplies } = await reader.replied(payload.id);
@@ -176,6 +193,11 @@ export async function smokeTestXReads(options = {}) {
       return { count: own.length };
     });
     await run('mentions', async () => ({ count: (await reader.mentions(5)).length }));
+    await run('search', async () => {
+      const found = await reader.search('javascript min_faves:100 lang:en', SEARCH_MODES.top, 5);
+      if (!found.length || found.some((item) => !item.author)) throw new Error('Topic search returned no posts or a post without an author.');
+      return { count: found.length };
+    });
     if (own.length) {
       await run('post', async () => {
         const found = await reader.post(own[0].id);
@@ -185,5 +207,5 @@ export async function smokeTestXReads(options = {}) {
       await run('thread', async () => ({ count: (await reader.thread(own[0].id, 5)).length }));
     }
   }
-  return { ok: checks.length === 5 && checks.every((check) => check.ok), checks };
+  return { ok: checks.length === 6 && checks.every((check) => check.ok), checks };
 }

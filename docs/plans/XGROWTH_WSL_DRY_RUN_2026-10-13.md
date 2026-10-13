@@ -119,3 +119,29 @@ document was read.
 6. **Untargeted `observe` calls each left an `about:blank` tab** in the Clearcote
    profile. The task tab was closed; five blank tabs remain and their ownership is not
    established, so they were left.
+
+## Follow-up: the `x-read` lane (same day)
+
+Finding 1 led to `x-read`, a read-only lookup through the pinned XActions client. Live
+WSL measurements with the account cookies, no browser:
+
+| Read | Bytes | Browser equivalent |
+|---|---|---|
+| mentions, 5 posts | 1,879 | 50,760 |
+| thread, 4 posts | 1,771 | about 18,000 |
+| topic search, 5 posts (`"coding agent" min_faves:100`, Latest) | 2,864 | not measured |
+
+What each surface uses:
+
+| Surface | Lane |
+|---|---|
+| Mentions, a post, a thread, our own replies, "did we already reply" | `x-read`, browser on `ok:false` |
+| Niche topic search (Top or Latest) | `x-read` `search`, browser on `ok:false` |
+| For You feed | browser only: the client has no home-timeline read and X rejects that lane |
+| Every send | unchanged: `act` or an approved-queue claim in the browser |
+
+Limits: search results are unpersonalized and unfiltered (one of five live Latest hits
+was a promotion), so they are recorded as search finds and never as For You
+observations. Search can lag, so an empty result or `replied:false` is not proof of
+absence. The query-ID refresh in XActions is currently broken upstream; the daily
+updater's smoke test is what detects a rotation, and the browser lane then takes over.
