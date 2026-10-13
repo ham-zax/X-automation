@@ -9,7 +9,7 @@ Correct CLI syntax: \`tab list --json\` to discover stable IDs, then \`tab <targ
 If a click is blocked by \`div#layers\` or another covering element, it was NOT dispatched. Observe the covering UI: use its current visible Close/Cancel control only when safe, or \`press Escape\` only if it cannot discard draft content. Re-snapshot before attempting any DIFFERENT pre-send action. Never force-click, script around overlays, or blindly repeat an action with uncertain effects.`;
 }
 
-export function browserOperatorContract({ browserTarget, browserInterface, agentBrowserCli, cdpPort, sessionId, browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+export function browserOperatorContract({ browserTarget, browserInterface, agentBrowserCli, cdpPort, sessionId, browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser' }) {
   if (browserTarget !== 'linux') return ''; // Windows uses the existing browser-fast + native-dialog policy.
   const fallback = cliInstructions({ agentBrowserCli, cdpPort, sessionId });
   if (browserInterface === 'agent-browser-cli') {

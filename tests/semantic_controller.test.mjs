@@ -649,7 +649,7 @@ try {
       runtime: 'codex', claiveEngine: 'muse', model: 'test-model', windowMinutes: 5,
       browserTarget: 'linux', cdpPort: '9222', agentBrowserCli: 'none',
       browserInterface: 'agent-browser-cli', browserMcpServer: 'xgrowth_browser',
-      browserFastBackend: 'clearcote', thinking: 'low', experiment: false,
+      browserFastBackend: 'cloakbrowser', thinking: 'low', experiment: false,
       agentMode: 'controller', executable: 'never-spawn',
     };
     const outcome = await runner.main({

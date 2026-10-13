@@ -414,7 +414,7 @@ export async function checkBrowserSession(credentials, {
     await page.goto(`https://x.com/${account}`, { waitUntil: 'networkidle2' });
     const ownProfile = await page.waitForSelector('a[href="/settings/profile"]', { timeout: 10_000 }).catch(() => null);
     if (!ownProfile) throw new Error(`Browser session is not authenticated as @${account}.`);
-    return { authenticated: true, account, transport: 'clearcote_browser_ui' };
+    return { authenticated: true, account, transport: 'cloakbrowser_browser_ui' };
   } finally {
     await browser.close().catch(() => {});
   }
@@ -539,7 +539,7 @@ export async function publishMainFeedBrowser(item, credentials, {
         tweetId: identity.tweetId,
         url: identity.url,
         ...structure,
-        result: { transport: 'clearcote_browser_ui', tweetId: identity.tweetId, url: identity.url, ...structure },
+        result: { transport: 'cloakbrowser_browser_ui', tweetId: identity.tweetId, url: identity.url, ...structure },
       };
     };
 

@@ -1,10 +1,10 @@
-import { launch as launchClearcote } from 'clearcote';
+import { launchPersistentContext } from 'cloakbrowser';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const CLEARCOTE_CHROME_EXECUTABLE = '/usr/bin/google-chrome';
-const CLEARCOTE_FINGERPRINT = 'x-test-growth-os';
+// A fixed seed keeps one browser identity across the throwaway profiles below.
+const CLOAKBROWSER_FINGERPRINT_SEED = 48217;
 const WAIT_UNTIL = Object.freeze({
   networkidle0: 'domcontentloaded',
   networkidle2: 'domcontentloaded',
@@ -76,16 +76,12 @@ export async function createBrowser(options = {}) {
   const runDirectory = await mkdtemp(join(root, 'run-'));
   let browser;
   try {
-    browser = await launchClearcote({
-      ...options,
-      executablePath: CLEARCOTE_CHROME_EXECUTABLE,
+    browser = await launchPersistentContext({
       headless: options.headless !== false,
       humanize: true,
-      fingerprint: CLEARCOTE_FINGERPRINT,
-      platform: 'linux',
-      brand: 'Chrome',
       userDataDir: options.userDataDir ?? join(runDirectory, 'profile'),
-      env: { ...process.env, ...options.env, TMPDIR: runDirectory },
+      args: [`--fingerprint=${CLOAKBROWSER_FINGERPRINT_SEED}`],
+      launchOptions: { env: { ...process.env, ...options.env, TMPDIR: runDirectory } },
     });
   } catch (error) {
     await rm(runDirectory, { recursive: true, force: true }).catch(() => {});

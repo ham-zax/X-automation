@@ -117,9 +117,9 @@ export function runtimeConfig(env = process.env) {
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(browserMcpServer)) {
     throw new Error('X_GROWTH_BROWSER_MCP_SERVER must be a simple MCP server name.');
   }
-  const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'clearcote').trim().toLowerCase();
-  if (!['chrome', 'clearcote'].includes(browserFastBackend)) {
-    throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or clearcote.');
+  const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'cloakbrowser').trim().toLowerCase();
+  if (!['chrome', 'cloakbrowser'].includes(browserFastBackend)) {
+    throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or cloakbrowser.');
   }
   const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
@@ -241,7 +241,7 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
 // The finite controller owns admission, budgets, and stopping now.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Act on every worthwhile eligible opportunity, including long sequences of valuable replies; do not invent filler or treat measured virality as a required category. The bridge gates still apply.
 ` : '';
@@ -316,7 +316,7 @@ export function buildOperatorPrompt({ mode = 'executor', ...options }) {
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'clearcote' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser' }) {
   const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:

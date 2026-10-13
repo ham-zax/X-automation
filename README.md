@@ -4,7 +4,7 @@ Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers so
 
 ## Components
 
-- `x_browser_publish.js` — owns authenticated Clearcote read/session checks, publication content-gate receipts, and read-only live-search identity recovery. Scripted x.com mutation exports fail closed.
+- `x_browser_publish.js` — owns authenticated CloakBrowser read/session checks, publication content-gate receipts, and read-only live-search identity recovery. Scripted x.com mutation exports fail closed.
 - `x_api_publish.js` — official X API v2 main-feed transport. Text Originals and Threads are supported with an OAuth user access token; Quote requires explicit Enterprise capability; local media upload remains fail-closed.
 - `post_thread.js` — browser-session preflight and dry-run validation only; direct browser thread mutation is disabled.
 - `behavior.js` — shared neutral contract for action purpose, social mode, affect strategy/provenance, information depth, conversation stage, and ACT/RESEARCH/SILENT decisions.
@@ -82,7 +82,7 @@ Copy the non-secret settings you want from `.env.example` into `.env`. `AUTH_TOK
 npm run browser:check
 ```
 
-That command launches the Clearcote browser, authenticates the X UI session, verifies the configured account profile, and publishes nothing.
+That command launches the CloakBrowser browser, authenticates the X UI session, verifies the configured account profile, and publishes nothing.
 
 ## Research
 
@@ -224,4 +224,4 @@ When you manually give the agent an X post, it should inspect the exact source, 
 
 ## Important limitation
 
-Authenticated browser/private-web access remains dependent on X's live web application, so discovery, analytics, profile reads, browser-agent publication, and reconciliation can break when X changes its UI. The background Node daemon does **not** use browser mutation and remains official-X-API-only. The persistent Growth Operator has a separate browser-agent execution lane: prefer the harness-owned MCP `browser-fast` surface, use `browser-devtools` for diagnostics, fall back to the WebHarness-bundled Agent Browser CLI in a named session when Local/MCP is unavailable, and use the global `agent-browser` CLI only as a secondary fallback. The legacy repository Clearcote/xactions writer remains disabled because its reply-target integrity previously failed verification. Browser execution never creates approval; exact repository authority, target/content gates, one-shot send semantics, structural verification, and Growth OS reconciliation remain required.
+Authenticated browser/private-web access remains dependent on X's live web application, so discovery, analytics, profile reads, browser-agent publication, and reconciliation can break when X changes its UI. The background Node daemon does **not** use browser mutation and remains official-X-API-only. The persistent Growth Operator has a separate browser-agent execution lane: prefer the harness-owned MCP `browser-fast` surface, use `browser-devtools` for diagnostics, fall back to the WebHarness-bundled Agent Browser CLI in a named session when Local/MCP is unavailable, and use the global `agent-browser` CLI only as a secondary fallback. The legacy repository xactions writer remains disabled because its reply-target integrity previously failed verification. Browser execution never creates approval; exact repository authority, target/content gates, one-shot send semantics, structural verification, and Growth OS reconciliation remain required.
