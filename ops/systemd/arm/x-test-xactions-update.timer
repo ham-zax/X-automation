@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily XActions read client update before the waking window
+
+[Timer]
+OnCalendar=*-*-* 08:10:00 Asia/Kolkata
+RandomizedDelaySec=5min
+Persistent=true
+Unit=x-test-xactions-update.service
+
+[Install]
+WantedBy=timers.target

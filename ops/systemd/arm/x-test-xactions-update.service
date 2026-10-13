@@ -1,0 +1,14 @@
+[Unit]
+Description=XGrowth XActions read client update and read-only smoke test
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/repo/x_test
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/node ops/xactions_update.mjs
+TimeoutStartSec=10min
+TimeoutStopSec=15s
+KillMode=control-group
+Restart=no

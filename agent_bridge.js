@@ -2125,8 +2125,13 @@ async function main() {
   }
 
   if (command === 'operator-status') {
-    const status = operatorStatus(payload);
+    const status = { ...operatorStatus(payload), xReads: (await import('./x_reads.js')).readXactionsStatus() };
     result(payload.detail === true ? status : compactOperatorStatus(status));
+    return;
+  }
+
+  if (command === 'x-read') {
+    result(await (await import('./x_reads.js')).xRead(payload));
     return;
   }
 

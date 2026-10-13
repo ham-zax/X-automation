@@ -72,6 +72,7 @@ npm run agent -- growth-run-finish
 npm run agent -- operator-priority-set
 npm run agent -- growth-focus-expand
 npm run agent -- scout
+npm run agent -- x-read
 npm run agent -- act
 npm run agent -- publication-attempts
 npm run agent -- publication-attempt-send-start

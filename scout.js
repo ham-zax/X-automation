@@ -184,7 +184,7 @@ export function buildScoutCards(input = {}) {
     score: null,
     reason: window.rest
       ? `Rest hours (${window.localTime} ${window.timeZone}): read mentions for critical breakthroughs only; do not make routine replies.`
-      : `Open ${MENTIONS_URL} and reply to worthwhile new replies to our posts.`,
+      : `Read mentions with x-read {"kind":"mentions"} (open ${MENTIONS_URL} when it reports ok:false) and reply to worthwhile new replies to our posts.`,
   }];
 
   // Original work is a separate lane. One editorial idea card per scout read is
