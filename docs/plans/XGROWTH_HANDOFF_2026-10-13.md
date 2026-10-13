@@ -139,3 +139,16 @@ wiring of `replied` into the pre-send path, optional `list` kind for X Lists.
 - Merge of `fix/context-budget` to `main`.
 - Re-enabling `x-test-growth-agent.timer`.
 - Whether non-English mentions get replies.
+
+## Loose ends
+
+- Claive worker `18f98f19fd60` (Haiku, WSL, workspace `context-budget`) is idle and
+  still open; `claive close 18f98f19fd60` ends it.
+- Five `about:blank` tabs remain in the WSL Clearcote profile `x-main` from the dry
+  run. Their ownership was not established, so they were left.
+- The daily updater's smoke test runs a freshly fetched upstream XActions commit with
+  the account cookies before any review of that commit.
+- `x_browser.js` has a hardcoded Chrome path, and the GitHub Trending and HN feeds
+  were not exercised today; neither is proven on ARM.
+- The ARM checkout is at `7e8f7f4`; this document is one commit later and has not
+  been pulled there.
