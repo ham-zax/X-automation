@@ -52,7 +52,7 @@ try {
   if (!existsSync(bin)) throw new Error('Claive binary not found');
   const args = ['run','--workspace',repo,'--prompt-file',promptFile,
     '--label','XGrowth daily analytics collector','--engine','codex',
-    '--model','gpt-6-luna','--reasoning-effort','high','--web'];
+    '--model','gpt-6-luna','--reasoning-effort','max','--web'];
   const child=spawn(bin,args,{cwd:repo,stdio:'inherit',env:{...process.env,
     CLAIVE_CODEX_YOLO:'1',CLAIVE_CODEX_USE_USER_CONFIG:'1'},});
   const code=await new Promise((resolve,reject)=>{ child.on('error',reject);child.on('close',(exit)=>resolve(exit)); });

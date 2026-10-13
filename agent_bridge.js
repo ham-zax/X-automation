@@ -1929,7 +1929,7 @@ async function main() {
         action: actionName,
         outputTweetId,
         outputUrl,
-        commentary: `delegated act ${validated.action}`,
+        commentary: validated.text,
         createdAt: now,
       });
       let relationshipEvent = null;
