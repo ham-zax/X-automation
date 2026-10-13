@@ -141,9 +141,9 @@ A canonical observation must include the intended authenticated account handle p
   "adapterType": "chatgpt_webharness",
   "sessionId": "<session>",
   "runId": "<run-id>",
-  "browserTarget": "windows",
+  "browserTarget": "<windows|linux, the host actually used>",
   "browserBackend": "chrome",
-  "sensorVersion": "browser_fast_v1",
+  "sensorVersion": "x_for_you_v1",
   "collectionStatus": "complete",
   "posts": []
 }

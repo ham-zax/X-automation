@@ -2,6 +2,8 @@
 
 **ARM current runtime (2026-10-10):** use `ops/systemd/arm/x-test-growth-agent.service`, which runs Claive + Codex `gpt-6-luna`, not the historical Pi configuration described later in this document. The authenticated browser lives only on ARM; `agent-browser-cli` is the live default and typed `webharness-mcp` is opt-in for a new run. The old model-rotation watchdog `x-test-watch.timer` is disabled. For exact operational settings, see `docs/ARM_24X7_HANDOFF.md` under Current deployment. Do not use the historical `model.conf` failover steps to change the Codex worker.
 
+**ARM attached-live session:** `ops/systemd/arm/attached-live.conf` (a drop-in for `x-test-growth-agent.service`) runs `ops/systemd/arm/arm-growth-live.sh` from the production checkout. The script fills `ops/systemd/arm/arm-growth-live.md` (the agent brief) and starts one bounded claive session. Edit these files here, pull on ARM, and copy the drop-in to `~/.config/systemd/user/x-test-growth-agent.service.d/` followed by `systemctl --user daemon-reload` when it changes. `experiment.conf` and `runtime-paths.conf` are the other drop-ins in that directory.
+
 These units are rollout artifacts for the production checkout in `/home/hamza/repo/x_test`.
 
 The dashboard is a read/review service; live X work belongs to the attached reasoning operator:
