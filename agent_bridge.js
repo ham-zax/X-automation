@@ -633,6 +633,21 @@ function compactPublicationAttempts(response) {
   };
 }
 
+// Scout cards for an agent choosing what to act on: identity, exact text and measured
+// numbers. Heuristic shape labels and the prose restatement of the metrics are detail.
+function compactScoutCard(card) {
+  if (card.tier === 'T1') {
+    return {
+      ...omitKeys(card, ['contentStyle', 'hookLabels', 'styleLabels', 'independentResearchFormats', 'reason']),
+      metrics: omitKeys(card.metrics, ['viralTier', 'bookmarksPerThousandViews']),
+    };
+  }
+  const kept = Object.fromEntries(Object.entries(card).filter(([, value]) => value !== null));
+  // pace.learning already carries the same recommendations.
+  if (card.tier === 'T2') kept.reason = omitKeys(card.reason, ['learningRecommendations']);
+  return kept;
+}
+
 function engagementRefreshOptions(payload) {
   const key = String(payload.key || '').trim();
   return {
@@ -1801,7 +1816,9 @@ async function main() {
     const store = await import('./store.js');
     const input = scoutModule.readScoutInput(store, { now: Date.now() });
     const { pace, cards } = scoutModule.buildScoutCards({ ...input, limit: payload.limit });
-    result({ generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards });
+    result(payload.detail === true
+      ? { generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards }
+      : { generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards: cards.map(compactScoutCard), compact: true, detailHint: DETAIL_HINT });
     return;
   }
 

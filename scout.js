@@ -16,6 +16,7 @@ const MAIN_FEED_PIPELINES = new Set(['original', 'quote', 'repost', 'thread']);
 // Relevance, momentum and freshness inform priority; none grants or denies authority.
 export const SCOUT_DEFAULTS = Object.freeze({
   limit: 30,
+  maxReplyAgeHours: 24,
   maxLimit: 50,
   ownHandle: 'ham_zax',
   candidateReadLimit: 500,
@@ -108,6 +109,8 @@ export function buildScoutCards(input = {}) {
     const publishedAt = Number(candidate.publishedAt);
     const ageHours = Number.isFinite(publishedAt) && publishedAt > 0
       ? Math.max(0, (now - publishedAt) / (60 * MINUTE_MS)) : null;
+    // A day-old conversation is no longer a live one unless it is independently flagged urgent.
+    if (ageHours != null && ageHours > SCOUT_DEFAULTS.maxReplyAgeHours && !candidate.urgent) continue;
     const nicheScore = Number.isFinite(Number(candidate.nicheScore)) ? Number(candidate.nicheScore) : 0;
     const viewsPerHour = Math.max(0, Number(candidate.viewsPerHour) || 0);
     const engagementsPerHour = Math.max(0, Number(candidate.engagementsPerHour) || 0);

@@ -7,7 +7,7 @@ morning version of this file; the earlier text is in Git history (`1a2df5a`).
 
 | Item | State |
 |---|---|
-| Branch | `fix/context-budget`, pushed, **not merged** to `main` (`ab312d0`) |
+| Branch | `fix/context-budget`, merged to `main` by fast-forward on 2026-10-13 |
 | ARM production checkout | `/home/ubuntu/repo/x_test` on `fix/context-budget` |
 | WSL | test-only; work in the worktree `~/repo/x_test.worktrees/context-budget` |
 | `x-test-growth-agent.timer` | disabled; sessions are started by hand |
@@ -15,7 +15,7 @@ morning version of this file; the earlier text is in Git history (`1a2df5a`).
 | Browser | CloakBrowser replaced Clearcote in this repository and in WebHarness (`3d1b168`). The ARM growth session still attaches to the signed-in Chromium on CDP 9222 |
 | Uncertain attempts `c8a99266-b68c-46d9-986e-a5c2671ac279` (Reply), `1e363f31-eaca-44c1-b95c-1017f2a9b6fc` (Quote) | untouched; never retry them |
 
-Rollback on ARM: `git checkout main` and `npm ci` in the checkout, restore the launcher,
+Rollback on ARM: `git checkout ab312d0` and `npm ci` in the checkout, restore the launcher,
 brief, drop-in and unit from `~/.local/state/x_test/backups/`,
 `systemctl --user daemon-reload`, and
 `systemctl --user disable --now x-test-xactions-update.timer`.
@@ -60,7 +60,8 @@ is why the timer is still off.
 | `operator-status {"detail":true}` was called twice | the brief allows it once per session |
 | The progress file went stale between minute 5 and the end of pass 1 | the brief asks for an update at least every 5 minutes inside a long pass |
 | `publication-attempts` `counts` covered only the newest 100 rows | `counts` now come from the whole table |
-| The browser contract offered `skills get core --full` (147 KB) | the contract asks for `skills get core` once (38 KB) |
+| The agent loaded `agent-browser skills get core` (38 KB) at every start | the browser contract in `ops/browser_operator_contract.js` lists the commands a session needs and tells the agent not to load the CLI skill text. Nothing is installed as a system skill |
+| `scout` returned about 18 KB per pass and ranked a 79-hour-old post near the top | conversation cards older than 24 hours are dropped unless flagged urgent; the default output omits shape labels and the prose `reason` (`{"detail":true}` returns them) |
 
 ## Open issues
 
@@ -68,26 +69,21 @@ is why the timer is still off.
    re-reads it from cache. The fixes above remove startup reading; they do not bound
    growth across passes. Not started from the context-budget plan: session record
    (tokens, calls, outcomes), wake gate, and a pre-ranked scout.
-2. **`scout` returns about 18 KB per pass** (14 cards at about 1.2 KB). It still ranks
-   stale posts: a 79-hour-old post was in the top cards on 2026-10-13.
-3. **`agent-browser skills get core` is 38 KB** and is read at the start of every
-   session. A short command list inside the browser contract would replace it.
-4. **Discovery snapshots are stale.** `operator-status` `.discovery` shows `x_latest`,
+2. **Discovery snapshots are stale.** `operator-status` `.discovery` shows `x_latest`,
    `x_momentum`, GitHub Trending, HN Top and creator timelines last fetched weeks ago
    with fetch errors. Only For You is current. The GitHub and HN feeds are unproven on
    ARM.
-5. **Skipped mentions.** `DanKornas` (`2108287657411563976`): saturation pressure 90.
+3. **Skipped mentions.** `DanKornas` (`2108287657411563976`): saturation pressure 90.
    `MrrrOzi` (`2108163023118725454`): Turkish; no reply without owner sign-off.
-6. **X navigation `ERR_TIMED_OUT`** was seen in one Haiku session and not investigated.
-7. **Monitoring pitfall.** `publication_attempts` has no `created_at`; the time column
+4. **X navigation `ERR_TIMED_OUT`** was seen in one Haiku session and not investigated.
+5. **Monitoring pitfall.** `publication_attempts` has no `created_at`; the time column
    is `claimed_at` in epoch milliseconds.
-8. **Codex effort.** claive runs Codex at `max` only.
-9. **The daily XActions updater** smoke-tests a freshly fetched upstream commit with
+6. **Codex effort.** claive runs Codex at `max` only.
+7. **The daily XActions updater** smoke-tests a freshly fetched upstream commit with
    the account cookies before any review of that commit.
 
 ## Owner decisions pending
 
-- Merge `fix/context-budget` to `main`.
 - Re-enable `x-test-growth-agent.timer`.
 - Luna `max` or Haiku `xhigh` as the session model.
 - Whether non-English mentions get replies.
