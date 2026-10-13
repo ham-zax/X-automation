@@ -10,7 +10,7 @@ morning version of this file; the earlier text is in Git history (`1a2df5a`).
 | Branch | `fix/context-budget`, merged to `main` by fast-forward on 2026-10-13 |
 | ARM production checkout | `/home/ubuntu/repo/x_test` on `fix/context-budget` |
 | WSL | test-only; work in the worktree `~/repo/x_test.worktrees/context-budget` |
-| `x-test-growth-agent.timer` | disabled; sessions are started by hand |
+| `x-test-growth-agent.timer` | enabled on 2026-10-13 19:10 UTC at the owner's request, with a host drop-in `cadence.conf` that starts a session 30 minutes after the previous start (the unit's own value is 5). A session that is still running is not started twice |
 | `x-test-xactions-update.timer` | enabled on ARM, daily; XActions pinned at `b9c4bf7` |
 | Browser | CloakBrowser replaced Clearcote in this repository and in WebHarness (`3d1b168`). The ARM growth session still attaches to the signed-in Chromium on CDP 9222 |
 | Uncertain attempts `c8a99266-b68c-46d9-986e-a5c2671ac279` (Reply), `1e363f31-eaca-44c1-b95c-1017f2a9b6fc` (Quote) | untouched; never retry them |
@@ -40,6 +40,7 @@ All times UTC.
 |---|---|---|
 | 05:08 and 05:16 | `claude-haiku-5-5` `xhigh`, run from WSL | about 7 min each, one pass each; 1 reply confirmed in total |
 | 16:18, run `76f8e503-c077-4637-b83a-aeb6fa20c2f8` | Codex `gpt-6-luna` `max` on ARM | 37 min, several passes, 2 replies confirmed, 23 skips, run finished and lease released |
+| 18:27, run `bd63e3d2-8256-4e65-a6d8-a00494688a1e` | same, on `e3d7953` (brief fixes, `growth-focus`) | 35 min, 4 passes, 6 replies confirmed, 44 skips, run completed and lease released |
 
 Confirmed replies of the 16:18 session:
 `https://x.com/ham_zax/status/2110049677135561095` and
@@ -47,8 +48,13 @@ Confirmed replies of the 16:18 session:
 
 Cost of the 16:18 session: 76 model calls; 9,563,546 input tokens, of which 9,268,480
 were cache reads (about 295,000 uncached); 100,253 output tokens; peak context 243,511
-tokens. It works end to end. It is not yet cheap enough to run around the clock, which
-is why the timer is still off.
+tokens.
+
+Cost of the 18:27 session: 16,901,281 input tokens, of which 16,430,336 were cache
+reads (about 471,000 uncached); 164,054 output tokens. Total tokens rose because it ran
+four passes and judged 50 candidates; per confirmed reply the input fell from about
+4.8 million to about 2.8 million tokens. The scout and browser-contract changes
+(`77517f1`) were deployed after this session and are not measured yet.
 
 ## Fixed after the 16:18 session
 
@@ -84,7 +90,6 @@ is why the timer is still off.
 
 ## Owner decisions pending
 
-- Re-enable `x-test-growth-agent.timer`.
 - Luna `max` or Haiku `xhigh` as the session model.
 - Whether non-English mentions get replies.
 
