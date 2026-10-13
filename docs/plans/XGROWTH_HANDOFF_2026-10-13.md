@@ -8,8 +8,8 @@ morning version of this file; the earlier text is in Git history (`1a2df5a`).
 | Item | State |
 |---|---|
 | Branch | `fix/context-budget`, merged to `main` by fast-forward on 2026-10-13 |
-| ARM production checkout | `/home/ubuntu/repo/x_test` on `fix/context-budget` |
-| WSL | test-only; work in the worktree `~/repo/x_test.worktrees/context-budget` |
+| ARM production checkout | `/home/ubuntu/repo/x_test` on `main` |
+| WSL | test-only; `~/repo/x_test` on `main`. The worktree `~/repo/x_test.worktrees/context-budget` is merged and can be removed |
 | `x-test-growth-agent.timer` | enabled on 2026-10-13 19:10 UTC at the owner's request, with a host drop-in `cadence.conf` that starts a session 30 minutes after the previous start (the unit's own value is 5). A session that is still running is not started twice |
 | `x-test-xactions-update.timer` | enabled on ARM, daily; XActions pinned at `b9c4bf7` |
 | Browser | CloakBrowser replaced Clearcote in this repository and in WebHarness (`3d1b168`). The ARM growth session still attaches to the signed-in Chromium on CDP 9222 |
