@@ -1608,7 +1608,7 @@ export const PUBLICATION_ATTEMPT_STATES = Object.freeze([
 ]);
 
 const PUBLICATION_ATTEMPT_STATE_SET = new Set(PUBLICATION_ATTEMPT_STATES);
-const PUBLICATION_ATTEMPT_TERMINAL_STATES = new Set(['confirmed_published', 'confirmed_not_sent', 'closed_unresolved']);
+export const PUBLICATION_ATTEMPT_TERMINAL_STATES = new Set(['confirmed_published', 'confirmed_not_sent', 'closed_unresolved']);
 const PUBLICATION_ATTEMPT_DUPLICATE_FENCE_STATES = new Set(['claimed', 'send_started', 'confirmed_published', 'investigating', 'closed_unresolved']);
 
 function publicationActionType(pipeline) {

@@ -180,6 +180,7 @@ The implemented AI runtime layer supports Direct OpenAI/OpenRouter/OpenAI-compat
 Another agent should use the bridge rather than editing SQLite or scraping dashboard HTML:
 
 ```bash
+# operator-status and queue are compact by default; add {"detail":true} to the input for the full payload.
 npm run agent -- operator-status <<<'{}'
 npm run agent -- operator-memory-review <<<'{"result":"no_update_needed","note":"Reviewed after five reconciled interactions; no stable reusable pattern yet.","confirmReview":true}'
 npm run agent -- research <<<'{"source":"x","limit":10}'

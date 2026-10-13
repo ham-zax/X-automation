@@ -145,6 +145,7 @@ import {
   listApprovedMainFeedItems,
   listPublicationMeasurementSeries,
   listPublicationAttempts,
+  PUBLICATION_ATTEMPT_TERMINAL_STATES,
   listPersonaStanceEvents,
   listQueueItems,
   listQueueSources,
@@ -516,7 +517,7 @@ function operatorSourceContext(payload) {
 }
 
 function result(value) {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify(value, null, process.stdout.isTTY ? 2 : 0)}\n`);
 }
 
 function engagementPacket(queueItem) {
@@ -551,6 +552,76 @@ function compactEngagementPacket(queueItem) {
       summary: queueItem.contributionSummary || '',
       archetype: queueItem.replyArchetype || '',
     },
+  };
+}
+
+const DETAIL_HINT = 'pass {"detail":true} for full evidence';
+const COMPACT_TERMINAL_ATTEMPT_LIMIT = 10;
+
+function omitKeys(value, keys) {
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
+}
+
+function pickKeys(value, keys) {
+  return Object.fromEntries(keys.filter((key) => key in value).map((key) => [key, value[key]]));
+}
+
+// Per-reply text is dropped from repetition evidence once it grows past 1 KB.
+function compactRepetition(repetition) {
+  const body = { ...repetition };
+  if (JSON.stringify(body.examples ?? []).length > 1024) delete body.examples;
+  return body;
+}
+
+function compactAccountHealth(summary) {
+  return {
+    ...pickKeys(summary, ['generatedAt', 'latestObservation', 'networkQuality', 'interactionYield', 'interactionCounts']),
+    health: omitKeys(summary.health, ['provenance']),
+    saturation: {
+      distribution: summary.saturation.distribution,
+      topTargets: summary.saturation.targets.slice(0, 5).map((target) => pickKeys(target, ['username', 'pressure', 'band'])),
+    },
+    repetition: compactRepetition(summary.repetition),
+    compact: true,
+    detailHint: DETAIL_HINT,
+  };
+}
+
+function compactOperatorStatus(status) {
+  return {
+    ...status,
+    persona: pickKeys(status.persona, ['id', 'version', 'dailyTone']),
+    personaHint: 'persona-model',
+    readiness: { ...omitKeys(status.readiness, ['accountHealth', 'sensors']), sensorsOmitted: true },
+    compact: true,
+    detailHint: DETAIL_HINT,
+  };
+}
+
+function compactQueue(response) {
+  return {
+    drafts: response.drafts.map((draft) => omitKeys(draft, ['editor'])),
+    queueItems: response.queueItems.map((item) => ({
+      ...omitKeys(item, ['engagement']),
+      engagePriority: item.engagement?.engagePriority ?? null,
+    })),
+    compact: true,
+    detailHint: DETAIL_HINT,
+  };
+}
+
+function compactPublicationAttempts(response) {
+  const terminal = response.attempts.filter((attempt) => PUBLICATION_ATTEMPT_TERMINAL_STATES.has(attempt.state));
+  const keptTerminal = new Set(terminal.slice(0, COMPACT_TERMINAL_ATTEMPT_LIMIT));
+  const counts = {};
+  for (const attempt of response.attempts) counts[attempt.state] = (counts[attempt.state] || 0) + 1;
+  return {
+    attempts: response.attempts.filter((attempt) => !PUBLICATION_ATTEMPT_TERMINAL_STATES.has(attempt.state) || keptTerminal.has(attempt)),
+    counts,
+    omittedTerminal: Math.max(0, terminal.length - COMPACT_TERMINAL_ATTEMPT_LIMIT),
+    readiness: response.readiness,
+    compact: true,
+    detailHint: DETAIL_HINT,
   };
 }
 
@@ -1568,10 +1639,11 @@ async function main() {
   }
 
   if (command === 'queue') {
-    result({
+    const response = {
       drafts: listDrafts({ status: payload.draftStatus, limit: Number(payload.limit || 20) }),
       queueItems: listQueueItems({ status: payload.status, pipeline: payload.pipeline, lane: payload.lane, limit: Number(payload.limit || 20) }),
-    });
+    };
+    result(payload.detail === true ? response : compactQueue(response));
     return;
   }
 
@@ -1608,7 +1680,7 @@ async function main() {
 
   if (command === 'publication-attempts') {
     ensureLegacyPublicationAttemptMigration();
-    result({
+    const response = {
       attempts: listPublicationAttempts({
         state: payload.state || null,
         queueItemId: payload.queueItemId == null ? null : Number(payload.queueItemId),
@@ -1616,7 +1688,9 @@ async function main() {
         limit: Number(payload.limit || 100),
       }),
       readiness: getPublicationReconciliationReadiness(),
-    });
+    };
+    const filtered = Boolean(payload.state || payload.runId || payload.queueItemId != null);
+    result(payload.detail === true || filtered ? response : compactPublicationAttempts(response));
     return;
   }
 
@@ -2051,7 +2125,8 @@ async function main() {
   }
 
   if (command === 'operator-status') {
-    result(operatorStatus(payload));
+    const status = operatorStatus(payload);
+    result(payload.detail === true ? status : compactOperatorStatus(status));
     return;
   }
 
@@ -2869,7 +2944,8 @@ async function main() {
   if (command === 'account-health') {
     const now = payload.now == null ? Date.now() : Number(payload.now);
     if (!Number.isFinite(now)) throw new Error('account-health now must be numeric when supplied.');
-    result(getAccountHealthSummary({ now }));
+    const summary = getAccountHealthSummary({ now });
+    result(payload.detail === true ? summary : compactAccountHealth(summary));
     return;
   }
 

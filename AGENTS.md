@@ -113,6 +113,8 @@ npm run agent -- audience-sync
 
 Commands read JSON from stdin and return JSON to stdout.
 
+The four commands `account-health`, `operator-status`, `queue` and `publication-attempts` are compact by default; pass `{"detail": true}` to get the previous full payload. Compact `publication-attempts` applies only when called without `state`, `queueItemId` or `runId`; it then returns every non-terminal attempt in full, the 10 newest terminal attempts, `counts` by state and `omittedTerminal`. Piped bridge output is single-line JSON, a terminal gets indented JSON, and compact `operator-status` carries `personaHint: "persona-model"` instead of the full persona model.
+
 When a user manually supplies an X post or URL:
 
 1. inspect the exact source and surrounding context;

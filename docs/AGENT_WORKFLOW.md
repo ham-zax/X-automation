@@ -260,6 +260,8 @@ Inspect structured health/network diagnostics:
 npm run agent -- account-health <<<'{}'
 ```
 
+`account-health` returns a compact projection by default, with only the top five saturation targets. Pass `{"detail": true}` to get the full payload, including every saturation target.
+
 Record only directly observed evidence, with explicit provenance and observation time:
 
 ```bash
