@@ -45,12 +45,13 @@ Terminal run results:
 Structured stop reasons:
 
 - `no_worthwhile_eligible_work`
-- `resource_ceiling_reached`
+- `resource_ceiling_reached`: the bridge reported a hard duration, publication-attempt or observation ceiling
+- `run_deadline_reserve_reached`: the session stopped starting work because its time limit was near, leaving time to finish and reconcile
 - `delegation_revoked`
 - `delegation_revised`
 - `capability_unavailable`
 - `reconciliation_scope_blocked`
-- `budget_exhausted`
+- `budget_exhausted`: legacy stored value, still accepted so older runs stay valid. New sessions must not use it; it never proved that tokens, money or an action allowance ran out
 - `manual_intervention_required`
 
 Bounds are ceilings, not targets. A run may stop before any public action. A healthy no-action run is valid when no worthwhile eligible opportunity remains.

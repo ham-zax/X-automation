@@ -27,11 +27,12 @@ import {
 export const GROWTH_RUN_STOP_REASONS = Object.freeze([
   'no_worthwhile_eligible_work',
   'resource_ceiling_reached',
+  'run_deadline_reserve_reached',
   'delegation_revoked',
   'delegation_revised',
   'capability_unavailable',
   'reconciliation_scope_blocked',
-  'budget_exhausted',
+  'budget_exhausted', // Legacy stored reason: accepted for older runs, not offered to new sessions.
   'manual_intervention_required',
 ]);
 const STOP_REASONS = new Set(GROWTH_RUN_STOP_REASONS);
