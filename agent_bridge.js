@@ -573,10 +573,18 @@ function compactRepetition(repetition) {
   return body;
 }
 
+// Reason evidence runs to ~1.6 KB per saturated target; keep who and how much.
+function compactHealthReasons(reasons) {
+  return reasons.map((reason) => ({
+    ...omitKeys(reason, ['provenance']),
+    ...pickKeys(reason.provenance ?? {}, ['username', 'pressure', 'band']),
+  }));
+}
+
 function compactAccountHealth(summary) {
   return {
     ...pickKeys(summary, ['generatedAt', 'latestObservation', 'networkQuality', 'interactionYield', 'interactionCounts']),
-    health: omitKeys(summary.health, ['provenance']),
+    health: { ...omitKeys(summary.health, ['provenance']), reasons: compactHealthReasons(summary.health.reasons) },
     saturation: {
       distribution: summary.saturation.distribution,
       topTargets: summary.saturation.targets.slice(0, 5).map((target) => pickKeys(target, ['username', 'pressure', 'band'])),
@@ -590,6 +598,7 @@ function compactAccountHealth(summary) {
 function compactOperatorStatus(status) {
   return {
     ...status,
+    accountHealth: { ...status.accountHealth, reasons: compactHealthReasons(status.accountHealth.reasons) },
     persona: pickKeys(status.persona, ['id', 'version', 'dailyTone']),
     personaHint: 'persona-model',
     readiness: { ...omitKeys(status.readiness, ['accountHealth', 'sensors']), sensorsOmitted: true },

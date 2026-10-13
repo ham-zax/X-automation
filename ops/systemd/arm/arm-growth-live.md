@@ -48,6 +48,6 @@ Command sheet (payload → result fields you need):
 - `act` `{"action":"reply|quote","text":"…","targetTweetId":"…","targetUrl":"https://x.com/<author>/status/<ID>","runId":"…","sessionId":"{{SESSION}}","candidateKey":"…","card":{"author":"…","sourceText":"<exact source text>","cardId":"…"}}`; a Quote also needs `editorial` with whyNow, distinctContribution, intendedAudience and verified sourceUrls. `{"status":"needs_rewrite"}` means rewrite the text, not retry it. An uncertain result is never retried.
 - `record-disposition` `{"candidateKey":"…","state":"skip|defer","reason":"…"}` for a saved candidate; the reason is required.
 - `relationship-context` `{"username":"<author>"}`; `not_tracked` is normal for a new person.
-- `publication-attempts` `{}` → non-terminal attempts in full, the newest terminal ones and `counts`; `{"runId":"…"}` for this run. Check sends with this command, never with SQL on the database.
+- `publication-attempts` `{"runId":"…"}` → this run's attempts in full. `{}` returns non-terminal attempts, the ten newest terminal ones and `counts` (about 35 KB): use it only to recover work from an earlier run. Check sends with this command, never with SQL on the database.
 
 Required output: concise confirmed public results, skips, blockers and uncertain outcomes, passes run, runId/sessionId, final run and lease state, and browser cleanup evidence. Stop at this mission's boundary.
