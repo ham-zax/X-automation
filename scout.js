@@ -56,6 +56,9 @@ export function parseStatusUrl(url) {
   return match ? { author: match[1], tweetId: match[2] } : { author: '', tweetId: '' };
 }
 
+// Applies to every T1 card; returned once per scout read instead of in each card.
+export const SCOUT_CARD_GUIDANCE = 'Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; for source-backed Original/Thread inspect and route the exact candidate key through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.';
+
 export function buildScoutCards(input = {}) {
   const now = Number(input.now);
   if (!Number.isFinite(now)) throw new Error('buildScoutCards requires a numeric now.');
@@ -154,7 +157,7 @@ export function buildScoutCards(input = {}) {
         bookmarksPerThousandViews,
       },
       score,
-      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. ${bookmarksPerThousandViews == null ? 'Bookmark rate unavailable.' : `Observed ${bookmarksPerThousandViews} bookmarks per 1,000 views.`} Source shape: ${sourceShape.hookLabels.join(', ')} / ${sourceShape.styleLabels.join(', ')} (heuristic, not proof). Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; for source-backed Original/Thread inspect and route the exact candidate key through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.`,
+      reason: `Priority ${score}: relevance ${nicheScore}/100, measured momentum ${Math.round(viewsPerHour)} views/h and ${Math.round(engagementsPerHour)} engagements/h, age ${ageHours == null ? 'unknown' : `${Math.round(ageHours)}h`}. ${bookmarksPerThousandViews == null ? 'Bookmark rate unavailable.' : `Observed ${bookmarksPerThousandViews} bookmarks per 1,000 views.`} Source shape: ${sourceShape.hookLabels.join(', ')} / ${sourceShape.styleLabels.join(', ')} (heuristic, not proof).`,
     });
   }
   replyCards.sort((a, b) => Number(Boolean(b.urgent)) - Number(Boolean(a.urgent))

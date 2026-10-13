@@ -1793,7 +1793,7 @@ async function main() {
     const store = await import('./store.js');
     const input = scoutModule.readScoutInput(store, { now: Date.now() });
     const { pace, cards } = scoutModule.buildScoutCards({ ...input, limit: payload.limit });
-    result({ generatedAt: input.now, pace, cards });
+    result({ generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards });
     return;
   }
 
