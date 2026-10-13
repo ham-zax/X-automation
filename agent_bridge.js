@@ -118,6 +118,7 @@ import {
   getMainFeedScheduleItem,
   getNewFollowerQuality,
   getNicheProfile,
+  getPublicationAttemptCounts,
   getPublicationMeasurements,
   getPublicationAttempt,
   getBlockingActAttemptForTarget,
@@ -622,11 +623,9 @@ function compactQueue(response) {
 function compactPublicationAttempts(response) {
   const terminal = response.attempts.filter((attempt) => PUBLICATION_ATTEMPT_TERMINAL_STATES.has(attempt.state));
   const keptTerminal = new Set(terminal.slice(0, COMPACT_TERMINAL_ATTEMPT_LIMIT));
-  const counts = {};
-  for (const attempt of response.attempts) counts[attempt.state] = (counts[attempt.state] || 0) + 1;
   return {
     attempts: response.attempts.filter((attempt) => !PUBLICATION_ATTEMPT_TERMINAL_STATES.has(attempt.state) || keptTerminal.has(attempt)),
-    counts,
+    counts: getPublicationAttemptCounts(),
     omittedTerminal: Math.max(0, terminal.length - COMPACT_TERMINAL_ATTEMPT_LIMIT),
     readiness: response.readiness,
     compact: true,
@@ -2152,6 +2151,18 @@ async function main() {
     return;
   }
 
+  if (command === 'growth-focus') {
+    // Read-only summary of the saved Growth Focus: group identity and its first terms.
+    const termLimit = payload.detail === true ? Infinity : 8;
+    result({
+      groups: getNicheProfile().profile.contentGroups.map((group) => ({
+        tag: group.tag, label: group.label, role: group.role, weight: group.weight, terms: group.terms.slice(0, termLimit),
+      })),
+      readOnly: true,
+    });
+    return;
+  }
+
   if (command === 'growth-focus-expand') {
     const now = payload.now == null ? Date.now() : Number(payload.now);
     const runId = String(payload.runId || '').trim();
@@ -3115,7 +3126,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {
