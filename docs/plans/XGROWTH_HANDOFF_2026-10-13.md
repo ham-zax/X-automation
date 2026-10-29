@@ -1,5 +1,9 @@
 # XGrowth handoff — 2026-10-13
 
+October 28 local continuation: read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md`
+and `TASKS.md` first. Keep this dated deployment record as history.
+The October 14 stop record is later. Current ARM state remains unchecked.
+
 State of the `fix/context-budget` work at the end of 2026-10-13 (UTC). It replaces the
 morning version of this file; the earlier text is in Git history (`1a2df5a`).
 

@@ -1,5 +1,9 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+October 28 local continuation: read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md`
+and `TASKS.md` first. The deployment claims below are dated October 10.
+This run does not check current ARM state or authorize historical restart commands.
+
 Written for the next agent (any model) to take over. This file lives in a public repository: it names no secrets, addresses or key paths. Server access details are in Hamza's private `myservers` repository.
 
 ## Goal

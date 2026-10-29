@@ -6,6 +6,11 @@ Do not implement later phases by inventing interfaces that earlier plans have no
 
 ## Execution order
 
+Current local issue implementation: [Growth OS issues, 28 October 2026](GROWTH_ISSUE_IMPLEMENTATION_2026-10-28.md).
+The root `TASKS.md` owns its active task status and evidence.
+Read [the dated implementation handoff](../GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md)
+for local changes, historical deployment records and remaining acceptance.
+
 ```text
 Phase 1A  Workflow foundation + four-dimensional triage
    |

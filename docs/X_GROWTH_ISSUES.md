@@ -2,13 +2,273 @@
 
 **Original checkpoint:** 2026-08-29
 
-**Last revalidated:** 2026-09-05
+**Last reviewed:** 2026-10-28 against local commit `6b29fcb85a71e85ca3351d753bed907c1de49d6f`.
 
-**Status:** historical issue inventory plus current revalidation. The original issue narratives remain useful evidence, but the table below is the current disposition against the Growth Operator, V3.2 persona, measurement/runtime, and browser-agent architecture.
+**Status:** the October review covers all 20 original findings, the documentation task XR-21 and three display defects grouped under XR-22.
+The September inventory remains historical evidence. Its status labels do not establish current deployment or runtime health.
 
 This document records X growth problems without converting plausible ideas into production rules without evidence.
 
 This is not an implementation plan. Each issue should be fixed only after its owner and acceptance condition are confirmed against current runtime state.
+
+## 2026-10-28 review and task inventory
+
+### Scope and evidence
+
+All 20 original findings remain relevant to the requested review. They are not 20 confirmed current defects.
+The entries distinguish local fixes, code gaps, operating risks, planned features, and historical observations that need fresh evidence.
+Each `XR` number matches the original finding number. `XR-21` records the additional handoff reconciliation task.
+
+The initial review covers the latest commit, relevant unchanged source, handoffs, engagement notes, the overhaul plan, and local `operator-status` output.
+Before that initial review, the tracked tree was clean. The subsequent implementation remains uncommitted. The existing untracked `live-progress.json` remains untouched.
+The review does not inspect today's ARM services, browser, model logs, or live X outcomes. Local state is not production evidence.
+No tests ran during the initial revalidation. Later implementation evidence appears in each status and in `TASKS.md`.
+Evidence bullets describe the initial baseline unless dated otherwise. Source line numbers may move after repairs.
+Hamza separately authorized local implementation. Recording a task here grants no deployment, public send, timer or owner-policy authority.
+Read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md` for the current local checkpoint and dated production records.
+
+Final graph review found three additional defects within existing tasks.
+XR-02 now rejects synthetic follower evidence at ingestion. XR-11's command sheet
+now names the actual engage-refresh fields. XR-21's status definition no longer
+claims uncommitted repairs exist in HEAD. Parent repaired all three in one round.
+The focused repair run passes 22/22. Existing synthetic zeros need source evidence
+before historical correction. Retrospective proposals live in `docs/FUTURE_IMPROVEMENTS.md`.
+
+Status meanings:
+
+- **Confirmed gap:** current source or local state establishes the stated limitation.
+- **Fixed locally:** the correction exists locally. October implementation repairs remain uncommitted unless stated otherwise. Deployment and runtime success remain unchecked.
+- **Confirmed risk:** the execution path exists. The review does not establish that harm occurred.
+- **Historical / needs evidence:** dated reports establish relevance, but do not establish a current failure.
+- **Planned:** the accepted direction identifies future work, not a regression in an existing feature.
+
+### XR-01 — Connect observed responses to relationship state
+
+- **Status:** local repair at review on October 28. **Priority:** P1. **Plan:** T3.
+- **Result:** opt-in engagement refresh uses one bounded HTTP mention read and the existing event owner. The versioned live brief requests collection explicitly.
+- **Checks:** parent targeted run 20/20 passes. Fixtures check exact parent links, repeated-read deduplication, follow-up opportunities, health responses and stored missing metrics.
+- **Limit:** no live read or deployment. Empty successful mention reads do not prove that no response exists.
+- **Evidence:** `agent_bridge.js:651` and `:1445` disable response and target-timeline refresh. Its `x-read` handler returns observations without recording relationship events.
+- **Limit:** `engagement.js:727` can record responses when enabled. The retired daemon also calls the refresh owner, so collection is not universally absent.
+- **Task:** connect authenticated observations to the existing response owner without restoring the retired daemon or changing send paths.
+- **Done when:** an observed author response creates one correctly linked event and appears in health and conversation views. Repeated ingestion creates no duplicate event.
+- **Interpretation:** zero recorded responses does not establish zero actual responses.
+
+### XR-02 — Use consistent follower observations in status views
+
+- **Status:** local repair at review on October 28. **Priority:** P1. **Plan:** T4. **Related:** XG-02.
+- **Result:** current status views share the newest eligible observation, with separate follower time and source. Historical metric fields retain their meaning.
+- **Checks:** parent focused run 19/19, isolated tie case 1/1, syntax and diff checks pass. Independent contract review found no blockers.
+- **Review repairs:** invalid follower payloads fail before conversion. Current reads select the latest non-future metric without changing historical performance output.
+- **Final review repair:** performance ingestion now skips account rows without a valid follower count while retaining usable post measurements. Newer missing counts no longer replace genuine observations. Valid zero remains evidence. Parent repair checks pass 22/22.
+- **Limit:** no deployment check or historical backfill. Existing synthetic zeros cannot be distinguished from real zeros without source evidence.
+- **Evidence:** `store.js:6034` writes `growth_follower_observation_v1`. `agent_bridge.js:1093` and `:2445` read `getPerformanceSnapshot().account` from `account_metrics`.
+- **Task:** choose the existing authoritative observation for current follower displays. Preserve its actual capture time and distinguish it from historical account metrics.
+- **Done when:** a supported follower observation updates the relevant status displays consistently. Unknown or stale values remain explicit.
+- **Baseline observation:** the initial local display returned 64 followers from September 11. Today's production count remains unknown.
+
+### XR-03 — Preserve reply classification in relationship events
+
+- **Status:** at review. Queue classification now reaches confirmed act events. Targeted checks pass 33/33. **Priority:** P1. **Plan:** T5.
+- **Evidence:** `agent_bridge.js:1937` records only attempt and output metadata for `act`. `health.js:423` treats missing `engagementKind` as `initial_reply`.
+- **Task:** preserve the actual engagement classification through the existing event owner.
+- **Done when:** initial replies, follow-ups, and responses to owned posts produce the correct health denominators and continuation counts.
+- **Boundary:** do not infer an historical classification without supporting evidence.
+
+### XR-04 — Record supported dimensions for outcome comparisons
+
+- **Status:** local metadata at review. Observed target size and writing labels pass focused checks. XR-20-C adds compact paragraph references to confirmed act events. **Priority:** P2. **Plan:** T5, T7/T8.
+- **Evidence:** the metadata at `agent_bridge.js:1944` omits target follower count, reply shape, and brief references.
+- **Task:** record observed target size and supported writing metadata through existing state owners. Add brief references when briefs exist.
+- **Done when:** results can group outputs by supported dimensions. Missing observations remain unknown.
+- **Boundary:** share implementation with XR-03. Do not create a second event owner or invent retrospective metrics.
+
+### XR-05 — Check duplicate protection after the reply-text correction
+
+- **Status:** at review. Disposable-state record-and-guard regression passes 1/1. Historical coverage remains incomplete. **Priority:** P1 acceptance task. **Plan:** T1.
+- **Evidence:** HEAD stores `commentary: validated.text` at `agent_bridge.js:1932`. `store.js:4481` reads that commentary as published reply text.
+- **Task:** check the real record-and-guard path with a focused regression case before accepting the fix for production.
+- **Done when:** a confirmed reply records its exact text, and a later duplicate to another target is refused by the content guard.
+- **Correction:** old labels do not necessarily leave every guard after seven days. The `act` lookup has a row limit without a `since` argument.
+- **Boundary:** no direct database backfill. Any historical repair needs recoverable exact text and a supported state operation.
+
+### XR-06 — Check analytics collection after the effort correction
+
+- **Status:** fixed locally. **Priority:** P1 acceptance task. **Plan:** T2.
+- **Evidence:** `growth_analytics_runner.js:55` now passes `--reasoning-effort max` for `gpt-6-luna`.
+- **Task:** check the deployed revision and collect one bounded production result when operational work is authorized.
+- **Done when:** the collector starts with the supported effort and reports measured writes or an accurate blocker. It also releases its owned tab.
+- **Current evidence:** the October 28 ARM run uses gpt-6-luna max and reports exact owned-tab cleanup. Analytics redirects to login. Parent checks zero new measured rows. See `docs/ANALYTICS_COLLECTOR_ACCEPTANCE_2026-10-28.md`. The code bytes used at that run are not provable. October 29 owner-authorized cookie import restores authenticated @ham_zax Home and Premium Analytics access. Values persist only in ignored .env with mode 0600. A new collector run and measured writes remain untested.
+
+### XR-07 — Distinguish successful collection cooldown from failure recovery
+
+- **Status:** at review after current-run diagnosis. Blocked, missing or invalid child outcomes now fail even on exit 0. Accessible empty is distinct from blocked. Parent focused checks pass 11/11. **Priority:** P2.
+- **Evidence:** `growth_analytics_runner.js:19` checks only `lastStartedAt`. Both successful and failed attempts retain that timestamp.
+- **Impact:** a failed launch or collection attempt suppresses another attempt for 21 hours.
+- **Task:** define bounded failure recovery separately from the successful collection interval.
+- **Done when:** failures can recover within the agreed interval without overlapping collectors or retrying uncertain public actions.
+- **Continuation result:** an ID-bound private JSON receipt carries the reported outcome and new-post count. Process failures remain failures. The historical completed checkpoint stays unchanged. No real collector or timer ran during repair tests.
+
+### XR-08 — Expand approved persona evidence
+
+- **Status:** confirmed content gap, not a code defect. **Priority:** P2. **Plan:** T9/T10. **Related:** XG-04.
+- **Evidence:** `persona/hamza-v1.json:282` has empty verified experience, tools, results, and failures lists. Verified projects are present.
+- **Task:** propose examples from supported owner material. Add only owner-approved facts or evidence from authorized bounded experiments through `persona.js`.
+- **Done when:** writing can use traceable first-person material without inventing experience.
+- **Limit:** empty lists do not prove that Hamza lacks the experience. The review does not prove they caused repetitive writing.
+- **October 29 scope:** existing persona calibration permits ordinary writing. Missing new experience evidence does not block all operation. Do not invent first-person claims.
+
+### XR-09 — Use one progress-file path
+
+- **Status:** at review. The brief and recovery document use the same absolute checkpoint path. Historical artifacts remain untouched. **Priority:** P2. **Plan:** T15.
+- **Evidence:** the live brief grants an absolute state path at line 15, then uses relative paths at lines 44 and 46.
+- **Evidence:** the untracked root `live-progress.json` records a completed October 13 session. It is not current run state.
+- **Task:** use one absolute path throughout the brief and recovery instructions.
+- **Done when:** a bounded session writes progress only to the state directory, and the operator can locate the same file for recovery.
+- **Boundary:** preserve existing artifacts until their owner decides their retention.
+
+### XR-10 — Check rest policy before broad discovery
+
+- **Status:** at review. The brief checks saved rest policy before broad collection and preserves urgent checks. Historical cost needs fresh measurement. **Priority:** P2. **Plan:** T15.
+- **Evidence:** the live brief orders mentions, For You ingestion, and niche searches before `scout`, which exposes `pace.activity`.
+- **Task:** check saved rest policy before broad collection. Preserve the existing exception for urgent signals.
+- **Done when:** a rest-window session avoids broad discovery, inspects only permitted urgent work, and records the reason for stopping.
+- **Limit:** the reported eight-minute overhead comes from the October audit, not a current measurement.
+
+### XR-11 — Complete the operator command sheet
+
+- **Status:** at review. Both examples match disposable bridge output. **Priority:** P2. **Plan:** T15.
+- **Evidence:** the command sheet in `ops/systemd/arm/arm-growth-live.md` omits `social-status` and `growth-run-status`.
+- **Task:** add examples that match the current bridge payload contracts and required identifiers.
+- **Done when:** each example returns the documented shape without missing-field errors in an appropriate nonpublishing context.
+- **Limit:** earlier malformed commands are historical reports. Missing examples do not prove that all such failures share one cause.
+
+### XR-12 — Add top-ranked reply collection for topic research
+
+- **Status:** at review. Explicit Top/Latest reply samples pass 13 focused tests. Chronological thread reads remain available. **Priority:** P2. **Plan:** T6.
+- **Evidence:** `x_reads.js:127` searches a conversation in the default Latest mode, then sorts the bounded results chronologically.
+- **Task:** add explicit ranked-reply collection for topic research while preserving existing thread-read behavior.
+- **Done when:** the collector returns a bounded, attributed reply sample with its ranking mode and capture time.
+- **Limit:** the current reader cannot establish the highest-ranked replies from that latest-only sample.
+
+### XR-13 — Review upstream code before authenticated execution
+
+- **Status:** at review. Exact commit approval now precedes candidate execution. Seven tests pass after the export-failure continuation. Independent boundary reviews find no blocker. **Priority:** P1.
+- **Evidence:** `ops/xactions_update.mjs:69` smoke-checks a newly fetched candidate before promotion. `x_reads.js` imports that candidate and supplies account cookies.
+- **Task:** establish a reviewed or explicitly trusted revision boundary before authenticated candidate execution.
+- **Done when:** an unapproved candidate cannot execute with account credentials. A failed candidate preserves the existing working pin.
+- **Limit:** automatic promotion controls act after execution. No compromise or credential disclosure was observed by this review.
+- **Continuation repair:** the working tree catches approved-candidate export failure, records fixed `failed: export` text, and continues the pin smoke and status write. The missing-src fixture passes with no candidate execution, unchanged pin and removed temporary export. Seven focused cases pass after parent test-evidence repairs. Immediate boundary review finds no blocker. Raw child stderr remains a pre-existing diagnostic limit. No live pin or approval changed.
+
+### XR-14 — Reassess repetitive writing and the action mix
+
+- **Status:** historical quality finding, still relevant to the owner-approved redesign. **Priority:** P1. **Plan:** T8/T9/T12/T13. **Related:** XG-06/XG-08/XG-11.
+- **Evidence:** `docs/ENGAGEMENT_IDEAS_2026-10.md`, section 2, records repeated question-and-advice shapes and a predominantly reply-based action mix.
+- **Task:** review a fresh bounded sample and compare it with approved voice examples and supported purposes.
+- **Done when:** the owner accepts the resulting writing sample and outcome comparisons use qualified measurements.
+- **Boundary:** do not impose quotas, human-looking delays, or a universal format rule. The audit does not establish an optimal action mix.
+
+### XR-15 — Measure and reduce session cost at the actual launcher
+
+- **Status:** local queue-guidance repair at review. Three retained attached sessions support the diagnosis. Current command output falls from 61,369 B unfiltered to 2,682 B for approved5 or 5,239 B for review5. Different retrieval scopes are intentional. Full-session token improvement remains unmeasured. **Priority:** P1. **Related plan:** context-budget work.
+- **Evidence:** the October 13 handoff records 76 model calls and peak context of 243,511 tokens for one session.
+- **Evidence:** `ops/systemd/arm/attached-live.conf` selects `arm-growth-live.sh`, bypassing `growth_agent_runner.js` as the service entry point.
+- **Task:** measure calls, cached and uncached input, output, context growth, outcomes, and elapsed time for the actual attached path.
+- **Done when:** a measured change reduces the identified waste without weakening authority, recovery, or content gates.
+- **Limit:** compact bridge responses already exist. Do not recreate that completed work or assume runner-only changes affect the attached launcher.
+- **Repair:** the live command sheet now documents bounded queue filters and avoids unchanged repeated draft reads. Evidence: `docs/ATTACHED_LAUNCHER_COST_2026-10-28.md` and the parent checkpoint in the plan. No live model run or send occurred.
+
+### XR-16 — Diagnose stale discovery by source
+
+- **Status:** local repairs and October 28 source observations at review. Four sources refreshed successfully. Creator refresh saved 13 candidates with an unavailable-account error. See `docs/SOURCE_FRESHNESS_ACCEPTANCE_2026-10-28.md`. Automatic refresh cadence remains unproven. **Priority:** P1. **Plan:** T14.
+- **Evidence:** the October 28 local status read returns September snapshots for Latest, Momentum, GitHub, HN, and creator timelines.
+- **Evidence:** For You was last captured on October 13. It is newer than those feeds, but it is not fresh on October 28.
+- **Correction:** stored missing-Chrome errors describe older attempts. Current `x_browser.js` launches CloakBrowser, so those errors do not establish the current cause.
+- **Task:** check each source through its current owner and authorized read transport. Record collection time, failures, and preserved last-good state.
+- **Done when:** each intended source has a current successful observation or an explicit current blocker.
+- **Correction:** creator refresh has a caller in `engagement.js`. An earlier claim that it has no caller is unsupported.
+- **Current transports:** Latest/Momentum use CloakBrowser. Creator timelines use the HTTP client. GitHub/HN use native fetch. The old Chrome error cannot explain all five sources.
+- **Local repairs:** explicit `engage-refresh {"refreshTargetTimelines":true}` now reaches the existing creator owner. Default remains local. Hard source errors report preserved candidates truthfully through `preservedLastGood`.
+- **Remaining findings:** the dashboard has no direct creator Refresh control. HN item failures can yield a partial result without item errors. Empty and zero-target results need policy context, not automatic failure labels. No new scheduler or transport replacement is justified by the stale snapshot alone.
+- **Needed evidence:** deployed revision, source attempt times and errors, current browser availability and service logs, then one authorized bounded refresh per source. Do not use the retired automation daemon.
+
+### XR-17 — Investigate browser tab drift
+
+- **Status:** October 29 attached failure-cleanup repair passes immediate lifecycle review with no blocker. The launcher now uses the existing exact tab lease and child supervisor. Fifty focused checks and 404 integrated tests pass before the final permission-order repair. The affected file passes 11/11 afterward. Retained normal exits show no owned-tab leak. Live failure exit and deployment remain untested. **Priority:** P2. **Plan:** T15.
+- **Evidence:** the October audit records baseline counts rising from eight to nine to ten tabs. The cause remains unknown.
+- **Task:** compare exact tab identities before allocation and after cleanup for a bounded authorized session.
+- **Done when:** each new tab has an owner, and normal and failure exits reclaim only session-owned tabs or report exact recovery identities.
+- **Boundary:** existing cleanup in `ops/agent_browser_session.js` is counter-evidence against assuming every path leaks. Do not close shared tabs.
+- **Current trace:** `docs/BROWSER_TAB_OWNERSHIP_2026-10-28.md` records exact identities and close commands. Historical counts of 8/9/10 do not match the retained sample baselines of 9/5/5. No duplicate cleanup repair is justified by that sample.
+
+### XR-18 — Reproduce the two recorded test failures
+
+- **Status:** fixture repair at review. October 29 reproduced rest-hour dependence and a follow-on test lease failure. Product gates remain unchanged. **Priority:** P1. **Plan:** T0.
+- **Check:** October 28 focused run passed 14/14. October 29 serial suite failed 5 cases during owner rest hours. Three disposable fixtures now set an explicit empty rest interval for claim/lease checks. All 26 affected cases pass. Final integrated result is in TASKS.md.
+- **Evidence:** the overhaul plan records failures at `26723ed` before the latest fixes.
+- **Cases:** `send-start needs only attemptId…` and `valid run-bound bridge activity renews…` in `tests/autonomous_run_friction_repairs.test.mjs`.
+- **Task:** run the focused existing cases in an isolated test context during authorized implementation or test work. Diagnose the first actual failure.
+- **Done when:** evidence distinguishes a runtime defect from a stale fixture or test contract, and the justified correction passes the relevant checks.
+- **Limit:** this review does not establish that the two cases still fail at HEAD.
+
+### XR-19 — Collect reproducible application defects
+
+- **Status:** bounded local inventory at review. Twenty-four disposable page-load GETs return 200. Three concrete display defects become XR-22. Owner walkthrough remains missing. **Priority:** P2. **Plan:** T0.
+- **Evidence:** the overhaul plan requests an owner walkthrough and concrete reproductions for the reported application quirks.
+- **Task:** inventory the affected pages and bridge commands using existing facilities. Record steps, expected behavior, actual behavior, and state requirements.
+- **Done when:** each accepted defect has a reproducible example, an owner, and a clear completion check.
+- **Boundary:** use safe local settings. Do not approve or publish from the stale local database.
+
+### XR-22 — Align approval displays and source labels with existing owners
+
+- **Status:** at review. Parent checks pass 6/6 for ready and blocked states. Two missing labels are added. **Priority:** P2. **Depends:** XR-19.
+- **Finding 1:** conversation detail can expose `flags.canApproveReply:true` while its embedded editor returns false. The outer predicate omits growth packaging. A score-44 draft with passing gates but `NO_CLEAR_PURPOSE_PAYOFF` reproduces the contradiction. `web_api.js::formatConversationDetail` owns the display. Use the existing editor flag. Server approval still rejects the blocked draft.
+- **Finding 2:** Today calls the same blocked original ready for approval. Its predicate checks score/gates without growth packaging. Use the canonical analysis readiness result at `web_api.js` Today handler. The action must agree with the editor for ready and blocked fixtures.
+- **Finding 3:** Today maps four of the six current source kinds. Add readable labels for `x_for_you` and `x_creator_latest` in `ui/src/features/today/Today.tsx`. Discover already labels those sources.
+- **Evidence:** `docs/LOCAL_APP_REVIEW_2026-10-28.md` records requests, payloads, owners, limitations and completion checks. Parent inspected all three predicates/maps.
+- **Boundary:** display state only. No approval write, publishing rule, schema, policy, routing or new source owner.
+
+### XR-20 — Track the proposed topic brief workflow as separate deliverables
+
+- **Status:** refinement and local T6/T7/T8 implementation are at review. Collections, draft briefs and optional paragraph citations have disposable-state coverage. Owner and operational acceptance remain separate. **Priority:** P2. **Plan:** T6–T13.
+- **Evidence:** `docs/plans/ENGAGEMENT_OVERHAUL_2026-10-14.md` defines the approved direction and its remaining work.
+- **Task:** retain the existing ticket boundaries below. Do not treat every planned feature as an existing defect.
+- **Done when:** each selected deliverable meets its own completion check and fits the existing publication and approval owners.
+
+| Deliverable | Existing ticket | Completion evidence | Dependency / overlap |
+| --- | --- | --- | --- |
+| Bounded topic collection | T6 | Attributed recent posts and ranked replies saved with capture times | XR-12 |
+| Saved topic brief | T7 | Numbered, sourced paragraphs distinguish reports, tested facts, and opinion | T6, owner read |
+| Brief-based writing | T8 | Drafts name supporting paragraphs and pass the owner's voice review | T7, XR-14 |
+| Approved voice examples | T9 | Supported examples and persona facts accepted by the owner | XR-08 |
+| Bounded real experiments | T10 | Authorized experiments save evidence through the persona owner | Separate design note |
+| Review integration | T11 | Existing review surfaces support the agreed brief workflow and human approvals | Decide access to ARM state |
+| Analysis of effective examples | T12 | Findings cite owned and outside examples without causal claims | Existing viral tools, qualified metrics |
+| Peer relationship workflow | T13 | Supported peer choices use the social ledger | No automated Unfollow |
+
+### XR-21 — Reconcile handoffs and issue status
+
+- **Status:** local reconciliation at review. The October 28 handoff links current ledger evidence and labels historical ARM claims by date. October 29 user-unit reads show growth disabled and Analytics enabled. New launcher stop grace remains versioned only. **Priority:** P1 before operational continuation.
+- **Evidence:** engagement notes call the latest fixes uncommitted, but HEAD contains them. Handoffs describe different dated timer and launcher states.
+- **Evidence:** the September inventory below still describes lecturer tone as mitigated and unattended execution as missing. Later records qualify both claims.
+- **Task:** preserve historical records, identify the current entry point, and label deployment facts with their check dates and hosts.
+- **Done when:** a new operator can distinguish local implementation, checked production state, historical outcomes, and pending restart authority from one clear index.
+- **Boundary:** documentation changes do not grant authority to restart the operator or watchdog. Check production state before adopting any historical startup command.
+
+### Suggested task order
+
+1. Reconcile evidence and current authority through XR-21. Reproduce XR-18 before code changes rely on the recorded test baseline.
+2. Close measurement gaps through XR-01 to XR-04. Check the local fixes through XR-05 and XR-06.
+3. Address the confirmed risks in XR-07 and XR-13 within separately scoped changes.
+4. Measure reliability and cost through XR-09 to XR-11 and XR-15 to XR-17.
+5. Use XR-08, XR-12, XR-14, XR-19, and XR-20 to implement only the selected overhaul deliverables.
+
+The plan retains a separate deployment and restart ticket, T16. This inventory does not complete that ticket or authorize a restart.
+
+## Historical September inventory
+
+The remaining sections preserve the September 5 checkpoint. Read their current-tense statements as dated observations.
+The October entries above take precedence where the scopes overlap. Unrelated historical issues require their own revalidation before action.
 
 ## Priority summary
 
@@ -500,3 +760,8 @@ Do not reopen these without new evidence:
 - mission-agent approval snapshots merely because growth is slow.
 
 The current growth bottleneck is not established to be any one copy template, one transport, or one X-ranking mechanism.
+
+October 29 delivery: implementation and tests are committed as ea09e0f. Earlier
+working-tree descriptions record their prior checkpoint. TASKS.md owns the current
+remaining acceptance. CloakBrowser launch passes through x_browser.js. The live
+operator CDP browser remains a separate Chromium instance.

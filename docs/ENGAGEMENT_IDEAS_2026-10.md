@@ -1,5 +1,9 @@
 # Engagement ideas from the 13–14 October 2026 session
 
+October 28 continuation: `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md` and
+`TASKS.md` own the local checkpoint. Current source supersedes old code-gap claims.
+The dated stop record below remains history. Startup commands grant no new authority.
+
 Status: notes for a later redesign. This is not a rule and not a plan of record. Nothing
 here is integrated except where "Current state" says so. It records what the owner said,
 what the data showed, what the X ranking code says and the options discussed, so a later
