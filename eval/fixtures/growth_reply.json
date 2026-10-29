@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "optimize": [
+    "VA-16"
+  ],
+  "controls": [
+    "VA-14"
+  ],
+  "validation": [
+    "VA-13",
+    "VA-18"
+  ],
+  "limitation": "Public sources and stored behavior. Missing affect fields default neutral. Not immutable historical generation inputs. No old published reply or quality labels.",
+  "cases": [
+    {
+      "id": "VA-16",
+      "sourceId": "2110065413073633316",
+      "url": "https://x.com/DanKornas/status/2110065413073633316",
+      "text": "Your phone can be where you fix the bug — not just where you read the issue.\n\nAndroidHarness is a native Android AI coding-agent app for builders who want to work on real code projects directly from an Android device.\n\nIt helps you make and inspect changes without a PC or root by combining file tools, a Linux toolchain, GitHub workflows, and browser control inside a chat interface.\n\nKey features:\n\n• On-device project work – reads and edits files, runs shell commands, and supports git from the phone\n• Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat\n• GitHub workflows – import repositories, commit selected files, push changes, and verify the resulting remote commit\n• Browser and preview tools – inspect web links or workspace previews, then navigate, snapshot, click, type, and capture screenshots\n• Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions\n\nIt’s open-source (MIT license).\n\nLink in the reply 👇",
+      "source": "x",
+      "author": "DanKornas",
+      "behavior": {
+        "decision": "ACT",
+        "primaryPurpose": "judgment",
+        "socialMode": "opinionated_peer",
+        "informationDepth": "judgment",
+        "selectionSource": "engagement_heuristic",
+        "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+        "selectedAt": 1791916455037,
+        "affectStrategy": "neutral",
+        "affectProvenance": "none",
+        "reasonToExist": "State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call."
+      },
+      "replyArchetype": "independent_judgment",
+      "contributionSummary": "State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call."
+    },
+    {
+      "id": "VA-14",
+      "sourceId": "2108943711740527003",
+      "url": "https://x.com/xoofx/status/2108943711740527003",
+      "text": "Just released CodeAlta 1.6.0, and you won't believe what is packed: 🎉\n- Canvas 🖼️ that can be created with an agent via a plugin\n- Statistics 📊\n- Welcome page for getting started 🤗\n- Integrated documentation - ask the agent 📝\n- Claude Code Remote support\nand more... 1/2 https://t.co/nAuq2uIctn",
+      "source": "x",
+      "author": "xoofx",
+      "behavior": {
+        "decision": "ACT",
+        "primaryPurpose": "celebration",
+        "socialMode": "enthusiast",
+        "informationDepth": "social_only",
+        "selectionSource": "engagement_heuristic",
+        "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+        "selectedAt": 1791693773671,
+        "affectStrategy": "neutral",
+        "affectProvenance": "none",
+        "reasonToExist": "Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward."
+      },
+      "replyArchetype": "celebration",
+      "contributionSummary": "Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward."
+    },
+    {
+      "id": "VA-13",
+      "sourceId": "2108963410939670725",
+      "url": "https://x.com/anemll/status/2108963410939670725",
+      "text": "New update to our 27B model for Apple Neural Engine: ANEMLL Forge v0.2.\nAn ANE research project. Goal: match UD-IQ3_XXS at roughly the same weight size.\nVideo: Pi coding Tetris. 16-minute session at 48× speed.\nhttps://t.co/0jvBOGJHjf\n1/8 https://t.co/0HcCYLEq4y",
+      "source": "x",
+      "author": "anemll",
+      "behavior": {
+        "decision": "ACT",
+        "primaryPurpose": null,
+        "socialMode": null,
+        "informationDepth": null,
+        "selectionSource": "legacy",
+        "personaModelVersion": "",
+        "selectedAt": null,
+        "affectStrategy": "neutral",
+        "affectProvenance": "none",
+        "reasonToExist": "Respond to the supplied source with a relevant contribution."
+      },
+      "replyArchetype": "",
+      "contributionSummary": ""
+    },
+    {
+      "id": "VA-18",
+      "sourceId": "2110087600480702881",
+      "url": "https://x.com/ArtificialAnlys/status/2110087600480702881",
+      "text": "Cache hit rates and Cost per Task by provider are now live on Artificial Analysis: Cost per Task for GLM-5.3 (max) varies ~9x across providers, driven by a combination of cache hit rate and token pricing\n\nAgentic workloads resend the full conversation history every turn, so most input tokens are cacheable, and cache pricing and cache hit rates drive most of the gap in Cost per Task. We already use measured cache hit rates to calculate Cost per Task, and are now publishing them for each model endpoint we track.\n\nWhat's new:\n➤ Cache hit rates are now visible for all first-party and third-party endpoints, measured by running multi-turn agentic coding tasks and reading cached tokens from each provider's usage response. Cache hit rate is the share of cacheable input tokens served from cache.\n➤ Cost per Task is now available by provider for open weights models, calculated from each provider's input, output, cache hit and cache write prices, applied at its measured cache hit rate. To standardize across providers for a given model, we use the same input, output and cacheable token counts from the model's Intelligence Index run.\n\nKey takeaways:\n➤ Cost per Task on GLM-5.3 (max) spans ~9x across providers, from $0.92 on Makora to $8.68 on Nebius. Both serve nearly all cacheable input from cache (98% and 100%) and charge the same output price ($4.40 per 1M tokens), so the gap comes from input pricing: Makora charges $0.10 per 1M cached input tokens, while Nebius offers no cached input discount on its shared serverless endpoints and bills all input at the full $1.40.\n➤ Cache hit rate ranges from 41% to 100% across 21 providers (25 endpoints). 15 endpoints are at 98% or above, and eight are at 100%: Modal, DeepInfra, Parasail, Together AI, DigitalOcean, Nebius, Novita and Z AI's first-party API. Multiverse Computing is lowest at 41%, followed by Bitdeer at 50%.",
+      "source": "x",
+      "author": "ArtificialAnlys",
+      "behavior": {
+        "decision": "ACT",
+        "primaryPurpose": "learning",
+        "socialMode": "curious_peer",
+        "informationDepth": "judgment",
+        "selectionSource": "engagement_heuristic",
+        "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+        "selectedAt": 1791919331606,
+        "affectStrategy": "neutral",
+        "affectProvenance": "none",
+        "reasonToExist": "Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it."
+      },
+      "replyArchetype": "informed_question",
+      "contributionSummary": "Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it."
+    }
+  ]
+}

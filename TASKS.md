@@ -55,6 +55,14 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 
 ## Active checkpoint
 
+29 October approved implementation: Hamza says Terra may be used at high effort
+and asks to proceed. Build the offline Growth OS/Harness² integration. No live
+publication or production configuration changes. New total dispatch ceiling: 28,
+including implementation, optimization, model reviews, validation, and final review.
+One model job at a time. Expected solver: DeepSeek V4.1 Flash Free max via OpenCode.
+Editors and reviewers: GPT-6.1 Terra high via Codex. No automatic model substitution.
+Implementation graph and packet follow at the end. Original graphs remain historical.
+
 29 October Harness² continuation: Hamza proposes automated prompt variants and
 integration with the Growth OS harness. The existing design records a proposed
 offline replay and bounded optimization sequence. See "Proposed integrated
@@ -286,3 +294,105 @@ identities reside in the other-models manifest. Three of three dispatches used.
 No extra reviewer, repeated sample, reserved case, or production model change.
 TaskStartSnapshot: main ee5276b with pre-existing untracked live-progress.json.
 Terra remains the parent preference on these four cases, not an accepted winner.
+
+
+## XR-14 offline benchmark implementation graph, 29 October
+
+TaskStartSnapshot: main bc8fa14. Only pre-existing root live-progress.json is
+untracked. Preserve it. The unrelated Harness²/Learning OS checkout stays unchanged.
+
+| id | status | depends | owner | acceptance | evidence |
+| XR14-B | open | - | Terra high implementation | Offline request/review/inspection CLI and native Harness² adapter use real Growth OS owners, isolated fixture state, exact T3 model requests, bounded resumable exchange and no publication. | Packet below. |
+| XR14-E | open | XR14-B | parent, T3 model calls | Actual Harness² task-level cycle runs with matched packets. Report baseline/V4/native candidates and validation, including failures. | Limit 28 total dispatches including engineering and final review. |
+| XR14-R | open | XR14-E | Terra high independent reviewer | One graph review checks no-send isolation, exact model settings, conformance and claimed evidence. One repair round. | Only Hamza marks done. |
+
+Scope: implement eval/growth_reply.mjs, eval/harness2_growth.py,
+tests/growth_reply_eval.test.mjs, tests/test_growth_harness.py and
+ docs/GROWTH_REPLY_BENCHMARK.md. Fixed input: eval/fixtures/growth_reply.json.
+No production JS edits are expected: injected runAI captures real Writer requests.
+No package installs, dependency changes, services, browsers, credentials, production
+DB access, host config or edits to /home/ubuntu/repo/harness2. No implementation
+worker edits to ledger, plan, source fixtures or production persona/prompts.
+TDD Route: off/skipped. Targeted checks verify the new offline workflow and
+isolation. Full existing serial Node suite runs once after integration.
+
+Interface design:
+- Node CLI reads one JSON request on stdin. Operations: prepare, review-request,
+  inspect. Parameters: caseId, fixtureFile, outputDir, lane=writer|direct,
+  styleFile optional, packetFile optional (freeze context across variants).
+- Before dynamic application imports, enter a new disposable cwd. All store
+  imports/writes stay there. Finally remove that cwd. Never call the bridge,
+  publication claim/send, browser, AI adapter, or real runStructuredAI transport.
+- prepare uses buildWriterPacket on the fixed public source/behavior and blank
+  draft. Reuse saved packetFile verbatim when supplied. Persist packet.json,
+  case.json and request.json in outputDir. Capture the canonical generation request
+  by invoking generateWriterOutput with injected runAI that captures and throws a
+  private sentinel before model execution. Baseline uses current writing contract.
+  Optional style is appended as a labeled voice fragment. Model request includes
+  the canonical schema. Do not copy/reimplement the Writer's prompt or schema.
+- direct is a limited direct-reply instruction replay, not an attached-agent run:
+  use the exact Writing a Reply section from the ARM brief and the same frozen
+  packet. Return decision POST/DO_NOT_POST and finalText only. Pure validateActInput
+  checks accepted reply text with the fixture target. Never call driveBrowserSend.
+  Label omitted browser/room/history context in artifacts and docs.
+- review-request reads model-output.json from outputDir. Use validateStructuredOutput
+  and validateWriterEvidenceReferences for writer lane. Capture reviewWriterOutput's
+  actual request with injected runAI and persist review-request.json. Invalid output
+  writes inspection evidence and blocks the review instead of silently repairing.
+- inspect reads review-output.json and validates it against the captured review
+  schema. Use applyWriterOutput, bindContentReview, draftReviewContext and scoreDraft
+  on fixture data for routed writing. Direct inspection uses its pure act validation
+  and the same actual content-review context. Persist inspection.json with explicit
+  schema/review failures. No writer result or review creates publication authority.
+- Use blank recent/history state, current static persona, no owner attestations.
+  Report those omissions. Historical behavior in fixtures is not a generation trace.
+
+Harness² adapter design:
+- Python script imports the existing Harness² library from --harness2-root. Disable
+  bytecode writes. Implement BenchmarkAdapter's seam and use actual core.recursion
+  run_mode for one k=1 task-level cycle. Do not reimplement propose/probe/compose.
+- Do not modify upstream CLI registries or existing Learning OS adapters. A thin
+  T3 exchange replaces model launching: emit pending request JSON, consume an
+  externally supplied response with exact request hash and T3 execution metadata.
+  No CLI agent launch, network, model API, or credential read in the adapter.
+- Commands: next (resume native cycle), accept (request ID plus response file),
+  rollout (case, lane, style file, label, optional solver target for matched Terra).
+  All share --run-root and --harness2-root. Script stdout is one JSON object.
+- A per-run config fixes source fixtures, case, lane, solver/reviewer/editor targets,
+  total call ceiling. Persist requests and responses beneath run-root with stable
+  IDs. Reserving a new request counts against the ceiling before dispatch. Repeating
+  next must not reserve duplicates. Reject stale hash, wrong model/options, duplicate
+  contradictory response and unsafe IDs. A pending or budget stop is resumable.
+- Normal targets: opencode/deepseek-v4.1-flash-free variant max for solver,
+  codex/gpt-6.1-terra reasoningEffort high for review/editor. Exact catalog model ID
+  is opencode2api/deepseek-v4.1-flash-free. Metadata cannot auto-change targets.
+- Existing request inputs/schemas are serialized for parent T3 delegation. All model
+  calls occur through parent tools. The parent records task IDs and returns output.
+- Adapter execute uses Node prepare/review/inspect. Cache only exact same input,
+  style and target requests. A requested replicate needs a distinct identity.
+  Retain raw model/schema errors and unknown usage. No made-up zero cost or quality.
+- Base editable tree: existing Opencode surface with only systemprompt.md allowed
+  nonempty. Its content is solely the extra voice fragment, bounded to 2400 chars.
+  Other required surface files remain empty. Source, schema, persona, fixtures,
+  evaluation and code are never editable. Core still validates trees.
+- Proposer bridge serializes native mission/context as data. For harness harvest,
+  ask for JSON {tree:{systemprompt.md: string},notes:string}, rebuild only that
+  allowed file in the returned workspace, and preserve immutable surface files.
+  Non-harvest native replies remain text/JSON as required by upstream method.
+  Use a specific pause exception that escapes core's failed-rollout handling.
+  No subprocess blocks awaiting a model. Parent executes one pending job at a time.
+- Trajectory contains exact generated content, content review, schema errors and
+  relevant source/packet context, never hidden answer labels or a numerical voice
+  score. Adapter score may return only disclosed mechanical conformance or null.
+
+Checks: meaningful disposable-state tests cover canonical request capture,
+context freeze, no prod DB/browser/transport, extra fields refusal, rejected review,
+DO_NOT_POST, bridge pending/resume, budget fence, metadata/hash mismatch, immutable
+surface and cache identity. Run node --test --test-concurrency=1
+ tests/growth_reply_eval.test.mjs and the new unittest file using the existing
+Harness² Python environment through uv. No live models in worker checks.
+Parent then runs current-context baseline, exact V4, native one-cycle candidates,
+a repeat if budget permits, celebration control VA-14 and new cases VA-13/18.
+A matched Terra-high solver comparison uses the same selected packet/style if
+budget permits. This is useful validation, not a reason to switch production model.
+Budget caps all dispatches, with one engineering worker and one final reviewer.

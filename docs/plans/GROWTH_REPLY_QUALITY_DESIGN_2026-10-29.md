@@ -3,6 +3,9 @@
 Latest continuation: see "Proposed integrated Harness² benchmark" at the end.
 Earlier pilot limits and stop records below retain their historical scope.
 
+Implementation approval supersedes the proposal's hold: Hamza authorizes Terra
+high and asks to proceed. See TASKS.md's implementation graph and packet.
+
 Status: pilot stopped after two inconclusive probes. Fresh diagnosis complete. Parent task: XR-14.
 Baseline: `8dfcb39ed2a6033d359f47a817b9d2004c767850`, branch `main`.
 
