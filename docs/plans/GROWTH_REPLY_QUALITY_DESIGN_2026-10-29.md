@@ -1,5 +1,8 @@
 # Growth OS reply-quality design and bounded pilot
 
+Latest continuation: see "Proposed integrated Harness² benchmark" at the end.
+Earlier pilot limits and stop records below retain their historical scope.
+
 Status: pilot stopped after two inconclusive probes. Fresh diagnosis complete. Parent task: XR-14.
 Baseline: `8dfcb39ed2a6033d359f47a817b9d2004c767850`, branch `main`.
 
@@ -209,3 +212,84 @@ It receives no parent theory or old analyst assessment. This replaces the fourth
 writing run within the five-dispatch ceiling. It is not an extra editor stage
 in a claimed stock Harness² run. Dispatch five and the 18 reserved cases stay
 unused. No production edit follows from these probes.
+
+## Proposed integrated Harness² benchmark
+
+Hamza proposes small prompt variants, repeated benchmarks, and comparison with
+the current Growth OS harness. This section records the proposed next direction.
+It does not launch another model run or deploy a writing change.
+
+The fresh DeepSeek experiment supplies a provisional V4 instruction and concrete
+factual and format failures. Read
+`docs/research/voice-audit-2026-10-29/fresh-prompt/REPORT.md`.
+Its improvement is narrower than production acceptance.
+
+### Recommended sequence
+
+1. Build an offline Growth OS replay around the existing packet, generation,
+   schema validation, and independent review owners. Use disposable fixture state.
+   Production state, browser transport, claims, and publication stay inaccessible.
+2. Establish the actual current-harness baseline. Compare V4 in the same context.
+   Include direct-reply preparation and routed writing. Do not invoke `act` to
+   test text. Its current handler proceeds to a publication claim and browser send.
+3. Check whether V4 survives real packet context. A clean-prompt result does not
+   prove it survives the old persona projection, purpose selection, or writing
+   contract. Keep those inputs fixed within each paired comparison. Investigate
+   demonstrated conflicts separately, rather than changing everything together.
+4. Connect that replay to Harness²'s benchmark adapter interface. Permit one
+   candidate style file to change. Keep source fixtures, evaluation, persona
+   facts, model selection, and authority code outside the editable harness tree.
+5. Run a bounded propose/probe/compose cycle with DeepSeek as solver and editor.
+   Record all calls, including editor, reviewer, repair, and reflector calls.
+   One heavy job runs at a time. Do not start until the ledger records the exact
+   cycle budget and model configuration. No automatic library or production promotion.
+6. Repeat promising variants and test fresh sources after selecting a candidate.
+   Eight source cases have now been used. Fourteen original cases remain unused.
+   Freeze the next split before tuning and do not rename exposed cases as unseen.
+
+### Acceptance evidence
+
+Mechanical checks cover exact output fields, valid references, request identity,
+and the absence of publication side effects. The known `text_alt` addition is a
+format regression fixture. Available diff sheets becoming every-tool-call diff
+sheets is a factual regression fixture.
+
+Use the existing independent review to inspect factual and owner claims. Its
+acceptance is evidence to assess, not proof that every claim is correct. Quotation
+matching alone cannot establish support for an inference. Judge conversational
+fit against the full source and invitation. Preserve useful technical answers and
+invited advice. Do not optimize length, question frequency, or a list of phrases.
+
+The parent and owner inspect paired outputs. Model self-scoring cannot establish
+the owner's voice. A gain must preserve factual and format behavior on controls.
+This benchmark cannot measure follower growth or a sustained live outcome.
+
+### Existing facilities and gaps
+
+Growth OS already has `buildWriterPacket`, `generateWriterOutput`, structured
+validation, role-bound runtimes, and server-owned independent review. Reuse them.
+Direct replies still accept operator text through `act`, so changing the Writer
+profile alone does not cover both authoring paths.
+
+The local Harness² extension targets Learning OS and Lingua OS. Its interface and
+isolated workspace pattern provide reference code. Its adapter is not a Growth OS
+benchmark. It launches OpenCode without an explicit max variant. Exact model and
+effort requests need verification before any claimed matched benchmark. Model
+delegation must follow the current T3 execution rules. Do not silently substitute
+CLI launches for the model route used in the successful prompt trial.
+
+The Harness² checkout contains unrelated dirty Learning OS work. Preserve it.
+Keep optimization artifacts separate from production style documents until the
+candidate earns acceptance. Do not build another general-purpose framework.
+
+### Terra reference and current scope
+
+Terra stays on hold. Saved Terra output is a qualitative reference on four shared
+sources. It used the earlier full baseline packet, while the fresh V4 run used a
+short new context. Those results do not form a matched final-harness model test.
+A later fair comparison must give both models the same final input. Do not make
+new Terra calls without a renewed request.
+
+No source code, production model, persona, service, timer, or approval changes are
+authorized by this proposal. Implementation scope and the next call budget need
+to be recorded before execution. XR-14 stays in-progress.
