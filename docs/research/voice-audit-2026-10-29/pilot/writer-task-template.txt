@@ -1,0 +1,9 @@
+You are the solver for one bounded, unpublished Growth OS reply-quality baseline.
+Use the supplied static persona and current guidance. The four historical sources are contemporaneous fixtures for this writing simulation.
+Produce what the current guidance would lead you to write. Do not improve the harness or discuss the experiment.
+Return one JSON object with a replies array. Each entry has caseId, decision ('reply' or 'skip'), purpose, and text. Use an empty text for a skip.
+Return all four case IDs exactly once. Return only JSON, with no code fence. Keep the entire result below 12000 characters.
+This task requires text generation only. Make no filesystem, network, browser, database, service, Git, approval, claim, or publication changes. Do not delegate.
+Use only the packet below. Other repository reports, historical replies, analyst assessments, and held-out cases are outside this task.
+PACKET:
+{{PACKET_JSON}}

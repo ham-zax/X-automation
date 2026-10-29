@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "submittedCharacterUnit": "JavaScript UTF-16 code units",
+  "dispatches": [
+    {
+      "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A6dca301a-ab4b-4abf-9d64-c687de02c511",
+      "status": "completed",
+      "reportedProvider": "opencode",
+      "reportedModel": "opencode2api/deepseek-v4.1-flash-free",
+      "reportedOptions": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "submittedTaskCharactersUTF16": 41595,
+      "acceptedSummaryCharactersUTF16": 783,
+      "usage": null
+    },
+    {
+      "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A6b1c6411-eccb-4fb3-b31d-b2725e07e483",
+      "status": "completed",
+      "reportedProvider": "opencode",
+      "reportedModel": "opencode2api/deepseek-v4.1-flash-free",
+      "reportedOptions": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "submittedTaskCharactersUTF16": 40486,
+      "acceptedSummaryCharactersUTF16": 768,
+      "usage": null
+    },
+    {
+      "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3Afd7a8c2e-5407-4690-adda-e2b3b75b33e6",
+      "status": "completed",
+      "reportedProvider": "opencode",
+      "reportedModel": "opencode2api/deepseek-v4.1-flash-free",
+      "reportedOptions": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "submittedTaskCharactersUTF16": 40302,
+      "acceptedSummaryCharactersUTF16": 692,
+      "usage": null
+    },
+    {
+      "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A84dd90d3-4e2b-4269-b440-ba1fb343cfe8",
+      "status": "completed",
+      "reportedProvider": "opencode",
+      "reportedModel": "opencode2api/deepseek-v4.1-flash-free",
+      "reportedOptions": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "submittedTaskCharactersUTF16": 47679,
+      "acceptedSummaryCharactersUTF16": 11912,
+      "usage": null
+    }
+  ]
+}

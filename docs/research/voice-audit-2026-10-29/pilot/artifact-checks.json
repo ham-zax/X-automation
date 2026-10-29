@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "artifactChecks": {
+    "checks": [
+      "frozen 4/18 split",
+      "baseline case membership",
+      "baseline source VA-03",
+      "baseline source VA-14",
+      "baseline source VA-16",
+      "baseline source VA-21",
+      "baseline input hash",
+      "baseline excludes reserved case IDs",
+      "candidate-a case membership",
+      "candidate-a source VA-03",
+      "candidate-a source VA-14",
+      "candidate-a source VA-16",
+      "candidate-a source VA-21",
+      "candidate-a input hash",
+      "candidate-a excludes reserved case IDs",
+      "candidate-b case membership",
+      "candidate-b source VA-03",
+      "candidate-b source VA-14",
+      "candidate-b source VA-16",
+      "candidate-b source VA-21",
+      "candidate-b input hash",
+      "candidate-b excludes reserved case IDs",
+      "A changes only guidance",
+      "B changes exactly the three persona cues",
+      "baseline static persona matches active values",
+      "current operating standard preserved",
+      "current attached reply guidance preserved",
+      "four terminal unique dispatches",
+      "baseline model and max option",
+      "baseline exact task reconstruction",
+      "baseline input/output bounds",
+      "baseline output contract",
+      "candidate-a model and max option",
+      "candidate-a exact task reconstruction",
+      "candidate-a input/output bounds",
+      "candidate-a output contract",
+      "candidate-b model and max option",
+      "candidate-b exact task reconstruction",
+      "candidate-b input/output bounds",
+      "candidate-b output contract",
+      "fresh-diagnosis model and max option",
+      "fresh-diagnosis exact task reconstruction",
+      "fresh-diagnosis input/output bounds",
+      "diagnosis raw evidence excludes parent theory",
+      "diagnosis input hash",
+      "no fifth dispatch or held-out run",
+      "HTML preserves sources and output strings",
+      "report plan link resolves",
+      "all other task rows preserved",
+      "XR-14 remains in-progress",
+      "all changes limited to ledger, inventory, proposals, plan and pilot",
+      "new files limited to plan and pilot",
+      "artifacts are regular UTF-8 files",
+      "new files have no trailing whitespace",
+      "git diff check"
+    ],
+    "checkCount": 55,
+    "status": "passed",
+    "files": {
+      "TASKS.md": "c0653b2b71bd6aad8479f0631ec8175d50790e1eed33ac36425aaf56fe617cc8",
+      "docs/FUTURE_IMPROVEMENTS.md": "96b214d3e776c6dc99917c47ef66c0cb4d53dde47460aa82d1e427a28f05a0db",
+      "docs/X_GROWTH_ISSUES.md": "3f074ab4b6b7fcb44d25de289b84426abce782c10524a4e1321b4329d1c5e58c",
+      "docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md": "00b5c7850b8231f26931747fad1fce40387528bfd5fa9204160c86892917c25f",
+      "docs/research/voice-audit-2026-10-29/pilot/REPORT.md": "2530a70900f44cf07b6b00f1212f4d9d87a10d2add0a865149c8eb26166fed9f",
+      "docs/research/voice-audit-2026-10-29/pilot/baseline-input.json": "e4de488a0054e066d4a741adf25e575bb8055bb63155d4fd10896a91e1d0974a",
+      "docs/research/voice-audit-2026-10-29/pilot/baseline-result.json": "3a72f9e60715148eeb7fdfec2a03da7dfbb03ee9f4ad01cd6487134059a8e024",
+      "docs/research/voice-audit-2026-10-29/pilot/candidate-a-input.json": "9f5e304fda609ecc8e0137ae4b7244a3658d7d8ea35958d437afb435c14711a9",
+      "docs/research/voice-audit-2026-10-29/pilot/candidate-a-result.json": "5ccff9dcc45a8a7e5c2ef50b01bc21e33f4823a3129253a3f722dae3fda4f53c",
+      "docs/research/voice-audit-2026-10-29/pilot/candidate-b-input.json": "524a589e644bce91cf5db598bc85a3e04e42605d691a9562fddac6d27ef449e5",
+      "docs/research/voice-audit-2026-10-29/pilot/candidate-b-result.json": "0d147779263cc4fcd72f20474875283bd5eda3cc8711c90a4b61f0f34c561069",
+      "docs/research/voice-audit-2026-10-29/pilot/comparison.html": "84494eb8658348b60de0d39374c6d96e1206e1c0c69682d2fd7552d553230120",
+      "docs/research/voice-audit-2026-10-29/pilot/diagnosis-task-template.txt": "42278d3f868a0b5d7fa3f881b87023dffc1e4793bf751825a4dbd363f8333042",
+      "docs/research/voice-audit-2026-10-29/pilot/fresh-diagnosis-input.json": "6efc3885b0e2d8f7a1be89ed7a1976fa3f4ec6bae058210539ba83eb0cd6f568",
+      "docs/research/voice-audit-2026-10-29/pilot/fresh-diagnosis-result.json": "6ca0b25175c33072f51fa3a337c892c8ee50797714e66c3ba518e97c33c6c4ae",
+      "docs/research/voice-audit-2026-10-29/pilot/manifest.json": "b65d2d07d6237bd8fa5f176dc97150c8842668042cbdadf71d67861a7aeedd65",
+      "docs/research/voice-audit-2026-10-29/pilot/request-receipts.json": "b8869df6e2bed7e1733e9d21345d0e1f707991016045e111b7e64fc9c0b7d63c",
+      "docs/research/voice-audit-2026-10-29/pilot/writer-task-template.txt": "e63d43974f635c23159a684429048f05226c07fa2486ab227e7cd3e563450d80"
+    },
+    "liveProgressSha256": "dc30b02b3620c379713e1d350b4aa4731eb1ab20b65eada92f4d75a5c4caf021",
+    "confidence": "Artifact integrity only. Reply-quality acceptance remains unestablished."
+  },
+  "privacyChecks": {
+    "status": "passed",
+    "privateValuesChecked": 2,
+    "artifactFilesScanned": 19,
+    "envMode": "0600",
+    "comparisonScriptSyntax": "passed"
+  },
+  "inlineDelivery": {
+    "status": "shown",
+    "attachmentId": "48b4b81e-456c-46f0-b65b-c5b7d46b6346-9a1446eb-719e-4e7d-991c-935f4c171a44-html"
+  },
+  "visualPreview": {
+    "status": "unavailable",
+    "reason": "Host AppArmor blocks the T3 preview browser sandbox. No screenshot or interaction check runs."
+  },
+  "initialFailures": [
+    {
+      "check": "baseline exact task reconstruction",
+      "cause": "The initial print() capture adds one final newline.",
+      "repair": "Record the exact packetSuffix in the manifest. The reconstructed task hash preserves submitted bytes."
+    },
+    {
+      "check": "staged git diff check",
+      "cause": "A physical extra blank line at the end of baseline-input.json violates the whitespace check.",
+      "repair": "Store the suffix in metadata instead. JSON values, actual requests and model results stay unchanged."
+    }
+  ],
+  "uncovered": [
+    "Owner voice acceptance",
+    "Production Writer and review execution",
+    "Repeated-sample stability",
+    "All 18 reserved cases",
+    "Public outcomes and follower growth"
+  ]
+}

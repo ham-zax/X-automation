@@ -1,0 +1,7 @@
+Independently diagnose a Growth OS reply-quality experiment from the goal and raw evidence below. You receive no prior analyst assessment. Baseline and two variants use four historical sources as contemporaneous fixtures.
+Check each source against each output. Identify any actual improvement, remaining mismatch, and evidence that weakens a proposed cause. Distinguish an observed defect from a causal hypothesis. The owner wants human participation without losing useful technical answers or independent judgment.
+Recommend only the next cheapest discriminating experiment, with one variable, fixed conditions, a checkable result, and remaining uncertainty. Do not propose a generic prompt rewrite or phrase bans without an exact witness. Name missing evidence when needed.
+Return JSON with observations, hypotheses, nextExperiment, and limits. Support observations with case IDs and exact short output quotes. Keep the entire result below 12000 characters.
+Use only the packet. Do not read other files, reports, historic replies, or reserved cases. Do not generate another batch of replies. Make no filesystem, network, browser, database, service, Git, approval, claim, publication, or model changes. Do not delegate.
+PACKET:
+{{PACKET_JSON}}

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stage": "baseline",
+  "provider": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A6dca301a-ab4b-4abf-9d64-c687de02c511",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A6dca301a-ab4b-4abf-9d64-c687de02c511>",
+  "status": "completed",
+  "usage": null,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "purpose": "technical_value",
+        "text": "credential handling is the part everyone writes twice. once badly, then again after a key turns up in a log. good to see it in the quickstart."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "purpose": "celebration",
+        "text": "an agent building a canvas through a plugin is the strangest part of a 1.6 release, in the best way. congrats on shipping it."
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "the foreground service and the resume cards are the real feature. a phone agent that dies when Android reclaims the app is a demo, not a tool."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "moving money or changing permissions. those are the two with no clean undo."
+      }
+    ]
+  }
+}

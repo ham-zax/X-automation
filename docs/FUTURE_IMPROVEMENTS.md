@@ -65,3 +65,24 @@ Current queue fields do not establish the exact input used to write every past
 reply. Proposal: assess the existing generation provenance at each active writing
 path before adding any new trace fields. The report separates checked current
 defaults from unproved historical causes. No schema or runtime changes occur here.
+
+## October 29 bounded voice pilot
+
+Two unpublished probes retain the unwanted evaluator habit. One changes reply
+guidance. The other removes three systems-focused persona cues. Proposal: retain
+their exact negative and mixed results before another prompt edit. The checkpoint
+is `docs/research/voice-audit-2026-10-29/pilot/REPORT.md`.
+
+The local Harness2 adapter does not request the max variant explicitly. Proposal:
+if a later repeated experiment needs that adapter, test requested settings at its
+existing launch boundary. Preserve the unrelated Learning OS work. Do not create
+a second generic evaluator merely to obtain the first comparison.
+
+The pilot omits production context and does not execute the real Writer review.
+Proposal: after choosing a concrete repair hypothesis, exercise that existing
+review with accepted and rejected controls. Do not infer a need for another gate
+from a static writing simulation. No production change follows from these proposals.
+
+The first request reconstruction check finds a baseline newline added by print().
+The manifest records the exact suffix. Proposal: capture request bytes before
+dispatch in future experiments. Preserve the current request hash check.

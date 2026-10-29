@@ -40,7 +40,7 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 | XR-11 | review | XR-18 | parent inline, shared documentation slice | Command sheet includes exact current social-status and growth-run-status payloads and result shapes. | Actual handlers and identity validation inspected. Disposable bridge checks pass for follow/like/repost status and a known fixture run. Documented fields exist. No claims, sends or real state writes. |
 | XR-12 | review | XR-18 | OpenCode DeepSeek max; parent acceptance | Bounded top-ranked reply collection is explicit and preserves chronological thread reads. Captured samples retain source and time. | Implementation taskId `node:delegated-task:command%3Amcp%3A7c5ee006-b2fe-457d-9a59-cd503c7826ec%3Adelegate-task%3Afe07284a-0a3e-46f5-a04f-333e408b21cd`. Parent inspected mode validation, bounds, direct-parent filtering, deduplication and upstream order. Targeted tests 13/13. Log `/tmp/xgrowth-xr12-parent-20261028.log`. No live X read or global ranking claim. |
 | XR-13 | review | XR-18 | OpenCode DeepSeek max; parent acceptance | Unapproved upstream code cannot execute with account credentials; existing working pin remains usable. | Continuation export repair taskId `node:delegated-task:command%3Amcp%3Ab7d7b565-c125-412d-ba80-487c2023a7b5%3Adelegate-task%3A79b467cc-5fc5-4e79-9687-1db69d70eebe` implementation complete. Parent inspected export-only catch and regression assertions. Worker focused cases 7/7, syntax checks pass. Parent diff check passes. Immediate boundary review taskId `node:delegated-task:command%3Amcp%3Ab7d7b565-c125-412d-ba80-487c2023a7b5%3Adelegate-task%3A5e769888-9a2c-47c2-8f05-a5de7432897f` completed with no blocker. Parent repaired two test-evidence gaps in one round: archive precondition and canary limitation comment. Final focused cases 7/7, log `/tmp/xgrowth-xr13-export-final-20261028.log`. Exact packet at plan end. Implementation taskId `node:delegated-task:command%3Amcp%3A7c5ee006-b2fe-457d-9a59-cd503c7826ec%3Adelegate-task%3A70d61994-90c9-49ca-80b7-8b7511c568af`. Parent inspected exact approval before export/import and preserved pin behavior. Targeted tests 6/6, syntax/diff checks pass. Log `/tmp/xgrowth-xr13-parent-20261028.log`. Immediate credential-boundary review taskId `node:delegated-task:command%3Amcp%3A7c5ee006-b2fe-457d-9a59-cd503c7826ec%3Adelegate-task%3Adb76f58e-f833-48c1-aba5-1e6d2656e7c8`: no blockers. Parent corrected the failed-candidate documentation in one repair round. Continuation now catches export failure before candidate smoke and continues pin smoke/status write. Raw child stderr remains a pre-existing diagnostic limit. No upstream hash approved or pin installed. |
-| XR-14 | in-progress | XR-01, XR-03-04 | parent investigation; owner voice acceptance | Fresh writing sample meets approved voice and purpose with qualified outcome comparisons. No quotas or invented optimal mix. | 29 October: owner requests a detailed diagnosis and restart checkpoint before repair. Report `docs/research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md` records 458 public October replies, 448 matched confirmed publications, 456 parent texts, and 22 assessed cases with controls. Durable corpus, manifest, and replay index reside under `docs/research/voice-audit-2026-10-29/`. Confirmed failures include unsolicited reviewer roles and overlooked source details. Current parser drops extended note text. Historical generation inputs remain partly unknown. No writing repair, replay test, new persona fact, or owner acceptance claimed. Missing biography does not block this diagnosis. No new worker dispatch. T8/T9/T12/T13. |
+| XR-14 | in-progress | XR-01, XR-03-04 | parent investigation; owner voice acceptance | Fresh writing sample meets approved voice and purpose with qualified outcome comparisons. No quotas or invented optimal mix. | 29 October: owner requests a detailed diagnosis and restart checkpoint before repair. Report `docs/research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md` records 458 public October replies, 448 matched confirmed publications, 456 parent texts, and 22 assessed cases with controls. Durable corpus, manifest, and replay index reside under `docs/research/voice-audit-2026-10-29/`. Confirmed failures include unsolicited reviewer roles and overlooked source details. Current parser drops extended note text. Historical generation inputs remain partly unknown. Initial diagnosis creates no worker. Approved pilot then completes three four-case writing runs and one fresh diagnosis with DeepSeek 4.1 Flash max. Two probes retain the main failure. Report `docs/research/voice-audit-2026-10-29/pilot/REPORT.md` records the stop and exact artifacts. Four of five pilot dispatches are used. Other 18 cases stay reserved. No accepted writing repair, new persona fact, or production acceptance. Missing biography does not block diagnosis. T8/T9/T12/T13. |
 | XR-15 | review | - | OpenCode diagnosis; parent inline repair | Measure actual attached-launcher cost and demonstrate a reduction in measured waste. | Research taskId `node:delegated-task:command%3Amcp%3Ab7d7b565-c125-412d-ba80-487c2023a7b5%3Adelegate-task%3Ae428cabb-91d8-4c9e-9f2f-f0a347c5f356`. Report `docs/ATTACHED_LAUNCHER_COST_2026-10-28.md` recovers three historical actual attached sessions and repeated queue reads. Parent adds bounded queue guidance in the actual live brief. Current read-only output: default 61,369 B, approved5 2,682 B, review5 5,239 B. Status scopes differ intentionally. Existing gates unchanged. Local remedy at review only. Matched current-revision session/token improvement remains unestablished. |
 | XR-16 | review | XR-18 | parent bounded operational checks | Diagnose source freshness through current owners. Implement only a demonstrated local defect. Record production blockers separately. | Prior local repairs pass 15/15. Parent ran one sequential supported refresh per source. X latest 22, momentum 4, GitHub 14 and HN 16 candidates with no error. Creator saved 13 candidates with an explicit unavailable-account error. Saved metadata checked through growth-next. Creator terminal output lost across context recovery, not claimed. Report `docs/SOURCE_FRESHNESS_ACCEPTANCE_2026-10-28.md`. No public action, service or credential change. Automatic cadence and Analytics authentication remain unproven. |
 | XR-17 | review | - | OpenCode diagnosis; parent acceptance | Exact before/after browser target evidence identifies drift or establishes cleanup for the tested lifecycle. | Continuation taskId `node:delegated-task:command%3Amcp%3A130c01fd-75e6-4494-872c-0cf1cabcf464%3Adelegate-task%3A574b2a07-d511-4447-9512-0d12199f37f2` implementation returned. Worker checks pass 47/47. Parent repairs the shared contract, existing prompt permissions and setup-signal gap. Final focused checks pass 50/50, log `/tmp/xgrowth-attached-parent-20261029.log`. Integrated suite passes 404/404 after clock fixture repairs. Immediate lifecycle review taskId `node:delegated-task:command%3Amcp%3A130c01fd-75e6-4494-872c-0cf1cabcf464%3Adelegate-task%3Ad3630a49-da7a-4456-a249-028c1dd1b888` completed: PASS, no blocker. Parent repairs the low prompt-write permission window in the second risk repair round. Final affected cases pass 11/11, log `/tmp/xgrowth-attached-review-fix-20261029.log`. Environment inheritance from the existing runner import is documented. 29 October: parent identifies concrete attached-launcher failure cleanup gap. Exact continuation packet at plan end reuses runChild and the existing tab lease. No historical leak assertion or timer activation. Research taskId `node:delegated-task:command%3Amcp%3Ab7d7b565-c125-412d-ba80-487c2023a7b5%3Adelegate-task%3Af85a21cd-5317-4ee9-af29-c8daf7508407`. Report `docs/BROWSER_TAB_OWNERSHIP_2026-10-28.md` traces exact targets: three normal attached exits close owned targets and preserve baseline IDs. Two extras have unproven ownership. Parent inspects the target/command trace. No owned-tab leak demonstrated, no duplicate cleanup added. Current-revision and attached failure-exit coverage remain missing. |
@@ -55,13 +55,21 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 
 ## Active checkpoint
 
-29 October reply-quality checkpoint: XR-14 is in-progress. The owner requests a
-detailed report before implementation. Read
+29 October pilot result: XR-14 remains in-progress. Three writing runs and one
+fresh diagnosis complete with DeepSeek 4.1 Flash, variant max. Two probes retain
+the main failure, so the repository stop rule ends composition. Read
+`docs/research/voice-audit-2026-10-29/pilot/REPORT.md` and
+`docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md`. Four of five evaluation
+dispatches are used. The 18 reserved cases remain unused. No writing repair or
+production acceptance is claimed. No extra implementation/review budget is granted.
+
+Earlier reply-quality checkpoint: the owner requests a detailed report before implementation. Read
 `docs/research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md` and its durable corpus.
 XG-06 is open on October evidence. No writing fix or owner acceptance is claimed.
 The report records 458 replies, 456 parents, and 22 assessed replay cases.
 The implementation/review dispatch budget remains exhausted at 22 of 22.
-No new task or worker is created. Only Hamza marks done.
+The earlier diagnosis creates no worker. The separate pilot above uses four.
+Only Hamza marks done.
 The latest bounded operator ends blocked before sending, with exact-target cleanup
 confirmed by the parent journal. The growth timer stays disabled. Installed stop
 grace is 60 seconds. The final checkpoint below records the run and attempt IDs.
@@ -193,3 +201,31 @@ journal confirms exact target `41393979E71DF5232098538A1A898D59` cleanup,
 cleaned=true with no warnings. The operator is inactive. The growth timer stays
 disabled. Installed stop grace is 60 seconds. Collector acceptance remains
 separate. These terminal results supersede the startup-only checkpoint.
+
+
+## XR-14 bounded pilot, approved 29 October 2026
+
+Authority: Hamza says "Agreed, please proceed" after the independent-design outline.
+Plan: `docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md`.
+TaskStartSnapshot: main at 8dfcb39, tracking origin/main with no divergence.
+At task start, the tracked tree is clean. Existing root live-progress.json stays excluded.
+No active Git operation or additional worktree is observed.
+
+New evaluation ceiling: five solver dispatches, one active at a time. This is
+separate from the exhausted 22/22 implementation/review budget. No new task rows.
+Model catalog confirms OpenCode opencode2api/deepseek-v4.1-flash-free, variant max.
+No additional editor agents. Parent proposes and composes. Packets are limited
+to 75,000 characters and accepted results to 12,000 characters. The provider
+does not expose a hard reasoning-token cap through this tool. No such cap is claimed.
+Calibration cases: VA-03, VA-14, VA-16, VA-21. Other 18 cases reserved.
+Evaluation dispatches consumed: 4 of 5. Three writing runs and one fresh diagnosis completed.
+Both probes retain the main failure. The AGENTS.md two-attempt stop rule applies.
+No composition or reserved-case run proceeds. Dispatch five stays unused.
+Baseline taskId: `node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3A6dca301a-ab4b-4abf-9d64-c687de02c511`. Results and exact inputs reside in the pilot directory.
+No production code, persona, policy, model setting, browser, service, or timer changes.
+
+Local Harness2 checkout contains pre-existing Learning OS changes. They stay
+untouched. Its adapter does not request max explicitly, so the pilot uses T3
+for exact-model dispatch and the Harness2 contrastive method under parent control.
+This is a controlled writing simulation, not an end-to-end production run or
+a completed stock Harness2 recursive execution. Only Hamza marks done.

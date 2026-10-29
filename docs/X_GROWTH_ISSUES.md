@@ -6,6 +6,11 @@
 
 **Reply-quality update:** 2026-10-29 against `be76450`. [The detailed audit](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md) records 458 October replies, 456 parent texts, and 22 assessed cases. XR-14 is in-progress. XG-06 is open on confirmed October evidence. No writing repair or owner acceptance is claimed. Earlier implementation and deployment statements below retain their original scope and date.
 
+**Pilot update:** 2026-10-29 against `8dfcb39`. Three writing runs and one fresh
+diagnosis use DeepSeek 4.1 Flash max. Two probes retain the evaluator habit.
+The [pilot report](research/voice-audit-2026-10-29/pilot/REPORT.md) records mixed
+results and the stop. The 18 reserved cases remain unused. No writing repair is accepted.
+
 **Status:** the October review covers all 20 original findings, the documentation task XR-21 and three display defects grouped under XR-22.
 The September inventory remains historical evidence. Its status labels do not establish current deployment or runtime health.
 
@@ -167,6 +172,7 @@ Status meanings:
 - **Status:** confirmed October quality failure, investigation in-progress. **Priority:** P1. **Plan:** T8/T9/T12/T13. **Related:** XG-06/XG-08/XG-11.
 - **Evidence:** [Detailed report](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md), 29 October. The corpus contains 458 replies, 448 matched confirmed Growth OS publications, and 456 parent texts. Twenty-two selected cases distinguish role failures, source-reading failures, ambiguous cases, and useful technical controls. `docs/ENGAGEMENT_IDEAS_2026-10.md`, section 2, remains earlier evidence.
 - **Task:** repair the demonstrated source and role failures through the actual writing paths, then compare unpublished outputs against the frozen cases. No repair or replay runs in the reporting step. Missing first-person evidence limits experience claims, not diagnosis or ordinary participation.
+- **Pilot:** current static guidance, replacement reply guidance, and a narrower persona produce four unpublished replies each. Neither change consistently resolves the main failure. A fresh diagnosis finds mixed gains. Four of five pilot dispatches complete. Composition and the reserved-case run stop under the repository rule. [Exact evidence](research/voice-audit-2026-10-29/pilot/REPORT.md). XR-14 stays in-progress.
 - **Done when:** the owner accepts the resulting writing sample and outcome comparisons use qualified measurements.
 - **Boundary:** do not impose quotas, human-looking delays, or a universal format rule. The audit does not establish an optimal action mix.
 
@@ -490,6 +496,13 @@ XG-06 is open. The [detailed report](research/GROWTH_REPLY_QUALITY_REPORT_2026-1
 preserves the available October corpus and 22 assessed exchanges. The problem
 includes unsolicited evaluator roles, questions partly or fully answered by the
 source, unsupported defect implications, and selected-purpose/output mismatches.
+
+The later [bounded pilot](research/voice-audit-2026-10-29/pilot/REPORT.md) tests
+current static guidance and two candidate changes. Some individual replies improve.
+Neither candidate earns promotion. Removing three systems-focused persona cues
+does not eliminate the general lesson. Full source text also leaves evaluator
+comparisons. Useful direct answers survive. No fixed sentence pattern or advice
+ban follows from these mixed results.
 Several connected technical replies remain useful controls. No percentage of bad
 replies or causal growth effect is established.
 

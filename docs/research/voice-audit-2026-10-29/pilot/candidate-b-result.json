@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stage": "candidate-b",
+  "provider": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "taskId": "node:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3Afd7a8c2e-5407-4690-adda-e2b3b75b33e6",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A2cf06da6-9bdd-4944-9f55-c9835fcf4ab9%3Adelegate-task%3Afd7a8c2e-5407-4690-adda-e2b3b75b33e6>",
+  "status": "completed",
+  "usage": null,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "credential vaults are the part everyone postpones until an agent leaks a key."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "purpose": "celebration",
+        "text": "canvas, stats, docs and remote support in one release is showing off. respect 🎉"
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "shell and git actually running on the phone, not on a remote box, is what separates this from the usual 'code from your phone' chat wrapper."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "grant itself more permissions. a bad diff reverts. a scope it gave itself quietly becomes the baseline."
+      }
+    ]
+  }
+}
