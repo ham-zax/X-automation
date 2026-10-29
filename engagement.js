@@ -1,6 +1,7 @@
 import { applyAcceptedLearnedRules } from './learning.js';
 import { selectBehaviorDecision } from './persona.js';
 import { refreshCreatorLatestDiscovery } from './x_discovery.js';
+import { readXTargetResponses } from './x_reads.js';
 
 export const ENGAGEMENT_KINDS = ['initial_reply', 'follow_up', 'own_post_response'];
 
@@ -540,6 +541,7 @@ export async function refreshEngagementOpportunities({
   refreshTargetTimelines = true,
   candidateKeys = [],
   creatorRefresh = refreshCreatorLatestDiscovery,
+  responseReader = readXTargetResponses,
 } = {}) {
   const [store, tech, opportunity, strategy, health] = await Promise.all([
     import('./store.js'),
@@ -582,10 +584,10 @@ export async function refreshEngagementOpportunities({
       score: niche.score,
       niche,
       metrics: {
-        views: Number(post.views || 0),
-        likes: Number(post.likes || 0),
-        retweets: Number(post.reposts || 0),
-        replies: Number(post.replies || 0),
+        views: post.views == null ? null : Number(post.views),
+        likes: post.likes == null ? null : Number(post.likes),
+        retweets: post.reposts == null ? null : Number(post.reposts),
+        replies: post.replies == null ? null : Number(post.replies),
       },
     };
   };
@@ -725,13 +727,12 @@ export async function refreshEngagementOpportunities({
   };
 
   if (refreshResponses && ourPosts.length) {
-    const responseRead = await tech.fetchXTargetResponses(
-      [],
+    const responseRead = await responseReader(
       ourPosts.map((item) => item.tweetId),
-      { responsesPerTarget: 10, since: now - responseSinceHours * 3_600_000 },
+      { since: now - responseSinceHours * 3_600_000, now },
     );
-    errors.push(...responseRead.errors.map((item) => `response @${item.targetUsername}: ${item.error}`));
-    for (const response of responseRead.responses) {
+    errors.push(...(responseRead.errors || []).map((item) => `response @${item.targetUsername}: ${item.error}`));
+    for (const response of responseRead.responses || []) {
       const parent = parentById.get(response.parentOurTweetId);
       let profile = store.getRelationshipProfile(response.targetUsername);
       const candidate = candidateFromPost(response, profile, true);
@@ -750,6 +751,10 @@ export async function refreshEngagementOpportunities({
             responseTweetId: response.id,
             responseType: response.responseType,
             parentOurTweetId: response.parentOurTweetId,
+            ...(response.transport ? { transport: response.transport } : {}),
+            ...(response.observedAt != null && Number.isFinite(Number(response.observedAt))
+              ? { observedAt: Number(response.observedAt) }
+              : {}),
           },
         });
         profile = store.getRelationshipProfile(response.targetUsername) || profile;

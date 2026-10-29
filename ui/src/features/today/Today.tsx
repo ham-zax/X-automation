@@ -31,6 +31,8 @@ const SOURCE_LABELS: Record<string, string> = {
   x_momentum: 'X momentum',
   github_trending: 'GitHub Trending',
   hn_top: 'HN Top Stories',
+  x_for_you: 'X For You',
+  x_creator_latest: 'Creator timelines',
 }
 
 const PIPELINE_LABELS: Record<string, string> = {

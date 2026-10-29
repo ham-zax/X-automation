@@ -25,6 +25,10 @@ const strategy = await import(`${rootUrl}strategy.js`);
 const runtime = await import(`${rootUrl}growth_agent_runtime.js`);
 const operatorLease = await import(`${rootUrl}operator_lease.js`);
 
+// Claim and lease tests use no rest interval in this disposable state.
+// The production policy stays unchanged.
+store.saveGrowthProductPolicy({ activity: { sleepStart: '00:00', sleepEnd: '00:00' } });
+
 function candidate(key, text = 'AI agent API runtime tooling for developers') {
   return {
     key,

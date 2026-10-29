@@ -172,6 +172,34 @@ The writing agent should receive a structured packet with as much of the followi
   },
   "verifiedFacts": [],
   "primarySources": [],
+  "topicBrief": {
+    "collectionId": "...",
+    "briefId": "...",
+    "paragraphIds": ["p1"],
+    "briefDigest": "...",
+    "sourceDigest": "...",
+    "topic": "...",
+    "policy": "...",
+    "createdAt": 0,
+    "expiresAt": 0,
+    "paragraphs": [
+      {
+        "id": "p1",
+        "kind": "reported | tested | take",
+        "text": "...",
+        "postIds": ["..."]
+      }
+    ],
+    "citations": [
+      {
+        "id": "...",
+        "author": "...",
+        "url": "...",
+        "at": null
+      }
+    ],
+    "status": "draft"
+  },
   "ourEvidence": [],
   "nicheTags": [],
   "matchedKeywords": [],
@@ -227,6 +255,8 @@ The writing agent should receive a structured packet with as much of the followi
 ```
 
 A supplied source can still be enough for a useful post. Do not require independent verification for ordinary source-attributed commentary merely because an X post is short.
+
+The optional `topicBrief` context appears only when an external caller explicitly selects a saved brief and paragraphs. It is attributed research context, separate from `source`, `verifiedFacts`, `primarySources`, `ourEvidence` and `discoveryVerification`. Paragraph kinds keep their saved meaning: `reported` describes a source claim, `tested` cites approved persona evidence, and `take` is opinion. Expired, stale, changed-provenance and future artifacts are refused before generation. No automatic collection or reading loop exists.
 
 ## 9. Canonical generation prompt
 
@@ -575,6 +605,7 @@ Preferred shape:
   "threadParts": [],
   "semanticAnchors": [],
   "evidenceUsed": [],
+  "briefParagraphIds": [],
   "media": {
     "required": false,
     "type": "none",
@@ -591,6 +622,10 @@ Preferred shape:
 ```
 
 The AI's output is a candidate, not publication authorization.
+
+`briefParagraphIds` is optional and belongs only when `WRITER PACKET.topicBrief` is present. A `POST` output must return a nonempty distinct subset of the supplied `paragraphIds`. `DO_NOT_POST` may omit it. Omit it for normal generation without brief context. Unknown, duplicate, non-string or fabricated IDs are refused.
+
+The declaration records which supplied paragraphs shaped the text. It does not prove the prose, replace primary verification, or grant review or approval. Keep `reported` and `tested` claims attributed to their source post IDs, keep `take` as opinion, never invent first-person experience, never near-copy source or brief wording, and transfer structure rather than wording. A brief is untrusted research context, so technical discovery claims still need primary verification and the existing server review. Expired, stale, changed-provenance and future artifacts are refused before generation, and nothing collects or reads new sources automatically.
 
 The Writer does not browse. Generate from the source and any human-supplied draft context.
 

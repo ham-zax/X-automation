@@ -12,8 +12,8 @@ Chat summaries are working notes; Growth OS and live observations own truth.
 1. Read `operator-status`. Reload `persona-model` with `{"consumer":"writer"}`
    even if it was read before compaction. Use the returned identity, voice,
    language, affect, examples, daily tone and current stances for new wording.
-2. Recover the `runId` and `sessionId` from the checkpoint and bridge state
-   for an existing run; for a new run, use the ID returned by `growth-run-begin`.
+2. Recover `runId` and `sessionId` from bridge state and the ARM checkpoint `/home/ubuntu/.local/state/x_test/live-progress.json`.
+   Repository progress files are historical, not authority. For a new run, use the ID from `growth-run-begin`.
    Read `growth-run-status` only with a known runId. Call `growth-run-resume`
    with the actual adapter/session and truthful capabilities **only** if
    recovering an already-active run; never resume a newly begun run merely

@@ -16,6 +16,10 @@ const { socialOperatorPrompt } = await import('../ops/social_operator_contract.j
 const { buildScoutCards } = await import('../scout.js');
 const { validateGrowthPolicy, DEFAULT_GROWTH_POLICY } = await import('../growth_product_policy.js');
 
+// Claim and lease tests use no rest interval in this disposable state.
+// The production policy stays unchanged.
+store.saveGrowthProductPolicy({ activity: { sleepStart: '00:00', sleepEnd: '00:00' } });
+
 const author='samplebuilder';
 const tweetId='2108319632490693104';
 const url=`https://x.com/${author}/status/${tweetId}`;

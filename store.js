@@ -6020,18 +6020,40 @@ export function saveGrowthProductPolicy(patch) {
   return next;
 }
 
+function latestObservedAccountMetrics(now) {
+  const timestamp = Number(now);
+  if (!Number.isFinite(timestamp)) return null;
+  return db.prepare('SELECT * FROM account_metrics WHERE captured_at <= ? ORDER BY captured_at DESC LIMIT 1')
+    .get(timestamp) || null;
+}
+
 export function getFreshGrowthFollowerObservation({ now = Date.now() } = {}) {
+  const timestamp = Number(now);
+  const freshWindow = 14 * 86_400_000;
+  const isFresh = (capturedAt) => Number.isFinite(capturedAt)
+    && timestamp >= capturedAt && timestamp - capturedAt < freshWindow;
+  // App-state evidence is listed first, so an exact capture-time tie keeps that source.
+  const candidates = [];
   const recent = json(getAppState(GROWTH_FOLLOWERS_STATE_KEY, null), null);
-  if (recent && Number.isInteger(recent.followers)
-    && now >= recent.observedAt && now - recent.observedAt < 14 * 86_400_000) return recent;
-  const account = getPerformanceSnapshot(1).account;
-  if (account && now >= Number(account.captured_at) && now - Number(account.captured_at) < 14 * 86_400_000) {
-    return { followers: Number(account.followers), observedAt: Number(account.captured_at), source: 'observed_account_metrics' };
+  const recentAt = Number(recent?.observedAt);
+  if (recent && Number.isInteger(recent.followers) && isFresh(recentAt)) {
+    candidates.push({ followers: recent.followers, observedAt: recentAt, source: recent.source });
   }
-  return null;
+  const account = latestObservedAccountMetrics(timestamp);
+  const accountAt = Number(account?.captured_at);
+  const accountFollowers = account?.followers == null ? NaN : Number(account.followers);
+  if (Number.isFinite(accountFollowers) && isFresh(accountAt)) {
+    candidates.push({ followers: accountFollowers, observedAt: accountAt, source: 'observed_account_metrics' });
+  }
+  if (!candidates.length) return null;
+  return candidates.reduce((newest, candidate) => (candidate.observedAt > newest.observedAt ? candidate : newest));
 }
 
 export function recordGrowthFollowerObservation({ followers, observedAt = Date.now(), source = 'authenticated_x_profile' } = {}) {
+  if ((typeof followers !== 'number' && typeof followers !== 'string')
+    || (typeof followers === 'string' && !followers.trim())) {
+    throw new DomainValidationError('Observed follower count must be a nonnegative integer.');
+  }
   const count=Number(followers), at=Number(observedAt), now=Date.now();
   if (!Number.isInteger(count) || count < 0 || count > 1_000_000_000) throw new DomainValidationError('Observed follower count must be a nonnegative integer.');
   if (!Number.isSafeInteger(at) || at > now + 60_000 || at < now - 10 * 60_000) {
@@ -6635,6 +6657,11 @@ export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Da
   if (!Number.isFinite(timestamp) || timestamp <= 0) throw new DomainValidationError('Performance snapshot capturedAt must be a positive timestamp.');
   const source = String(metricSource || '').trim();
   if (!source) throw new DomainValidationError('Performance snapshot metricSource is required.');
+  const rawFollowers = profile?.followersCount;
+  const followers = typeof rawFollowers === 'number'
+    || (typeof rawFollowers === 'string' && rawFollowers.trim())
+    ? Number(rawFollowers)
+    : NaN;
   const optionalNumber = (value) => {
     if (value == null || value === '' || value === '-') return null;
     const number = Number(value);
@@ -6643,11 +6670,13 @@ export function recordPerformanceSnapshot({ profile, posts = [], capturedAt = Da
   };
   db.exec('BEGIN');
   try {
-    if (profile) {
+    // Partial profile reads must not fabricate newer follower evidence. Post
+    // measurements remain usable even when the account count is unavailable.
+    if (Number.isSafeInteger(followers) && followers >= 0) {
       db.prepare(`INSERT OR REPLACE INTO account_metrics(captured_at, followers, following, posts, likes)
         VALUES (?, ?, ?, ?, ?)`).run(
         timestamp,
-        Number(profile.followersCount || 0),
+        followers,
         Number(profile.followingCount || 0),
         Number(profile.tweetCount || 0),
         Number(profile.likesCount || 0),
@@ -6720,6 +6749,33 @@ export function getPerformanceSnapshot(limit = 30) {
       ON x.tweet_id = p.tweet_id AND x.latest = p.captured_at
     ORDER BY p.published_at DESC LIMIT ?`).all(limit);
   return { account, previousAccount, posts };
+}
+
+// Current-status projection only. Historical metrics keep their own capture time,
+// profile counters and ordering; only the follower count comes from the freshest
+// valid observation. This reads state and never writes.
+export function getCurrentAccountSnapshot({ now = Date.now() } = {}) {
+  const account = latestObservedAccountMetrics(now);
+  const observation = getFreshGrowthFollowerObservation({ now });
+  if (!account && !observation) return null;
+  const base = account
+    ? { ...account }
+    : { captured_at: null, followers: null, following: null, posts: null, likes: null };
+  if (observation) {
+    return {
+      ...base,
+      followers: observation.followers,
+      followersCapturedAt: observation.observedAt,
+      followersSource: observation.source,
+    };
+  }
+  const capturedAt = Number(account.captured_at);
+  return {
+    ...base,
+    followers: account.followers == null ? null : Number(account.followers),
+    followersCapturedAt: Number.isFinite(capturedAt) ? capturedAt : null,
+    followersSource: 'observed_account_metrics',
+  };
 }
 
 function requireAiEnum(value, allowed, label) {

@@ -134,11 +134,59 @@ export function validateWriterEvidenceReferences(output, packet) {
   return used;
 }
 
+// Citation declarations describe supplied research context. They never replace
+// evidence IDs, discovery verification, server review or approval.
+function validateWriterBriefParagraphIds(value, topicBrief, decision) {
+  const supplied = value !== undefined && value !== null;
+  if (!supplied) {
+    if (topicBrief && decision === 'POST') {
+      throw new Error('Writer output with a topic brief requires nonempty briefParagraphIds for POST.');
+    }
+    return [];
+  }
+  if (!Array.isArray(value)) throw new Error('briefParagraphIds must be an array when supplied.');
+  const ids = [];
+  for (const item of value) {
+    if (typeof item !== 'string') throw new Error('briefParagraphIds must contain paragraph id strings.');
+    const id = item.trim();
+    if (!id) throw new Error('briefParagraphIds must not contain blank ids.');
+    if (ids.includes(id)) throw new Error('briefParagraphIds must be distinct.');
+    ids.push(id);
+  }
+  if (!topicBrief) {
+    if (ids.length) throw new Error('Writer cited briefParagraphIds without a topic brief packet.');
+    return [];
+  }
+  if (decision === 'POST' && ids.length === 0) {
+    throw new Error('Writer output with a topic brief requires nonempty briefParagraphIds for POST.');
+  }
+  const selected = new Set(Array.isArray(topicBrief.paragraphIds) ? topicBrief.paragraphIds : []);
+  const unknown = ids.filter((id) => !selected.has(id));
+  if (unknown.length) {
+    throw new Error(`Writer cited brief paragraph IDs that were not supplied: ${[...new Set(unknown)].join(', ')}.`);
+  }
+  return ids;
+}
+
+function topicBriefEditorMetadata(topicBrief, paragraphIds) {
+  return {
+    collectionId: topicBrief.collectionId,
+    briefId: topicBrief.briefId,
+    paragraphIds: [...paragraphIds],
+    briefDigest: topicBrief.briefDigest,
+    sourceDigest: topicBrief.sourceDigest,
+    createdAt: topicBrief.createdAt,
+    expiresAt: topicBrief.expiresAt,
+  };
+}
+
 function writerCurrentDraft(draft) {
   if (!draft) return null;
   const editor = { ...(draft.editor || {}) };
   delete editor.generation;
   delete editor.generationHistory;
+  // A saved citation declaration is metadata. It is never implicit Writer context.
+  delete editor.topicBrief;
   return { ...draft, editor };
 }
 
@@ -156,6 +204,7 @@ export function buildWriterPacket({
   recentReplyArchetypes = [],
   health = {},
   writingStrategy = null,
+  topicBrief = null,
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
   const sourceStyle = extractViralStyleFeatures({ text: candidate?.text || '' });
@@ -248,6 +297,7 @@ export function buildWriterPacket({
         }
       : null,
     evidence: (Array.isArray(evidence) ? evidence : []).map(writerEvidenceItem).filter(Boolean),
+    ...(topicBrief != null ? { topicBrief } : {}),
     editorial: editorialRecommendation ? {
       recommendationId: editorialRecommendation.id ?? null,
       thesis: editorialRecommendation.thesis ?? '',
@@ -300,6 +350,9 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
   const mediaType = mediaInput.type || 'none';
   if (!MEDIA_TYPES.has(mediaType)) throw new Error(`Invalid media type: ${mediaType}`);
   const evidenceUsed = validateWriterEvidenceReferences(writerOutput, writerPacket);
+  const topicBrief = writerPacket?.topicBrief && typeof writerPacket.topicBrief === 'object'
+    && !Array.isArray(writerPacket.topicBrief) ? writerPacket.topicBrief : null;
+  const briefParagraphIds = validateWriterBriefParagraphIds(writerOutput?.briefParagraphIds, topicBrief, decision);
   const behaviorValidation = validateBehaviorDecision(writerPacket?.behavior, { pipeline, requireAct: true });
   if (!behaviorValidation.valid) throw new Error(`Writer output is missing a valid selected behavior: ${behaviorValidation.errors.join(' ')}`);
 
@@ -311,6 +364,9 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     threadParts: asStringArray(writerOutput?.threadParts),
     semanticAnchors: asStringArray(writerOutput?.semanticAnchors).filter(Boolean),
     evidenceUsed,
+    ...(topicBrief && briefParagraphIds.length
+      ? { topicBrief: topicBriefEditorMetadata(topicBrief, briefParagraphIds) }
+      : {}),
     discussionQuestion: String(writerOutput?.discussionQuestion ?? '').trim(),
     media: {
       required: mediaInput.required ?? false,

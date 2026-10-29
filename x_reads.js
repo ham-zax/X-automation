@@ -6,19 +6,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const X_READ_KINDS = Object.freeze(['mentions', 'post', 'thread', 'own-replies', 'replied', 'search']);
+export const X_READ_KINDS = Object.freeze(['mentions', 'post', 'thread', 'own-replies', 'replied', 'replies', 'search']);
 const STATUS_STALE_MS = 48 * 60 * 60 * 1000;
 const READ_TIMEOUT_MS = 30_000;
 const MAX_LIMIT = 40;
 const MAX_QUERY_LENGTH = 300;
 const SEARCH_MODES = Object.freeze({ top: 'Top', latest: 'Latest' });
+const RESPONSE_MENTION_LIMIT = 40;
+const RESPONSE_PARENT_LIMIT = 100;
+const RESPONSE_ERROR_LIMIT = 300;
+const TWEET_ID_PATTERN = /^\d{5,25}$/;
+const HANDLE_PATTERN = /^[a-z0-9_]{1,15}$/;
 
 export function xactionsHome(env = process.env) {
   return path.resolve(env.X_GROWTH_XACTIONS_HOME || '.xactions-upstream');
 }
 
 export function readXactionsStatus({ env = process.env, now = Date.now() } = {}) {
-  const use = 'x-read {"kind":"mentions|post|thread|own-replies|replied","id":"<tweetId>"} or {"kind":"search","query":"<X search query>","mode":"top|latest"}; on ok:false read through the browser. The For You feed is browser-only.';
+  const use = 'x-read {"kind":"mentions|post|thread|own-replies|replied|replies","id":"<tweetId>"} or {"kind":"search","query":"<X search query>","mode":"top|latest"}; on ok:false read through the browser. The For You feed is browser-only.';
   let status;
   try {
     status = JSON.parse(fs.readFileSync(path.join(xactionsHome(env), 'status.json'), 'utf8'));
@@ -79,6 +84,12 @@ function searchRequest(payload) {
   return { query, mode };
 }
 
+function repliesRequest(payload) {
+  const mode = SEARCH_MODES[String(payload.mode || 'top').toLowerCase()];
+  if (!mode) throw new Error('x-read replies requires a mode of top or latest.');
+  return { mode };
+}
+
 function clampLimit(value, fallback) {
   const limit = Number(value);
   return Number.isFinite(limit) && limit >= 1 ? Math.min(MAX_LIMIT, Math.floor(limit)) : fallback;
@@ -130,6 +141,19 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
       if (!posts.some((item) => item.id === root.id)) posts.push(root);
       return posts.sort((a, b) => String(a.at).localeCompare(String(b.at)));
     },
+    // A bounded sample in upstream order, never a complete or globally ranked reply list.
+    async replies(id, mode, limit) {
+      const target = await post(id);
+      const candidates = await search(`conversation_id:${target.conversationId || target.id}`, MAX_LIMIT, mode);
+      const seen = new Set([target.id]);
+      const posts = [];
+      for (const item of candidates) {
+        if (seen.has(item.id) || item.inReplyTo !== target.id) continue;
+        seen.add(item.id);
+        posts.push(item);
+      }
+      return { target, posts: posts.slice(0, clampLimit(limit, 20)) };
+    },
     // Search can lag or omit posts: a found reply is definitive, a miss is not.
     async replied(id) {
       const target = await post(id);
@@ -144,6 +168,7 @@ export async function xRead(payload = {}, options = {}) {
   const kind = String(payload.kind || '');
   if (!X_READ_KINDS.includes(kind)) throw new Error(`x-read kind must be one of: ${X_READ_KINDS.join(', ')}.`);
   const request = kind === 'search' ? searchRequest(payload) : null;
+  const replies = kind === 'replies' ? repliesRequest(payload) : null;
   try {
     if (!request && kind !== 'mentions' && kind !== 'own-replies') tweetId(payload.id, `x-read ${kind}`);
     const reader = await createXReader(options);
@@ -152,6 +177,11 @@ export async function xRead(payload = {}, options = {}) {
     if (request) {
       const posts = await reader.search(request.query, request.mode, payload.limit);
       return { ...base, ...request, count: posts.length, posts, note: 'Search finds, not For You observations. Results are unfiltered, so judge each post.' };
+    }
+    if (replies) {
+      const { target, posts } = await reader.replies(payload.id, replies.mode, payload.limit);
+      return { ...base, target, mode: replies.mode, observedAt: Date.now(), count: posts.length, posts,
+        note: 'Bounded search sample in the selected mode, not complete thread coverage; an empty result is not proof of absence.' };
     }
     if (kind === 'post') return { ...base, posts: [await reader.post(payload.id)] };
     if (kind === 'replied') {
@@ -168,6 +198,81 @@ export async function xRead(payload = {}, options = {}) {
     if (/requires a tweet id/.test(String(error?.message))) throw error;
     return { ok: false, kind, fallback: 'browser', reason: String(error?.message || error).slice(0, 300) };
   }
+}
+
+function responseHandle(readerOptions = {}) {
+  const env = readerOptions.env || process.env;
+  return String(readerOptions.handle || env.X_ACCOUNT || 'ham_zax').replace(/^@/, '').trim().toLowerCase();
+}
+
+function responseSince(value) {
+  if (value == null || value === '') return null;
+  if (value instanceof Date) return Number.isFinite(value.getTime()) ? value.getTime() : null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function responseTimestamp(post) {
+  if (!post?.at) return null;
+  const timestamp = Date.parse(post.at);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+// Mention observation for owned posts. Search can lag or omit posts: a found reply is
+// definitive, but a missing mention is not proof that no response exists.
+export async function readXTargetResponses(ourTweetIds, { since = null, now = Date.now(), readerOptions = {} } = {}) {
+  const parentIds = [...new Set((Array.isArray(ourTweetIds) ? ourTweetIds : [ourTweetIds])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean))].slice(0, RESPONSE_PARENT_LIMIT);
+  const responses = [];
+  const errors = [];
+  if (!parentIds.length) return { responses, errors };
+
+  const parentSet = new Set(parentIds);
+  const observedAt = Number(now);
+  const sinceTimestamp = responseSince(since);
+  const ownHandle = responseHandle(readerOptions);
+  const read = await xRead({ kind: 'mentions', limit: RESPONSE_MENTION_LIMIT }, readerOptions);
+  if (!read?.ok) {
+    errors.push({
+      targetUsername: ownHandle,
+      error: String(read?.reason || read?.error || 'mention read failed').slice(0, RESPONSE_ERROR_LIMIT),
+    });
+    return { responses, errors };
+  }
+
+  const seen = new Set();
+  for (const post of Array.isArray(read.posts) ? read.posts : []) {
+    const id = String(post?.id || '');
+    if (!TWEET_ID_PATTERN.test(id) || seen.has(id)) continue;
+    const author = String(post?.author || '').replace(/^@/, '').trim().toLowerCase();
+    if (!HANDLE_PATTERN.test(author) || author === ownHandle) continue;
+    const parentOurTweetId = String(post?.inReplyTo || '');
+    if (!parentSet.has(parentOurTweetId)) continue;
+    const timestamp = responseTimestamp(post);
+    if (timestamp == null || timestamp > observedAt) continue;
+    if (sinceTimestamp != null && timestamp < sinceTimestamp) continue;
+    seen.add(id);
+    responses.push({
+      id,
+      authorUsername: author,
+      targetUsername: author,
+      text: String(post.text || ''),
+      url: post.url || `https://x.com/${author}/status/${id}`,
+      timestamp,
+      parentOurTweetId,
+      responseType: 'reply',
+      observedAt,
+      transport: 'http_mentions',
+      views: post.views ?? null,
+      likes: post.likes ?? null,
+      reposts: post.reposts ?? null,
+      replies: post.replies ?? null,
+    });
+  }
+  return { responses, errors };
 }
 
 // Used by ops/xactions_update.mjs to decide whether a checkout may be promoted.

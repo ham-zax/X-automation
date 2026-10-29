@@ -163,6 +163,7 @@ export async function refreshSourceSnapshot(inputKind) {
       candidates: current.candidates,
       error: status.error,
       attemptedAt,
+      preservedLastGood: current.candidates.length > 0,
     };
   }
 }

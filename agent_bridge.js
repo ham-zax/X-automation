@@ -124,6 +124,7 @@ import {
   getBlockingActAttemptForTarget,
   getLatestPublicationAttemptForQueueItem,
   getPerformanceSnapshot,
+  getCurrentAccountSnapshot,
   getCurrentPersonaStances,
   getQueueItem,
   getQueueItemByCandidate,
@@ -651,8 +652,8 @@ function compactScoutCard(card) {
 function engagementRefreshOptions(payload) {
   const key = String(payload.key || '').trim();
   return {
-    refreshResponses: false,
-    refreshTargetTimelines: false,
+    refreshResponses: payload.refreshResponses === true,
+    refreshTargetTimelines: payload.refreshTargetTimelines === true,
     candidateKeys: key ? [key] : [],
   };
 }
@@ -1090,7 +1091,7 @@ function operatorStatus(payload = {}) {
   ];
   return {
     generatedAt: now,
-    account: getPerformanceSnapshot(1)?.account || null,
+    account: getCurrentAccountSnapshot({ now }),
     persona: getPersonaModelSummary(),
     accountHealth: { state: accountHealth.health.state, reasons: accountHealth.health.reasons, generatedAt: accountHealth.generatedAt },
     laneChampions: {
@@ -1527,6 +1528,9 @@ async function main() {
       throw new Error(`writer-packet requires a routed text pipeline; current pipeline is ${pipeline || 'none'}.`);
     }
     if (!workflow.draft) throw new Error(`Draft required for ${pipeline}.`);
+    const topicBrief = payload.topicBrief == null
+      ? null
+      : await (await import('./topic_research.js')).resolveTopicBriefCitation(payload.topicBrief);
     const username = sourceUsername(workflow.candidate);
     const generation = getWritingStrategyGenerationContext(workflow.queueItem.id);
     const packet = buildWriterPacket({
@@ -1539,6 +1543,7 @@ async function main() {
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: workflow.candidate.key }),
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: workflow.candidate.key }),
       writingStrategy: generation.writingStrategy,
+      topicBrief,
     });
     result({ packet, generation });
     return;
@@ -1558,6 +1563,9 @@ async function main() {
     if (payload.output?.pipeline !== pipeline) {
       throw new Error(`Writer pipeline mismatch: ${payload.output?.pipeline || 'missing'} !== ${pipeline}. Route the queue item first.`);
     }
+    const topicBrief = payload.topicBrief == null
+      ? null
+      : await (await import('./topic_research.js')).resolveTopicBriefCitation(payload.topicBrief);
     const writerBase = current.editor?.pipeline && current.editor.pipeline !== pipeline
       ? { ...current, editor: Array.isArray(current.editor?.generationHistory) ? { generationHistory: [...current.editor.generationHistory] } : {} }
       : current;
@@ -1577,6 +1585,7 @@ async function main() {
       recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),
       recentReplies: listRecentPublishedContent({ kind: 'reply', limit: 20, excludeCandidateKey: candidate.key }),
       writingStrategy: strategyGeneration.writingStrategy,
+      topicBrief,
     });
     let next = applyWriterOutput(writerBase, payload.output || {}, { generationProvenance, writerPacket });
     const verificationNeeded = requiresTechDiscoveryVerification({ pipeline, candidate,
@@ -1857,6 +1866,13 @@ async function main() {
     const card = payload.card && typeof payload.card === 'object' ? payload.card : {};
     const author = String(card.author || payload.targetUsername ||
       (String(validated.targetUrl || '').match(/^https:\/\/x\.com\/([A-Za-z0-9_]+)\/status\//) || [])[1] || '').replace(/^@/, '');
+    const observation = actModule.validateActObservation(payload.observation, {
+      targetUsername: author,
+      now: Date.now(),
+    });
+    const topicBrief = payload.topicBrief == null
+      ? null
+      : await (await import('./topic_research.js')).resolveTopicBriefCitation(payload.topicBrief);
     if (validated.action === 'quote') {
       const social = await import('./social_engagement.js');
       const sourceUrl = validated.targetUrl
@@ -1941,7 +1957,14 @@ async function main() {
           sourceTweetId: validated.targetTweetId || null,
           ourTweetId: outputTweetId,
           occurredAt: now,
-          metadata: { attemptId: published.attemptId, outputUrl },
+          metadata: actModule.buildActRelationshipMetadata({
+            action: validated.action,
+            queueItem: claim.queueItem,
+            observation,
+            attemptId: published.attemptId,
+            outputUrl,
+            topicBrief,
+          }),
         });
       }
       result({ status: 'confirmed_published', attempt: published, recorded, relationshipEvent, outputUrl });
@@ -2157,6 +2180,26 @@ async function main() {
 
   if (command === 'x-read') {
     result(await (await import('./x_reads.js')).xRead(payload));
+    return;
+  }
+
+  if (command === 'topic-collect') {
+    result(await (await import('./topic_research.js')).collectTopicResearch(payload));
+    return;
+  }
+
+  if (command === 'topic-read') {
+    result(await (await import('./topic_research.js')).getTopicCollection(payload?.id));
+    return;
+  }
+
+  if (command === 'topic-brief-save') {
+    result(await (await import('./topic_research.js')).saveTopicBrief(payload));
+    return;
+  }
+
+  if (command === 'topic-brief-read') {
+    result(await (await import('./topic_research.js')).getTopicBrief(payload));
     return;
   }
 
@@ -2442,7 +2485,7 @@ async function main() {
       : [];
     const growth = growthRead(payload);
     result({
-      account: getPerformanceSnapshot(1)?.account || null,
+      account: getCurrentAccountSnapshot(),
       refreshed: refreshes.map((refresh) => ({
         kind: refresh.kind,
         fetchedAt: refresh.fetchedAt,
@@ -3143,7 +3186,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

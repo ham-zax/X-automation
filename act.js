@@ -20,6 +20,23 @@ const TRUNCATED_CREATE_TWEET_ID_RE = /"create_tweet"\s*:\s*\{\s*"tweet_results"\
 const FRESHNESS_SLACK_MS = 120000;
 const REQUEST_BODY_PATHS = [['request', 'postData'], ['request', 'body'], ['requestBody'], ['request_body'], ['postData']];
 const RESPONSE_BODY_PATHS = [['response', 'body'], ['responseBody'], ['response_body'], ['body']];
+const ACT_OBSERVATION_FIELDS = Object.freeze([
+  'targetFollowers',
+  'targetFollowersObservedAt',
+  'targetFollowersSourceUrl',
+  'replyShape',
+]);
+const ACT_FOLLOWER_OBSERVATION_FIELDS = Object.freeze([
+  'targetFollowers',
+  'targetFollowersObservedAt',
+  'targetFollowersSourceUrl',
+]);
+// Queue engagement kinds owned by engagement.js. act only preserves a
+// recognized queue value; it never infers classification from reply text.
+const ACT_QUEUE_ENGAGEMENT_KINDS = Object.freeze(['initial_reply', 'follow_up', 'own_post_response']);
+const ACT_MAX_TARGET_FOLLOWERS = 1_000_000_000;
+const ACT_MAX_REPLY_SHAPE_LEN = 80;
+const PROFILE_URL_RE = /^https:\/\/x\.com\/([A-Za-z0-9_]+)\/?$/;
 
 export function extractTweetIdFromUrl(url) {
   const match = String(url || '').match(STATUS_URL_RE);
@@ -105,6 +122,115 @@ export function validateActInput(input = {}) {
   }
   const candidateKey = String(input.candidateKey || '').trim() || null;
   return { action, text, targetTweetId: targetTweetId || '', targetUrl, candidateKey };
+}
+
+// Optional measurement data for a confirmed act outcome. It is never authority:
+// the caller must still resolve the target author, claim, and browser execution.
+// Missing values stay null; nothing is coerced to zero or inferred.
+export function validateActObservation(observation, { targetUsername = '', now = Date.now() } = {}) {
+  const normalized = {
+    targetFollowers: null,
+    targetFollowersObservedAt: null,
+    targetFollowersSourceUrl: null,
+    replyShape: null,
+  };
+  if (observation == null) return normalized;
+  if (typeof observation !== 'object' || Array.isArray(observation)) {
+    throw new Error('act observation must be a JSON object when supplied.');
+  }
+  const unknownFields = Object.keys(observation).filter((key) => !ACT_OBSERVATION_FIELDS.includes(key));
+  if (unknownFields.length) {
+    throw new Error(`act observation has unsupported field(s): ${unknownFields.sort().join(', ')}.`);
+  }
+  const followerSupplied = ACT_FOLLOWER_OBSERVATION_FIELDS.some((key) => observation[key] != null);
+  if (followerSupplied) {
+    const handle = String(targetUsername || '').replace(/^@/, '').trim().toLowerCase();
+    if (!/^[a-z0-9_]{1,15}$/.test(handle)) {
+      throw new Error('act follower observation requires the resolved target username.');
+    }
+    const count = observation.targetFollowers;
+    if (typeof count !== 'number' || !Number.isInteger(count) || count < 0 || count > ACT_MAX_TARGET_FOLLOWERS) {
+      throw new Error(`act targetFollowers must be an integer from 0 to ${ACT_MAX_TARGET_FOLLOWERS}.`);
+    }
+    const observedAt = observation.targetFollowersObservedAt;
+    if (!Number.isSafeInteger(observedAt) || observedAt <= 0) {
+      throw new Error('act targetFollowersObservedAt must be a positive integer timestamp.');
+    }
+    const currentTime = Number(now);
+    if (!Number.isSafeInteger(currentTime) || currentTime <= 0) {
+      throw new Error('act observation now must be a positive integer timestamp.');
+    }
+    if (observedAt > currentTime) throw new Error('act targetFollowersObservedAt is in the future.');
+    const sourceUrl = observation.targetFollowersSourceUrl;
+    const profileMatch = typeof sourceUrl === 'string' ? sourceUrl.match(PROFILE_URL_RE) : null;
+    if (!profileMatch || profileMatch[1].toLowerCase() !== handle) {
+      throw new Error(`act targetFollowersSourceUrl must be https://x.com/${handle} for the resolved target.`);
+    }
+    normalized.targetFollowers = count;
+    normalized.targetFollowersObservedAt = observedAt;
+    normalized.targetFollowersSourceUrl = sourceUrl;
+  }
+  if (observation.replyShape != null) {
+    if (typeof observation.replyShape !== 'string') throw new Error('act replyShape must be a string when supplied.');
+    const shape = observation.replyShape.trim();
+    if (!shape) throw new Error('act replyShape must be nonblank when supplied.');
+    if (shape.length > ACT_MAX_REPLY_SHAPE_LEN) {
+      throw new Error(`act replyShape is ${shape.length} chars; the limit is ${ACT_MAX_REPLY_SHAPE_LEN}.`);
+    }
+    normalized.replyShape = shape;
+  }
+  return normalized;
+}
+
+// Compact citation identity for confirmed events. Research text stays out of the
+// relationship ledger; only saved IDs, digests and times are retained.
+function topicBriefCitationMetadata(topicBrief) {
+  return {
+    collectionId: topicBrief.collectionId,
+    briefId: topicBrief.briefId,
+    paragraphIds: Array.isArray(topicBrief.paragraphIds) ? [...topicBrief.paragraphIds] : [],
+    briefDigest: topicBrief.briefDigest,
+    sourceDigest: topicBrief.sourceDigest,
+    createdAt: topicBrief.createdAt,
+    expiresAt: topicBrief.expiresAt,
+  };
+}
+
+// Combines a validated observation with the claim's queue snapshot. The queue
+// owns engagement classification and reply archetype; the observation only
+// supplies measurement labels.
+export function buildActRelationshipMetadata({
+  action = '',
+  queueItem = null,
+  observation = null,
+  attemptId = null,
+  outputUrl = null,
+  topicBrief = null,
+} = {}) {
+  const queue = queueItem && typeof queueItem === 'object' && !Array.isArray(queueItem) ? queueItem : {};
+  const observed = observation && typeof observation === 'object' && !Array.isArray(observation) ? observation : {};
+  const normalizedAction = String(action || '').trim().toLowerCase();
+  const queueKind = String(queue.engagementKind || '').trim();
+  const replyArchetype = String(queue.replyArchetype || '').trim() || null;
+  const explicitShape = typeof observed.replyShape === 'string' && observed.replyShape.trim()
+    ? observed.replyShape.trim()
+    : null;
+  const citation = topicBrief && typeof topicBrief === 'object' && !Array.isArray(topicBrief)
+    && (normalizedAction === 'reply' || normalizedAction === 'quote')
+    ? topicBriefCitationMetadata(topicBrief)
+    : null;
+  return {
+    attemptId: attemptId == null || String(attemptId).trim() === '' ? null : String(attemptId),
+    outputUrl: outputUrl == null || String(outputUrl).trim() === '' ? null : String(outputUrl),
+    engagementKind: normalizedAction === 'reply' && ACT_QUEUE_ENGAGEMENT_KINDS.includes(queueKind) ? queueKind : null,
+    parentOurTweetId: String(queue.parentOurTweetId || '').trim() || null,
+    replyArchetype,
+    replyShape: explicitShape || replyArchetype || null,
+    targetFollowers: observed.targetFollowers ?? null,
+    targetFollowersObservedAt: observed.targetFollowersObservedAt ?? null,
+    targetFollowersSourceUrl: observed.targetFollowersSourceUrl ?? null,
+    ...(citation ? { topicBrief: citation } : {}),
+  };
 }
 
 export function buildIntentUrl({ action, text, targetTweetId = '', targetUrl = '' }) {

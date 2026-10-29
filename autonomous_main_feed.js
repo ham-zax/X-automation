@@ -25,7 +25,7 @@ import {
   getLatestWritingStrategySelectionForQueueItem,
   getMainFeedScheduleItem,
   getNicheProfile,
-  getPerformanceSnapshot,
+  getCurrentAccountSnapshot,
   getQueueItem,
   listAcceptedLearnedRules,
   listApprovedMainFeedItems,
@@ -49,10 +49,10 @@ function compactGrant(grant) {
   };
 }
 
-function storedFollowerState(grant) {
-  const account = getPerformanceSnapshot(1)?.account || null;
-  const count = account == null ? null : Number(account.followers);
-  const capturedAt = account == null ? null : Number(account.captured_at);
+function storedFollowerState(grant, now = Date.now()) {
+  const account = getCurrentAccountSnapshot({ now });
+  const count = account?.followers == null ? null : Number(account.followers);
+  const capturedAt = account?.followersCapturedAt == null ? null : Number(account.followersCapturedAt);
   const validCount = Number.isFinite(count) ? count : null;
   const milestones = Array.isArray(grant?.milestones) ? grant.milestones.map(Number).filter(Number.isFinite) : [];
   return {
@@ -84,7 +84,7 @@ export function getGrowthOperatorMainFeedStatus({ now = Date.now(), operatorLeas
   const timestamp = Number(now);
   if (!Number.isFinite(timestamp)) throw new Error('Growth Operator main-feed status requires numeric now.');
   const grant = getGrowthOperatorDelegation();
-  const followers = storedFollowerState(grant);
+  const followers = storedFollowerState(grant, timestamp);
   const health = getAccountHealthSummary({ now: timestamp }).health;
   const lease = getOperatorLeaseStatus({ now: timestamp });
   const reconciliation = getPublicationReconciliationReadiness();
@@ -130,7 +130,7 @@ export async function refreshGrowthOperatorFollowerState({
       required: false,
       fresh: false,
       grantRevision: startingGrant.revision,
-      followers: storedFollowerState(startingGrant),
+      followers: storedFollowerState(startingGrant, startedAt),
       error: null,
     };
   }
@@ -141,7 +141,7 @@ export async function refreshGrowthOperatorFollowerState({
       required: true,
       fresh: false,
       grantRevision: startingGrant.revision,
-      followers: storedFollowerState(startingGrant),
+      followers: storedFollowerState(startingGrant, startedAt),
       error: String(performance.error),
     };
   }
@@ -152,7 +152,7 @@ export async function refreshGrowthOperatorFollowerState({
       required: true,
       fresh: false,
       grantRevision: startingGrant.revision,
-      followers: storedFollowerState(startingGrant),
+      followers: storedFollowerState(startingGrant, startedAt),
       error: 'Follower count unavailable from fresh account-performance read.',
     };
   }
@@ -163,7 +163,7 @@ export async function refreshGrowthOperatorFollowerState({
     required: true,
     fresh: true,
     grantRevision: startingGrant.revision,
-    followers: storedFollowerState(currentGrant),
+    followers: storedFollowerState(currentGrant, Math.max(startedAt, capturedAt)),
     authorityChanged: currentGrant.state !== 'running' || Number(currentGrant.revision) !== Number(startingGrant.revision),
     error: null,
   };

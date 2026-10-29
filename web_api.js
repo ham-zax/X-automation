@@ -1260,7 +1260,6 @@ function formatConversationDetail(key) {
   const health = getAccountHealthSummary();
   const constrained = health.health.state === 'constrained';
   const payload = draftEditorPayload(draft?.id);
-  const gatesPassed = payload?.analysis?.gates?.passed === true;
   return {
     key,
     targetUsername: queueItem.targetUsername || profile?.username || 'unknown',
@@ -1304,7 +1303,7 @@ function formatConversationDetail(key) {
     autonomousDecision: queueItem.targetTweetId ? getAutonomousReplyDecisionForTarget(queueItem.targetTweetId) : null,
     flags: {
       canReview: Boolean(draft) && ['drafting', 'needs_review', 'failed'].includes(queueItem.status),
-      canApproveReply: !constrained && queueItem.status === 'needs_review' && Number(payload?.analysis?.score || 0) >= 40 && gatesPassed,
+      canApproveReply: Boolean(payload?.flags?.canApproveReply),
       approved: !constrained && queueItem.status === 'approved' && Boolean(queueItem.humanApprovedAt) && Boolean(queueItem.approvedText),
     },
   };
@@ -2250,7 +2249,7 @@ export async function handleApi(req, res, requestUrl) {
               relevanceOverride: reviewItem.relevance?.humanOverride || null,
             })
           : null;
-        const ready = Boolean(analysis && analysis.score >= 40 && analysis.gates?.passed === true);
+        const ready = analysis?.publishable === true;
         actions.push({
           eyebrow: 'Review a post',
           title: candidate?.title || 'A draft needs your decision',

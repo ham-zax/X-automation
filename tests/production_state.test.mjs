@@ -20,6 +20,10 @@ const reconciliation = await import(moduleUrl('publication_reconciliation.js'));
 const db = new DatabaseSync(store.DB_FILE);
 const exec = promisify(execFile);
 
+// Claim and lease tests use no rest interval in this disposable state.
+// The production policy stays unchanged.
+store.saveGrowthProductPolicy({ activity: { sleepStart: '00:00', sleepEnd: '00:00' } });
+
 function source(id) {
   const key = `https://x.com/builder/status/${id}`;
   store.upsertCandidates([{ key, source: 'x', title: '@builder', text: 'Developer tooling and runtime API engineering', url: key, timestamp: Date.now() }]);
