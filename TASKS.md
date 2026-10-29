@@ -302,8 +302,8 @@ TaskStartSnapshot: main bc8fa14. Only pre-existing root live-progress.json is
 untracked. Preserve it. The unrelated Harness²/Learning OS checkout stays unchanged.
 
 | id | status | depends | owner | acceptance | evidence |
-| XR14-B | open | - | Terra high implementation | Offline request/review/inspection CLI and native Harness² adapter use real Growth OS owners, isolated fixture state, exact T3 model requests, bounded resumable exchange and no publication. | Packet below. |
-| XR14-E | open | XR14-B | parent, T3 model calls | Actual Harness² task-level cycle runs with matched packets. Report baseline/V4/native candidates and validation, including failures. | Limit 28 total dispatches including engineering and final review. |
+| XR14-B | review | - | Terra high Node implementation plus parent adapter | Offline request/review/inspection CLI and native Harness² adapter use real Growth OS owners, isolated fixture state, exact T3 model requests, bounded resumable exchange and no publication. | Packet below. |
+| XR14-E | in-progress | XR14-B | parent, T3 model calls | Actual Harness² task-level cycle runs with matched packets. Report baseline/V4/native candidates and validation, including failures. | Limit 28 total dispatches including engineering and final review. |
 | XR14-R | open | XR14-E | Terra high independent reviewer | One graph review checks no-send isolation, exact model settings, conformance and claimed evidence. One repair round. | Only Hamza marks done. |
 
 Scope: implement eval/growth_reply.mjs, eval/harness2_growth.py,
@@ -396,3 +396,23 @@ a repeat if budget permits, celebration control VA-14 and new cases VA-13/18.
 A matched Terra-high solver comparison uses the same selected packet/style if
 budget permits. This is useful validation, not a reason to switch production model.
 Budget caps all dispatches, with one engineering worker and one final reviewer.
+
+Implementation dispatch 1 of 28 requested: Terra high, worktree isolation.
+
+Dispatch 1 returns no artifact or concrete blocker. Parent checks its empty worktree.
+Task ID: node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A4d41c83d-a44c-4de1-a6be-c813086e3873.
+Dispatch 2 narrows implementation to Node replay and its focused test. Parent owns
+Python adapter, Python check and benchmark documentation. Same total ceiling 28.
+
+XR14-B evidence: dispatch 2 implements Node replay in worktree t3-5c5a9ab3.
+Task ID node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8815ec87-ed5b-40d0-a0e7-ddaa225ada29.
+Parent integrates its patch and implements the native Python bridge. Focused Node
+checks pass 2/2 after packet matching and stale-review corrections. Native Python
+checks pass 4/4, including real k=1 recursion with mocked external model I/O.
+Documentation records protocol and limits. Full serial Node suite starts next.
+Current integrated dispatch usage: 2 of 28. Independent final review remains reserved.
+
+Parent full serial suite passes: 406 tests, 0 failures, 0 skipped.
+Command: node --test --test-concurrency=1 tests/*.test.mjs.
+Log: /tmp/growth-harness-full-test.log. Native Python checks remain 4/4.
+XR14-B is at review. XR14-E starts the live-model offline experiment next.

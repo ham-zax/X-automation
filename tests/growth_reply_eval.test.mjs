@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+const root = process.cwd();
+const temp = mkdtempSync(path.join(tmpdir(), 'reply-eval-test-'));
+const cli = path.join(root, 'eval/growth_reply.mjs');
+const call = request => JSON.parse(execFileSync(process.execPath, [cli], { cwd: temp, input: JSON.stringify(request), encoding: 'utf8' }));
+const load = (dir, name) => JSON.parse(readFileSync(path.join(dir, name), 'utf8'));
+const save = (dir, name, value) => writeFileSync(path.join(dir, name), JSON.stringify(value));
+const review = { passed: false, ownerClaims: [], factualClaims: [], voiceIssues: [], issues: ['Needs work'] };
+
+test('captures real schema and freezes packet, refusing extra fields and failed review', () => {
+  const dir = path.join(temp, 'writer'), other = path.join(temp, 'other');
+  assert.equal(call({ operation: 'prepare', caseId: 'VA-16', outputDir: dir }).status, 'prepared');
+  const request = load(dir, 'request.json');
+  assert.equal(request.metadata.consumer, 'writer_runtime');
+  assert.equal(request.schema.additionalProperties, false);
+  call({ operation: 'prepare', caseId: 'VA-16', outputDir: other, packetFile: path.join(dir, 'packet.json') });
+  assert.equal(readFileSync(path.join(dir, 'packet.json'), 'utf8'), readFileSync(path.join(other, 'packet.json'), 'utf8'));
+  assert.throws(() => call({ operation: 'prepare', caseId: 'VA-14', outputDir: other, packetFile: path.join(dir, 'packet.json') }), error => error.status === 1 && /Frozen packet/.test(error.stdout));
+  const output = { decision: 'POST', pipeline: 'reply', thesis: '', finalText: 'Interesting approach to coding on a phone.', threadParts: [], semanticAnchors: [], evidenceUsed: [], media: { required: false, type: 'none', reason: '', source: '', altText: '' }, discussionQuestion: null, followValue: '', relationshipValue: null, profileProofValue: null, riskFlags: [] };
+  save(dir, 'model-output.json', { ...output, extra: true });
+  assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');
+  assert.ok(load(dir, 'inspection.json').schemaErrors.length);
+  save(dir, 'model-output.json', output);
+  assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'review-requested');
+  assert.equal(load(dir, 'review-request.json').metadata.consumer, 'writer_content_review');
+  save(dir, 'review-output.json', review);
+  assert.equal(call({ operation: 'inspect', outputDir: dir }).status, 'blocked');
+  assert.ok(load(dir, 'inspection.json').reviewFailures.length);
+  save(dir, 'model-output.json', { ...output, extra: true });
+  assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');
+  assert.equal(existsSync(path.join(dir, 'review-request.json')), false);
+  assert.equal(existsSync(path.join(temp, '.x-research.sqlite')), false);
+});
+
+test('direct replay reports DO_NOT_POST without authority', () => {
+  const dir = path.join(temp, 'direct');
+  call({ operation: 'prepare', caseId: 'VA-14', outputDir: dir, lane: 'direct' });
+  assert.match(load(dir, 'request.json').prompt, /Limited instruction replay/);
+  save(dir, 'model-output.json', { decision: 'DO_NOT_POST', finalText: '' });
+  call({ operation: 'review-request', outputDir: dir });
+  save(dir, 'review-output.json', { ...review, passed: true, issues: [] });
+  assert.equal(call({ operation: 'inspect', outputDir: dir }).status, 'do-not-post');
+  assert.equal(load(dir, 'inspection.json').publicationAuthority, false);
+});
+test.after(() => rmSync(temp, { recursive: true, force: true }));
