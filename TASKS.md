@@ -128,3 +128,21 @@ remain unproven. Topic experiments/review/peer deliverables beyond T6-T8 remain
 separate proposals. Existing persona supports ordinary activity without invented
 experience. All task statuses remain review or blocked. Only Hamza marks done.
 Dispatch budget stays 22/22. No further worker dispatch occurs.
+
+
+## Operational continuation, 29 October 2026, 06:29 UTC
+
+Owner requests active operational work after local delivery. Parent installs the
+already reviewed versioned attached-live.conf into the user service drop-in and
+runs daemon-reload. Readback reports TimeoutStopUSec=1min. Parent starts one
+bounded x-test-growth-agent.service session, with the recurring timer disabled.
+Session: luna-arm-20261029T062942Z-d62fcf06. Runtime worker: ab3fd0b7268a.
+Launcher-owned target: 41393979E71DF5232098538A1A898D59.
+Journal confirms supervisor and worker process start. This is the production
+operator under saved delegation, not an additional implementation dispatch.
+No policy, AUTO_POST setting, model, source, or credential changes occur.
+Final Growth Run, publication results, authentication and cleanup require the
+worker result. Do not report startup as a completed run or a public action.
+Collector stays separate while the operator owns the shared browser.
+This section supersedes the inactive-service and 15s-timeout checkpoint above.
+Implementation dispatch budget remains 22/22. No task is marked done.
