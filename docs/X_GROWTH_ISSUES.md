@@ -169,6 +169,8 @@ Status meanings:
 
 ### XR-14 — Reassess repetitive writing and the action mix
 
+- **Fresh-prompt continuation:** six DeepSeek-only calls test four new prompts, a repeat, and four new sources. V4 improves the conversational register but still shows factual drift and an extra output field. Terra stays on hold. [Checkpoint](research/voice-audit-2026-10-29/fresh-prompt/REPORT.md). No production repair or owner acceptance is claimed.
+
 - **Status:** confirmed October quality failure, investigation in-progress. **Priority:** P1. **Plan:** T8/T9/T12/T13. **Related:** XG-06/XG-08/XG-11.
 - **Evidence:** [Detailed report](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md), 29 October. The corpus contains 458 replies, 448 matched confirmed Growth OS publications, and 456 parent texts. Twenty-two selected cases distinguish role failures, source-reading failures, ambiguous cases, and useful technical controls. `docs/ENGAGEMENT_IDEAS_2026-10.md`, section 2, remains earlier evidence.
 - **Task:** repair the demonstrated source and role failures through the actual writing paths, then compare unpublished outputs against the frozen cases. No repair or replay runs in the reporting step. Missing first-person evidence limits experience claims, not diagnosis or ordinary participation.

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "stage": "v4-calibration",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "provider": "opencode",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A2fb4b2ab-b5b1-495a-9a41-dff827e4ceba",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A2fb4b2ab-b5b1-495a-9a41-dff827e4ceba>",
+  "summaryCharactersUTF16": 707,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "text": "Credential vaults and guardrails are the parts where I would want someone else's notes. The quickstart repo helps too, since it turns the guide into something you can run."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "text": "The canvas an agent can create through a plugin is the feature I want to try. Congratulations on 1.6.0."
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "text": "The recorded check outcomes are the detail I like most. Working from a phone is one thing, seeing what the agent actually ran is another."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "text": "Merging a pull request. I want to read the diff before it lands, even if the agent is sure."
+      }
+    ]
+  }
+}

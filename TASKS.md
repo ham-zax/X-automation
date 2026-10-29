@@ -55,6 +55,18 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 
 ## Active checkpoint
 
+29 October fresh-prompt experiment: Hamza requests iterative DeepSeek-only style
+tuning without the old persona or writing guidance. Terra is on hold. New ceiling:
+six calls, sequentially, including revisions and validation. No production mutation.
+Use a neutral general-agent wrapper, no purpose taxonomy, and source text only.
+Calibration: VA-03/14/16/21. Transfer cases frozen before generation: VA-04/06/10/22.
+These four transfer cases leave the previously unused set in this new experiment.
+The earlier eighteen-case reservation belongs to the earlier pilot, not this wave.
+Six calls complete: four versions, an exact V4 repeat, and a new-source check.
+V4 is promising for voice but retains factual drift and a transfer field deviation.
+Terra stays on hold. No production change. Fourteen earlier cases remain unused.
+Report: `docs/research/voice-audit-2026-10-29/fresh-prompt/REPORT.md`.
+
 29 October additional comparison: Hamza requests MiMo, GLM 5.3, and Big Pickle
 at the highest available reasoning. New budget: three dispatches, one per model,
 sequentially. Pi catalog: MiMo V2.6 Flash Free high, GLM 5.3 Flash Free max,

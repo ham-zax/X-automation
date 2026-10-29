@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "stage": "v3-calibration",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "provider": "opencode",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8d1c0a02-5ce3-43fb-8795-54f50b90473e",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8d1c0a02-5ce3-43fb-8795-54f50b90473e>",
+  "summaryCharactersUTF16": 617,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "text": "The credential vault section is the one I'd open first. Most agent setup guides skip where the keys actually live."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "text": "The part where you just ask about the docs sounds quietly useful. Congrats on 1.6.0."
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "text": "The diff sheets and recorded check results are what make this believable. A phone agent that shows its work is easier to trust."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "text": "Deleting things. A bad edit I can read and revert. A bad delete can take the only copy."
+      }
+    ]
+  }
+}

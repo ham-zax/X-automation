@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "artifactChecks": {
+    "artifactIntegrity": "passed",
+    "checkCount": 62,
+    "checks": [
+      "calibration IDs",
+      "calibration source VA-03",
+      "calibration source VA-14",
+      "calibration source VA-16",
+      "calibration source VA-21",
+      "transfer IDs",
+      "transfer source VA-04",
+      "transfer source VA-06",
+      "transfer source VA-10",
+      "transfer source VA-22",
+      "six unique completed dispatches",
+      "1 exact request",
+      "1 model settings",
+      "1 output membership",
+      "1 core fields VA-03",
+      "1 core fields VA-14",
+      "1 core fields VA-16",
+      "1 core fields VA-21",
+      "2 exact request",
+      "2 model settings",
+      "2 output membership",
+      "2 core fields VA-03",
+      "2 core fields VA-14",
+      "2 core fields VA-16",
+      "2 core fields VA-21",
+      "3 exact request",
+      "3 model settings",
+      "3 output membership",
+      "3 core fields VA-03",
+      "3 core fields VA-14",
+      "3 core fields VA-16",
+      "3 core fields VA-21",
+      "4 exact request",
+      "4 model settings",
+      "4 output membership",
+      "4 core fields VA-03",
+      "4 core fields VA-14",
+      "4 core fields VA-16",
+      "4 core fields VA-21",
+      "5 exact request",
+      "5 model settings",
+      "5 output membership",
+      "5 core fields VA-03",
+      "5 core fields VA-14",
+      "5 core fields VA-16",
+      "5 core fields VA-21",
+      "6 exact request",
+      "6 model settings",
+      "6 output membership",
+      "6 core fields VA-04",
+      "6 core fields VA-06",
+      "6 core fields VA-10",
+      "6 core fields VA-22",
+      "format deviations preserved and disclosed",
+      "repeat byte-identical",
+      "no old persona or purpose fields in payloads",
+      "visual output and source integrity",
+      "tracked scope",
+      "new file scope",
+      "live progress untouched",
+      "Terra held and no production mutation",
+      "new artifacts have no trailing whitespace"
+    ],
+    "outputContract": "deviation in transfer, not fully passing",
+    "deviations": [
+      {
+        "call": 6,
+        "caseId": "VA-04",
+        "extraFields": [
+          "text_alt"
+        ]
+      },
+      {
+        "call": 6,
+        "caseId": "VA-06",
+        "extraFields": [
+          "text_alt"
+        ]
+      },
+      {
+        "call": 6,
+        "caseId": "VA-10",
+        "extraFields": [
+          "text_alt"
+        ]
+      },
+      {
+        "call": 6,
+        "caseId": "VA-22",
+        "extraFields": [
+          "text_alt"
+        ]
+      }
+    ],
+    "files": {
+      "TASKS.md": "1803b92c0c100dd12cb8e91947589fff91c8850d1f504105e9fa2a62611801f6",
+      "docs/X_GROWTH_ISSUES.md": "b830436657e12cc5b2bdbab510f2f3e8f44b8de4c10a8ff0c00d2acc49e1f039",
+      "docs/FUTURE_IMPROVEMENTS.md": "9732629f22a4b00ee15f2abe5899fd7712958f9a0c754145336ade4b8d4a9787",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/REPORT.md": "0c43c2f79a92291c5e2f05c94eb8703bd85492b44b4bb29464ae29bcc3d7b439",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/calibration.json": "6d76d2dbc67e0d73d2a681e57c30b937b7bf95ea0f765e644603e639a267c23b",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/comparison.html": "d652a218ab3c270bb6051282d86c3c6f42567c7243bf555c4db9471755f44227",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/format.txt": "9793d167347bd5e74ca715ec84863da7bfbc18dc167c91b84677843f035f0c69",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/manifest.json": "f94d7ded65bde17f3048cfee89898c3807feb2b1e85196308e5b09e173374392",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v1.txt": "a23ca34a99567d7ec2d7c93ab0974f29fd5adfaa749dcf1bac4e3a3681cbfc23",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v2.txt": "199029ce9179d42d0e2bda8a0b97eb856b93e6dc72d844deba09874e664bbef1",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v3.txt": "70ecd6858584bb165e736b0a50f687fac3e3fc080fb30918600eb931d498b084",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v4.txt": "5a601babee1e36f663c3c0ffdd38a8713e644ade55a4ffe10c43d9fd86845a46",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-1.txt": "552383fd36c8cb70b89470b2bd50b5e5de184701d482b09fda6211afabbe44fd",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-2.txt": "02483f65152b4d4404421de2ecc407f1e2e60d1fceac62a82c9eb5451c675933",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-3.txt": "50cbd2ab05e36f91a592948ec8f0da084aabea2d0073e3f330740524bdbb257c",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-4.txt": "79b33fa6bda5f7eba11d0edd95a7d8b79c31aca19112520226b83f82015825b8",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-6.txt": "cab1d285ffc9c04e1d2be0d82de356842ca16e1c551f40451d3dd9c279a06bcd",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/request-receipts.json": "299c7eb200907d20196707032c03fcbc9c35ab8cab1324acc15f9892a1076627",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-1.json": "345f1125b086e527280bb29bf9f14d041bc7716a403f7f004c0f46e016bcc2a8",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-2.json": "68f4bd69efe17b3f2695ad77fb3ac45b603e3e52c6befb8a6f3676a448038304",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-3.json": "d4b06389d805d9087000a1e90fbc83bebe86ad459bedea33104de3d11ce9bfd6",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-4.json": "fb6df531833e24535141a6d2a7206b88f42baf0f36d6a8a5cb8353baa18c67a1",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-5.json": "39f950c9600496aa8c1d5b7d90a5a2d4514d33ea56edcaab3862377ca6668d64",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/result-6.json": "9d6b3419fda91801a7e4102d13f58b11711e562d47172b63eb3a1924d4cbdfe7",
+      "docs/research/voice-audit-2026-10-29/fresh-prompt/transfer.json": "a6a75f5e7fbbdf8ce74015f1564b44501e362fb58e603e214fa5ab6353531e97"
+    },
+    "selectedPromptWords": 182,
+    "qualityAcceptance": "unestablished"
+  },
+  "privacyChecks": {
+    "privateValueScan": "passed",
+    "comparisonScriptSyntax": "passed"
+  },
+  "inlineDelivery": "shown",
+  "visualPreview": "unavailable: AppArmor blocks the preview sandbox",
+  "limits": [
+    "Parent qualitative assessment",
+    "No owner acceptance",
+    "No production Writer/review execution",
+    "Selected repeat has factual drift",
+    "Transfer contains extra fields",
+    "One synthetic example overlaps thematically with a transfer case"
+  ]
+}

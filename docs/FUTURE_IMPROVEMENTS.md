@@ -1,5 +1,14 @@
 # Future improvement proposals
 
+## Fresh DeepSeek prompt experiment, 29 October
+
+Short prompts and synthetic conversation examples improve the register in a new
+DeepSeek-only trial. The repeat still changes source quantifiers, and transfer
+adds an unwanted output field. Proposal: test this provisional contract through
+the existing structured runtime and factual review before production integration.
+Do not add another style rule for each schema defect. Evidence lives in
+`docs/research/voice-audit-2026-10-29/fresh-prompt/REPORT.md`.
+
 These proposals come from the October 28 implementation retrospective.
 They do not authorize source changes, new tasks or deployment.
 

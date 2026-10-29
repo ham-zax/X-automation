@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "stage": "v1-calibration",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "provider": "opencode",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A6e68e103-fe9b-49dd-938e-11f90bd429aa",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A6e68e103-fe9b-49dd-938e-11f90bd429aa>",
+  "summaryCharactersUTF16": 865,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "text": "The memory part is what I want to read first. How are you scoping it per agent? I keep going back and forth between one shared store and something narrower per deployment."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "text": "Canvas built by a plugin the agent calls is a neat idea. Does the agent get a fixed set of drawing calls, or can it write arbitrary canvas code?"
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "text": "Diff sheets and recorded check outcomes in chat is the part I would actually use. What does the Linux toolchain look like on device? Straight proot, or something lighter?"
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "text": "Anything that destroys something it cannot restore. Deleting backups, force-pushing a shared branch, dropping a table. I can review a bad email. I cannot review a lost commit."
+      }
+    ]
+  }
+}

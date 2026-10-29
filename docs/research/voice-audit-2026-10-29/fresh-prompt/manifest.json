@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "authority": "User requests repeated fresh-prompt DeepSeek style tuning. Terra stays on hold.",
+  "baselineCommit": "bb1f613",
+  "dispatchLimit": 6,
+  "dispatches": [
+    {
+      "ordinal": 1,
+      "stage": "v1-calibration",
+      "status": "completed",
+      "request": "request-1.txt",
+      "requestSha256": "552383fd36c8cb70b89470b2bd50b5e5de184701d482b09fda6211afabbe44fd",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A6e68e103-fe9b-49dd-938e-11f90bd429aa",
+      "result": "result-1.json"
+    },
+    {
+      "ordinal": 2,
+      "stage": "v2-calibration",
+      "status": "completed",
+      "request": "request-2.txt",
+      "requestSha256": "02483f65152b4d4404421de2ecc407f1e2e60d1fceac62a82c9eb5451c675933",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7607aa12-020f-470f-94db-041498d04cc6",
+      "result": "result-2.json"
+    },
+    {
+      "ordinal": 3,
+      "stage": "v3-calibration",
+      "status": "completed",
+      "request": "request-3.txt",
+      "requestSha256": "50cbd2ab05e36f91a592948ec8f0da084aabea2d0073e3f330740524bdbb257c",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8d1c0a02-5ce3-43fb-8795-54f50b90473e",
+      "result": "result-3.json"
+    },
+    {
+      "ordinal": 4,
+      "stage": "v4-calibration",
+      "status": "completed",
+      "request": "request-4.txt",
+      "requestSha256": "79b33fa6bda5f7eba11d0edd95a7d8b79c31aca19112520226b83f82015825b8",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A2fb4b2ab-b5b1-495a-9a41-dff827e4ceba",
+      "result": "result-4.json"
+    },
+    {
+      "ordinal": 5,
+      "stage": "v4-repeat",
+      "status": "completed",
+      "request": "request-4.txt",
+      "requestSha256": "79b33fa6bda5f7eba11d0edd95a7d8b79c31aca19112520226b83f82015825b8",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8c26dd6a-8c35-4b42-9aca-cf57e9c20ad8",
+      "result": "result-5.json"
+    },
+    {
+      "ordinal": 6,
+      "stage": "v4-transfer",
+      "status": "completed",
+      "request": "request-6.txt",
+      "requestSha256": "cab1d285ffc9c04e1d2be0d82de356842ca16e1c551f40451d3dd9c279a06bcd",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa1a56616-3f7f-4cac-b291-e6097ade4695",
+      "result": "result-6.json"
+    }
+  ],
+  "provider": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "variant": "max",
+  "role": "general",
+  "calibration": [
+    "VA-03",
+    "VA-14",
+    "VA-16",
+    "VA-21"
+  ],
+  "transfer": [
+    "VA-04",
+    "VA-06",
+    "VA-10",
+    "VA-22"
+  ],
+  "productionChange": false,
+  "scope": "New short prompts. No old persona, style documents, purpose labels, old replies or analyst assessments in solver inputs. Provider harness remains. No production Writer/review execution.",
+  "selectedPrompt": "prompt-v4.txt",
+  "selectionBeforeTransfer": true,
+  "selectionReason": "No invented past, unsupported other-tool generalization or approval-test framing in the fourth calibration sample. Parent judgment, not owner acceptance.",
+  "status": "completed_with_residual_defects",
+  "dispatchesUsed": 6,
+  "ownerAccepted": false,
+  "terra": "on_hold",
+  "selectedPromptStatus": "provisional",
+  "transferFormatDeviation": "result-6 adds an unrequested empty text_alt field to each reply. Preserve it as returned.",
+  "remainingEarlierReservedCases": 14
+}

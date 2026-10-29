@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "stage": "v2-calibration",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "provider": "opencode",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7607aa12-020f-470f-94db-041498d04cc6",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7607aa12-020f-470f-94db-041498d04cc6>",
+  "summaryCharactersUTF16": 664,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "text": "Credential vaults are usually the part agent demos skip. Good to see them treated as a real topic next to guardrails and memory."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "text": "The canvas built by a plugin is the interesting part. An agent that can draw its own view beats another chat panel."
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "text": "A diff sheet for every tool call is the right choice on a phone. Small screen plus silent edits is a bad combination."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "text": "Deleting production data without a second look. I would put force-pushing to main right next to it."
+      }
+    ]
+  }
+}

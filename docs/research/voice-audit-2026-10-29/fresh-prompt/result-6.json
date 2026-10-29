@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "stage": "v4-transfer",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "provider": "opencode",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa1a56616-3f7f-4cac-b291-e6097ade4695",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa1a56616-3f7f-4cac-b291-e6097ade4695>",
+  "summaryCharactersUTF16": 858,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-04",
+        "decision": "reply",
+        "text": "Reading the diff and still not knowing is the honest part of this. Keep the prompt in a file instead of scrolling back for it, so the diff has something fixed to check against.",
+        "text_alt": ""
+      },
+      {
+        "caseId": "VA-06",
+        "decision": "reply",
+        "text": "The rooting is what makes this more than a photo frame. A screen you can put a modern browser on at that price is a good deal.",
+        "text_alt": ""
+      },
+      {
+        "caseId": "VA-10",
+        "decision": "reply",
+        "text": "\"Where they talk about sleep\" landing on a podcast segment is the one that gets me. One query, four kinds of files, no filenames needed.",
+        "text_alt": ""
+      },
+      {
+        "caseId": "VA-22",
+        "decision": "reply",
+        "text": "One addition: drop queued jobs when the PR closes or the branch is force-pushed. The commit SHA protects the results, but the pending job still burns tokens.",
+        "text_alt": ""
+      }
+    ]
+  }
+}

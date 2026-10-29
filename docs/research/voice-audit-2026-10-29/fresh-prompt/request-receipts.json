@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "requests": [
+    {
+      "ordinal": 1,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A6e68e103-fe9b-49dd-938e-11f90bd429aa",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 3180,
+      "acceptedSummaryCharactersUTF16": 865
+    },
+    {
+      "ordinal": 2,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7607aa12-020f-470f-94db-041498d04cc6",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 3378,
+      "acceptedSummaryCharactersUTF16": 664
+    },
+    {
+      "ordinal": 3,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8d1c0a02-5ce3-43fb-8795-54f50b90473e",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 3786,
+      "acceptedSummaryCharactersUTF16": 617
+    },
+    {
+      "ordinal": 4,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A2fb4b2ab-b5b1-495a-9a41-dff827e4ceba",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 4006,
+      "acceptedSummaryCharactersUTF16": 707
+    },
+    {
+      "ordinal": 5,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A8c26dd6a-8c35-4b42-9aca-cf57e9c20ad8",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 4006,
+      "acceptedSummaryCharactersUTF16": 660
+    },
+    {
+      "ordinal": 6,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa1a56616-3f7f-4cac-b291-e6097ade4695",
+      "provider": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": [
+        {
+          "id": "variant",
+          "value": "max"
+        }
+      ],
+      "status": "completed",
+      "submittedTaskCharactersUTF16": 5615,
+      "acceptedSummaryCharactersUTF16": 858
+    }
+  ]
+}
