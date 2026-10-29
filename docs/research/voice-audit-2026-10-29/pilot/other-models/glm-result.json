@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "provider": "pi",
+  "model": "opencode2api/glm-5.3-flash-free",
+  "options": [
+    {
+      "id": "thinking",
+      "value": "max"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A09edc37b-2113-4e2a-915d-d706ac065833",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A09edc37b-2113-4e2a-915d-d706ac065833>",
+  "submittedTaskCharactersUTF16": 41595,
+  "acceptedSummaryCharactersUTF16": 1245,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "purpose": "technical_value",
+        "text": "the credential vault being first-class is the part i'd highlight. most agent automations treat credentials as a dotenv file and call it a day — then the agent has the master key forever. scoping + rotation matters way more than guardrails someone writes once and never revisits"
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "purpose": "support",
+        "text": "integrated docs-as-a-plugin is the underrated one here. an agent that can read the tool's own docs in place beats everyone hoping the model saw your changelog"
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "purpose": "technical_value",
+        "text": "the recovery section is the real differentiator — foreground service + resume cards means an agent run is treated as a process that can die mid-task, not a chat session someone babysits. most mobile agent tools skip that entirely and the fix is the user re-explaining what got lost"
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "delete data at scale. everything else is recoverable or reversible with enough effort — a bad deploy rolls back, a wrong email is embarrassing, a bad commit gets reverted. mass deletion is the one that's gone the second it runs"
+      }
+    ]
+  },
+  "usage": null
+}

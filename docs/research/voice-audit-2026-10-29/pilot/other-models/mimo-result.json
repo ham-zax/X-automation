@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "provider": "pi",
+  "model": "opencode2api/mimo-v2.6-flash-free",
+  "options": [
+    {
+      "id": "thinking",
+      "value": "high"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A9136f579-8595-4188-864d-b9cdb4115bb5",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A9136f579-8595-4188-864d-b9cdb4115bb5>",
+  "submittedTaskCharactersUTF16": 41595,
+  "acceptedSummaryCharactersUTF16": 733,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "reply",
+        "purpose": "technical_value",
+        "text": "the vault part is the one I'd read first. most agent guides treat credentials like a solved problem because the demo never holds a real token."
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "skip",
+        "purpose": "social_presence",
+        "text": ""
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "purpose": "technical_value",
+        "text": "resume cards are the actual feature. every phone agent demo dies the moment you background it, so recovery is the whole product here."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "ship to production. I can review a diff or delete a bad email after the fact; the write that lands before I've looked is the one that needs approval."
+      }
+    ]
+  },
+  "usage": null
+}

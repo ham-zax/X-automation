@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "authority": "User requests MiMo, GLM 5.3 and Big Pickle at highest reasoning.",
+  "baselineCommit": "ee5276b",
+  "dispatchLimit": 3,
+  "provider": "pi",
+  "input": "../baseline-input.json",
+  "template": "../writer-task-template.txt",
+  "packetSuffix": "\n",
+  "models": [
+    {
+      "slug": "mimo",
+      "id": "opencode2api/mimo-v2.6-flash-free",
+      "thinking": "high",
+      "status": "completed",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A9136f579-8595-4188-864d-b9cdb4115bb5"
+    },
+    {
+      "slug": "glm",
+      "id": "opencode2api/glm-5.3-flash-free",
+      "thinking": "max",
+      "status": "completed",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A09edc37b-2113-4e2a-915d-d706ac065833"
+    },
+    {
+      "slug": "big-pickle",
+      "id": "opencode2api/big-pickle",
+      "thinking": "high",
+      "status": "completed",
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A2fef4dea-c5cd-4512-88c5-47a27e3ba578"
+    }
+  ],
+  "reservedCaseRun": false,
+  "productionChange": false,
+  "dispatchesUsed": 3,
+  "status": "completed",
+  "taskSha256": "5972ef8ee33d0304601af780fa9979b226261a529b00661889f26a099ebd27c5",
+  "inputSha256": "e4de488a0054e066d4a741adf25e575bb8055bb63155d4fd10896a91e1d0974a",
+  "usageAvailable": false
+}

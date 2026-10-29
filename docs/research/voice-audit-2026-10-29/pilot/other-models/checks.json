@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "artifactChecks": {
+    "status": "passed",
+    "requestHash": "5972ef8ee33d0304601af780fa9979b226261a529b00661889f26a099ebd27c5",
+    "requestReconstruction": "identical baseline request for all three models",
+    "modelsAndOptions": "passed",
+    "caseAndOutputContracts": "passed",
+    "comparisonData": "passed",
+    "dispatches": "3 of 3",
+    "reservedCases": "unused",
+    "oldPilotArtifacts": "unchanged",
+    "liveProgress": "unchanged",
+    "files": {
+      "TASKS.md": "8f4a00b131a7a6ec32a2698ea2eb84c3a0e4313e3c905829ebf732e66627457d",
+      "docs/X_GROWTH_ISSUES.md": "1ebd7f09645b34c01a64aae970ad26893538a92ac94f68bcde45e75f776687cf",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/REPORT.md": "f0cf17967467f5a12ecbb6e407005139c2c196887fec4e702505eb17dae4133b",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/big-pickle-result.json": "cca190a7b8567f76a490aa331c5c82db7be7151bbbe401f111b82fc16c603bf0",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/comparison.html": "535309972d01ea79f2fd3724c16d4b2a10cd482918347039311e25062798208e",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/glm-result.json": "c5b1598ff3aeff8b073a734613c19451232cd7623ab18da144ce15028ad0e6c3",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/manifest.json": "043dc035367ba577f4daab93c6b9dbc9eed3ce70bbe1f5cbe594d2fe1fc9d86a",
+      "docs/research/voice-audit-2026-10-29/pilot/other-models/mimo-result.json": "e12a28c8a38e004ddff0da994e4d96d9450392c66e924933a4b94e3011750cad"
+    }
+  },
+  "privacyChecks": {
+    "privateValueScan": "passed",
+    "comparisonScriptSyntax": "passed"
+  },
+  "catalogTargets": [
+    {
+      "slug": "mimo",
+      "id": "opencode2api/mimo-v2.6-flash-free",
+      "thinking": "high"
+    },
+    {
+      "slug": "glm",
+      "id": "opencode2api/glm-5.3-flash-free",
+      "thinking": "max"
+    },
+    {
+      "slug": "big-pickle",
+      "id": "opencode2api/big-pickle",
+      "thinking": "high"
+    }
+  ],
+  "inlineDelivery": "shown",
+  "visualPreview": "unavailable: AppArmor blocks the preview sandbox",
+  "limits": [
+    "One sample per case",
+    "Unblinded parent assessment",
+    "Different provider and effort from reference models",
+    "No real Writer or review execution",
+    "No production acceptance"
+  ]
+}

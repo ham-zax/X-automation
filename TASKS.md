@@ -55,6 +55,13 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 
 ## Active checkpoint
 
+29 October additional comparison: Hamza requests MiMo, GLM 5.3, and Big Pickle
+at the highest available reasoning. New budget: three dispatches, one per model,
+sequentially. Pi catalog: MiMo V2.6 Flash Free high, GLM 5.3 Flash Free max,
+Big Pickle high. All three complete on the exact original four-case baseline task.
+The parent sees recurring evaluator language in each. New budget consumed: 3 of 3.
+Report: `docs/research/voice-audit-2026-10-29/pilot/other-models/REPORT.md`.
+
 29 October follow-up: Hamza requests GPT-6.1 Terra at medium effort. Dispatch
 five reuses the exact four-case baseline task. This overrides the earlier
 DeepSeek-only limit for this dispatch. No production change or reserved-case run.
@@ -250,3 +257,13 @@ Terra result: three replies and one skip on the same four calibration sources.
 The parent sees less dismissive comparison language in this sample. One generation
 does not establish stable model superiority. All five dispatches are now consumed.
 No reserved case, Writer review, live run, or production model change.
+
+## XR-14 additional models, 29 October 2026
+
+Hamza authorizes three further model comparisons at highest exposed reasoning.
+MiMo V2.6 Flash Free high, GLM 5.3 Flash Free max, and Big Pickle high complete
+through Pi. Each reuses the original baseline request. Exact targets and task
+identities reside in the other-models manifest. Three of three dispatches used.
+No extra reviewer, repeated sample, reserved case, or production model change.
+TaskStartSnapshot: main ee5276b with pre-existing untracked live-progress.json.
+Terra remains the parent preference on these four cases, not an accepted winner.
