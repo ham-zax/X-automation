@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "case": "VA-16",
+    "style": "Match each factual claim and causal comparison in a reply to the strength of the supplied evidence. If evidence does not support a claim, express a preference or question without asserting the claim, or omit it. Preserve useful technical opinions and social reactions.",
+    "lane": "writer",
+    "solver": {
+      "providerInstanceId": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": {
+        "variant": "max"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "replicate": ""
+  },
+  "inputsDigest": "09dd6f081447936caecc488266afa60c43dc5270a23c249260f56c9344c885fc",
+  "hashes": {
+    "packet.json": "f6ed2669aa0664192074780c7cf0cd173fd488e2c9ab3343748bf9a6a2c514a2",
+    "case.json": "01be938dfc39ee900ad965563c3d0b40587ce63f140e534f6de72c6b2f4672b6",
+    "request.json": "9b1520c3d42232917f1dbc0d170ff45a92759fdb5d4542a36817b6bd058538f1",
+    "model-output.json": "56140221dad931f6ac62064c70a387b48619f8cb0995d7d6475952a8e098ab48",
+    "review-request.json": "3e1ad52c04567884272f814746b0395dff2401dd73f421902903f7c6fcdaee6d",
+    "review-output.json": "988ca61168a3256d8b8b5b2d8a93aa6ae8e717f8e60d2aa7476bb1a2021661d5",
+    "inspection.json": "89411e7f1613dbec26a9e6da8e7d36c02036d9174851677d97afa2366e7d048d"
+  }
+}

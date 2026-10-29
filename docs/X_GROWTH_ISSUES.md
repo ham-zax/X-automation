@@ -521,6 +521,12 @@ step. Future work needs paired offline comparison and owner feedback. Missing
 new biography is not a reason to postpone correcting demonstrated failures.
 The earlier direction below remains history, not proof of mitigation.
 
+The [integrated offline experiment](research/voice-audit-2026-10-29/integrated-harness/REPORT.md)
+adds a reusable model/prompt benchmark. The native cycle keeps the baseline.
+No voice repair earns production acceptance. Optional review calibration stops
+classifying a congratulation as a fact while retaining unsupported product claims.
+Selected behavior is the next proposed variable to isolate, not a proven cause.
+
 ### Problem
 
 Several replies and draft directions drifted toward mini-essays: polished explanations, packaged takeaways, and advice to “developers” rather than participation in the actual conversation.

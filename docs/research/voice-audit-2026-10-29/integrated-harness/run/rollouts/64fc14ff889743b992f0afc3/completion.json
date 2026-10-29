@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "case": "VA-16",
+    "style": "Before drafting, match each decisive claim to the available evidence. Evidence is enough when it supports the claim's scope and certainty. Reserve room for the complete output and inspection. Reopen or inspect the output. If inspection blocks it, revise the cited problems and inspect again. If a blocker cannot be resolved with available evidence, report it.",
+    "lane": "writer",
+    "solver": {
+      "providerInstanceId": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": {
+        "variant": "max"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "replicate": ""
+  },
+  "inputsDigest": "09dd6f081447936caecc488266afa60c43dc5270a23c249260f56c9344c885fc",
+  "hashes": {
+    "packet.json": "f6ed2669aa0664192074780c7cf0cd173fd488e2c9ab3343748bf9a6a2c514a2",
+    "case.json": "01be938dfc39ee900ad965563c3d0b40587ce63f140e534f6de72c6b2f4672b6",
+    "request.json": "1d15356191a41a064d8282ed7541bb81cf38491860b047410a8850268613c663",
+    "model-output.json": "590cacf13bf406059af57916c60131a030448b29c45c18702f62c813451340d5",
+    "review-request.json": "cb73f9fcad74f66730b9caeb1c2b2dcfbbd7a8a24e5e2c969609eebe632cc769",
+    "review-output.json": "749fc636223e178fd21d636e0fee901b6970407a4c07ed70a21db2f3b595d8b6",
+    "inspection.json": "03c79a9fddb6b34c024770acd593fdceef349a576e028d8ba2c5dcd5b9fd0ed0"
+  }
+}

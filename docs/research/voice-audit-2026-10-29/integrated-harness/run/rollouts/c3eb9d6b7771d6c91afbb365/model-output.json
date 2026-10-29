@@ -1,0 +1,28 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "The recovery design, not the file editing, is the hard part of an on-device coding agent, so the foreground service, resume cards, and persistent queue are where this earns its claim.",
+  "finalText": "the recovery part is the real product. editing files from a phone is the easy claim; surviving android killing the foreground service mid-edit is the hard one. resume cards plus a persistent queue is the right place to solve that.",
+  "threadParts": [],
+  "semanticAnchors": [
+    "Android",
+    "foreground service",
+    "persistent queue"
+  ],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "A judgment reply needs no visual support.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a systems-first read of an agent product instead of restating its feature list, which fits the builder-judgment identity.",
+  "relationshipValue": "Joins the author on the specific design choice his post raises rather than offering generic praise.",
+  "profileProofValue": null,
+  "riskFlags": [
+    "Reply reasons only from the feature list in the source post. It makes no first-hand testing or experience claim.",
+    "The difficulty of Android killing a foreground service is an inference from the source's own recovery features, not verified behavior."
+  ]
+}

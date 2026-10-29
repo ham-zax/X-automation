@@ -1,0 +1,40 @@
+{
+  "lane": "writer",
+  "candidate": {
+    "id": "VA-14",
+    "sourceId": "2108943711740527003",
+    "url": "https://x.com/xoofx/status/2108943711740527003",
+    "text": "Just released CodeAlta 1.6.0, and you won't believe what is packed: 🎉\n- Canvas 🖼️ that can be created with an agent via a plugin\n- Statistics 📊\n- Welcome page for getting started 🤗\n- Integrated documentation - ask the agent 📝\n- Claude Code Remote support\nand more... 1/2 https://t.co/nAuq2uIctn",
+    "source": "x",
+    "author": "xoofx",
+    "behavior": {
+      "decision": "ACT",
+      "primaryPurpose": "celebration",
+      "socialMode": "enthusiast",
+      "informationDepth": "social_only",
+      "selectionSource": "engagement_heuristic",
+      "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+      "selectedAt": 1791693773671,
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "reasonToExist": "Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward."
+    },
+    "replyArchetype": "celebration",
+    "contributionSummary": "Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.",
+    "key": "https://x.com/xoofx/status/2108943711740527003"
+  },
+  "draft": {
+    "candidateKey": "https://x.com/xoofx/status/2108943711740527003",
+    "body": "",
+    "editor": {
+      "pipeline": "reply"
+    }
+  },
+  "omissions": [
+    "blank recent and history state",
+    "no owner attestations",
+    "no browser, room or thread context",
+    "fixture behavior is not a generation trace"
+  ],
+  "publicationAuthority": false
+}

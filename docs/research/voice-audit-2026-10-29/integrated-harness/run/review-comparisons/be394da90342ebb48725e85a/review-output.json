@@ -1,0 +1,25 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "Coding from a phone breaks on interruption, not on editor quality",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "a foreground service plus a persistent queue is the line between a usable agent and a demo",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The source says recovery features help work continue through interruptions. It does not establish that interruptions, rather than editor quality, cause phone coding to fail.",
+    "The source does not establish that a foreground service and persistent queue determine whether an agent is usable."
+  ]
+}

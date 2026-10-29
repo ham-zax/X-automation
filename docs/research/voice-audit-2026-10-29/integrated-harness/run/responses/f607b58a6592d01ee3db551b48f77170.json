@@ -1,0 +1,56 @@
+{
+  "requestHash": "f607b58a6592d01ee3db551b48f77170e8735994034a8ca14295e6a1fc255e32",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "on android the OS decides when your agent dies",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false,
+        "supportAssessment": {
+          "support": "unresolved",
+          "projectMatch": false,
+          "contradictionChecked": false,
+          "limitationsChecked": false
+        }
+      },
+      {
+        "text": "the foreground service and the resume queue",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false,
+        "supportAssessment": {
+          "support": "unresolved",
+          "projectMatch": false,
+          "contradictionChecked": false,
+          "limitationsChecked": false
+        }
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The source does not establish that Android's OS decides when the agent stops. The wording makes an absolute causal claim.",
+      "The source reports a foreground service, resume cards, and a persistent message queue. It does not establish a resume queue or how recovery works.",
+      "No primary project evidence was supplied to check the implementation or its limitations."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"on android the OS decides when your agent dies\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false,\"supportAssessment\":{\"support\":\"unresolved\",\"projectMatch\":false,\"contradictionChecked\":false,\"limitationsChecked\":false}},{\"text\":\"the foreground service and the resume queue\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false,\"supportAssessment\":{\"support\":\"unresolved\",\"projectMatch\":false,\"contradictionChecked\":false,\"limitationsChecked\":false}}],\"voiceIssues\":[],\"issues\":[\"The source does not establish that Android's OS decides when the agent stops. The wording makes an absolute causal claim.\",\"The source reports a foreground service, resume cards, and a persistent message queue. It does not establish a resume queue or how recovery works.\",\"No primary project evidence was supplied to check the implementation or its limitations.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa3cd5c78-acee-4928-a216-182d8ac4a3eb",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa3cd5c78-acee-4928-a216-182d8ac4a3eb>",
+    "status": "completed",
+    "usage": null
+  }
+}

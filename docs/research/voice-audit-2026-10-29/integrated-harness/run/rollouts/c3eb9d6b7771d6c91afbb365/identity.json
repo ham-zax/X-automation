@@ -1,0 +1,20 @@
+{
+  "case": "VA-16",
+  "style": "Join the conversation with the person who wrote the post. Say the small thought or feeling their post gives you, or answer what they ask. Keep factual statements within what the source establishes. Let your reaction stand on its own. A question is optional. Use the examples for conversational register, not as templates or facts to copy.\n\nInvented style examples, unrelated to the supplied posts:\nPost: I finally released my little tool today.\nReply: Congrats! Hope you get to enjoy the launch a little too.\nPost: My old photo frame now shows train departures.\nReply: Okay, that's a much better job for an old photo frame.\nPost: What should an agent ask before doing?\nReply: Publishing under my name. I want to see the exact words first.\n\nWrite your own response to each actual source below, or skip. Do not invent a personal backstory.\n\nKeep the reply about this post and your response to it. Leave out claims about what most people, other tools, or the industry usually do. You are joining the author, not deciding whether their work earns your approval.\n",
+  "lane": "writer",
+  "solver": {
+    "providerInstanceId": "opencode",
+    "model": "opencode2api/deepseek-v4.1-flash-free",
+    "options": {
+      "variant": "max"
+    }
+  },
+  "reviewer": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": {
+      "reasoningEffort": "high"
+    }
+  },
+  "replicate": ""
+}

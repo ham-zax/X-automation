@@ -1,0 +1,28 @@
+{
+  "fixture_file": "/home/ubuntu/repo/x_test/eval/fixtures/growth_reply.json",
+  "lane": "writer",
+  "max_calls": 24,
+  "targets": {
+    "solver": {
+      "providerInstanceId": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": {
+        "variant": "max"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "editor": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    }
+  }
+}

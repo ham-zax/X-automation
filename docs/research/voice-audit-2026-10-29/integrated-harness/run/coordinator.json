@@ -1,0 +1,479 @@
+{
+  "schemaVersion": 1,
+  "engineeringDispatches": 2,
+  "dispatchLimit": 28,
+  "modelJobs": [
+    {
+      "ordinal": 3,
+      "id": "729bbceeaf2909ff7109d4cf637dc6b9",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "729bbceeaf2909ff7109d4cf637dc6b9efb91e228a94f2cec88a6f4003ddadc5",
+      "inputCharactersUTF16": 61868,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A150f1319-7e4f-4d5b-9081-0a9459adf6fa",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/729bbceeaf2909ff7109d4cf637dc6b9.json"
+    },
+    {
+      "ordinal": 4,
+      "id": "cbfbd626c8f5d294597627056dd33ba1",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "cbfbd626c8f5d294597627056dd33ba17c94fef9c897292b6c604117514f2d39",
+      "inputCharactersUTF16": 22415,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A1a87081f-e9db-49d1-897d-04251a0eeec2",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/cbfbd626c8f5d294597627056dd33ba1.json"
+    },
+    {
+      "ordinal": 5,
+      "id": "f7c65d46177ea61e16d7fbb99061c745",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "f7c65d46177ea61e16d7fbb99061c7454cb1c164fbd35482c4ca09ac68bab6ff",
+      "inputCharactersUTF16": 62960,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A6ada6730-65ce-4df9-9c63-a01dc5232452",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/f7c65d46177ea61e16d7fbb99061c745.json"
+    },
+    {
+      "ordinal": 6,
+      "id": "e29d1b3fd010f3b8f1f8eb699388ae94",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "e29d1b3fd010f3b8f1f8eb699388ae94e9f5a23953b92ccff3e0be09fff626fe",
+      "inputCharactersUTF16": 22445,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ad84719c3-6822-4c6c-946d-9e5b89510e85",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/e29d1b3fd010f3b8f1f8eb699388ae94.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 7,
+      "id": "71f8f6f64dc26454ebbfa8d75bdcd43f",
+      "kind": "editor",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "71f8f6f64dc26454ebbfa8d75bdcd43ffd1d36f51200c1dddb4d14c02c968aa2",
+      "inputCharactersUTF16": 29480,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A9106ea39-2326-44e4-b031-59ce4c0f3686",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/71f8f6f64dc26454ebbfa8d75bdcd43f.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false,
+      "supersededBeforeAdoption": "A replay bug changed only the baseline inspection timestamp before native adoption. The completed response remains evidence and counts against the dispatch ceiling."
+    },
+    {
+      "ordinal": 8,
+      "id": "c99b4bf0b9687212fc015d37b72f9efc",
+      "kind": "editor",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "c99b4bf0b9687212fc015d37b72f9efc012ba0310dc8d2f3ea5d244c35c7f04c",
+      "inputCharactersUTF16": 29480,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A84b10164-624a-4d6c-9f61-2043dd6366d6",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/c99b4bf0b9687212fc015d37b72f9efc.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 9,
+      "id": "55f6e8ee0a166c13a04e2408ef1ca010",
+      "kind": "editor",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "55f6e8ee0a166c13a04e2408ef1ca01030d6480c8395cb03515325cb7c26a4a5",
+      "inputCharactersUTF16": 30086,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ad9582dfa-16b2-4326-a353-873d9ab0855a",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/55f6e8ee0a166c13a04e2408ef1ca010.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 10,
+      "id": "b7a8159ea77aaa4d291b10124961b4a6",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "b7a8159ea77aaa4d291b10124961b4a658e9b14dcb4b46c85e8d9b2476aac4b1",
+      "inputCharactersUTF16": 62248,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A94237297-d18e-4e48-ab5c-e4fd747d68f9",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/b7a8159ea77aaa4d291b10124961b4a6.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 11,
+      "id": "13c23933eb65195d4b7ee936b5e861c8",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "13c23933eb65195d4b7ee936b5e861c8b7204d033a695d19d6108bd8c883430c",
+      "inputCharactersUTF16": 22422,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aedbf9991-872d-4c10-bc76-3a579b0bcdfa",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/13c23933eb65195d4b7ee936b5e861c8.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 12,
+      "id": "b40a6aaf858919368800c0c568cfe52d",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "b40a6aaf858919368800c0c568cfe52d83dab82214112d4aea5d6a060d841322",
+      "inputCharactersUTF16": 62157,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab9b5e20f-7dcb-4418-9733-cc4f06349d87",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/b40a6aaf858919368800c0c568cfe52d.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 13,
+      "id": "a62ac7a8b45e1ef05a52e59f134becf9",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "a62ac7a8b45e1ef05a52e59f134becf9d471340b1e86abcde80748d7a9a92748",
+      "inputCharactersUTF16": 22412,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ac4a3309d-1d6d-4f67-b8ef-b787ee5acd5d",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/a62ac7a8b45e1ef05a52e59f134becf9.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 14,
+      "id": "dbd1af2f8dd0c9a02275289194e5c5bd",
+      "kind": "editor",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "dbd1af2f8dd0c9a02275289194e5c5bd9d56eae88acfe8a5086003494dcb2904",
+      "inputCharactersUTF16": 55629,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A150bd63b-5ea8-42f0-b0b2-62533fe3416a",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/dbd1af2f8dd0c9a02275289194e5c5bd.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 15,
+      "id": "8c511ab723d93044c70833b3c10c56bf",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "8c511ab723d93044c70833b3c10c56bf7ef3074413a298aa397e575c430b3976",
+      "inputCharactersUTF16": 61868,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A656a0772-6bc3-4d86-a64f-4aeb21794c24",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/8c511ab723d93044c70833b3c10c56bf.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 16,
+      "id": "1fc3192ea82adbe539fd3f9d134dd485",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "1fc3192ea82adbe539fd3f9d134dd485016be58e9d395da312fc6c09913afae6",
+      "inputCharactersUTF16": 22329,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab613ba89-ff0b-477d-a0e4-393ba920ea4e",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/1fc3192ea82adbe539fd3f9d134dd485.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 17,
+      "id": "df7951c6c281ecc48c3b6834384893b1",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "df7951c6c281ecc48c3b6834384893b1ece985cd390235e96314f2c5cdd8e6fd",
+      "inputCharactersUTF16": 61045,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A94929e84-f5f2-4662-b469-273880b372f8",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/df7951c6c281ecc48c3b6834384893b1.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 18,
+      "id": "cba54c9898455d832badfb56b25529f9",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "cba54c9898455d832badfb56b25529f9498ddb1737c5eae2cef98ce322fc69c8",
+      "inputCharactersUTF16": 21515,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aff6d06e7-d11d-4811-9f6e-d0f6658df588",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/cba54c9898455d832badfb56b25529f9.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 19,
+      "id": "cc2ae0dffde4e7785eacf39b5b3128d3",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "cc2ae0dffde4e7785eacf39b5b3128d3625cf76566a9fd2c1f4a387b348ca62d",
+      "inputCharactersUTF16": 25782,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A3ac96bba-e5f1-418e-9305-8321599d8f7a",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/cc2ae0dffde4e7785eacf39b5b3128d3.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 20,
+      "id": "f607b58a6592d01ee3db551b48f77170",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "f607b58a6592d01ee3db551b48f77170e8735994034a8ca14295e6a1fc255e32",
+      "inputCharactersUTF16": 22365,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aa3cd5c78-acee-4928-a216-182d8ac4a3eb",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/f607b58a6592d01ee3db551b48f77170.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 21,
+      "id": "d65c521821b9cbc8f35a1c2eb4a1cba3",
+      "kind": "solver",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/deepseek-v4.1-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      },
+      "status": "completed",
+      "requestHash": "d65c521821b9cbc8f35a1c2eb4a1cba3ca4362c88bb97a03c7b80fa56e2b528c",
+      "inputCharactersUTF16": 26874,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ae1351fb6-acf9-4bd0-b2b5-1add59836f07",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/d65c521821b9cbc8f35a1c2eb4a1cba3.json",
+      "activityTypes": [
+        "user_message",
+        "reasoning",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    },
+    {
+      "ordinal": 22,
+      "id": "a40633948b0e8564e97cdd26054828e1",
+      "kind": "reviewer",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6.1-terra",
+        "options": {
+          "reasoningEffort": "high"
+        }
+      },
+      "status": "completed",
+      "requestHash": "a40633948b0e8564e97cdd26054828e186142ea18764f3b6bfa204f31bad617c",
+      "inputCharactersUTF16": 22372,
+      "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Afedb8a15-e4b6-4e6c-8e5e-fc8b3c421faf",
+      "responseFile": "/tmp/growth-reply-h2-2fld4m97/incoming/a40633948b0e8564e97cdd26054828e1.json",
+      "activityTypes": [
+        "user_message",
+        "assistant_message",
+        "checkpoint"
+      ],
+      "activityHasMore": false
+    }
+  ],
+  "resumeCommand": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --lane direct --style-file docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v4.txt --label direct-v4",
+  "validationIndex": 3,
+  "validationCommands": [
+    {
+      "label": "Terra matched writer",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --label terra-matched --solver-target '/tmp/growth-reply-h2-2fld4m97/terra-target.json'"
+    },
+    {
+      "label": "Celebration control",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-14 --label celebration-control"
+    },
+    {
+      "label": "Direct instruction baseline",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --lane direct --label direct-baseline"
+    },
+    {
+      "label": "Direct instruction V4",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --lane direct --style-file docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v4.txt --label direct-v4"
+    }
+  ]
+}

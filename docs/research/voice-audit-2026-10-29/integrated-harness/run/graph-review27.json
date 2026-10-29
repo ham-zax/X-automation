@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab2c843fb-4f60-4f8c-86fd-e26162d255f1",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab2c843fb-4f60-4f8c-86fd-e26162d255f1",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab2c843fb-4f60-4f8c-86fd-e26162d255f1>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253Ab2c843fb-4f60-4f8c-86fd-e26162d255f1:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab2c843fb-4f60-4f8c-86fd-e26162d255f1",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253Ab2c843fb-4f60-4f8c-86fd-e26162d255f1:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "codex",
+  "model": "gpt-6.1-terra",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "high"
+    }
+  ],
+  "summary": "The packet supports three concrete findings. The offline replay calls the real Writer and review owners, and the supplied code does not invoke a public-send path. The cache and identity checks still have gaps that can affect comparisons.\n\n1. **Medium — A frozen packet can use stale behavior.**  \n   **Location:** `eval/growth_reply.mjs`, `prepare`, frozen packet check.  \n   **Trigger:** Change a fixture’s behavior while keeping its URL and source text. Run another style under the same run root. The check accepts the old packet because it compares only pipeline, URL and text.  \n   **Impact:** The generation and review requests use the old packet behavior, while `case.json` and the input digest reflect the new fixture. A behavior comparison can therefore be mislabeled.  \n   **Correction:** Bind the frozen packet to all fixture fields that affect packet construction. Reject a mismatch and require a fresh root.\n\n2. **Medium — Completed rollouts can survive changes to their actual owners.**  \n   **Location:** `eval/harness2_growth.py`, `_inputs_digest` and `execute` completion reuse.  \n   **Trigger:** Change the Writer schema, packet builder, review prompt, binding code or other application code after a rollout completes. The digest covers only the fixture case, lane and writing document.  \n   **Impact:** The adapter returns the old output and review without detecting that the code used to generate or inspect them changed. Artifact hashes only establish that the saved files remain unchanged.  \n   **Correction:** Include the relevant source and contract versions in the completion identity, or reject reuse when those inputs cannot be established.\n\n3. **Medium — Response validation accepts unrequested model options.**  \n   **Location:** `eval/harness2_growth.py`, `Exchange.validate_response`.  \n   **Trigger:** The request specifies no options, or specifies only one option, while the execution receipt contains additional settings. Validation checks only the requested keys.  \n   **Impact:** Runs with different effective settings can share one request identity and appear comparable. A receipt with extra settings still passes.  \n   **Correction:** Compare normalized complete option sets, with explicit handling for provider defaults, and retain the actual settings in the evidence.\n\nOne usability issue also affects diagnosis: `_node` reports only stderr on failure, while `growth_reply.mjs` writes its error JSON to stdout. A missing fixture or failed import can therefore appear as an empty “offline replay failed” message. Include the bounded stdout error in the exception.\n\nThe packet refutes several broader concerns. Writer generation and review requests come from the real runtime callbacks. Review-only comparison copies the frozen output and requests no solver. Invalid outputs remain in `model-output.json`, and failed reviews retain the text. The native cycle reports `KEEP_BASE`, and the report does not claim a writing repair.\n\nThe evidence does not establish filesystem sandboxing or prevent a model provider’s harness from using tools. The documentation correctly states that limit. I could not assess omitted application owners, Harness² internals, actual T3 receipts or the final pending Python check from this packet. The reported test results are supplied evidence, not checks I ran.",
+  "resultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253Ab2c843fb-4f60-4f8c-86fd-e26162d255f1:target-thread:48b4b81e-456c-46f0-b65b-c5b7d46b6346:b474825c-0417-4a26-a58f-59185c7cba44",
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

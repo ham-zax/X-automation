@@ -1,0 +1,146 @@
+{
+  "status": "blocked",
+  "exactText": "congrats on 1.6 — an agent-built canvas plus integrated docs is a big jump for one release.",
+  "decision": "POST",
+  "schemaErrors": [],
+  "reviewFailures": [
+    "Unsupported claim: an agent-built canvas plus integrated docs",
+    "The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result.",
+    "The product assertion is not visibly attributed to the source."
+  ],
+  "review": {
+    "schemaVersion": 1,
+    "reviewer": "external_agent",
+    "execution": null,
+    "reviewedAt": 1793275640209,
+    "fingerprint": "315cad93ec4cb9f56e72a3c3c6f3d2af24eb3be090738ef7900509b7bc391038",
+    "personaVersion": "hamza-v1-alpha-2026-10-02",
+    "factualClaims": [
+      {
+        "text": "an agent-built canvas plus integrated docs",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝",
+        "attributed": false
+      }
+    ],
+    "ownerClaims": [],
+    "available": true,
+    "voiceIssues": [],
+    "issues": [
+      "Unsupported claim: an agent-built canvas plus integrated docs",
+      "The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result.",
+      "The product assertion is not visibly attributed to the source."
+    ],
+    "passed": false
+  },
+  "actError": null,
+  "score": {
+    "score": 40,
+    "minimumScore": 30,
+    "quality": "strong",
+    "breakdown": {
+      "purpose": 10,
+      "clarity": 10,
+      "provenance": 0,
+      "originality": 10,
+      "realization": 10
+    },
+    "behavior": {
+      "schemaVersion": 1,
+      "decision": "ACT",
+      "pipeline": "reply",
+      "primaryPurpose": "celebration",
+      "secondaryPurposes": [],
+      "socialMode": "enthusiast",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.",
+      "selectionSource": "engagement_heuristic",
+      "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+      "provenance": {
+        "ownerFactsAllowed": false,
+        "ownerExperienceAllowed": false,
+        "sourceClaims": [],
+        "ownerClaims": [],
+        "restrictions": [],
+        "summary": ""
+      },
+      "selectedAt": 1791693773671
+    },
+    "sourceSimilarity": 0.06666666666666667,
+    "weightedLength": 91,
+    "publishable": false,
+    "gates": {
+      "passed": false,
+      "failures": [
+        {
+          "code": "CONTENT_FACTUAL_REVIEW_FAILED",
+          "message": "Unsupported claim: an agent-built canvas plus integrated docs The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result. The product assertion is not visibly attributed to the source."
+        },
+        {
+          "code": "GROWTH_FIT_UNKNOWN",
+          "message": "Growth fit needs a current classification. Rescore candidates from Growth Focus before approval."
+        }
+      ],
+      "warnings": [],
+      "checks": {
+        "growthFocus": false,
+        "purposeIntegrity": true,
+        "factualProvenance": false,
+        "contentReview": true,
+        "behaviorAlignment": true,
+        "originality": true,
+        "scannability": true,
+        "understandable": true,
+        "noPlaceholders": true,
+        "length": true,
+        "ctaIntegrity": true,
+        "recentDuplicate": true,
+        "hashtagCount": true,
+        "emojiCount": true,
+        "threadRules": true,
+        "mediaReady": true
+      }
+    },
+    "growthPackaging": {
+      "ready": true,
+      "blockers": [],
+      "items": {
+        "stoppingPower": {
+          "status": "clear",
+          "detail": "The selected act is legible at the required depth."
+        },
+        "readerPayoff": {
+          "status": "clear",
+          "detail": "useful resource/action, specific insight, contextual social/relationship act"
+        },
+        "distributionLeverage": {
+          "status": "borrowed_context",
+          "detail": "Reply participates directly in the source conversation."
+        },
+        "sourceActionPath": {
+          "status": "not_needed",
+          "detail": "This draft does not promise a resource/action path."
+        },
+        "interactionOpening": {
+          "status": "optional",
+          "detail": "No forced question; the selected act may already be complete."
+        },
+        "mediaOpportunity": {
+          "status": "unnecessary",
+          "detail": "No media is required for this draft."
+        },
+        "strategyState": {
+          "status": "not_required",
+          "mode": null,
+          "label": "Engage Next reply",
+          "detail": "Main-feed Writing Approach is not required for the reply lane; the persisted behavior decision owns purpose, mode, affect, and depth."
+        }
+      }
+    }
+  },
+  "publicationAuthority": false
+}

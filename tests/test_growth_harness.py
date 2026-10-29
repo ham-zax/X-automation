@@ -4,6 +4,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -49,6 +50,7 @@ class ExchangeTests(unittest.TestCase):
             {**valid, "requestHash": "other"},
             {**valid, "execution": {**valid["execution"], "model": "other"}},
             {**valid, "execution": {**valid["execution"], "options": {"reasoningEffort": "low"}}},
+            {**valid, "execution": {**valid["execution"], "options": {"reasoningEffort": "high", "extra": "unrequested"}}},
             {**valid, "execution": {**valid["execution"], "status": "running"}},
         ]:
             with self.assertRaises(ValueError):
@@ -64,8 +66,10 @@ class NativeCycleTests(unittest.TestCase):
         config = {"max_calls": 16, "fixture_file": str(REPO / "eval/fixtures/growth_reply.json"),
                   "targets": h.DEFAULT_TARGETS, "lane": "writer"}
         adapter = h.GrowthAdapter(root, config, self.native)
+        adapter.node_calls = []
 
         def node(operation, **params):
+            adapter.node_calls.append(operation)
             out = Path(params["outputDir"])
             if operation == "prepare":
                 style = Path(params["styleFile"]).read_text()
@@ -74,7 +78,7 @@ class NativeCycleTests(unittest.TestCase):
             elif operation == "review-request":
                 h.write(out / "review-request.json", {"prompt": "Review " + (out / "model-output.json").read_text(), "schema": {"type": "object"}})
             elif operation == "inspect":
-                h.write(out / "inspection.json", {"schemaValid": True, "review": "fixture"})
+                h.write(out / "inspection.json", {"schemaValid": True, "review": {"passed": True}, "reviewedAt": len(adapter.node_calls)})
             else:
                 raise AssertionError(operation)
             return {"status": "ok"}
@@ -89,6 +93,55 @@ class NativeCycleTests(unittest.TestCase):
                             {"systemprompt.md": "x" * 2401}]:
                 with self.assertRaises(ValueError):
                     adapter.validate_tree(invalid)
+
+    def test_owner_changes_invalidate_completed_input_versions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adapter = self.adapter(root / "run")
+            (root / "docs").mkdir()
+            (root / "docs/POST_GENERATION_PROMPT.md").write_text("writing contract")
+            owner = root / "writer_runtime.js"
+            owner.write_text("first schema and review")
+            with patch.object(h, "REPO", root):
+                before = adapter._inputs_digest("VA-16")
+                owner.write_text("changed schema and review")
+                self.assertNotEqual(before, adapter._inputs_digest("VA-16"))
+
+    def test_node_error_includes_json_stdout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter = self.adapter(tmp)
+            result = type("Result", (), {"returncode": 1, "stderr": "", "stdout": '{"error":"Unknown caseId"}'})()
+            with patch.object(h.subprocess, "run", return_value=result):
+                with self.assertRaisesRegex(RuntimeError, "Unknown caseId"):
+                    h.GrowthAdapter._node(adapter, "prepare", caseId="missing")
+
+    def test_review_comparison_never_requests_a_solver_or_changes_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source"
+            source.mkdir()
+            for name, value in {"packet.json": {}, "case.json": {}, "request.json": {},
+                                "model-output.json": {"finalText": "Congrats!"}}.items():
+                h.write(source / name, value)
+            before = {p.name: p.read_bytes() for p in source.iterdir()}
+            adapter = self.adapter(root / "comparison")
+            style = root / "calibration.txt"
+            style.write_text("Treat congratulations as social acts.")
+            with self.assertRaises(h.Pending) as pending:
+                adapter.review_existing(source, style)
+            request = pending.exception.request
+            self.assertEqual(request["kind"], "reviewer")
+            self.assertEqual(adapter.node_calls, ["review-request"])
+            result = root / "response.json"
+            h.write(result, response(request, {"passed": True}))
+            adapter.exchange.accept(request["id"], result)
+            dest = adapter.review_existing(source, style)
+            self.assertEqual({p.name: p.read_bytes() for p in source.iterdir()}, before)
+            advisory = h.read(dest / "advisory.json")
+            self.assertTrue(advisory["advisoryOnly"])
+            self.assertFalse(advisory["publicationAuthority"])
+            self.assertTrue(advisory["rawReviewPassed"])
+            self.assertNotIn("prepare", adapter.node_calls)
 
     def test_real_native_cycle_pauses_and_resumes_without_model_launches(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +179,12 @@ class NativeCycleTests(unittest.TestCase):
             self.assertEqual(complete.ledger.P, 3)
             self.assertEqual(len(pending_ids), len(set(pending_ids)))
             self.assertEqual(len(pending_ids), 11)
+            before = len(adapter.node_calls)
+            original = adapter.execute("VA-16", None, "base1")
+            stamp = (original / "inspection.json").read_bytes()
+            adapter.execute("VA-16", None, "another-label")
+            self.assertEqual(len(adapter.node_calls), before)
+            self.assertEqual((original / "inspection.json").read_bytes(), stamp)
             rendered = h.clean(complete.to_dict())
             self.assertIsNone(rendered["ledger"]["usd"])
             self.assertTrue((root / "native/harnesses/c1/systemprompt.md").exists())

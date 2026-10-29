@@ -1,0 +1,22 @@
+{
+  "requestHash": "cc2ae0dffde4e7785eacf39b5b3128d3625cf76566a9fd2c1f4a387b348ca62d",
+  "output": {
+    "decision": "POST",
+    "finalText": "the chat is the easy part. on android the OS decides when your agent dies, so the foreground service and the resume queue are the actual product here."
+  },
+  "rawSummary": "{\"decision\":\"POST\",\"finalText\":\"the chat is the easy part. on android the OS decides when your agent dies, so the foreground service and the resume queue are the actual product here.\"}",
+  "execution": {
+    "providerInstanceId": "opencode",
+    "model": "opencode2api/deepseek-v4.1-flash-free",
+    "options": [
+      {
+        "id": "variant",
+        "value": "max"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A3ac96bba-e5f1-418e-9305-8321599d8f7a",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A3ac96bba-e5f1-418e-9305-8321599d8f7a>",
+    "status": "completed",
+    "usage": null
+  }
+}

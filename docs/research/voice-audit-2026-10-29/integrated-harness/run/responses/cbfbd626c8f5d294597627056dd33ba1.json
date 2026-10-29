@@ -1,0 +1,43 @@
+{
+  "requestHash": "cbfbd626c8f5d294597627056dd33ba17c94fef9c897292b6c604117514f2d39",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "Coding from a phone breaks on interruption, not on editor quality",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false
+      },
+      {
+        "text": "a foreground service plus a persistent queue is the line between a usable agent and a demo",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The source says recovery features help work continue through interruptions. It does not establish that interruptions, rather than editor quality, break phone coding.",
+      "The source does not establish that a foreground service and a persistent queue determine whether an agent is usable."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"Coding from a phone breaks on interruption, not on editor quality\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false},{\"text\":\"a foreground service plus a persistent queue is the line between a usable agent and a demo\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false}],\"voiceIssues\":[],\"issues\":[\"The source says recovery features help work continue through interruptions. It does not establish that interruptions, rather than editor quality, break phone coding.\",\"The source does not establish that a foreground service and a persistent queue determine whether an agent is usable.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A1a87081f-e9db-49d1-897d-04251a0eeec2",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A1a87081f-e9db-49d1-897d-04251a0eeec2>",
+    "status": "completed",
+    "usage": null
+  }
+}

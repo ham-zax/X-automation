@@ -1,0 +1,36 @@
+{
+  "requestHash": "574c3d4a5c6df1bba79ef460b67bc0c0091890ba715bf70915ca849732ffcb3e",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "an agent-built canvas plus integrated docs",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝",
+        "attributed": false
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result.",
+      "The product assertion is not visibly attributed to the source."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"an agent-built canvas plus integrated docs\",\"status\":\"unsupported\",\"sourceId\":\"candidate\",\"sourceQuote\":\"Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝\",\"attributed\":false}],\"voiceIssues\":[],\"issues\":[\"The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result.\",\"The product assertion is not visibly attributed to the source.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A4ebdace7-fcd4-4350-b1f3-ca9511644b75",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A4ebdace7-fcd4-4350-b1f3-ca9511644b75>",
+    "status": "completed",
+    "usage": null
+  }
+}

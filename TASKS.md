@@ -303,8 +303,8 @@ untracked. Preserve it. The unrelated Harness²/Learning OS checkout stays uncha
 
 | id | status | depends | owner | acceptance | evidence |
 | XR14-B | review | - | Terra high Node implementation plus parent adapter | Offline request/review/inspection CLI and native Harness² adapter use real Growth OS owners, isolated fixture state, exact T3 model requests, bounded resumable exchange and no publication. | Packet below. |
-| XR14-E | in-progress | XR14-B | parent, T3 model calls | Actual Harness² task-level cycle runs with matched packets. Report baseline/V4/native candidates and validation, including failures. | Limit 28 total dispatches including engineering and final review. |
-| XR14-R | open | XR14-E | Terra high independent reviewer | One graph review checks no-send isolation, exact model settings, conformance and claimed evidence. One repair round. | Only Hamza marks done. |
+| XR14-E | review | XR14-B | parent, T3 model calls | Actual Harness² task-level cycle runs with matched packets. Report baseline/V4/native candidates and validation, including failures. | Native cycle completes KEEP_BASE. Eight unique draft inspections fail. Two calibrated reviews narrow a social classification without accepting factual overreach. See integrated-harness/REPORT.md and manifest. |
+| XR14-R | review | XR14-E | Terra high independent reviewer | One graph review checks no-send isolation, exact model settings, conformance and claimed evidence. One repair round. | Dispatch 26 returns no verdict. Dispatch 27 completes a text-packet assessment. Parent repairs three medium comparison findings and one error diagnostic in one round. Node 2/2, Python 7/7. Only Hamza marks done. |
 
 Scope: implement eval/growth_reply.mjs, eval/harness2_growth.py,
 tests/growth_reply_eval.test.mjs, tests/test_growth_harness.py and
@@ -410,9 +410,86 @@ Parent integrates its patch and implements the native Python bridge. Focused Nod
 checks pass 2/2 after packet matching and stale-review corrections. Native Python
 checks pass 4/4, including real k=1 recursion with mocked external model I/O.
 Documentation records protocol and limits. Full serial Node suite starts next.
-Current integrated dispatch usage: 2 of 28. Independent final review remains reserved.
+Current integrated dispatch usage: 27 of 28. Independent final review remains reserved.
 
 Parent full serial suite passes: 406 tests, 0 failures, 0 skipped.
 Command: node --test --test-concurrency=1 tests/*.test.mjs.
 Log: /tmp/growth-harness-full-test.log. Native Python checks remain 4/4.
 XR14-B is at review. XR14-E starts the live-model offline experiment next.
+
+Integrated replay correction: recomputing completed inspection changed reviewedAt
+and the editor request identity. Parent freezes completed rollout artifacts and
+adds a native-cycle regression with changing timestamps. Python checks pass 4/4.
+One completed editor response is superseded and still counted. No extra solver
+or review call was made for the correction. Existing pending request now remains
+stable across resume. Active owned run: /tmp/growth-reply-h2-2fld4m97.
+
+Boundary correction: native Harness² import initializes its existing dotenv
+configuration. The bridge does not resolve provider auth or serialize environment
+values, but documentation no longer claims filesystem-level secret isolation.
+T3 evaluation jobs remain text-only by instruction and their activity is checked.
+
+Native k=1 sequential cycle completes with real core.recursion: four rollout
+labels and three edit/compose stages. Composer returns KEEP_BASE. Both probe
+replies remain blocked. Composed base reuses an identical cached execution; it
+is not a new sample. No improved style is accepted or promoted.
+Next checks: matched Terra, celebration/new-source controls and direct instruction
+replay. Optional writer repeat is replaced by direct-path coverage. One final
+fresh quality diagnosis is reserved after no gain, followed by the single graph
+review. All dispatches must remain within the same 28-call ceiling.
+
+Positive-control finding: a source-specific CodeAlta congratulation receives a
+failed review for lack of explicit attribution. Parent judges its voice appropriate.
+No reviewer or factual gate is weakened. New-source VA-13/18 runs are deferred
+until this judgment boundary is calibrated. They remain unused as solver cases.
+Direct instruction baseline/V4 checks continue, then one fresh quality diagnosis
+and the single final graph review. The remaining budget is a ceiling, not a quota.
+
+Dispatch 23 is the reserved fresh quality diagnosis, Terra high, from raw goals,
+exact requests, sources, outputs, reviews and current binding rules. No parent
+causal theory is supplied. New-source tests remain deferred.
+
+Initial diagnosis submission exceeds T3's 120000-character task limit and starts
+no worker. Parent factors duplicate persona/schema data and selects relevant
+policy excerpts. Dispatch 23 remains reserved for the compacted retry.
+
+Dispatch 23 completes. Fresh diagnosis separates real unsupported comparisons
+from questionable review classification. It does not prove a single root cause.
+User authorizes efficient closeout, offline review calibration and benchmark
+reuse across models. Change Necessity: code-change at the offline replay owner.
+Scope adds review-only replay, a selectable reviewer and one calibration fragment.
+No production review, attribution, approval, persona or send rules change.
+TaskStartSnapshot for this extension: main 077e53e with the existing benchmark
+cache correction and docs edits, plus pre-existing live-progress.json.
+Two review-only Terra-high calls use the existing celebration and overreach
+outputs. They add no solver calls or unused source cases. One final graph review
+remains reserved. The 28-dispatch ceiling stays unchanged.
+
+Closeout evidence: docs/research/voice-audit-2026-10-29/integrated-harness/REPORT.md.
+The archive retains exact requests, outputs, native cycle, frozen packets,
+receipts, diagnosis and two review comparisons. No new writing prompt wins.
+Review calibration omits the congratulation from factual claims but retains
+the canvas and causal-comparison objections. Both replies still fail binding.
+Focused extension checks: Node 2/2 and Python 5/5. Earlier full Node suite 406/406
+predates only the optional review-fragment extension. No production changes.
+
+Dispatch 26 starts the single independent Terra-high graph review. Parent checks
+the final code diff first. Existing artifacts answer quality questions. This call
+checks implementation and evidence accuracy, not another voice experiment.
+A wrong integration could invalidate later comparisons. Independence justifies
+delegation over repeating the parent review. Two budget slots remain unused.
+
+Dispatch 26 stops without a review verdict. A WSL-specific skill requires a
+missing transport. This checkout is the ARM production repository, and WSL is
+test-only under AGENTS.md. Dispatch 27 retries the same final graph review using
+an exact parent-captured text packet, with no host access requirement. The first
+attempt counts. No prior independent graph verdict exists. One slot stays unused.
+
+Final parent repair: bind frozen candidate/behavior, invalidate cached results on
+application/replay/persona/package changes, require exact receipt option sets,
+and include Node JSON errors in diagnostics. Review-only invalid output remains
+visible without a model request. Affected checks pass Node 2/2 and Python 7/7.
+Final serial Node suite after repair: 406 passed, 0 failed, 0 skipped.
+Log archived as integrated-harness/final-node-tests.log. Actual dispatches 27/28.
+XR14-B, XR14-E and XR14-R are at review. XR-14 quality acceptance remains open.
+No new production writing policy is accepted. Stop this experiment here.

@@ -1,0 +1,24 @@
+{
+  "requestHash": "c99b4bf0b9687212fc015d37b72f9efc012ba0310dc8d2f3ea5d244c35c7f04c",
+  "output": {
+    "tree": {
+      "systemprompt.md": "Before drafting, match each decisive claim to the available evidence. Evidence is enough when it supports the claim's scope and certainty. Reserve room for the complete output and inspection. Reopen or inspect the output. If inspection blocks it, revise the cited problems and inspect again. If a blocker cannot be resolved with available evidence, report it."
+    },
+    "notes": "In base1, the first draft made two claims that exceeded the source. Review flagged both, and inspection blocked the output. The trajectory ended without a revision. The added procedure checks support before drafting and provides for repair after a blocked inspection."
+  },
+  "rawSummary": "{\n  \"tree\": {\n    \"systemprompt.md\": \"Before drafting, match each decisive claim to the available evidence. Evidence is enough when it supports the claim's scope and certainty. Reserve room for the complete output and inspection. Reopen or inspect the output. If inspection blocks it, revise the cited problems and inspect again. If a blocker cannot be resolved with available evidence, report it.\"\n  },\n  \"notes\": \"In base1, the first draft made two claims that exceeded the source. Review flagged both, and inspection blocked the output. The trajectory ended without a revision. The added procedure checks support before drafting and provides for repair after a blocked inspection.\"\n}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A84b10164-624a-4d6c-9f61-2043dd6366d6",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A84b10164-624a-4d6c-9f61-2043dd6366d6>",
+    "status": "completed",
+    "usage": null
+  }
+}

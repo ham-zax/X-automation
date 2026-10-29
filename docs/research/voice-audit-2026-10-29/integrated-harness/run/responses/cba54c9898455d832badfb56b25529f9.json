@@ -1,0 +1,43 @@
+{
+  "requestHash": "cba54c9898455d832badfb56b25529f9498ddb1737c5eae2cef98ce322fc69c8",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "congrats on 1.6",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Just released CodeAlta 1.6.0",
+        "attributed": false
+      },
+      {
+        "text": "an agent-built canvas plus integrated docs",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝",
+        "attributed": false
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The supplied excerpt reports the release and features, but the reply does not attribute those claims to the source.",
+      "The excerpt says an agent can create a canvas through a plugin. It does not independently establish the proposed wording."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"congrats on 1.6\",\"status\":\"unsupported\",\"sourceId\":\"candidate\",\"sourceQuote\":\"Just released CodeAlta 1.6.0\",\"attributed\":false},{\"text\":\"an agent-built canvas plus integrated docs\",\"status\":\"unsupported\",\"sourceId\":\"candidate\",\"sourceQuote\":\"Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝\",\"attributed\":false}],\"voiceIssues\":[],\"issues\":[\"The supplied excerpt reports the release and features, but the reply does not attribute those claims to the source.\",\"The excerpt says an agent can create a canvas through a plugin. It does not independently establish the proposed wording.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aff6d06e7-d11d-4811-9f6e-d0f6658df588",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Aff6d06e7-d11d-4811-9f6e-d0f6658df588>",
+    "status": "completed",
+    "usage": null
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "passed": false,
+  "ownerClaims": [
+    "Fixing a bug from a phone is still wild to me.",
+    "a chat log I cannot inspect tells me nothing"
+  ],
+  "factualClaims": [
+    {
+      "text": "Fixing a bug from a phone",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Your phone can be where you fix the bug — not just where you read the issue.",
+      "attributed": false
+    },
+    {
+      "text": "The per-call diff cards",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [
+    "“still wild to me” suggests a continuing personal reaction. No owner evidence supports that history."
+  ],
+  "issues": [
+    "The phone-based bug-fixing claim relies on an X source claim, but the reply does not attribute it.",
+    "The source describes cards for every tool call and diff sheets in chat. It does not establish that every call has a diff card.",
+    "The statement about an uninspectable chat log is a subjective judgment, not evidence of prior use."
+  ]
+}

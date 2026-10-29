@@ -1,0 +1,18 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "an agent-built canvas plus integrated docs",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The source says an agent can create a canvas through a plugin. The reply describes an agent-built canvas, which may imply a completed result.",
+    "The product assertion is not visibly attributed to the source."
+  ]
+}

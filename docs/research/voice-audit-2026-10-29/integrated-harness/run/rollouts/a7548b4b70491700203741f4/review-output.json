@@ -1,0 +1,38 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "on android the OS decides when your agent dies",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false,
+      "supportAssessment": {
+        "support": "unresolved",
+        "projectMatch": false,
+        "contradictionChecked": false,
+        "limitationsChecked": false
+      }
+    },
+    {
+      "text": "the foreground service and the resume queue",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false,
+      "supportAssessment": {
+        "support": "unresolved",
+        "projectMatch": false,
+        "contradictionChecked": false,
+        "limitationsChecked": false
+      }
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The source does not establish that Android's OS decides when the agent stops. The wording makes an absolute causal claim.",
+    "The source reports a foreground service, resume cards, and a persistent message queue. It does not establish a resume queue or how recovery works.",
+    "No primary project evidence was supplied to check the implementation or its limitations."
+  ]
+}

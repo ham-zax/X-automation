@@ -296,3 +296,15 @@ new Terra calls without a renewed request.
 No source code, production model, persona, service, timer, or approval changes are
 authorized by this proposal. Implementation scope and the next call budget need
 to be recorded before execution. XR-14 stays in-progress.
+
+## Superseding implementation checkpoint, 29 October
+
+Hamza later authorizes Terra high and the bounded offline implementation graph
+in TASKS.md. The earlier Terra hold and proposal-only scope above are historical.
+The implementation and experiment report now live at
+`../research/voice-audit-2026-10-29/integrated-harness/REPORT.md`.
+The native cycle keeps the baseline. No production style is accepted.
+Optional offline review calibration narrows social-claim classification while
+retaining actual factual objections. It grants no publication authority.
+Close the experiment after one final graph review. The next proposed causal
+test changes selected behavior alone. Do not start another tuning wave here.

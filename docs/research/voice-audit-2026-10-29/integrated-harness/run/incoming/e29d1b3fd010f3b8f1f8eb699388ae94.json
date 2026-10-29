@@ -1,0 +1,50 @@
+{
+  "requestHash": "e29d1b3fd010f3b8f1f8eb699388ae94e9f5a23953b92ccff3e0be09fff626fe",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "editing files from a phone",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "On-device project work – reads and edits files, runs shell commands, and supports git from the phone",
+        "attributed": false
+      },
+      {
+        "text": "surviving android killing the foreground service mid-edit",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false
+      },
+      {
+        "text": "resume cards plus a persistent queue",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions",
+        "attributed": false
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The source reports phone editing, resume cards, and a persistent queue. The reply does not attribute those reports, and no primary project evidence is supplied.",
+      "The source does not establish what happens when Android kills the foreground service during an edit. The proposed wording presents that failure scenario as the central recovery problem without evidence."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"editing files from a phone\",\"status\":\"unsupported\",\"sourceId\":\"candidate\",\"sourceQuote\":\"On-device project work – reads and edits files, runs shell commands, and supports git from the phone\",\"attributed\":false},{\"text\":\"surviving android killing the foreground service mid-edit\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false},{\"text\":\"resume cards plus a persistent queue\",\"status\":\"unsupported\",\"sourceId\":\"candidate\",\"sourceQuote\":\"Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions\",\"attributed\":false}],\"voiceIssues\":[],\"issues\":[\"The source reports phone editing, resume cards, and a persistent queue. The reply does not attribute those reports, and no primary project evidence is supplied.\",\"The source does not establish what happens when Android kills the foreground service during an edit. The proposed wording presents that failure scenario as the central recovery problem without evidence.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ad84719c3-6822-4c6c-946d-9e5b89510e85",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ad84719c3-6822-4c6c-946d-9e5b89510e85>",
+    "status": "completed",
+    "usage": null
+  }
+}

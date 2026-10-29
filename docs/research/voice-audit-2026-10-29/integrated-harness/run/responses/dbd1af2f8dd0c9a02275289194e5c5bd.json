@@ -1,0 +1,24 @@
+{
+  "requestHash": "dbd1af2f8dd0c9a02275289194e5c5bd9d56eae88acfe8a5086003494dcb2904",
+  "output": {
+    "tree": {
+      "systemprompt.md": ""
+    },
+    "notes": "kept -> KEEP_BASE -> The only base rollout produced a draft, but inspection blocked it for unsupported claims. One base rollout is not a repeated failure.\ndropped -> dom1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout produced no publishable reply.\ndropped -> inv1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout did not revise the draft and produced no publishable reply."
+  },
+  "rawSummary": "{\"tree\":{\"systemprompt.md\":\"\"},\"notes\":\"kept -> KEEP_BASE -> The only base rollout produced a draft, but inspection blocked it for unsupported claims. One base rollout is not a repeated failure.\\ndropped -> dom1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout produced no publishable reply.\\ndropped -> inv1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout did not revise the draft and produced no publishable reply.\"}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A150bd63b-5ea8-42f0-b0b2-62533fe3416a",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A150bd63b-5ea8-42f0-b0b2-62533fe3416a>",
+    "status": "completed",
+    "usage": null
+  }
+}

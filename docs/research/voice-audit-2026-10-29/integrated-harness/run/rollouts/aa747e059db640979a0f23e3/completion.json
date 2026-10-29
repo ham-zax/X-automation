@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "case": "VA-16",
+    "style": "",
+    "lane": "writer",
+    "solver": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "replicate": ""
+  },
+  "inputsDigest": "09dd6f081447936caecc488266afa60c43dc5270a23c249260f56c9344c885fc",
+  "hashes": {
+    "packet.json": "f6ed2669aa0664192074780c7cf0cd173fd488e2c9ab3343748bf9a6a2c514a2",
+    "case.json": "01be938dfc39ee900ad965563c3d0b40587ce63f140e534f6de72c6b2f4672b6",
+    "request.json": "c19bcc9e27e786e2c798048dac7c212bd2e87d973f9687d1d3297bcac5a22d5f",
+    "model-output.json": "d58dec2aac0f7fef77b25881458386f6c76c75ba0c2cede420be1d9176d3032a",
+    "review-request.json": "300c7eb01cd16d667756b0940415112dddec263555d25c85d3191f64553b4ef6",
+    "review-output.json": "9c8c5207ab60f17d73a13bdfe34abeeb847087687e807fbb985e7f28deba09f9",
+    "inspection.json": "9f98c8fcfc22f4a6e475ca6fd1d1f280bbca3579bbddf89add9bdbb8fa2b7c4b"
+  }
+}

@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const original = process.cwd();
@@ -34,8 +35,10 @@ async function main(input) {
       const candidate = { ...item, key: item.url };
       const draft = { candidateKey: item.url, body: '', editor: { pipeline: 'reply' } };
       const queueItem = { pipeline: 'reply', behavior: item.behavior, replyArchetype: item.replyArchetype, contributionSummary: item.contributionSummary };
-      const packet = input.packetFile ? await read(resolve(input.packetFile)) : drafting.buildWriterPacket({ candidate, queueItem, draft });
-      if (packet.pipeline !== 'reply' || packet.candidate?.url !== candidate.url || packet.candidate?.text !== candidate.text) throw new Error('Frozen packet does not match this reply source.');
+      const expected = drafting.buildWriterPacket({ candidate, queueItem, draft });
+      const packet = input.packetFile ? await read(resolve(input.packetFile)) : expected;
+      if (packet.pipeline !== 'reply' || !isDeepStrictEqual(packet.candidate, expected.candidate)
+        || !isDeepStrictEqual(packet.behavior, expected.behavior)) throw new Error('Frozen packet does not match this reply source or behavior. Use a fresh run root.');
       if (input.packetFile) await writeFile(files.packet, await readFile(resolve(input.packetFile))); else await write(files.packet, packet);
       await write(files.case, { lane, candidate, draft, omissions: ['blank recent and history state', 'no owner attestations', 'no browser, room or thread context', 'fixture behavior is not a generation trace'], publicationAuthority: false });
       const style = input.styleFile ? await readFile(resolve(input.styleFile), 'utf8') : '';
@@ -73,6 +76,7 @@ async function main(input) {
     const reviewOutput = state.lane === 'writer' ? output : { ...output, pipeline: 'reply', threadParts: [] };
     if (input.operation === 'review-request') {
       const reviewRequest = await capture(runAI => runtime.reviewWriterOutput(packet, reviewOutput, { runAI }));
+      if (input.reviewStyleFile) reviewRequest.prompt += `\n\nOFFLINE REVIEW CALIBRATION:\n${await readFile(resolve(input.reviewStyleFile), 'utf8')}`;
       await write(files['review-request'], reviewRequest);
       return { status: 'review-requested', artifacts: { reviewRequest: files['review-request'] } };
     }

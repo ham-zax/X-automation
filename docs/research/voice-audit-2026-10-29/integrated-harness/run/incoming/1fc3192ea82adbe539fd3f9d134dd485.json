@@ -1,0 +1,35 @@
+{
+  "requestHash": "1fc3192ea82adbe539fd3f9d134dd485016be58e9d395da312fc6c09913afae6",
+  "output": {
+    "passed": false,
+    "ownerClaims": [],
+    "factualClaims": [
+      {
+        "text": "review the diff and push without getting back to a PC",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false
+      }
+    ],
+    "voiceIssues": [],
+    "issues": [
+      "The supplied X source reports these features, but the reply does not attribute the claim to that source. No independent evidence supports the stated workflow."
+    ]
+  },
+  "rawSummary": "{\"passed\":false,\"ownerClaims\":[],\"factualClaims\":[{\"text\":\"review the diff and push without getting back to a PC\",\"status\":\"unsupported\",\"sourceId\":\"\",\"sourceQuote\":\"\",\"attributed\":false}],\"voiceIssues\":[],\"issues\":[\"The supplied X source reports these features, but the reply does not attribute the claim to that source. No independent evidence supports the stated workflow.\"]}",
+  "execution": {
+    "providerInstanceId": "codex",
+    "model": "gpt-6.1-terra",
+    "options": [
+      {
+        "id": "reasoningEffort",
+        "value": "high"
+      }
+    ],
+    "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab613ba89-ff0b-477d-a0e4-393ba920ea4e",
+    "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3Ab613ba89-ff0b-477d-a0e4-393ba920ea4e>",
+    "status": "completed",
+    "usage": null
+  }
+}

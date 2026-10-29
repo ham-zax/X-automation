@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "case": "VA-14",
+    "style": "",
+    "lane": "writer",
+    "solver": {
+      "providerInstanceId": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": {
+        "variant": "max"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "replicate": ""
+  },
+  "inputsDigest": "cef9fd44ad689dacc271f8f13fac3f032ecc30685226d76f0f7337936f1e32c8",
+  "hashes": {
+    "packet.json": "28a592eaf4a80741df14ed478b88393e1288c637234014f35db353f6ccd072a2",
+    "case.json": "4b9155900d9bba9c4658ad440302dc201c7b8b1875fbe8896bdde3c5a2cb7359",
+    "request.json": "857ecce90c1a96cccd39924d6f57ed646274b9ccbe191882cee85f4fe01e9727",
+    "model-output.json": "0c2c960551218705165c484594058fb52b8960a47ce41cce0bdb316c9c67c69b",
+    "review-request.json": "f02dad19be38c944f0c9d34bbdc7038f2dc8a795e3c53ca901e5803db0975995",
+    "review-output.json": "a581e6b082c28f581301b2667024c95835297317fed8e32d39f122c2aefd6897",
+    "inspection.json": "e9b5f93d1557c2b33e108bf9fb84283c3d17580996027245876b229372693b0d"
+  }
+}

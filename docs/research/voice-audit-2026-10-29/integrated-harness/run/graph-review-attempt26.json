@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7e5738b2-c03d-43a3-befb-a8488321dbc0",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7e5738b2-c03d-43a3-befb-a8488321dbc0",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7e5738b2-c03d-43a3-befb-a8488321dbc0>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253A7e5738b2-c03d-43a3-befb-a8488321dbc0:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A7e5738b2-c03d-43a3-befb-a8488321dbc0",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253A7e5738b2-c03d-43a3-befb-a8488321dbc0:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "codex",
+  "model": "gpt-6.1-terra",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "high"
+    }
+  ],
+  "summary": "I could not complete the review. The required `wsl-web-harness` tool is unavailable in this session.\n\nThe [code-review skill](/home/ubuntu/.codex/plugins/cache/created-by-me-remote/webharness-skills/0.1.3/skills/code-review/SKILL.md) says to “stop before claiming to have inspected or verified local code” when that tool is unavailable. I therefore cannot give a findings verdict from the partial inspection.\n\nNo files, services, credentials, databases, or public actions were changed. I did not run tests.",
+  "resultContextTransferId": "context-transfer:type:subagent_result:source-thread:thread%3Adelegated-task%3Acommand%253Amcp%253A6cda235a-727d-4304-b3f7-1cea1fcabc30%253Adelegate-task%253A7e5738b2-c03d-43a3-befb-a8488321dbc0:target-thread:48b4b81e-456c-46f0-b65b-c5b7d46b6346:aa766dbe-2fe7-4dad-b34f-9a990ca0902f",
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

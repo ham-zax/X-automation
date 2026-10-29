@@ -1,0 +1,41 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "running commands from a phone is the easy part",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "the review loop decides this one",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "reading a real diff and catching a bad edit on a 6-inch screen",
+      "status": "illustrative",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "tool-call cards",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [
+    "The easy-part contrast repeats the hidden-boundary framing that the persona warns against."
+  ],
+  "issues": [
+    "The supplied excerpt does not establish that running commands is easier than reviewing changes or that the review loop decides the outcome.",
+    "The source reports tool-call cards, but the reply does not attribute that claim and no primary project evidence is supplied."
+  ]
+}

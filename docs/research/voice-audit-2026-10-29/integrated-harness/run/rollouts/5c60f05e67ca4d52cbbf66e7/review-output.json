@@ -1,0 +1,25 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "congrats on 1.6",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Just released CodeAlta 1.6.0",
+      "attributed": false
+    },
+    {
+      "text": "an agent-built canvas plus integrated docs",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Canvas 🖼️ that can be created with an agent via a plugin - Statistics 📊 - Welcome page for getting started 🤗 - Integrated documentation - ask the agent 📝",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The supplied excerpt reports the release and features, but the reply does not attribute those claims to the source.",
+    "The excerpt says an agent can create a canvas through a plugin. It does not independently establish the proposed wording."
+  ]
+}

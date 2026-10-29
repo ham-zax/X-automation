@@ -1,0 +1,24 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "A phone coding agent is well suited to contained fixes that can be reviewed and pushed without a PC.",
+  "finalText": "The sweet spot for a phone coding agent is a contained fix: review the diff and push without getting back to a PC.",
+  "threadParts": [],
+  "semanticAnchors": [
+    "phone coding agent",
+    "diff"
+  ],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The reply is complete without media.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a clear judgment about where a phone coding agent fits a workflow.",
+  "relationshipValue": "Responds directly to the proposed workflow in the source post.",
+  "profileProofValue": "Shows practical workflow taste.",
+  "riskFlags": []
+}

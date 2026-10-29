@@ -1,0 +1,234 @@
+[ACTION] model-output.json
+[OBSERVATION] {
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "Judge the phone coding agent by its recovery layer, not its chat UI: a foreground service, resume cards and a persistent queue are what let real work survive interruptions.",
+  "finalText": "The recovery layer decides whether this is real work or a demo: foreground service, resume cards, persistent message queue. Diff sheets and recorded check outcomes matter more than a nicer chat UI.",
+  "threadParts": [],
+  "semanticAnchors": [
+    "Android",
+    "AI coding agent",
+    "git",
+    "diffs"
+  ],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The reply is a judgment on the source's own feature list, so no extra visual is needed.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a builder's judgment: it picks the part of the product that determines real workflow value instead of reacting to the launch surface.",
+  "relationshipValue": "Engages the author's post with a specific, non-generic read of the feature list, which is a better basis for a technical exchange than praise.",
+  "profileProofValue": "Reinforces the account's recurring lens on recovery, failure boundaries and real workflow consequences, applied to a source that actually raises them.",
+  "riskFlags": [
+    "All feature details come from the source announcement and are not independently verified."
+  ]
+}
+
+[ACTION] review-output.json
+[OBSERVATION] {
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "The recovery layer decides whether this is real work or a demo",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "foreground service, resume cards, persistent message queue",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions",
+      "attributed": false
+    },
+    {
+      "text": "Diff sheets and recorded check outcomes",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The claim that recovery decides whether the app supports real work or is a demo goes beyond the supplied evidence.",
+    "The candidate source reports the listed features, but the proposed reply does not attribute those reports. No primary project evidence is supplied to verify them."
+  ]
+}
+
+[ACTION] inspection.json
+[OBSERVATION] {
+  "status": "blocked",
+  "exactText": "The recovery layer decides whether this is real work or a demo: foreground service, resume cards, persistent message queue. Diff sheets and recorded check outcomes matter more than a nicer chat UI.",
+  "decision": "POST",
+  "schemaErrors": [],
+  "reviewFailures": [
+    "Unsupported claim: The recovery layer decides whether this is real work or a demo",
+    "Unsupported claim: foreground service, resume cards, persistent message queue",
+    "Unsupported claim: Diff sheets and recorded check outcomes",
+    "The claim that recovery decides whether the app supports real work or is a demo goes beyond the supplied evidence.",
+    "The candidate source reports the listed features, but the proposed reply does not attribute those reports. No primary project evidence is supplied to verify them."
+  ],
+  "review": {
+    "schemaVersion": 1,
+    "reviewer": "external_agent",
+    "execution": null,
+    "reviewedAt": 1793272648664,
+    "fingerprint": "bc7767b636e94e50d7695b6f8d9bed14eb8c41c9cc8d5da99af186b13b6f9016",
+    "personaVersion": "hamza-v1-alpha-2026-10-02",
+    "factualClaims": [
+      {
+        "text": "The recovery layer decides whether this is real work or a demo",
+        "status": "unsupported",
+        "sourceId": "",
+        "sourceQuote": "",
+        "attributed": false
+      },
+      {
+        "text": "foreground service, resume cards, persistent message queue",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions",
+        "attributed": false
+      },
+      {
+        "text": "Diff sheets and recorded check outcomes",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+        "attributed": false
+      }
+    ],
+    "ownerClaims": [],
+    "available": true,
+    "voiceIssues": [],
+    "issues": [
+      "Unsupported claim: The recovery layer decides whether this is real work or a demo",
+      "Unsupported claim: foreground service, resume cards, persistent message queue",
+      "Unsupported claim: Diff sheets and recorded check outcomes",
+      "The claim that recovery decides whether the app supports real work or is a demo goes beyond the supplied evidence.",
+      "The candidate source reports the listed features, but the proposed reply does not attribute those reports. No primary project evidence is supplied to verify them."
+    ],
+    "passed": false
+  },
+  "actError": null,
+  "score": {
+    "score": 34,
+    "minimumScore": 30,
+    "quality": "standard",
+    "breakdown": {
+      "purpose": 10,
+      "clarity": 10,
+      "provenance": 0,
+      "originality": 10,
+      "realization": 4
+    },
+    "behavior": {
+      "schemaVersion": 1,
+      "decision": "ACT",
+      "pipeline": "reply",
+      "primaryPurpose": "judgment",
+      "secondaryPurposes": [],
+      "socialMode": "opinionated_peer",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "judgment",
+      "conversationStage": "initial",
+      "reasonToExist": "State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.",
+      "selectionSource": "engagement_heuristic",
+      "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+      "provenance": {
+        "ownerFactsAllowed": false,
+        "ownerExperienceAllowed": false,
+        "sourceClaims": [],
+        "ownerClaims": [],
+        "restrictions": [],
+        "summary": ""
+      },
+      "selectedAt": 1791916455037
+    },
+    "sourceSimilarity": 0.13709677419354838,
+    "weightedLength": 197,
+    "publishable": false,
+    "gates": {
+      "passed": false,
+      "failures": [
+        {
+          "code": "CONTENT_FACTUAL_REVIEW_FAILED",
+          "message": "Unsupported claim: The recovery layer decides whether this is real work or a demo Unsupported claim: foreground service, resume cards, persistent message queue Unsupported claim: Diff sheets and recorded check outcomes The claim that recovery decides whether the app supports real work or is a demo goes beyond the supplied evidence. The candidate source reports the listed features, but the proposed reply does not attribute those reports. No primary project evidence is supplied to verify them."
+        },
+        {
+          "code": "GROWTH_FIT_UNKNOWN",
+          "message": "Growth fit needs a current classification. Rescore candidates from Growth Focus before approval."
+        }
+      ],
+      "warnings": [],
+      "checks": {
+        "growthFocus": false,
+        "purposeIntegrity": true,
+        "factualProvenance": false,
+        "contentReview": true,
+        "behaviorAlignment": true,
+        "originality": true,
+        "scannability": true,
+        "understandable": true,
+        "noPlaceholders": true,
+        "length": true,
+        "ctaIntegrity": true,
+        "recentDuplicate": true,
+        "hashtagCount": true,
+        "emojiCount": true,
+        "threadRules": true,
+        "mediaReady": true
+      }
+    },
+    "growthPackaging": {
+      "ready": false,
+      "blockers": [
+        {
+          "code": "NO_CLEAR_PURPOSE_PAYOFF",
+          "message": "The current draft does not visibly fulfill its selected purpose."
+        }
+      ],
+      "items": {
+        "stoppingPower": {
+          "status": "clear",
+          "detail": "The selected act is legible at the required depth."
+        },
+        "readerPayoff": {
+          "status": "blocked",
+          "detail": "The selected purpose is not evident in the draft."
+        },
+        "distributionLeverage": {
+          "status": "borrowed_context",
+          "detail": "Reply participates directly in the source conversation."
+        },
+        "sourceActionPath": {
+          "status": "not_needed",
+          "detail": "This draft does not promise a resource/action path."
+        },
+        "interactionOpening": {
+          "status": "optional",
+          "detail": "No forced question; the selected act may already be complete."
+        },
+        "mediaOpportunity": {
+          "status": "unnecessary",
+          "detail": "No media is required for this draft."
+        },
+        "strategyState": {
+          "status": "not_required",
+          "mode": null,
+          "label": "Engage Next reply",
+          "detail": "Main-feed Writing Approach is not required for the reply lane; the persisted behavior decision owns purpose, mode, affect, and depth."
+        }
+      }
+    }
+  },
+  "publicationAuthority": false
+}

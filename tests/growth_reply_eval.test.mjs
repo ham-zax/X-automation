@@ -22,6 +22,13 @@ test('captures real schema and freezes packet, refusing extra fields and failed 
   call({ operation: 'prepare', caseId: 'VA-16', outputDir: other, packetFile: path.join(dir, 'packet.json') });
   assert.equal(readFileSync(path.join(dir, 'packet.json'), 'utf8'), readFileSync(path.join(other, 'packet.json'), 'utf8'));
   assert.throws(() => call({ operation: 'prepare', caseId: 'VA-14', outputDir: other, packetFile: path.join(dir, 'packet.json') }), error => error.status === 1 && /Frozen packet/.test(error.stdout));
+  const frozen = load(dir, 'packet.json');
+  const fixtureFile = path.join(temp, 'changed-fixture.json');
+  const fixture = JSON.parse(readFileSync(path.join(root, 'eval/fixtures/growth_reply.json'), 'utf8'));
+  fixture.cases.find(item => item.id === 'VA-16').behavior.reasonToExist = 'A different contribution.';
+  writeFileSync(fixtureFile, JSON.stringify(fixture));
+  assert.throws(() => call({ operation: 'prepare', caseId: 'VA-16', fixtureFile, outputDir: other, packetFile: path.join(dir, 'packet.json') }), error => error.status === 1 && /Frozen packet/.test(error.stdout));
+  assert.deepEqual(load(dir, 'packet.json'), frozen);
   const output = { decision: 'POST', pipeline: 'reply', thesis: '', finalText: 'Interesting approach to coding on a phone.', threadParts: [], semanticAnchors: [], evidenceUsed: [], media: { required: false, type: 'none', reason: '', source: '', altText: '' }, discussionQuestion: null, followValue: '', relationshipValue: null, profileProofValue: null, riskFlags: [] };
   save(dir, 'model-output.json', { ...output, extra: true });
   assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');
@@ -29,6 +36,13 @@ test('captures real schema and freezes packet, refusing extra fields and failed 
   save(dir, 'model-output.json', output);
   assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'review-requested');
   assert.equal(load(dir, 'review-request.json').metadata.consumer, 'writer_content_review');
+  const canonicalReview = load(dir, 'review-request.json');
+  const fragment = path.join(temp, 'review-style.txt');
+  writeFileSync(fragment, 'A congratulation is a social act.');
+  call({ operation: 'review-request', outputDir: dir, reviewStyleFile: fragment });
+  assert.equal(load(dir, 'review-request.json').prompt, canonicalReview.prompt + '\n\nOFFLINE REVIEW CALIBRATION:\nA congratulation is a social act.');
+  assert.deepEqual(load(dir, 'review-request.json').schema, canonicalReview.schema);
+  assert.deepEqual(load(dir, 'model-output.json'), output);
   save(dir, 'review-output.json', review);
   assert.equal(call({ operation: 'inspect', outputDir: dir }).status, 'blocked');
   assert.ok(load(dir, 'inspection.json').reviewFailures.length);

@@ -1,0 +1,1 @@
+Match each factual claim and causal comparison in a reply to the strength of the supplied evidence. If evidence does not support a claim, express a preference or question without asserting the claim, or omit it. Preserve useful technical opinions and social reactions.

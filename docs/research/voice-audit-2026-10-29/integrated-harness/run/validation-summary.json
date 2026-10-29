@@ -1,0 +1,169 @@
+{
+  "schemaVersion": 1,
+  "results": [
+    {
+      "label": "Terra matched writer",
+      "command": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --label terra-matched --solver-target '/tmp/growth-reply-h2-2fld4m97/terra-target.json'",
+      "runDir": "/tmp/growth-reply-h2-2fld4m97/rollouts/aa747e059db640979a0f23e3",
+      "status": "blocked",
+      "text": "The sweet spot for a phone coding agent is a contained fix: review the diff and push without getting back to a PC.",
+      "decision": "POST",
+      "schemaErrors": [],
+      "reviewPassed": false,
+      "voiceIssues": [],
+      "reviewFailures": [
+        "Unsupported claim: review the diff and push without getting back to a PC",
+        "The supplied X source reports these features, but the reply does not attribute the claim to that source. No independent evidence supports the stated workflow."
+      ],
+      "publishable": false
+    },
+    {
+      "label": "Celebration control",
+      "command": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-14 --label celebration-control",
+      "runDir": "/tmp/growth-reply-h2-2fld4m97/rollouts/5c60f05e67ca4d52cbbf66e7",
+      "status": "blocked",
+      "text": "congrats on 1.6 — an agent-built canvas plus integrated docs is a big jump for one release.",
+      "decision": "POST",
+      "schemaErrors": [],
+      "reviewPassed": false,
+      "voiceIssues": [],
+      "reviewFailures": [
+        "Unsupported claim: congrats on 1.6",
+        "Unsupported claim: an agent-built canvas plus integrated docs",
+        "The supplied excerpt reports the release and features, but the reply does not attribute those claims to the source.",
+        "The excerpt says an agent can create a canvas through a plugin. It does not independently establish the proposed wording."
+      ],
+      "publishable": false
+    },
+    {
+      "label": "Direct instruction baseline",
+      "command": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --lane direct --label direct-baseline",
+      "runDir": "/tmp/growth-reply-h2-2fld4m97/rollouts/a7548b4b70491700203741f4",
+      "status": "blocked",
+      "text": "the chat is the easy part. on android the OS decides when your agent dies, so the foreground service and the resume queue are the actual product here.",
+      "decision": "POST",
+      "schemaErrors": [],
+      "reviewPassed": false,
+      "voiceIssues": [],
+      "reviewFailures": [
+        "Unsupported claim: on android the OS decides when your agent dies",
+        "Unsupported claim: the foreground service and the resume queue",
+        "The source does not establish that Android's OS decides when the agent stops. The wording makes an absolute causal claim.",
+        "The source reports a foreground service, resume cards, and a persistent message queue. It does not establish a resume queue or how recovery works.",
+        "No primary project evidence was supplied to check the implementation or its limitations."
+      ],
+      "publishable": false
+    },
+    {
+      "label": "Direct instruction V4",
+      "command": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-16 --lane direct --style-file docs/research/voice-audit-2026-10-29/fresh-prompt/prompt-v4.txt --label direct-v4",
+      "runDir": "/tmp/growth-reply-h2-2fld4m97/rollouts/039e3cd21fb300f6c2c2cae5",
+      "status": "blocked",
+      "text": "Fixing a bug from a phone is still wild to me. The per-call diff cards are the part that makes it usable, since a chat log I cannot inspect tells me nothing.",
+      "decision": "POST",
+      "schemaErrors": [],
+      "reviewPassed": false,
+      "voiceIssues": [
+        "“still wild to me” suggests a continuing personal reaction. No owner evidence supports that history."
+      ],
+      "reviewFailures": [
+        "Unsupported claim: Fixing a bug from a phone",
+        "Unsupported claim: The per-call diff cards",
+        "Owner experience needs exact-text human attestation.",
+        "The phone-based bug-fixing claim relies on an X source claim, but the reply does not attribute it.",
+        "The source describes cards for every tool call and diff sheets in chat. It does not establish that every call has a diff card.",
+        "The statement about an uninspectable chat log is a subjective judgment, not evidence of prior use."
+      ],
+      "publishable": false
+    }
+  ],
+  "deferred": [
+    {
+      "label": "New source VA-13",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-13 --label validation-13"
+    },
+    {
+      "label": "New source VA-18",
+      "cmd": "uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python eval/harness2_growth.py rollout --run-root '/tmp/growth-reply-h2-2fld4m97' --case VA-18 --label validation-18"
+    }
+  ],
+  "nativeCycle": {
+    "status": "complete",
+    "cycle": {
+      "mode": "seq",
+      "task_id": "VA-16",
+      "k": 1,
+      "finals": [
+        "c1"
+      ],
+      "ok": true,
+      "fell_back": [],
+      "kept_base": [
+        "c1"
+      ],
+      "stages": [
+        {
+          "label": "inv1",
+          "dim": "INV",
+          "fell_back": false,
+          "kept_base": false,
+          "attempts": 0,
+          "usd": null,
+          "cached": true,
+          "notes": "{\"notes\": \"In base1, the first draft made two claims that exceeded the source. Review flagged both, and inspection blocked the output. The trajectory ended without a revision. The added procedure checks support before drafting and provides for repair after a blocked inspection.\", \"tree\": {\"systemprompt.md\": \"Before drafting, match each decisive claim to the available evidence. Evidence is enough when it supports the claim's scope and certainty. Reserve room for the complete output and inspection. Reopen or inspect the output. If inspection blocks it, revise the cited problems and inspect again. If a blocker cannot be resolved with available evidence, report it.\"}}",
+          "error": ""
+        },
+        {
+          "label": "dom1",
+          "dim": "DOM",
+          "fell_back": false,
+          "kept_base": false,
+          "attempts": 0,
+          "usd": null,
+          "cached": true,
+          "notes": "{\"notes\": \"In base1, the reply claimed interruptions matter more than editor quality and that two recovery features determine usability. The review found both claims unsupported and blocked the reply. The source only says recovery features help work continue through interruptions.\", \"tree\": {\"systemprompt.md\": \"Match each factual claim and causal comparison in a reply to the strength of the supplied evidence. If evidence does not support a claim, express a preference or question without asserting the claim, or omit it. Preserve useful technical opinions and social reactions.\"}}",
+          "error": ""
+        },
+        {
+          "label": "c1",
+          "dim": "COMPOSE",
+          "fell_back": false,
+          "kept_base": true,
+          "attempts": 0,
+          "usd": null,
+          "cached": true,
+          "notes": "{\"notes\": \"kept -> KEEP_BASE -> The only base rollout produced a draft, but inspection blocked it for unsupported claims. One base rollout is not a repeated failure.\\ndropped -> dom1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout produced no publishable reply.\\ndropped -> inv1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout did not revise the draft and produced no publishable reply.\", \"tree\": {\"systemprompt.md\": \"\"}}",
+          "error": ""
+        }
+      ],
+      "similarity": null,
+      "ledger": {
+        "mode": "seq",
+        "task_id": "VA-16",
+        "k": 1,
+        "R": 4,
+        "expected_R": 4,
+        "P": 3,
+        "session_attempts": 0,
+        "expected_P": 3,
+        "usd": null,
+        "rollout_usd": null,
+        "session_usd": null,
+        "rollouts": [
+          "base1",
+          "inv1",
+          "dom1",
+          "c1"
+        ],
+        "sessions": [
+          "inv1",
+          "dom1",
+          "c1"
+        ]
+      },
+      "errors": []
+    },
+    "selectedStyle": "/tmp/growth-reply-h2-2fld4m97/native/harnesses/c1/systemprompt.md"
+  },
+  "modelDispatches": 20
+}

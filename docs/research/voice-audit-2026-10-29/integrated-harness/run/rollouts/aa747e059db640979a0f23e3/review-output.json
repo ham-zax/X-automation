@@ -1,0 +1,17 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "review the diff and push without getting back to a PC",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The supplied X source reports these features, but the reply does not attribute the claim to that source. No independent evidence supports the stated workflow."
+  ]
+}

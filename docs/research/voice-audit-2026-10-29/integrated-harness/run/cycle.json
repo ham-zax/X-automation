@@ -1,0 +1,74 @@
+{
+  "mode": "seq",
+  "task_id": "VA-16",
+  "k": 1,
+  "finals": [
+    "c1"
+  ],
+  "ok": true,
+  "fell_back": [],
+  "kept_base": [
+    "c1"
+  ],
+  "stages": [
+    {
+      "label": "inv1",
+      "dim": "INV",
+      "fell_back": false,
+      "kept_base": false,
+      "attempts": 0,
+      "usd": null,
+      "cached": true,
+      "notes": "{\"notes\": \"In base1, the first draft made two claims that exceeded the source. Review flagged both, and inspection blocked the output. The trajectory ended without a revision. The added procedure checks support before drafting and provides for repair after a blocked inspection.\", \"tree\": {\"systemprompt.md\": \"Before drafting, match each decisive claim to the available evidence. Evidence is enough when it supports the claim's scope and certainty. Reserve room for the complete output and inspection. Reopen or inspect the output. If inspection blocks it, revise the cited problems and inspect again. If a blocker cannot be resolved with available evidence, report it.\"}}",
+      "error": ""
+    },
+    {
+      "label": "dom1",
+      "dim": "DOM",
+      "fell_back": false,
+      "kept_base": false,
+      "attempts": 0,
+      "usd": null,
+      "cached": true,
+      "notes": "{\"notes\": \"In base1, the reply claimed interruptions matter more than editor quality and that two recovery features determine usability. The review found both claims unsupported and blocked the reply. The source only says recovery features help work continue through interruptions.\", \"tree\": {\"systemprompt.md\": \"Match each factual claim and causal comparison in a reply to the strength of the supplied evidence. If evidence does not support a claim, express a preference or question without asserting the claim, or omit it. Preserve useful technical opinions and social reactions.\"}}",
+      "error": ""
+    },
+    {
+      "label": "c1",
+      "dim": "COMPOSE",
+      "fell_back": false,
+      "kept_base": true,
+      "attempts": 0,
+      "usd": null,
+      "cached": true,
+      "notes": "{\"notes\": \"kept -> KEEP_BASE -> The only base rollout produced a draft, but inspection blocked it for unsupported claims. One base rollout is not a repeated failure.\\ndropped -> dom1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout produced no publishable reply.\\ndropped -> inv1 -> The candidate produced a draft, but inspection blocked it for unsupported claims and missing attribution. The rollout did not revise the draft and produced no publishable reply.\", \"tree\": {\"systemprompt.md\": \"\"}}",
+      "error": ""
+    }
+  ],
+  "similarity": null,
+  "ledger": {
+    "mode": "seq",
+    "task_id": "VA-16",
+    "k": 1,
+    "R": 4,
+    "expected_R": 4,
+    "P": 3,
+    "session_attempts": 0,
+    "expected_P": 3,
+    "usd": null,
+    "rollout_usd": null,
+    "session_usd": null,
+    "rollouts": [
+      "base1",
+      "inv1",
+      "dom1",
+      "c1"
+    ],
+    "sessions": [
+      "inv1",
+      "dom1",
+      "c1"
+    ]
+  },
+  "errors": []
+}

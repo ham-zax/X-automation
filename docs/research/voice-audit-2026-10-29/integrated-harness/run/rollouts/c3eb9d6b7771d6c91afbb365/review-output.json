@@ -1,0 +1,32 @@
+{
+  "passed": false,
+  "ownerClaims": [],
+  "factualClaims": [
+    {
+      "text": "editing files from a phone",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "On-device project work – reads and edits files, runs shell commands, and supports git from the phone",
+      "attributed": false
+    },
+    {
+      "text": "surviving android killing the foreground service mid-edit",
+      "status": "unsupported",
+      "sourceId": "",
+      "sourceQuote": "",
+      "attributed": false
+    },
+    {
+      "text": "resume cards plus a persistent queue",
+      "status": "unsupported",
+      "sourceId": "candidate",
+      "sourceQuote": "Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions",
+      "attributed": false
+    }
+  ],
+  "voiceIssues": [],
+  "issues": [
+    "The source reports phone editing, resume cards, and a persistent queue. The reply does not attribute those reports, and no primary project evidence is supplied.",
+    "The source does not establish what happens when Android kills the foreground service during an edit. The proposed wording presents that failure scenario as the central recovery problem without evidence."
+  ]
+}

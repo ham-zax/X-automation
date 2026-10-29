@@ -1,0 +1,169 @@
+{
+  "status": "blocked",
+  "exactText": "Fixing a bug from a phone is still wild to me. The per-call diff cards are the part that makes it usable, since a chat log I cannot inspect tells me nothing.",
+  "decision": "POST",
+  "schemaErrors": [],
+  "reviewFailures": [
+    "Unsupported claim: Fixing a bug from a phone",
+    "Unsupported claim: The per-call diff cards",
+    "Owner experience needs exact-text human attestation.",
+    "The phone-based bug-fixing claim relies on an X source claim, but the reply does not attribute it.",
+    "The source describes cards for every tool call and diff sheets in chat. It does not establish that every call has a diff card.",
+    "The statement about an uninspectable chat log is a subjective judgment, not evidence of prior use."
+  ],
+  "review": {
+    "schemaVersion": 1,
+    "reviewer": "external_agent",
+    "execution": null,
+    "reviewedAt": 1793273753468,
+    "fingerprint": "2869ad6e617210aa3b3e3c3c920e73faffb8142d82ff62bef84540d7ca8fc38d",
+    "personaVersion": "hamza-v1-alpha-2026-10-02",
+    "factualClaims": [
+      {
+        "text": "Fixing a bug from a phone",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "Your phone can be where you fix the bug — not just where you read the issue.",
+        "attributed": false
+      },
+      {
+        "text": "The per-call diff cards",
+        "status": "unsupported",
+        "sourceId": "candidate",
+        "sourceQuote": "every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+        "attributed": false
+      }
+    ],
+    "ownerClaims": [
+      "Fixing a bug from a phone is still wild to me.",
+      "a chat log I cannot inspect tells me nothing"
+    ],
+    "available": true,
+    "voiceIssues": [
+      "“still wild to me” suggests a continuing personal reaction. No owner evidence supports that history."
+    ],
+    "issues": [
+      "Unsupported claim: Fixing a bug from a phone",
+      "Unsupported claim: The per-call diff cards",
+      "Owner experience needs exact-text human attestation.",
+      "The phone-based bug-fixing claim relies on an X source claim, but the reply does not attribute it.",
+      "The source describes cards for every tool call and diff sheets in chat. It does not establish that every call has a diff card.",
+      "The statement about an uninspectable chat log is a subjective judgment, not evidence of prior use."
+    ],
+    "passed": false
+  },
+  "actError": null,
+  "score": {
+    "score": 34,
+    "minimumScore": 30,
+    "quality": "standard",
+    "breakdown": {
+      "purpose": 10,
+      "clarity": 10,
+      "provenance": 0,
+      "originality": 10,
+      "realization": 4
+    },
+    "behavior": {
+      "schemaVersion": 1,
+      "decision": "ACT",
+      "pipeline": "reply",
+      "primaryPurpose": "judgment",
+      "secondaryPurposes": [],
+      "socialMode": "opinionated_peer",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "judgment",
+      "conversationStage": "initial",
+      "reasonToExist": "State the clearest workflow judgment, preference, or consequence the source actually supports. Ask only when a missing fact genuinely blocks a call.",
+      "selectionSource": "engagement_heuristic",
+      "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+      "provenance": {
+        "ownerFactsAllowed": false,
+        "ownerExperienceAllowed": false,
+        "sourceClaims": [],
+        "ownerClaims": [],
+        "restrictions": [],
+        "summary": ""
+      },
+      "selectedAt": 1791916455037
+    },
+    "sourceSimilarity": 0.0625,
+    "weightedLength": 157,
+    "publishable": false,
+    "gates": {
+      "passed": false,
+      "failures": [
+        {
+          "code": "CONTENT_FACTUAL_REVIEW_FAILED",
+          "message": "Unsupported claim: Fixing a bug from a phone Unsupported claim: The per-call diff cards Owner experience needs exact-text human attestation. The phone-based bug-fixing claim relies on an X source claim, but the reply does not attribute it. The source describes cards for every tool call and diff sheets in chat. It does not establish that every call has a diff card. The statement about an uninspectable chat log is a subjective judgment, not evidence of prior use. “still wild to me” suggests a continuing personal reaction. No owner evidence supports that history."
+        },
+        {
+          "code": "GROWTH_FIT_UNKNOWN",
+          "message": "Growth fit needs a current classification. Rescore candidates from Growth Focus before approval."
+        }
+      ],
+      "warnings": [],
+      "checks": {
+        "growthFocus": false,
+        "purposeIntegrity": true,
+        "factualProvenance": false,
+        "contentReview": true,
+        "behaviorAlignment": true,
+        "originality": true,
+        "scannability": true,
+        "understandable": true,
+        "noPlaceholders": true,
+        "length": true,
+        "ctaIntegrity": true,
+        "recentDuplicate": true,
+        "hashtagCount": true,
+        "emojiCount": true,
+        "threadRules": true,
+        "mediaReady": true
+      }
+    },
+    "growthPackaging": {
+      "ready": false,
+      "blockers": [
+        {
+          "code": "NO_CLEAR_PURPOSE_PAYOFF",
+          "message": "The current draft does not visibly fulfill its selected purpose."
+        }
+      ],
+      "items": {
+        "stoppingPower": {
+          "status": "clear",
+          "detail": "The selected act is legible at the required depth."
+        },
+        "readerPayoff": {
+          "status": "blocked",
+          "detail": "The selected purpose is not evident in the draft."
+        },
+        "distributionLeverage": {
+          "status": "borrowed_context",
+          "detail": "Reply participates directly in the source conversation."
+        },
+        "sourceActionPath": {
+          "status": "not_needed",
+          "detail": "This draft does not promise a resource/action path."
+        },
+        "interactionOpening": {
+          "status": "optional",
+          "detail": "No forced question; the selected act may already be complete."
+        },
+        "mediaOpportunity": {
+          "status": "unnecessary",
+          "detail": "No media is required for this draft."
+        },
+        "strategyState": {
+          "status": "not_required",
+          "mode": null,
+          "label": "Engage Next reply",
+          "detail": "Main-feed Writing Approach is not required for the reply lane; the persisted behavior decision owns purpose, mode, affect, and depth."
+        }
+      }
+    }
+  },
+  "publicationAuthority": false
+}

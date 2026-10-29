@@ -1,0 +1,32 @@
+{
+  "identity": {
+    "case": "VA-16",
+    "style": "Join the conversation with the person who wrote the post. Say the small thought or feeling their post gives you, or answer what they ask. Keep factual statements within what the source establishes. Let your reaction stand on its own. A question is optional. Use the examples for conversational register, not as templates or facts to copy.\n\nInvented style examples, unrelated to the supplied posts:\nPost: I finally released my little tool today.\nReply: Congrats! Hope you get to enjoy the launch a little too.\nPost: My old photo frame now shows train departures.\nReply: Okay, that's a much better job for an old photo frame.\nPost: What should an agent ask before doing?\nReply: Publishing under my name. I want to see the exact words first.\n\nWrite your own response to each actual source below, or skip. Do not invent a personal backstory.\n\nKeep the reply about this post and your response to it. Leave out claims about what most people, other tools, or the industry usually do. You are joining the author, not deciding whether their work earns your approval.\n",
+    "lane": "direct",
+    "solver": {
+      "providerInstanceId": "opencode",
+      "model": "opencode2api/deepseek-v4.1-flash-free",
+      "options": {
+        "variant": "max"
+      }
+    },
+    "reviewer": {
+      "providerInstanceId": "codex",
+      "model": "gpt-6.1-terra",
+      "options": {
+        "reasoningEffort": "high"
+      }
+    },
+    "replicate": ""
+  },
+  "inputsDigest": "eeeffb70a19819c3ddf2c9121c2e9774392b627c0343203caeedd89e797260ea",
+  "hashes": {
+    "packet.json": "f6ed2669aa0664192074780c7cf0cd173fd488e2c9ab3343748bf9a6a2c514a2",
+    "case.json": "b348a77f9f8db4ad8eff0b8daced6c9b5767ab8b372a829f01d5522a65e0b5c1",
+    "request.json": "c083fe983bfa46a0f8b1f9254efb5c054f8b9a41c48dafcb3828f143d5af7c76",
+    "model-output.json": "4c6f94c57629b759d7316435c0c0d55bfe786462d4e401990dd6b6b03ea42966",
+    "review-request.json": "6a3d427affe98cbabb55e57bb0702dba2c1a2dc465ca83e91eb5d907b97eb9c7",
+    "review-output.json": "e9b2133efa9b896ba270748aa3ec8d7d0703d65df383729d27187eafc489ec59",
+    "inspection.json": "df77381c5c732e80e9c6d807e372813388c39ace7d1316a9cf478d49f0cc8509"
+  }
+}

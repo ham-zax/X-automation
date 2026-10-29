@@ -1,5 +1,25 @@
 # Future improvement proposals
 
+## Offline reply experiment closeout, 29 October
+
+The native cycle finds no improved fragment. A short-prompt result fails to
+transfer into the full Writer packet. Proposal: isolate selected behavior before
+adding another voice rule. Keep factual overreach separate from stylistic fit.
+
+The initial completed inspection changes its timestamp on replay, which changes
+editor request identity. The offline adapter now freezes completed artifacts.
+Proposal: expose cache reuse and actual dispatch counts together in future reports.
+Do not count cached composition as another independent sample.
+
+The first quality diagnosis exceeds T3's task limit before a worker starts.
+Proposal: factor repeated persona/schema sections before constructing large
+evidence packets. Oversized tool output also costs context. Print summaries and
+save full responses directly to owned files. No global rule or CI change is made.
+
+The review flags a congratulation as a fact. Optional offline calibration narrows
+that classification. Proposal: decide the source-context attribution contract
+before any production integration. Do not optimize for a blanket pass rate.
+
 ## Fresh DeepSeek prompt experiment, 29 October
 
 Short prompts and synthetic conversation examples improve the register in a new
