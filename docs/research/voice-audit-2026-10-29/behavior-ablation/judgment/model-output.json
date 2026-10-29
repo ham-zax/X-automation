@@ -1,0 +1,28 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "The phone form factor is the demo, but the per-call diff and recorded check outcome are what make this agent worth judging.",
+  "finalText": "the phone part is the demo. the tool cards are the product — every call gets a diff sheet and its recorded check outcome instead of a hidden edit. strip that out and it's just another chat window in your pocket.",
+  "threadParts": [],
+  "semanticAnchors": [
+    "AndroidHarness",
+    "AI coding agent",
+    "tool call",
+    "diff"
+  ],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The reply is a judgment on the source's own feature list, so the quoted post carries the context.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a concrete builder judgment about agent interfaces: visible per-call actions outrank a novel form factor.",
+  "relationshipValue": "Adds a distinct evaluation angle to the author's launch thread instead of restating the feature list.",
+  "profileProofValue": null,
+  "riskFlags": [
+    "All capability claims come from the source post and remain unattributed in the reply, in line with judgment depth."
+  ]
+}

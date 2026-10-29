@@ -493,3 +493,18 @@ Final serial Node suite after repair: 406 passed, 0 failed, 0 skipped.
 Log archived as integrated-harness/final-node-tests.log. Actual dispatches 27/28.
 XR14-B, XR14-E and XR14-R are at review. XR-14 quality acceptance remains open.
 No new production writing policy is accepted. Stop this experiment here.
+
+## XR-14 behavior ablation, renewed 29 October
+
+User authorizes the next isolated experiment. Budget: two DeepSeek max dispatches.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-BA | review | XR14-R | parent | Compare identical frozen input with only selected behavior changed. Record outputs and causal limits. No production changes. | behavior-ablation directory |
+
+The new pair uses the same source, persona, Writer contract, model and settings.
+Behavior purpose/mode/depth/reason form one intervention. No extra style fragment.
+No model judge or production gate change. Parent assesses wording directly.
+
+Behavior ablation uses 2/2 dispatches. Exact packet comparison passes outside
+behavior. Both samples retain product grading and unsupported decisive framing.
+Changing behavior alone does not remove the issue in this pair. No production
+change or root-cause claim follows. See behavior-ablation/REPORT.md.
