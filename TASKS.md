@@ -55,6 +55,12 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 
 ## Active checkpoint
 
+29 October follow-up: Hamza requests GPT-6.1 Terra at medium effort. Dispatch
+five reuses the exact four-case baseline task. This overrides the earlier
+DeepSeek-only limit for this dispatch. No production change or reserved-case run.
+Comparison completes: three replies and one skip. Five of five dispatches are used.
+Evidence: `docs/research/voice-audit-2026-10-29/pilot/terra-medium/REPORT.md`.
+
 29 October pilot result: XR-14 remains in-progress. Three writing runs and one
 fresh diagnosis complete with DeepSeek 4.1 Flash, variant max. Two probes retain
 the main failure, so the repository stop rule ends composition. Read
@@ -229,3 +235,18 @@ untouched. Its adapter does not request max explicitly, so the pilot uses T3
 for exact-model dispatch and the Harness2 contrastive method under parent control.
 This is a controlled writing simulation, not an end-to-end production run or
 a completed stock Harness2 recursive execution. Only Hamza marks done.
+
+## XR-14 Terra medium comparison, 29 October 2026
+
+Authority: Hamza says "try it with terra medium, 6.1". Use the remaining fifth
+dispatch for one baseline comparison, not another prompt edit or review.
+Catalog confirms Codex `gpt-6.1-terra`, `reasoningEffort=medium`.
+Reuse the original task template, baseline input, and recorded newline suffix.
+One sample per case. Model, provider, and effort change together. Other inputs
+stay fixed. No production writes or additional workers. TaskStartSnapshot:
+main `bf02422`, with only pre-existing untracked `live-progress.json`.
+
+Terra result: three replies and one skip on the same four calibration sources.
+The parent sees less dismissive comparison language in this sample. One generation
+does not establish stable model superiority. All five dispatches are now consumed.
+No reserved case, Writer review, live run, or production model change.

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Growth OS reply comparison</title>
+<style>
+:root{font-family:var(--font-sans);color:var(--foreground);line-height:1.5}
+html,body{margin:0}
+button,a{font:inherit}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+button{border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px;background:var(--secondary);color:var(--secondary-foreground);cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:var(--accent-foreground);border-color:var(--ring)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--ring);outline-offset:3px}
+p{margin:0 0 10px}
+h3{font-size:16px;margin:0 0 10px}
+a{color:var(--primary)}
+.hint,.note,.kind{color:var(--muted-foreground);font-size:13px}
+.source{border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;background:var(--card);color:var(--card-foreground)}
+.source p{white-space:pre-wrap;max-height:240px;overflow:auto}
+.comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+article{background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);padding:16px;min-width:0}
+blockquote{margin:12px 0;white-space:pre-wrap;font-size:15px;line-height:1.55}
+.kind{overflow-wrap:anywhere}
+footer{margin-top:12px}
+@media(max-width:600px){.comparison{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+<p class="hint">Same baseline packet · Two models · One sample per case</p>
+<nav aria-label="Choose a source" id="cases"></nav>
+<section class="source" aria-label="Source post">
+<h3><a id="source-link" target="_blank" rel="noopener noreferrer"></a></h3>
+<p id="source-text"></p>
+</section>
+<section class="comparison" id="comparison" aria-label="Two model outputs" aria-live="polite"></section>
+<footer class="hint">These notes are parent judgments. They are not owner acceptance or quality scores. All 18 reserved cases remain unused.</footer>
+</main>
+<script id="comparison-data" type="application/json">{"cases":[{"caseId":"VA-03","sourceId":"2108327973078315274","sourceUrl":"https://x.com/RLanceMartin/status/2108327973078315274","sourceText":"i wrote a short guide on building automations with Claude Managed Agents. \n\nit covers a few topics for agent deployments like credential vaults, guardrails, &amp; memory. \n\n@cjav_dev + i  share a quickstart repo &amp; a simple Claude Code command to set it up. \n\nhttps://t.co/PZdqKFpWWf","sourceTextStatus":"live_timeline_legacy_text"},{"caseId":"VA-14","sourceId":"2108943711740527003","sourceUrl":"https://x.com/xoofx/status/2108943711740527003","sourceText":"Just released CodeAlta 1.6.0, and you won't believe what is packed: 🎉\n- Canvas 🖼️ that can be created with an agent via a plugin\n- Statistics 📊\n- Welcome page for getting started 🤗\n- Integrated documentation - ask the agent 📝\n- Claude Code Remote support\nand more... 1/2 https://t.co/nAuq2uIctn","sourceTextStatus":"live_timeline_legacy_text"},{"caseId":"VA-16","sourceId":"2110065413073633316","sourceUrl":"https://x.com/DanKornas/status/2110065413073633316","sourceText":"Your phone can be where you fix the bug — not just where you read the issue.\n\nAndroidHarness is a native Android AI coding-agent app for builders who want to work on real code projects directly from an Android device.\n\nIt helps you make and inspect changes without a PC or root by combining file tools, a Linux toolchain, GitHub workflows, and browser control inside a chat interface.\n\nKey features:\n\n• On-device project work – reads and edits files, runs shell commands, and supports git from the phone\n• Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat\n• GitHub workflows – import repositories, commit selected files, push changes, and verify the resulting remote commit\n• Browser and preview tools – inspect web links or workspace previews, then navigate, snapshot, click, type, and capture screenshots\n• Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions\n\nIt’s open-source (MIT license).\n\nLink in the reply 👇","sourceTextStatus":"live_timeline_extended_text"},{"caseId":"VA-21","sourceId":"2108793397884436870","sourceUrl":"https://x.com/Goura_vk/status/2108793397884436870","sourceText":"If an AI agent can plan, use tools, write code, send emails, and make decisions on its own, what is the one action you would still never let it do without human approval?","sourceTextStatus":"live_timeline_legacy_text"}],"outputs":{"baseline":{"replies":[{"caseId":"VA-03","decision":"reply","purpose":"technical_value","text":"credential handling is the part everyone writes twice. once badly, then again after a key turns up in a log. good to see it in the quickstart."},{"caseId":"VA-14","decision":"reply","purpose":"celebration","text":"an agent building a canvas through a plugin is the strangest part of a 1.6 release, in the best way. congrats on shipping it."},{"caseId":"VA-16","decision":"reply","purpose":"judgment","text":"the foreground service and the resume cards are the real feature. a phone agent that dies when Android reclaims the app is a demo, not a tool."},{"caseId":"VA-21","decision":"reply","purpose":"judgment","text":"moving money or changing permissions. those are the two with no clean undo."}]},"terra":{"replies":[{"caseId":"VA-03","decision":"skip","purpose":"none","text":""},{"caseId":"VA-14","decision":"reply","purpose":"celebration","text":"agent-created canvases are a fun addition. congrats on 1.6!"},{"caseId":"VA-16","decision":"reply","purpose":"judgment","text":"fixing a bug from your phone is cool. being able to pick the task back up after an interruption makes it feel like a real workflow."},{"caseId":"VA-21","decision":"reply","purpose":"judgment","text":"Grant itself new permissions. A mistake gets a lot more expensive when the agent can expand its own access."}]}},"notes":{"VA-03":["Makes a broad claim about everyone and credential mistakes.","Skips. Avoids the lecture, but does not demonstrate a better reply."],"VA-14":["Specific celebration with a more distinctive reaction.","A simple celebration. Fits the launch, but is fairly generic."],"VA-16":["Calls an alternative a demo rather than a tool.","Reacts to recovery. No dismissal of competitors or extra test."],"VA-21":["Names two actions and claims no clean undo.","Answers with permission escalation and its consequence."]}}</script>
+<script>
+const data=JSON.parse(document.getElementById('comparison-data').textContent);
+const stages=['baseline','terra'];
+const titles=['DeepSeek 4.1 Flash · max','Terra 6.1 · medium'];
+const labels=['Guide','Release','Phone coding','Approval'];
+const nav=document.getElementById('cases');
+const cards=document.getElementById('comparison');
+function show(index){
+ const source=data.cases[index];
+ for(const [i,button] of Array.from(nav.children).entries())button.setAttribute('aria-pressed',String(i===index));
+ const link=document.getElementById('source-link');
+ link.textContent=source.caseId+' · Source post';
+ link.href=source.sourceUrl;
+ document.getElementById('source-text').textContent=source.sourceText;
+ cards.replaceChildren();
+ stages.forEach((stage,i)=>{
+  const reply=data.outputs[stage].replies.find(item=>item.caseId===source.caseId);
+  const card=document.createElement('article');
+  const title=document.createElement('h3');title.textContent=titles[i];
+  const kind=document.createElement('p');kind.className='kind';kind.textContent=reply.decision+' · '+reply.purpose;
+  const text=document.createElement('blockquote');text.textContent=reply.text||'Skipped';
+  const note=document.createElement('p');note.className='note';note.textContent=data.notes[source.caseId][i];
+  card.append(title,kind,text,note);cards.append(card);
+ });
+}
+data.cases.forEach((source,index)=>{
+ const button=document.createElement('button');button.type='button';button.textContent=source.caseId+' · '+labels[index];
+ button.addEventListener('click',()=>show(index));nav.append(button);
+});
+show(0);
+</script>
+</body>
+</html>

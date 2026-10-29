@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "artifactChecks": {
+    "status": "passed",
+    "requestReconstruction": "exact match to DeepSeek baseline",
+    "modelAndEffort": "passed",
+    "caseAndOutputContracts": "passed",
+    "comparisonData": "passed",
+    "dispatchAccounting": "5 of 5",
+    "reservedCases": "unused",
+    "productChanges": false,
+    "oldPilotArtifacts": "unchanged",
+    "liveProgress": "unchanged",
+    "files": {
+      "TASKS.md": "e47250a51606ee0babfad507390f01633a346162f408bc8fa41454884b0b3d19",
+      "docs/X_GROWTH_ISSUES.md": "bf247e7ab1ee7bb82e070df53d1696589948a3c35254b7cd735939235ac78cb6",
+      "docs/research/voice-audit-2026-10-29/pilot/terra-medium/REPORT.md": "5ce70cf60da6f6b24bb7e143db34a2a490660946e1c18c9b2d83f3154e793206",
+      "docs/research/voice-audit-2026-10-29/pilot/terra-medium/comparison.html": "0ffc6836fa4446cbbafda3f71a621de45351066dae67d395b80b335d26bb682a",
+      "docs/research/voice-audit-2026-10-29/pilot/terra-medium/manifest.json": "477f11921e0353319a7618543dfb4394af464d7271345026017d9cec0cc1258c",
+      "docs/research/voice-audit-2026-10-29/pilot/terra-medium/result.json": "6cd05e822fa8b4f6434c3173389d58756b57d72ee7f39e2790363a6ef88e08fc"
+    }
+  },
+  "privacyChecks": {
+    "privateValueScan": "passed",
+    "comparisonScriptSyntax": "passed"
+  },
+  "inlineDelivery": "shown",
+  "visualPreview": "unavailable: host AppArmor blocks the preview sandbox",
+  "uncovered": [
+    "Owner voice acceptance",
+    "Repeated-sample stability",
+    "Real Writer and review execution",
+    "Reserved-case comparison",
+    "Production behavior and outcomes"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "baselineCommit": "bf0242237c9e8b3b9e9590ffb8f3f324a7205fee",
+  "authority": "Hamza requests Terra 6.1 medium after the first pilot. The fifth dispatch is reassigned to a model comparison.",
+  "dispatchOrdinal": 5,
+  "evaluationDispatchesUsed": 5,
+  "evaluationDispatchLimit": 5,
+  "input": "../baseline-input.json",
+  "template": "../writer-task-template.txt",
+  "packetSuffix": "\n",
+  "taskSha256": "5972ef8ee33d0304601af780fa9979b226261a529b00661889f26a099ebd27c5",
+  "cases": [
+    "VA-03",
+    "VA-14",
+    "VA-16",
+    "VA-21"
+  ],
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A761324c1-9436-44c3-9e12-d46f91a2b0bc",
+  "provider": "codex",
+  "model": "gpt-6.1-terra",
+  "reasoningEffort": "medium",
+  "status": "completed",
+  "reservedCaseRun": false,
+  "productionChange": false,
+  "scope": "Static writing simulation. Model, provider and effort change together. One sample per case. No winner or production acceptance established."
+}

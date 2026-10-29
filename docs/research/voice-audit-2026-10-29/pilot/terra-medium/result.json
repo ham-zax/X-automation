@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "provider": "codex",
+  "model": "gpt-6.1-terra",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "medium"
+    }
+  ],
+  "status": "completed",
+  "taskId": "node:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A761324c1-9436-44c3-9e12-d46f91a2b0bc",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A6cda235a-727d-4304-b3f7-1cea1fcabc30%3Adelegate-task%3A761324c1-9436-44c3-9e12-d46f91a2b0bc>",
+  "submittedTaskCharactersUTF16": 41595,
+  "acceptedSummaryCharactersUTF16": 584,
+  "usage": null,
+  "output": {
+    "replies": [
+      {
+        "caseId": "VA-03",
+        "decision": "skip",
+        "purpose": "none",
+        "text": ""
+      },
+      {
+        "caseId": "VA-14",
+        "decision": "reply",
+        "purpose": "celebration",
+        "text": "agent-created canvases are a fun addition. congrats on 1.6!"
+      },
+      {
+        "caseId": "VA-16",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "fixing a bug from your phone is cool. being able to pick the task back up after an interruption makes it feel like a real workflow."
+      },
+      {
+        "caseId": "VA-21",
+        "decision": "reply",
+        "purpose": "judgment",
+        "text": "Grant itself new permissions. A mistake gets a lot more expensive when the agent can expand its own access."
+      }
+    ]
+  }
+}
