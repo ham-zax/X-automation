@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Evidence for the October reply-quality investigation. Not a production policy or a claim of improved writing.",
+  "auditDate": "2026-10-29",
+  "recordedAtUtc": "2026-10-29T07:18:28.138066+00:00",
+  "repository": "/home/ubuntu/repo/x_test",
+  "baselineCommit": "be76450",
+  "account": "ham_zax",
+  "replyDateRangeUtc": {
+    "first": "2026-10-03T20:10:46.000Z",
+    "last": "2026-10-24T05:14:25.000Z"
+  },
+  "accountTimeZone": "Asia/Kolkata",
+  "requestedScope": "Available October 2026 public replies and their immediate parent posts.",
+  "counts": {
+    "uniqueReplies": 458,
+    "retrievedParents": 456,
+    "missingParents": 2,
+    "confirmedLedgerAndLiveTimeline": 448,
+    "liveTimelineOnly": 10
+  },
+  "parentTextStatusCounts": {
+    "live_timeline_legacy_text": 202,
+    "live_timeline_extended_text": 254,
+    "missing_source": 2
+  },
+  "replyCountsByUtcDate": {
+    "2026-10-03": 1,
+    "2026-10-05": 1,
+    "2026-10-07": 7,
+    "2026-10-08": 20,
+    "2026-10-09": 106,
+    "2026-10-10": 214,
+    "2026-10-11": 75,
+    "2026-10-12": 15,
+    "2026-10-13": 12,
+    "2026-10-14": 1,
+    "2026-10-15": 1,
+    "2026-10-19": 3,
+    "2026-10-24": 2
+  },
+  "collection": {
+    "publicationLedger": "agent_bridge.js publication-attempts, state confirmed_published, limit 500. 479 records returned before filtering by actual October publication IDs and reply action.",
+    "monthMatching": "Published ID timestamps, then live timeline timestamps and inReplyTo parent IDs. Attempt creation dates are not used as proof of publication dates.",
+    "liveReader": "Installed approved XActions pin, normal read-only search and getTweetsAndReplies. No upstream update.",
+    "timelineRows": 945,
+    "timelinePages": 24,
+    "timelineStop": "Stopped after three own-account timeline rows before 2026-10-01. Older parent posts do not trigger this stop.",
+    "detailLookup": "102 individual parent lookups. 99 succeeded. The loop stopped on a rate limit. The normal profile timeline then supplied the bulk source/reply pairs without a rate-limit error.",
+    "extendedText": "Audit-only fetch inspection retained note_tweet.note_tweet_results.result.text where present. Production parser was not modified.",
+    "xactionsPinnedCommit": "9896a18200a44420aa4361f36d55caa27431657e"
+  },
+  "classification": {
+    "purpose": "Reading aid. The two provisional_model columns are unvalidated model suggestions, not editorial verdicts or send gates.",
+    "model": "jev-1.13.0",
+    "recordsProcessed": 458,
+    "failedRecords": 0,
+    "manualAssessment": "The report and replay-case index contain the parent analyst assessment of selected cases. No claim that every model label received manual review."
+  },
+  "missingParentPairs": [
+    {
+      "replyId": "2109175208191877182",
+      "replyUrl": "https://x.com/ham_zax/status/2109175208191877182",
+      "parentId": "2109098428521496737",
+      "parentUrl": "https://x.com/i/status/2109098428521496737"
+    },
+    {
+      "replyId": "2109592936816034041",
+      "replyUrl": "https://x.com/ham_zax/status/2109592936816034041",
+      "parentId": "2109581904525902099",
+      "parentUrl": "https://x.com/i/status/2109581904525902099"
+    }
+  ],
+  "limits": [
+    "Public timeline retrieval cannot prove coverage of deleted, hidden, unavailable or omitted posts.",
+    "Immediate parent text does not supply every image, video, quoted post, linked document or surrounding turn.",
+    "An extended-text payload is not by itself proof that the legacy payload was truncated.",
+    "The ten replies outside the matched publication ledger have no established human/agent origin.",
+    "No performance association proves follower growth, causation, or owner acceptance.",
+    "The current parser and current source code do not prove the exact runtime inputs used for each historical publication."
+  ],
+  "sensitiveData": "Public post text and public identifiers only. No cookies, request headers, credentials, private profile fields or database copy.",
+  "files": {
+    "pairs": "reply-source-pairs.csv",
+    "caseIndex": "replay-cases.json",
+    "report": "../GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md",
+    "publicationContext": "publication-context.json"
+  },
+  "selectedCases": 22,
+  "sha256": {
+    "reply-source-pairs.csv": "0149c644200d252b1568ba2d391f5e81bc8db9f6058dfd24c1cf56d6f01986f9",
+    "replay-cases.json": "cfac4e496ae20ce3c12ca1c874d178722078835269775f3d22dd84bf777fd090",
+    "publication-context.json": "22686db15cccda80601f0428bc6fa4bcb8f599f7003dff5eeff80ec93b368485"
+  }
+}

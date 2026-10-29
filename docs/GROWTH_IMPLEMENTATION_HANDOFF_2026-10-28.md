@@ -4,6 +4,12 @@ Read `TASKS.md` first for current task status, dependencies, evidence and dispat
 budget. `docs/X_GROWTH_ISSUES.md` owns the findings. The implementation plan is
 `docs/plans/GROWTH_ISSUE_IMPLEMENTATION_2026-10-28.md`.
 
+Latest checkpoint, 29 October: [the detailed reply-quality report](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md)
+records the owner's current priority. XR-14 is in-progress and XG-06 is open.
+The report preserves 458 replies, 456 parent texts, and 22 assessed cases.
+No writing fix or owner acceptance is claimed. Read the final checkpoint below
+for the latest operator outcome. Earlier sections retain their dated scope.
+
 ## Local implementation
 
 The baseline is main at `6b29fcb85a71e85ca3351d753bed907c1de49d6f`.
@@ -179,3 +185,36 @@ remain unproven. Topic experiments/review/peer deliverables beyond T6-T8 remain
 separate proposals. Existing persona supports ordinary activity without invented
 experience. All task statuses remain review or blocked. Only Hamza marks done.
 Dispatch budget stays 22/22. No further worker dispatch occurs.
+
+
+## Reply-quality investigation checkpoint, 29 October 2026
+
+The owner makes message quality the active priority and requests a detailed
+report before repair. XR-14 is in-progress. XG-06 is open on October evidence.
+Read `docs/research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md` first.
+Its durable evidence directory is `docs/research/voice-audit-2026-10-29/`.
+The corpus contains 458 unique replies, 448 matched confirmed publications,
+and 456 immediate parent texts. Twenty-two assessed cases include failures,
+ambiguous cases, direct answers, and invited-advice controls. The manifest
+records provenance and limits. Current queue context is not a generation trace.
+
+The evidence shows unsolicited technical reviews, missed source details, and
+purpose/output mismatches. The current XActions parser drops extended note text.
+Current contribution and Writer defaults can prefer technical explanation.
+These current facts do not prove every historical model input or one root cause.
+Missing owner biography does not block diagnosis. No new persona fact is inferred.
+Earlier speculative prompt/brief changes are reverted before this checkpoint.
+No writing repair, replay test, new public action, or owner acceptance is claimed
+by the reporting work. Further implementation/review delegation needs a renewed
+budget. The existing budget remains 22/22. Only Hamza marks done.
+
+The earlier bounded operator has now finished. Session
+`luna-arm-20261029T062942Z-d62fcf06`, worker `ab3fd0b7268a`, run
+`f8a98e0b-54a4-4ba0-a0fd-7f39e88375a2` ends blocked with
+`capability_unavailable`. Attempt `b61b22cb-d95f-4ead-bd9d-dcc00f4197e4`
+is confirmed_not_sent after BROWSER_FAST_PIN_INIT_UNCERTAIN before the send
+boundary. Zero public actions are confirmed. The run lease releases. Parent
+journal confirms exact target `41393979E71DF5232098538A1A898D59` cleanup,
+cleaned=true with no warnings. The operator is inactive. The growth timer stays
+disabled. Installed stop grace is 60 seconds. Collector acceptance remains
+separate. These terminal results supersede the startup-only checkpoint.

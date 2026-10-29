@@ -47,3 +47,21 @@ The lifecycle reviewer finds no authority change. Proposal: decide whether the
 launch environment needs an explicit inheritance contract before future launcher
 refactors. No environment filtering or credential handling changes are authorized
 by this proposal.
+
+## October 29 reply-quality investigation
+
+The earlier mitigated voice label relied on prompt permissions. Actual October
+reply/source pairs show recurring unsolicited reviewer roles and missed source
+details. Proposal: use a frozen paired sample, with direct-answer and invited-advice
+controls, before claiming a writing repair. The replay design lives in
+`docs/research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md`. No evaluation runs here.
+
+Individual source reads reach a rate limit before the normal account timeline
+supplies the bulk parent context. Proposal: reuse the durable corpus first. For
+future historical audits, check whether normal timeline conversation rows supply
+the needed parents before repeating many individual detail reads.
+
+Current queue fields do not establish the exact input used to write every past
+reply. Proposal: assess the existing generation provenance at each active writing
+path before adding any new trace fields. The report separates checked current
+defaults from unproved historical causes. No schema or runtime changes occur here.

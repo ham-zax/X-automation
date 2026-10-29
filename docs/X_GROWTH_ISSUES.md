@@ -4,6 +4,8 @@
 
 **Last reviewed:** 2026-10-28 against local commit `6b29fcb85a71e85ca3351d753bed907c1de49d6f`.
 
+**Reply-quality update:** 2026-10-29 against `be76450`. [The detailed audit](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md) records 458 October replies, 456 parent texts, and 22 assessed cases. XR-14 is in-progress. XG-06 is open on confirmed October evidence. No writing repair or owner acceptance is claimed. Earlier implementation and deployment statements below retain their original scope and date.
+
 **Status:** the October review covers all 20 original findings, the documentation task XR-21 and three display defects grouped under XR-22.
 The September inventory remains historical evidence. Its status labels do not establish current deployment or runtime health.
 
@@ -162,9 +164,9 @@ Status meanings:
 
 ### XR-14 — Reassess repetitive writing and the action mix
 
-- **Status:** historical quality finding, still relevant to the owner-approved redesign. **Priority:** P1. **Plan:** T8/T9/T12/T13. **Related:** XG-06/XG-08/XG-11.
-- **Evidence:** `docs/ENGAGEMENT_IDEAS_2026-10.md`, section 2, records repeated question-and-advice shapes and a predominantly reply-based action mix.
-- **Task:** review a fresh bounded sample and compare it with approved voice examples and supported purposes.
+- **Status:** confirmed October quality failure, investigation in-progress. **Priority:** P1. **Plan:** T8/T9/T12/T13. **Related:** XG-06/XG-08/XG-11.
+- **Evidence:** [Detailed report](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md), 29 October. The corpus contains 458 replies, 448 matched confirmed Growth OS publications, and 456 parent texts. Twenty-two selected cases distinguish role failures, source-reading failures, ambiguous cases, and useful technical controls. `docs/ENGAGEMENT_IDEAS_2026-10.md`, section 2, remains earlier evidence.
+- **Task:** repair the demonstrated source and role failures through the actual writing paths, then compare unpublished outputs against the frozen cases. No repair or replay runs in the reporting step. Missing first-person evidence limits experience claims, not diagnosis or ordinary participation.
 - **Done when:** the owner accepts the resulting writing sample and outcome comparisons use qualified measurements.
 - **Boundary:** do not impose quotas, human-looking delays, or a universal format rule. The audit does not establish an optimal action mix.
 
@@ -299,7 +301,7 @@ The October entries above take precedence where the scopes overlap. Unrelated hi
 | XG-03 | **CLOSED / experiment completed insufficient** | Experiment 2 was rechecked at 60m with completed A/B/C counts `1/0/0`; no winner exists. On 2026-09-05 it was completed so insufficient A/B/C evidence no longer production-gates the persona. |
 | XG-04 | **OPEN — strategic hypothesis** | Own-account evidence confirms Satori, a trading system, and a Catan neural-engine project surface, while recent output remains commentary-heavy. Whether owned proof converts profile visits/follows better remains unproven. |
 | XG-05 | **REFRAMED — strategic hypothesis** | The A/B/C hook campaign is no longer an active production constraint. The useful remaining question is whether any payoff/format/owned-proof treatment increases profile inspection and qualified follow conversion, not whether a clever hook wins attention. |
-| XG-06 | **MITIGATED / monitor** | V4/V3.2, Writer rules, and `x-content` memory now explicitly permit terse/social-only acts and reject automatic lecturer/hidden-boundary framing. Keep monitoring own-account output for recurrence rather than treating shortness as a new universal rule. |
+| XG-06 | **OPEN — October recurrence confirmed on 29 October** | The earlier mitigated label relied on instructions rather than accepted outputs. [Paired October evidence](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md) shows unsolicited technical reviews and missed source details despite social-only permissions. Preserve useful technical answers. Do not impose a universal length or format rule. |
 | XG-07 | **OPEN — P1 efficiency** | Distribution fit is checked and unroutable work is skipped, but Editorial can still spend provider/research budget before weak live distribution becomes decisive. |
 | XG-08 | **OPEN — P1 operating risk** | Account Health currently remains WATCH on author-response/continuation yield. Budgets are ceilings rather than fill targets and generic filler no longer earns relationship credit, but relationship conversion is still weak. |
 | XG-09 | **CLOSED in experiment/Editorial interpretation** | Measurement rows preserve actual capture time; `captureTiming` labels windows that crossed later windows as `collapsed_past_later_window`; age-inappropriate rows are excluded from Editorial cohorts and experiment completion. Historical rows remain descriptive evidence only. |
@@ -480,7 +482,27 @@ Future experiments can distinguish scroll-stopping performance from profile/foll
 
 **Class:** observed quality failure  
 **Priority:** P1  
-**Primary owner:** `docs/POST_GENERATION_PROMPT.md`; `x-content` account voice memory may reinforce the same contract but is not the repository source of truth.
+**Owners:** `engagement.js` selects contributions. `drafting.js` and `persona.js` supply Writer defaults. `autonomous_reply.js` uses the Writer prompt. The attached brief and `agent_bridge.js::act` also support operator-written replies. `x_reads.js` and the approved XActions normalization boundary own source fidelity. `docs/POST_GENERATION_PROMPT.md` alone does not cover every reply path.
+
+### 29 October evidence and current disposition
+
+XG-06 is open. The [detailed report](research/GROWTH_REPLY_QUALITY_REPORT_2026-10-29.md)
+preserves the available October corpus and 22 assessed exchanges. The problem
+includes unsolicited evaluator roles, questions partly or fully answered by the
+source, unsupported defect implications, and selected-purpose/output mismatches.
+Several connected technical replies remain useful controls. No percentage of bad
+replies or causal growth effect is established.
+
+The current installed XActions parser omits extended note text. The general
+contribution fallback prefers technical and learning candidates. Missing Writer
+archetypes default to synthesis. These are current checked facts and plausible
+contributors. They do not prove every historical generation input or one universal
+cause. The parser pin postdates the published replies.
+
+No source, prompt, persona, production brief, or policy changes in this reporting
+step. Future work needs paired offline comparison and owner feedback. Missing
+new biography is not a reason to postpone correcting demonstrated failures.
+The earlier direction below remains history, not proof of mitigation.
 
 ### Problem
 
@@ -742,7 +764,7 @@ Closed items no longer occupy the frontier. The current order is:
 5. **XG-04 / reframed XG-05** — test verified owned proof and profile/follow payoff without forcing one hook morphology.
 6. **XG-15** — only if unattended browser execution is a product requirement, add a durable CLI-agent consumer rather than expanding the deterministic daemon into a browser reasoner.
 7. **XG-13** — migrate the explicit Audience unfollow mutation away from private X HTTP when that workflow is next touched.
-8. **XG-06** remains a monitoring condition: preserve role diversity and the V3.2 stopping rule while the account accumulates new evidence.
+8. **XG-06** is open on the 29 October paired audit. This older ordering does not set its current priority. XR-14 now records the owner's active reply-quality investigation. Preserve useful technical answers while correcting source comprehension and unsolicited reviewer roles.
 
 Closed/superseded items XG-03, XG-09, XG-10, XG-12, and XG-14 should be reopened only with concrete regression evidence.
 
