@@ -46,3 +46,22 @@ Continuous `automation.js` and the old model-rotation watchdog are retired.
 Do not enable their services. The dashboard remains an inspection interface.
 Historical deployment evidence lives in `docs/ARM_24X7_HANDOFF.md`.
 No host installation or current service inspection accompanies this doc update.
+
+## DeepSeek selection, 31 October
+
+The versioned `arm/deepseek.conf` drop-in selects OpenCode with
+`opencode2api/deepseek-v4.1-flash-free`, max effort and profile Reply mode.
+The current saved Writer role selects profile15: Pi, the same DeepSeek model,
+max effort and no fallback. Model bindings remain runtime state, not Git data.
+
+The installed OpenCode executable supports operator sessions. Its SDK/server
+structured-output interface does not match the existing Writer adapter. The
+Writer therefore uses the existing Pi adapter and the same opencode2api provider.
+A real structured Writer connection check passes with DeepSeek and no fallback.
+This does not establish end-to-end content quality or continuous availability.
+
+The ARM service and existing timer start under owner authorization. The launcher
+reports OpenCode/DeepSeek/max/profile mode and allocates one owned browser tab.
+A separate read-only browser check establishes the signed-in Profile href
+`/ham_zax`. Its test targets close cleanly. The operator checks current account,
+delegation, rest policy and claims before any public action.

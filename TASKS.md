@@ -658,3 +658,11 @@ configurable. No new reviewer, runtime, schema, test or publication gate.
 
 | id | status | depends | owner | acceptance | evidence |
 | PW-I | review | OW-D | parent | Refine the existing Reply and Original/Quote contracts from the peer-loop checkpoint. Preserve creative acts and current interfaces. | Checkpoint archived in docs/research/DEEPSEEK_PEER_LOOP_CHECKPOINT_2026-10-31.md. Existing Reply and shared Original/Quote prompts refined. Workflow and integration report updated. Parent inspected prompt diff and runtime ownership. No new model evaluation, tests, schema, model settings or publication changes. |
+
+## DeepSeek operator startup, 31 October
+
+TaskStartSnapshot: 13f2193. Owner authorizes push, durable ARM operator startup,
+DeepSeek executor and Writer selection, and a read-only X Growth browser check.
+
+| id | status | depends | owner | acceptance | evidence |
+| DS-LIVE | review | PW-I | parent | Push current work, use DeepSeek V4.1 max for executor and Writer, start durable operator, check authenticated browser. | Pushed through 13f2193 before startup. Installed versioned deepseek.conf. Service starts 16:44:12 UTC, PID3675080, active/running. Journal confirms OpenCode DeepSeek V4.1 max, operator-status and browser commands. Timer enabled/active, user Linger=yes. Browser signed-in Profile href /ham_zax, exact test targets cleaned. OpenCode Writer SDK preflight fails before any model request. Pi Writer profile15 DeepSeek max passes real structured ready=true check, invocation1d35412f-f752-4b46-bdfa-f2926d95f853, no fallback. Startup accepted for review, no completed Growth Run or public-result claim. |

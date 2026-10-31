@@ -171,3 +171,29 @@ No new model experiment or quality improvement measurement is claimed. The exact
 revised contract has not been evaluated on fresh DeepSeek outputs. The next useful
 evaluation compares the previous and revised contracts with the same DeepSeek
 settings and fresh conversation context. Separate source errors from taste.
+
+## Owner-authorized DeepSeek startup, 31 October, 16:44 UTC
+
+The owner requests push, durable startup, DeepSeek for executor and Writer,
+and an X Growth browser check. The previous operator and timer are inactive.
+The bridge reports no active lease or active publication attempt at preflight.
+
+The executor now runs OpenCode with deepseek-v4.1-flash-free at max.
+The Writer role selects profile15, Pi with the same model through opencode2api,
+max reasoning and no fallback. A real structured connection check returns
+ready=true with invocation 1d35412f-f752-4b46-bdfa-f2926d95f853 and the expected
+DeepSeek receipt. The OpenCode Writer preflight first fails with runtime_unsupported
+because the installed executable lacks the expected SDK/server interface. No
+model request occurs on that failure. Existing Pi support avoids a new adapter.
+
+The first browser observations show authenticated Home but omit the handle
+from the interactive snapshot. Reading the signed-in Profile control's href
+establishes /ham_zax. All preflight test targets close with cleaned=true and
+no warnings. No preflight public action occurs.
+
+The systemd service starts at 16:44:12 UTC and the existing timer is enabled.
+Launcher logs record OpenCode, DeepSeek V4.1, max reasoning and profile mode.
+Systemd owns the process, so ending this coding session does not stop it.
+The selected runtime still receives the existing bounded live brief and owner
+policy. Timer scheduling does not create a publishing quota or bypass rest.
+This startup evidence does not claim a completed Growth Run or public result.
