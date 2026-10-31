@@ -633,3 +633,14 @@ line compaction, benchmark override and model-binding readback. Parent checks
 those deltas. Focused38/38, runner/reply41/41, repair17/17, final full412/412,
 Python7/7. Cheap checker6 calls show shared scope interpretation and order effects.
 No new automatic cheap critic is installed. RP-I/RP-C/RP-R at review, not done.
+
+## Attached operator / Writer split, 31 October
+
+User authorizes implementation. TaskStartSnapshot e9f2f2e, main. Preserve live-progress.json.
+| id | status | depends | owner | acceptance | evidence |
+| OW-I | review | RP-R | parent | Selectable attached operator and operator/profile Reply writer, existing act flow and model provenance. | docs/plans/OPERATOR_WRITER_SPLIT_2026-10-31.md. Existing focused checks 46/46. Disposable generation check: operator zero calls, profile one call, skip and OpenCode model selection pass. |
+| OW-R | review | OW-I | parent | Inspect scoped diff and minimal existing checks under the owner's latest simplicity direction. | Parent inspected command, generation, telemetry and claim seams. Syntax and diff checks pass. No live model, browser, send, deployment or full-suite acceptance. No new tests, hashes or extra review worker. Only Hamza marks done. |
+
+Implementation stays inline because command and reply changes share owners.
+The latest owner direction replaces the earlier binding and broad-check proposal.
+No new experiment calls, automatic critic, mandatory Writer receipt or host changes.

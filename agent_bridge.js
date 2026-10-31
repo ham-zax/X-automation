@@ -1860,6 +1860,17 @@ async function main() {
     return;
   }
 
+  if (command === 'reply-generate') {
+    if (!payload.runId || !payload.sessionId) throw new Error('reply-generate requires runId and sessionId.');
+    requireGrowthRunLease(payload.runId, payload.sessionId);
+    const resolvedTopicBrief = payload.topicBrief == null ? null
+      : await (await import('./topic_research.js')).resolveTopicBriefCitation(payload.topicBrief);
+    const prepared = await (await import('./act_reply_writer.js')).generateActReply({ ...payload, resolvedTopicBrief });
+    requireGrowthRunLease(payload.runId, payload.sessionId);
+    result(prepared);
+    return;
+  }
+
   if (command === 'act') {
     const actModule = await import('./act.js');
     const validated = actModule.validateActInput(payload);
@@ -1914,6 +1925,8 @@ async function main() {
       editorial: payload.editorial || null,
       runId: payload.runId || null,
       claimHolder: String(payload.sessionId || 'act_bridge'),
+      modelProvenance: validated.action === 'reply'
+        ? (await import('./act_reply_writer.js')).replyModelProvenance({ ...payload, targetTweetId: validated.targetTweetId }) : null,
     });
     const drive = await actModule.driveBrowserSend({
       intentUrl,
@@ -1925,7 +1938,7 @@ async function main() {
     }, {
       beforeClick: (evidence) => {
         markPublicationAttemptSendStarted(claim.attempt.attemptId, {
-          preSendEvidence: { ...evidence, intentUrl, transport: 'browser_agent' },
+          preSendEvidence: { ...claim.attempt.preSendEvidence, ...evidence, intentUrl, transport: 'browser_agent' },
         });
       },
     });
@@ -3189,7 +3202,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

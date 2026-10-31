@@ -81,8 +81,6 @@ try {
     assert.equal(command.args[command.args.indexOf('--tools') + 1], 'read,bash');
     assert.equal(command.args[command.args.indexOf('--thinking') + 1], 'high');
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_PI_THINKING: 'turbo' }), /X_GROWTH_PI_THINKING/);
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_AGENT_MODEL: 'opencode2api/nemotron-3-ultra-free' }), /Nemotron and Ling/);
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'pi', X_GROWTH_AGENT_MODEL: 'opencode2api/ling-3.1-flash' }), /Nemotron and Ling/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_TARGET: 'mars' }), /X_GROWTH_BROWSER_TARGET/);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_BROWSER_CDP_PORT: '9222; rm' }), /CDP_PORT/);
   });
@@ -199,13 +197,11 @@ await test('default and executor wakes invoke exactly one finite tick and never 
     assert.equal(args[args.indexOf('--reasoning-effort') + 1], 'max');
     for (const flag of ['--model', '--max-model-steps', '--web', '--fallback-models']) assert.equal(args.includes(flag), false);
     assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'other' }), /must be muse, pi, or codex/);
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'nemotron-free' }), /not allowed/);
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'pi', X_GROWTH_AGENT_MODEL: 'ling-3.1-flash' }), /not allowed/);
   });
-  await test('Claive Codex pins gpt-6-luna at max effort in yolo mode without unsupported flags', () => {
+  await test('Claive Codex defaults to Luna and permits an owner-selected model', () => {
     const config = runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex' });
     assert.equal(config.model, 'gpt-6-luna');
-    assert.throws(() => runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex', X_GROWTH_AGENT_MODEL: 'gpt-6' }), /require gpt-6-luna/);
+    assert.equal(runner.runtimeConfig({ X_GROWTH_AGENT_RUNTIME: 'claive', X_GROWTH_CLAIVE_ENGINE: 'codex', X_GROWTH_AGENT_MODEL: 'gpt-6' }).model, 'gpt-6');
     const command = runner.commandFor(config, 'work', { promptFile: '/tmp/operator.md' });
     const { args } = command;
     assert.equal(args[args.indexOf('--engine') + 1], 'codex');

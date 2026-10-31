@@ -1,5 +1,5 @@
 import { socialOperatorPrompt } from './ops/social_operator_contract.js';
-import { REPLY_CONTRACT } from './reply_contract.js';
+import { REPLY_CONTRACT, replyWorkflowInstruction } from './reply_contract.js';
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -86,22 +86,15 @@ export function runtimeConfig(env = process.env) {
   const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : (runtime === 'claive' && claiveEngine === 'muse') || runtime === 'muse' ? CLAIVE_MODEL
     : runtime === 'claive' && claiveEngine === 'codex' ? CLAIVE_CODEX_MODEL : '';
   const model = String(env.X_GROWTH_AGENT_MODEL || defaultModel).trim();
-  if (runtime === 'claive' && claiveEngine === 'muse' && model !== CLAIVE_MODEL) {
-    throw new Error(`Claive Muse workers require ${CLAIVE_MODEL}; alternate engines/models need explicit owner authorization.`);
-  }
-  if (runtime === 'claive' && claiveEngine === 'codex' && model !== CLAIVE_CODEX_MODEL) {
-    throw new Error(`Claive Codex workers require ${CLAIVE_CODEX_MODEL}; alternate engines/models need explicit owner authorization.`);
-  }
-  const loweredModel = model.toLowerCase();
-  if (loweredModel.includes('nemotron') || /(^|[\/_.:-])ling(?:$|[\/_.:-])/.test(loweredModel)) {
-    throw new Error('Nemotron and Ling models are not allowed for the growth operator.');
-  }
   // Pi is the headless-Linux runtime: its browser is the persistent CDP Chromium, not a Windows tab.
   const browserTarget = String(env.X_GROWTH_BROWSER_TARGET || (runtime === 'pi' ? 'linux' : 'windows')).trim().toLowerCase();
   if (!BROWSER_TARGETS.includes(browserTarget)) {
     throw new Error(`Unsupported X_GROWTH_BROWSER_TARGET=${browserTarget}. Expected windows or linux.`);
   }
-  const thinking = String(env.X_GROWTH_PI_THINKING || DEFAULT_PI_THINKING).trim().toLowerCase();
+  const reasoning = String(env.X_GROWTH_AGENT_REASONING || '').trim().toLowerCase();
+  const replyWriterMode = String(env.X_GROWTH_REPLY_WRITER_MODE || 'profile').trim().toLowerCase();
+  if (!['operator', 'profile'].includes(replyWriterMode)) throw new Error('X_GROWTH_REPLY_WRITER_MODE must be operator or profile.');
+  const thinking = String(reasoning || env.X_GROWTH_PI_THINKING || DEFAULT_PI_THINKING).trim().toLowerCase();
   if (!PI_THINKING_LEVELS.includes(thinking)) {
     throw new Error(`Unsupported X_GROWTH_PI_THINKING=${thinking}. Expected ${PI_THINKING_LEVELS.join(', ')}.`);
   }
@@ -139,6 +132,8 @@ export function runtimeConfig(env = process.env) {
     browserMcpServer,
     browserFastBackend,
     thinking,
+    reasoning,
+    replyWriterMode,
     experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
     agentMode: growthAgentMode(env),
     executable: runtime === 'claive'
@@ -181,8 +176,7 @@ export function controllerRuntimeProfile(config) {
         ...base,
         name: 'controller-ephemeral-codex',
         runtime: 'codex',
-        // Claive Codex is pinned by runtimeConfig; native Codex preserves an
-        // explicit owner-selected model so the bounded adapter can reject an
+        // Preserve the selected model. The bounded adapter can reject an
         // unsupported selection before dispatch instead of silently swapping it.
         model: config.model || CLAIVE_CODEX_MODEL,
         reasoning: 'max',
@@ -243,7 +237,8 @@ function executorBrowserLine({ browserTarget, browserInterface, browserMcpServer
 // The finite controller owns admission, budgets, and stopping now.
 export function executorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser',
+  replyWriterMode = process.env.X_GROWTH_REPLY_WRITER_MODE || 'profile' }) {
   const experimentNote = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account. The owner has granted authority for governed sends that pass the bridge gates, with no human review before sending. Act on every worthwhile eligible opportunity, including long sequences of valuable replies; do not invent filler or treat measured virality as a required category. The bridge gates still apply.
 ` : '';
@@ -280,7 +275,7 @@ ${socialOperatorPrompt()}
 - For a verified source-grounded Original/Thread, follow docs/GROWTH_AGENT_EXECUTION.md through the existing candidate key: route and behavior, writing-strategy-select, writer-packet, apply-writer-output, update-draft ready, mission-approve with exact run/session/grant and source/evidence references. Alternatively, invoke growth-run-next operation=prepare_main_feed when permitted and repair its returned draft. Critique hook clarity, truth, source, audience utility and active persona for at most two passes. A due approved queue item uses browser-publish-claim/send-start/record-action with positive live verification; quick act cannot attach media or publish a multi-part Thread.
 - T2 \`original\` is a rare editorial REVIEW card, not an instruction to produce a post. For a small follower account, the original must express a genuinely standalone novel insight/strong opinion/helpful firsthand learning with a verifiable primary source, clear why-now, clear audience value and a new angle beyond existing timeline content. Routine headline summaries, paraphrases, weak takes or invented experiences are not worth a post; prefer a reply or skip. Every Original must use the reviewed queue; only direct-act Quotes require a structured \`editorial\` object (see below). No daily quantity cap. During rest, only a verified recent major release/breakthrough or independently recorded breakout may authorize an exceptional original; otherwise do not draft/publish one.
 - A pass with no worthwhile T1/T2 cards and no new mentions counts as empty only after broad enough fresh live collection, successful ingestion and another scout read; inspect available cards rather than treating raw metrics, labels or elapsed time as action prohibitions. Never repeat the same cached scout result as a second discovery pass.
-Calling act: JSON on stdin for Reply: \`{"action":"reply","runId":"<runId>","sessionId":"${sessionId}","targetTweetId":"<tweetId>","targetUrl":"<url>","candidateKey":"<candidateKey>","text":"<text>","card":{"author":"<author>","sourceText":"<exact observed source>"}}\`. For Quote, use action=quote and the same target fields; do not call act for Originals; use the reviewed queue instead. For EVERY direct-act Quote, add \`"editorial":{"whyNow":"<specific substantive reason, 30+ chars>","distinctContribution":"<unique angle beyond source and existing timeline, 35+ chars>","intendedAudience":"<who specifically benefits, 16+ chars>","whyNotReply":"<why this deserves a standalone feed post instead of a reply, 28+ chars>","sourceUrls":["https://<actual verified primary source>"]}\`. If an official announcement or research breakthrough justifies emergency publication despite rest, ALSO add \`"urgency":{"kind":"verified_major_launch","verifiedAt":<actual date +%s%3N after live checking>,"whatChanged":"<specific verified event, 40+ chars>","whyImmediate":"<why reacting now is valuable, 35+ chars>}\` INSIDE editorial. Cite the actual original source; never mark old, speculative or unsourced material urgent. A fast-moving source already tracked in X ingest can independently qualify through its recorded measured like/reply acceleration without declaring an urgent tier. Only actual confirmed events qualify.
+${replyWorkflowInstruction(replyWriterMode)} Calling act: JSON on stdin for Reply: \`{"action":"reply","runId":"<runId>","sessionId":"${sessionId}","targetTweetId":"<tweetId>","targetUrl":"<url>","candidateKey":"<candidateKey>","text":"<text>","card":{"author":"<author>","sourceText":"<exact observed source>"}}\`. For Quote, use action=quote and the same target fields; do not call act for Originals; use the reviewed queue instead. For EVERY direct-act Quote, add \`"editorial":{"whyNow":"<specific substantive reason, 30+ chars>","distinctContribution":"<unique angle beyond source and existing timeline, 35+ chars>","intendedAudience":"<who specifically benefits, 16+ chars>","whyNotReply":"<why this deserves a standalone feed post instead of a reply, 28+ chars>","sourceUrls":["https://<actual verified primary source>"]}\`. If an official announcement or research breakthrough justifies emergency publication despite rest, ALSO add \`"urgency":{"kind":"verified_major_launch","verifiedAt":<actual date +%s%3N after live checking>,"whatChanged":"<specific verified event, 40+ chars>","whyImmediate":"<why reacting now is valuable, 35+ chars>}\` INSIDE editorial. Cite the actual original source; never mark old, speculative or unsourced material urgent. A fast-moving source already tracked in X ingest can independently qualify through its recorded measured like/reply acceleration without declaring an urgent tier. Only actual confirmed events qualify.
 
 Act outcomes (the \`status\` field of the act result):
 - \`confirmed_published\`: the post is live. Keep its \`outputUrl\` for the summary and continue.
@@ -318,7 +313,8 @@ export function buildOperatorPrompt({ mode = 'executor', ...options }) {
 
 export function operatorPrompt({ runtime, sessionId, maxDurationMinutes = 20, browserTarget = 'windows',
   agentBrowserCli = DEFAULT_WEBHARNESS_AGENT_BROWSER, cdpPort = DEFAULT_CDP_PORT, experiment = false,
-  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser' }) {
+  browserInterface = 'agent-browser-cli', browserMcpServer = 'xgrowth_browser', browserFastBackend = 'cloakbrowser',
+  replyWriterMode = process.env.X_GROWTH_REPLY_WRITER_MODE || 'profile' }) {
   const browser = browserSection({ browserTarget, browserInterface, browserMcpServer, browserFastBackend, agentBrowserCli, cdpPort, sessionId });
   const experimentSection = experiment ? `
 EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is running an experiment to see 1-2 days of unattended results. The owner has granted full authority for every governed decision in this session: approve, review and send replies, quotes, reposts and originals that pass the bridge's own gates; no human will review before sending. Bias toward action, not silence:
@@ -333,7 +329,7 @@ EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is ru
 
 This is an OPERATIONAL growth session, not a software-engineering task.
 
-Reply realization contract: ${REPLY_OPERATOR_CONTRACT}
+${replyWorkflowInstruction(replyWriterMode)} Reply realization contract: ${REPLY_OPERATOR_CONTRACT}
 
 Execute this checklist first; it is included here so no separate discovery or historical-plan reading is needed:
 ${readFileSync(path.join(REPO, 'docs/GROWTH_AGENT_EXECUTION.md'), 'utf8')}
@@ -400,30 +396,29 @@ Do not optimize for a fixed number of posts/replies. Optimize for useful, releva
 ${experimentSection}`;
 }
 
-// RETIRED FROM MAIN (kept as a nonexecuted compatibility helper): builds
-// reasoning-child commands for the retired elapsed-time loop. Main no longer
-// spawns children; retained for command-shape tests only.
-export function commandFor(config, prompt, { promptFile, engineSessionId } = {}) {
+// Shared child command owner for attached sessions. Controller main itself does
+// not launch the old elapsed-time loop.
+export function commandFor(config, prompt, { promptFile, engineSessionId, workspace = REPO } = {}) {
   if (config.runtime === 'claive') {
     if (!promptFile) throw new Error('Claive requires a temporary operational prompt file.');
     const args = [
-      'run', '--workspace', REPO, '--prompt-file', promptFile,
+      'run', '--workspace', workspace, '--prompt-file', promptFile,
       '--label', 'XGrowth autonomous operator', '--engine', config.claiveEngine,
     ];
     if (config.claiveEngine === 'pi') {
-      args.push('--provider', 'opencode2api', '--reasoning-effort', 'max');
+      args.push('--provider', 'opencode2api', '--reasoning-effort', config.reasoning || 'max');
       if (engineSessionId) args.push('--session-id', engineSessionId);
       if (config.model) args.push('--model', config.model);
     } else if (config.claiveEngine === 'codex') {
       // The codex engine rejects --max-model-steps and --output-schema and needs no provider or session flag.
       // Yolo: claive's codex engine drops its Codex sandbox only when CLAIVE_CODEX_YOLO=1 is set for the child.
-      args.push('--model', CLAIVE_CODEX_MODEL, '--reasoning-effort', 'max', '--web');
+      args.push('--model', config.model, '--reasoning-effort', config.reasoning || 'max', '--web');
       return { executable: config.executable, args, env: {
         CLAIVE_CODEX_YOLO: '1',
         CLAIVE_CODEX_USE_USER_CONFIG: '1', // Keep Codex worker's browser skill discovery in CLI and typed-MCP mode.
       } };
     } else {
-      args.push('--model', CLAIVE_MODEL, '--reasoning-effort', 'xhigh',
+      args.push('--model', config.model, '--reasoning-effort', config.reasoning || 'xhigh',
         '--max-model-steps', '100', '--web');
     }
     return { executable: config.executable, args };
@@ -434,7 +429,7 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
     if (!promptFile) throw new Error('Muse requires a temporary operational prompt file.');
     return {
       executable: config.executable,
-      args: ['exec', '--yolo', '--workspace', REPO, '--model', config.model || CLAIVE_MODEL,
+      args: ['exec', '--yolo', '--workspace', workspace, '--model', config.model || CLAIVE_MODEL,
         '--reasoning-effort', config.thinking === 'max' ? 'max' : 'xhigh',
         '--max-model-steps', '200', '--prompt-file', promptFile],
     };
@@ -451,7 +446,7 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
   }
   if (config.runtime === 'opencode') {
     const args = ['run', '--standalone', '--auto', '--title', 'XGrowth unattended operator'];
-    if (config.model) args.push('--model', config.model);
+    if (config.model) args.push('--model', config.reasoning && !config.model.includes('#') ? `${config.model}#${config.reasoning}` : config.model);
     args.push(prompt);
     return { executable: config.executable, args };
   }
@@ -471,9 +466,10 @@ export function commandFor(config, prompt, { promptFile, engineSessionId } = {})
     '--ephemeral',
     '--sandbox', 'workspace-write',
     '--skip-git-repo-check',
-    '-C', REPO,
+    '-C', workspace,
   ];
   if (config.model) args.push('--model', config.model);
+  if (config.reasoning) args.push('-c', `model_reasoning_effort=${JSON.stringify(config.reasoning)}`);
   args.push('-');
   return { executable: config.executable, args, stdinPrompt: prompt };
 }

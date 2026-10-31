@@ -1,20 +1,19 @@
 // Attached live Growth session on ARM. This module is the only renderer of the
 // live brief and the only owner of the session's browser target. It allocates
-// exactly one tab through the existing lease, runs one bounded Claive child
+// exactly one tab through the existing lease, runs one bounded operator child
 // under the existing runChild supervision, and always releases the lease.
 import { randomUUID } from 'node:crypto';
-import { REPLY_CONTRACT } from '../reply_contract.js';
+import { REPLY_CONTRACT, replyWorkflowInstruction } from '../reply_contract.js';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runtimeConfig, runChild } from '../growth_agent_runner.js';
+import { runtimeConfig, runChild, commandFor } from '../growth_agent_runner.js';
 import { browserOperatorContract } from './browser_operator_contract.js';
 import { leaseAgentBrowserTab } from './agent_browser_session.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_REPO_DIR = path.resolve(MODULE_DIR, '..');
 const DEFAULT_STATE_DIR = '/home/ubuntu/.local/state/x_test';
-const DEFAULT_CLAIVE_BIN = '/home/ubuntu/repo/claive/bin/claive';
 const BRIEF_PATH = 'ops/systemd/arm/arm-growth-live.md';
 const PROMPT_FILE = 'arm-growth-live.prompt.md';
 const SESSION_ID = /^[A-Za-z0-9_-]{1,96}$/;
@@ -41,7 +40,11 @@ export async function runAttachedLiveSession(options = {}) {
   if (!SESSION_ID.test(sessionId)) {
     throw new Error('Attached live session ID must match [A-Za-z0-9_-] with length 1 through 96.');
   }
-  const config = options.config || runtimeConfig();
+  const config = options.config || runtimeConfig({ ...process.env,
+    X_GROWTH_AGENT_RUNTIME: process.env.X_GROWTH_AGENT_RUNTIME || 'claive',
+    X_GROWTH_CLAIVE_ENGINE: process.env.X_GROWTH_CLAIVE_ENGINE || 'codex',
+    X_GROWTH_AGENT_REASONING: process.env.X_GROWTH_AGENT_REASONING || 'max',
+  });
   if (config.browserTarget !== 'linux') {
     throw new Error('Attached live sessions require the linux browser target.');
   }
@@ -50,7 +53,9 @@ export async function runAttachedLiveSession(options = {}) {
   }
   const leaseTab = options.leaseTab || leaseAgentBrowserTab;
   const run = options.run || runChild;
-  const claiveBin = options.claiveBin || DEFAULT_CLAIVE_BIN;
+  const operator = { runtime: config.runtime, engine: config.runtime === 'claive' ? config.claiveEngine : null,
+    model: config.model || null, reasoning: config.reasoning || (config.runtime === 'pi' ? config.thinking : null),
+    replyWriterMode: config.replyWriterMode || 'profile', source: 'launcher_command_configuration' };
 
   let lease;
   let failure = null;
@@ -73,6 +78,7 @@ export async function runAttachedLiveSession(options = {}) {
     const prompt = template
       .replace('{{BROWSER_CONTRACT}}', () => contract)
       .replace('{{REPLY_CONTRACT}}', () => REPLY_CONTRACT)
+      .replace('{{REPLY_WORKFLOW}}', () => replyWorkflowInstruction(operator.replyWriterMode))
       .replaceAll('{{SESSION}}', () => sessionId)
       .replaceAll('{{OWNED_TAB}}', () => lease.targetId);
     if (prompt.includes('{{')) throw new Error('Unfilled placeholder in the brief.');
@@ -85,25 +91,18 @@ export async function runAttachedLiveSession(options = {}) {
     });
     await writeFile(promptFile, prompt, { mode: 0o600 });
     if (stopSignal) throw new Error(`Attached live session interrupted by ${stopSignal}.`);
-    await run({
-      executable: claiveBin,
-      args: [
-        'run',
-        '--workspace', repoDir,
-        '--prompt-file', promptFile,
-        '--engine', 'codex',
-        '--model', 'gpt-6-luna',
-        '--reasoning-effort', 'max',
-        '--web',
-        '--turn-timeout', '2700',
-        '--label', 'XGrowth live ARM',
-      ],
-      env: {
-        CODEX_WORKER_BINARY: config.codexExecutable,
-        CLAIVE_CODEX_YOLO: '1',
-        CLAIVE_CODEX_USE_USER_CONFIG: '1',
-      },
-    }, { cwd: repoDir, timeoutMs: CHILD_TIMEOUT_MS, killGraceMs: KILL_GRACE_MS });
+    const command = commandFor({ ...config,
+      ...(options.claiveBin && config.runtime === 'claive' ? { executable: options.claiveBin } : {}),
+    }, prompt, { promptFile, workspace: repoDir });
+    if (config.runtime === 'claive') command.args.push('--turn-timeout', '2700');
+    command.env = { ...command.env, CODEX_WORKER_BINARY: config.codexExecutable,
+      X_GROWTH_OPERATOR_RUNTIME: config.runtime,
+      X_GROWTH_OPERATOR_MODEL: config.model || '',
+      X_GROWTH_OPERATOR_REASONING: operator.reasoning || '',
+      X_GROWTH_REPLY_WRITER_MODE: operator.replyWriterMode,
+    };
+    console.log(`Attached operator: ${JSON.stringify(operator)}`);
+    await run(command, { cwd: repoDir, timeoutMs: CHILD_TIMEOUT_MS, killGraceMs: KILL_GRACE_MS });
   } catch (error) {
     failure = error;
   } finally {
@@ -128,7 +127,7 @@ export async function runAttachedLiveSession(options = {}) {
   }
   const incomplete = cleanupFailure(cleanup, cleanupError, lease.targetId);
   if (incomplete) throw incomplete;
-  return { sessionId, targetId: lease.targetId, cleanup };
+  return { sessionId, targetId: lease.targetId, cleanup, operator };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

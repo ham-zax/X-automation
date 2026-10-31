@@ -27,6 +27,46 @@ Use `ai-config` to inspect the safe resolved profile. `ai-bind-role` selects an
 existing profile. Changing this role does not change the operator's runtime,
 run lease or authority. No continuous daemon is needed for model selection.
 
+## Operator and Writer selection
+
+The attached launcher uses the existing runtime settings:
+
+```bash
+X_GROWTH_AGENT_RUNTIME=opencode
+X_GROWTH_AGENT_MODEL=opencode2api/deepseek-v4.1-flash-free
+X_GROWTH_AGENT_REASONING=max
+X_GROWTH_BROWSER_TARGET=linux
+X_GROWTH_REPLY_WRITER_MODE=profile
+```
+
+Use a model ID and reasoning level supported by the selected runtime.
+The example selects the operator, not the saved Writer profile.
+These settings apply when the next attached session starts.
+Without overrides, the attached launcher keeps its Claive/Codex default.
+The browser lease and current publication gates remain in force.
+
+- `operator` mode: the operator writes Replies itself, then calls `act`.
+  No extra Writer call is needed.
+- `profile` mode: call `reply-generate` with the current run/session, target URL,
+  exact `card.sourceText`, selected ACT `behavior`, and optional `candidateKey`.
+  The saved `writer` role writes one Reply using the compact contract.
+  It can use the same model or a different model from the operator.
+  Pass generated `text` and `writerInvocationId` to `act` with the existing target
+  and card fields. A skip ends that opportunity. Report a Writer failure.
+  Do not silently substitute another model.
+
+`reply-generate` returns preparation only. It takes no claim and sends nothing.
+Optional topic citations use the existing `topicBrief` selector.
+Existing Writer profile fallbacks still apply and appear in execution metadata.
+Originals and Threads retain their existing Writer and independent review path.
+No extra reply critic or automatic rewrite loop runs here.
+
+Publication attempts record the configured operator and, when supplied, the
+Writer execution reference. The operator report identifies requested settings.
+It does not establish a provider's hidden routing. The Writer execution records
+its reported model and fallback. The reference is for audit, not proof that text
+remains unchanged. The existing `act` checks still decide publication eligibility.
+
 ## System objective
 
 The account is a **developer + builder in tech** account and social participant.

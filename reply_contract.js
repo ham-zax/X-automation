@@ -52,3 +52,9 @@ export function normalizeReplyOutput(output, pipeline) {
   if (output?.pipeline != null && output.pipeline !== 'reply') throw new Error('Reply Writer pipeline mismatch.');
   return { ...output, pipeline: 'reply', threadParts: [] };
 }
+
+export function replyWorkflowInstruction(mode = 'profile') {
+  return mode === 'operator'
+    ? 'Reply writer mode is operator: write the reply yourself using the Reply contract, then use the existing act flow. No separate Writer call is needed.'
+    : 'Reply writer mode is profile: call reply-generate once with runId/sessionId, target URL/ID, exact card.sourceText and selected ACT behavior. If generated, pass its unchanged text and writerInvocationId to act. If skipped, move on. If it fails, report the failure instead of silently writing with another model.';
+}

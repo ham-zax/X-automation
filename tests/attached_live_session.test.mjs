@@ -30,6 +30,8 @@ function config(overrides = {}) {
     agentBrowserCli: '/fake/agent-browser',
     cdpPort: '9222',
     codexExecutable: '/fake/codex',
+    runtime: 'claive', claiveEngine: 'codex', model: 'gpt-6-luna', reasoning: 'max',
+    executable: '/fake/claive', replyWriterMode: 'profile',
     ...overrides,
   };
 }
@@ -143,17 +145,21 @@ test('success renders the exact owned target and releases that one lease once', 
     'run',
     '--workspace', repoDir,
     '--prompt-file', promptFile,
+    '--label', 'XGrowth autonomous operator',
     '--engine', 'codex',
     '--model', 'gpt-6-luna',
     '--reasoning-effort', 'max',
     '--web',
     '--turn-timeout', '2700',
-    '--label', 'XGrowth live ARM',
   ]);
   assert.deepEqual(command.env, {
     CODEX_WORKER_BINARY: '/fake/codex',
     CLAIVE_CODEX_YOLO: '1',
     CLAIVE_CODEX_USE_USER_CONFIG: '1',
+    X_GROWTH_OPERATOR_RUNTIME: 'claive',
+    X_GROWTH_OPERATOR_MODEL: 'gpt-6-luna',
+    X_GROWTH_OPERATOR_REASONING: 'max',
+    X_GROWTH_REPLY_WRITER_MODE: 'profile',
   });
   assert.deepEqual(options, { cwd: repoDir, timeoutMs: 2_700_000, killGraceMs: 5_000 });
 
@@ -165,6 +171,8 @@ test('success renders the exact owned target and releases that one lease once', 
     sessionId: 'luna-arm-test-1',
     targetId: TARGET,
     cleanup: { targetId: TARGET, cleaned: true, warnings: [] },
+    operator: { runtime: 'claive', engine: 'codex', model: 'gpt-6-luna', reasoning: 'max',
+      replyWriterMode: 'profile', source: 'launcher_command_configuration' },
   });
 });
 

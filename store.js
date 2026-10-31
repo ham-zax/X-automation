@@ -1899,6 +1899,7 @@ export function claimActPublication({
   editorial = null,
   runId = null,
   claimHolder = '',
+  modelProvenance = null,
   now = Date.now(),
 } = {}) {
   const pipeline = String(action || '').trim().toLowerCase();
@@ -2030,6 +2031,7 @@ export function claimActPublication({
       targetId || null,
       targetUrl || null,
       JSON.stringify({ candidateKey: queueItem.candidateKey, sourceUrl: String(targetUrl || ''),
+        ...(modelProvenance ? { models: modelProvenance } : {}),
         editorial: editorial && typeof editorial === 'object' ? editorial : null,
         activityDecision: activityDecision ? {
           reason: activityDecision.reason, urgent: activityDecision.urgent,

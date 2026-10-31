@@ -106,7 +106,7 @@ export async function independentlyReviewAndSaveDraft(draft, packet, writerOutpu
   return { draft: saved, contentReview: bound };
 }
 
-export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = 120_000, runAI = runStructuredAI, skipReview = false, replyContractText = REPLY_CONTRACT } = {}) {
+export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = 120_000, runAI = runStructuredAI, skipReview = false, replyContractText = REPLY_CONTRACT, metadata = {} } = {}) {
   const deadline = Date.now() + timeoutMs;
   const isReply = packet.pipeline === 'reply';
   const generationPacket = isReply ? projectReplyPacket(packet) : packet;
@@ -129,7 +129,7 @@ export async function generateWriterOutput(packet, promptDocumentText, { timeout
     prompt,
     schema: isReply ? replyOutputSchema(packet) : OUTPUT_SCHEMA,
     timeoutMs,
-    metadata: { consumer: 'writer_runtime', dailyTone: packet.persona?.dailyTone || null },
+    metadata: { ...metadata, consumer: 'writer_runtime', dailyTone: packet.persona?.dailyTone || null },
   });
   const output = normalizeReplyOutput(result.output, packet.pipeline);
   validateWriterEvidenceReferences(output, packet);
