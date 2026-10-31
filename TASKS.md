@@ -508,3 +508,25 @@ Behavior ablation uses 2/2 dispatches. Exact packet comparison passes outside
 behavior. Both samples retain product grading and unsupported decisive framing.
 Changing behavior alone does not remove the issue in this pair. No production
 change or root-cause claim follows. See behavior-ablation/REPORT.md.
+
+## XR-14 lean reply comparison, 31 October
+
+User authorizes six DeepSeek max calls, three per condition, one source VA-16.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-L | review | XR14-BA | parent | Compare full social Writer context with lean contract/persona/schema. Preserve every output and separate role from factual errors. | voice-audit-2026-10-31/lean-reply/plan.json |
+
+Fixed source, social behavior, model and settings. Bundled subtraction intervention.
+Order frozen before generation. No model judge or production mutation.
+
+Launch returns model_unavailable. Refreshed T3 catalog advertises no DeepSeek
+model through OpenCode or Pi. Zero model workers start, zero outputs generated.
+Six-call plan stays prepared. No substitute or CLI fallback is used.
+
+User reports recovery. Catalog again exposes the exact DeepSeek max target.
+Resume the original six-call order and unchanged requests. Prior failed launch
+started no worker and consumes no generation slot.
+
+Lean comparison completes 6/6 calls in the frozen order. All six schemas pass.
+No generation worker uses tools in the recorded activity. Lean gives one closer
+peer reaction, but product testing/ranking persists. No production change earns
+acceptance. Report: voice-audit-2026-10-31/lean-reply/REPORT.md. Budget exhausted.

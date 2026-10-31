@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "completedGenerationDispatches": 6,
+  "failedAvailabilityLaunches": 1,
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "variant": "max",
+  "schemaValid": 6,
+  "costUSD": null,
+  "productionChange": false,
+  "files": {
+    "availability.json": "97e4ec9289d293505cbaeea5b794ddfbed6d402201a799c00278b8ae90599bad",
+    "2-lean-output.json": "a7661b1cc849b26a7d1e321f21713ef1cbe69faae6e3c5b2c9969ec0b65b9e6e",
+    "1-full-output.json": "3e2c10da46643d9179ebfc1db6eb86cda6bdfbe241deee32670dc9ab83e5f445",
+    "full-request.json": "9b59f6d0a1f20a353622da6e876ffc4ba8f3cf6908b75466a8ba987fc15b21ce",
+    "6-lean-receipt.json": "5724885ef1c86637c6daf6113089cd4d5295d110f5b242541f2a09de01498835",
+    "6-lean-output.json": "6c43c07cdc5d329fe7a86aa187e7c146a5652d3afebff892ee60f8d2c2d3bacc",
+    "3-lean-output.json": "9023b082b9ae5eb10041571c559776ecf1e55279a797ed3cb1ac25f0aa6aa131",
+    "4-full-receipt.json": "adcee92c1c50a3adfc7c6aaac6aa22a5417037addc644534e4c67fd8e0fe085a",
+    "2-lean-receipt.json": "cc9275db619885819aa035b2a3d6524b1d44f61234e64020c29a4221c83807cf",
+    "REPORT.md": "33c266ccde03e4383942b7817aedeca9abada878149154ae8eec7aded1c5e14f",
+    "lean-request.json": "fd353028d8df740f1bde0d36a70a9485ee540c3df4e9e90134e990c1e6c14480",
+    "5-full-receipt.json": "78a7bd17594ab2c4769324cfac9bc0638b06019e27c25bf4e0c0a665eaca5b80",
+    "1-full-receipt.json": "cac451c434c6ff36f57b51ad0f978993854425c70311b17b8baff44257a34ff7",
+    "3-lean-receipt.json": "4e76a045f3d59dd73734b7b3c3f7f0a738f14f8cfbda3cdaa38a85c451e1f639",
+    "4-full-output.json": "2d79540d886f0165dd3f73afc8f89d66d4cf1181fc39ba0012c7d19244131be7",
+    "5-full-output.json": "f3121a868029f640e6b168d4a95c0261532bdc481de4783050244309d5cbf431",
+    "plan.json": "74de19a55239281cf1978c512c989c466378f00a2ea7d870e708446694721377"
+  }
+}

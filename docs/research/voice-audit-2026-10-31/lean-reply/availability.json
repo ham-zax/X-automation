@@ -1,0 +1,160 @@
+{
+  "attempt": [
+    {
+      "ordinal": 1,
+      "arm": "full",
+      "result": {
+        "_tag": "OrchestratorMcpFailure",
+        "code": "model_unavailable",
+        "message": "Model opencode2api/deepseek-v4.1-flash-free is not advertised by provider opencode."
+      }
+    }
+  ],
+  "availability": {
+    "parentThreadId": "48b4b81e-456c-46f0-b65b-c5b7d46b6346",
+    "inheritedProviderInstanceId": "codex",
+    "inheritedModel": "gpt-6.1-sol",
+    "inheritedOptions": [
+      {
+        "id": "reasoningEffort",
+        "value": "medium"
+      },
+      {
+        "id": "serviceTier",
+        "value": "default"
+      }
+    ],
+    "runtimeMode": "full-access",
+    "interactionMode": "default",
+    "providers": [
+      {
+        "providerInstanceId": "codex",
+        "driverKind": "codex",
+        "displayName": "Codex",
+        "models": [],
+        "canRunChildTask": true,
+        "canRunCrossProviderChildTask": true,
+        "constraints": []
+      },
+      {
+        "providerInstanceId": "claudeAgent",
+        "driverKind": "claudeAgent",
+        "displayName": "Claude",
+        "models": [],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "cursor",
+        "driverKind": "cursor",
+        "displayName": "Cursor",
+        "models": [],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "grok",
+        "driverKind": "grok",
+        "displayName": "Grok",
+        "models": [],
+        "runtimeModes": [
+          "approval-required",
+          "auto",
+          "full-access"
+        ],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "opencode",
+        "driverKind": "opencode",
+        "displayName": "OpenCode",
+        "models": [],
+        "runtimeModes": [
+          "approval-required",
+          "auto-accept-edits",
+          "auto",
+          "full-access"
+        ],
+        "canRunChildTask": true,
+        "canRunCrossProviderChildTask": true,
+        "constraints": []
+      },
+      {
+        "providerInstanceId": "antigravity",
+        "driverKind": "antigravity",
+        "displayName": "Antigravity",
+        "models": [],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "fx",
+        "driverKind": "fx",
+        "displayName": "fx",
+        "models": [],
+        "runtimeModes": [
+          "approval-required",
+          "auto"
+        ],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "muse",
+        "driverKind": "muse",
+        "displayName": "Muse Code",
+        "models": [],
+        "runtimeModes": [
+          "approval-required",
+          "full-access"
+        ],
+        "canRunChildTask": false,
+        "canRunCrossProviderChildTask": false,
+        "constraints": [
+          "Provider instance is disabled."
+        ]
+      },
+      {
+        "providerInstanceId": "pi",
+        "driverKind": "pi",
+        "displayName": "Pi",
+        "models": [],
+        "runtimeModes": [
+          "approval-required",
+          "auto-accept-edits",
+          "full-access"
+        ],
+        "canRunChildTask": true,
+        "canRunCrossProviderChildTask": true,
+        "constraints": []
+      }
+    ],
+    "features": {
+      "appOwnedSubagents": true,
+      "asyncPolling": true,
+      "cancellation": true,
+      "batchThreadCreation": true,
+      "threadManagement": true,
+      "incrementalThreadRead": true,
+      "scheduledTasks": true,
+      "maxBatchThreads": 20
+    }
+  },
+  "outcome": "No model worker started. Requested DeepSeek model unavailable. No substitute used."
+}

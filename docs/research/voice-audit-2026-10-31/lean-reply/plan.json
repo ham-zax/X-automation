@@ -1,0 +1,25 @@
+{
+  "source": "VA-16",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "variant": "max",
+  "order": [
+    "full",
+    "lean",
+    "lean",
+    "full",
+    "full",
+    "lean"
+  ],
+  "budget": 6,
+  "assessment": [
+    "uninvited product grading",
+    "unsupported capability or quantifier",
+    "invented owner history",
+    "response fits social purpose"
+  ],
+  "limits": [
+    "Bundled prompt, persona projection and schema change. Does not isolate a single component.",
+    "Three samples per arm, one source, no blind owner rating or statistical claim.",
+    "No model judge, production changes or public sends."
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "React to the AndroidHarness launch by naming the recovery stack as the part that decides whether a phone coding agent is real.",
+  "finalText": "the recovery stack is the genuinely hard part here. foreground service + resume cards is what makes a phone agent more than a demo.",
+  "threadParts": [],
+  "semanticAnchors": [
+    "Android",
+    "AI coding agent",
+    "foreground service",
+    "resume cards"
+  ],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The reply is a short reaction to the visible post; media would not add meaning.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a specific, non-generic reaction that identifies what actually matters in a mobile agent build, without turning a launch reply into a lecture.",
+  "relationshipValue": "Joins the author's launch conversation with a concrete point about the feature set they listed, rather than generic praise.",
+  "profileProofValue": null,
+  "riskFlags": [
+    "No first-hand use of AndroidHarness is claimed; the reaction stays on the features the source lists.",
+    "The source's feature claims are unverified by this reply."
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A9deece8a-5aa5-48a3-9669-05b42a3c8a91",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A9deece8a-5aa5-48a3-9669-05b42a3c8a91",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A9deece8a-5aa5-48a3-9669-05b42a3c8a91>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A9deece8a-5aa5-48a3-9669-05b42a3c8a91:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A9deece8a-5aa5-48a3-9669-05b42a3c8a91",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A9deece8a-5aa5-48a3-9669-05b42a3c8a91:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\n  \"decision\": \"POST\",\n  \"pipeline\": \"reply\",\n  \"thesis\": \"React to the AndroidHarness launch by naming the recovery stack as the part that decides whether a phone coding agent is real.\",\n  \"finalText\": \"the recovery stack is the genuinely hard part here. foreground service + resume cards is what makes a phone agent more than a demo.\",\n  \"threadParts\": [],\n  \"semanticAnchors\": [\n    \"Android\",\n    \"AI coding agent\",\n    \"foreground service\",\n    \"resume cards\"\n  ],\n  \"evidenceUsed\": [],\n  \"media\": {\n    \"required\": false,\n    \"type\": \"none\",\n    \"reason\": \"The reply is a short reaction to the visible post; media would not add meaning.\",\n    \"source\": \"\",\n    \"altText\": \"\"\n  },\n  \"discussionQuestion\": null,\n  \"followValue\": \"Shows a specific, non-generic reaction that identifies what actually matters in a mobile agent build, without turning a launch reply into a lecture.\",\n  \"relationshipValue\": \"Joins the author's launch conversation with a concrete point about the feature set they listed, rather than generic praise.\",\n  \"profileProofValue\": null,\n  \"riskFlags\": [\n    \"No first-hand use of AndroidHarness is claimed; the reaction stays on the features the source lists.\",\n    \"The source's feature claims are unverified by this reply.\"\n  ]\n}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}
