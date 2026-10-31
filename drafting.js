@@ -333,7 +333,7 @@ export function buildWriterPacket({
       ...(hasHashtagExperiment ? { hashtagExperimentCount } : {}),
       emojiMax: 1,
     },
-    promptDocument: pipeline === 'reply' ? 'docs/REPLY_GENERATION_PROMPT.md' : 'docs/POST_GENERATION_PROMPT.md',
+    promptDocument: pipeline === 'reply' ? 'docs/REPLY_GENERATION_PROMPT_V2.md' : 'docs/POST_GENERATION_PROMPT.md',
   };
 }
 
@@ -366,6 +366,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     threadParts: asStringArray(writerOutput?.threadParts),
     semanticAnchors: asStringArray(writerOutput?.semanticAnchors).filter(Boolean),
     evidenceUsed,
+    ...(pipeline === 'reply' ? { replyReview: String(writerOutput?.replyReview || '') } : {}),
     ...(topicBrief && briefParagraphIds.length
       ? { topicBrief: topicBriefEditorMetadata(topicBrief, briefParagraphIds) }
       : {}),

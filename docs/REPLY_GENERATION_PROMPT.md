@@ -1,3 +1,6 @@
+Historical Reply contract v1. Runtime now loads REPLY_GENERATION_PROMPT_V2.md.
+Retained as the previous version, not an additional runtime instruction.
+
 Write a reply as @ham_zax, a developer and builder participating as a peer.
 Realize the selected behavior for the visible parent post and supplied conversation.
 

@@ -65,3 +65,23 @@ reports OpenCode/DeepSeek/max/profile mode and allocates one owned browser tab.
 A separate read-only browser check establishes the signed-in Profile href
 `/ham_zax`. Its test targets close cleanly. The operator checks current account,
 delegation, rest policy and claims before any public action.
+
+## Reply Writer override, 31 October
+
+The owner now selects GLM 5.3 Flash Free max for Replies through the saved
+`reply_writer` role, profile16, with no fallback. The executor remains DeepSeek.
+The shared `writer` role remains DeepSeek for Originals, structured Quotes and
+Threads. Direct operator-authored Quotes still use the executor model.
+AI Settings exposes Reply Writer separately. Unbound Reply Writer settings
+inherit the shared Writer. See `docs/AGENT_WORKFLOW.md` for selection details.
+Contract v2 keeps two candidates and all 16 checks in one writing invocation.
+The earlier all-DeepSeek startup record above remains historical evidence.
+
+Owner clarification: GLM now writes all formats, not only Replies. Both writer
+and reply_writer select profile16, glm-5.3-flash-free max without fallback.
+DeepSeek remains the executor and orchestration model. The bridge now exposes
+writer-generate for a routed saved draft, reusing generateDraftCandidate and its
+existing independent review. Profile-mode operators use that command for
+Originals, Threads and Quotes instead of writing public prose themselves.
+Quotes still publish through act and its editorial checks. Originals and Threads
+still use the approved queue. These generation commands grant no authority.

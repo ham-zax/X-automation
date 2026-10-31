@@ -131,7 +131,7 @@ test('success renders the exact owned target and releases that one lease once', 
   assert.ok(prompt.includes(TARGET));
   assert.ok(prompt.includes('Browser interface: agent-browser-cli'));
   assert.ok(prompt.includes(`Use only launcher-owned target ${TARGET}`));
-  assert.ok(prompt.includes('Write a reply as @ham_zax'));
+  assert.ok(prompt.includes('Write as @ham_zax'));
   assert.equal(prompt.includes('`tab new '), false);
   assert.equal(prompt.includes('`tab close '), false);
   assert.equal(prompt.includes('{{'), false);

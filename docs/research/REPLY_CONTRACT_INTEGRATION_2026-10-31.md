@@ -197,3 +197,37 @@ Systemd owns the process, so ending this coding session does not stop it.
 The selected runtime still receives the existing bounded live brief and owner
 policy. Timer scheduling does not create a publishing quota or bypass rest.
 This startup evidence does not claim a completed Growth Run or public result.
+
+## Owner-selected GLM Reply v2, 31 October
+
+The owner adopts the tested GLM two-candidate prompt for production Replies.
+The exact tested body is copied into REPLY_GENERATION_PROMPT_V2.md. A runtime
+output section maps its A/B checks and selection into replyReview, its selected
+public text into finalText, and SKIP into DO_NOT_POST. That adapter section is
+new. The selected behavior, owner evidence and publication requirements remain.
+
+The shared reply_contract.js owner now loads v2. The old file remains labeled
+v1 for history. Replies use the new reply_writer AI role. Without an explicit
+binding it inherits writer. No new database table or schema migration is needed.
+
+Production reply_writer selects profile16: Pi, glm-5.3-flash-free, max, no fallback.
+The executor remains OpenCode DeepSeek V4.1 max. Shared writer remains profile15,
+DeepSeek V4.1 max, for Originals, structured Quotes and Threads. Direct-act Quotes
+are operator-authored and do not invoke the shared Writer automatically.
+The dashboard labels these two writing choices separately. Originals and Quotes
+can change models through writer, but they do not have independent per-format
+model bindings in this revision.
+
+The candidates and numbered checks are a writing record, not independent review
+or publication authority. The final selected text alone enters the existing send
+flow. No additional model critic, parser for the check prose, dependency or hash
+verification is introduced. Existing independent review routes still apply.
+
+Owner clarification: GLM now writes all formats, not only Replies. Both writer
+and reply_writer select profile16, glm-5.3-flash-free max without fallback.
+DeepSeek remains the executor and orchestration model. The bridge now exposes
+writer-generate for a routed saved draft, reusing generateDraftCandidate and its
+existing independent review. Profile-mode operators use that command for
+Originals, Threads and Quotes instead of writing public prose themselves.
+Quotes still publish through act and its editorial checks. Originals and Threads
+still use the approved queue. These generation commands grant no authority.

@@ -64,7 +64,7 @@ export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
 export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy', 'pi']);
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
-export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer']);
+export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer', 'reply_writer']);
 export const SOURCE_SNAPSHOT_KINDS = Object.freeze([
   'x_latest',
   'x_momentum',
@@ -7091,6 +7091,9 @@ function resolveExplicitAiProfile(profile) {
 export function resolveAiProfileForRole(role, explicitProfile = null) {
   const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
   const binding = getAiRoleBinding(normalizedRole);
+  if (normalizedRole === 'reply_writer' && !binding && explicitProfile == null) {
+    return { ...resolveAiProfileForRole('writer'), role: normalizedRole, source: 'writer', binding: null };
+  }
   let profile = resolveExplicitAiProfile(explicitProfile);
   let source = profile ? 'explicit' : null;
   if (!profile && binding?.primaryProfileId != null) {

@@ -5,7 +5,7 @@
 **Behavior contract:** `behavior.js`
 **Persona owner:** `persona.js`
 
-Runtime Replies use `REPLY_GENERATION_PROMPT.md` and the compact projection in
+Runtime Replies use `REPLY_GENERATION_PROMPT_V2.md` and the compact projection in
 `reply_contract.js`. This multi-format document remains the runtime contract for
 Originals, Quotes and Threads. Its historical Reply guidance does not add fields
 or prose to the compact Reply request.

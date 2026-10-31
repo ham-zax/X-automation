@@ -12,8 +12,8 @@ export function operatorModelReport(env = process.env) {
 export function replyModelProvenance(payload) {
   const operator = operatorModelReport();
   if (!payload.writerInvocationId) return { operator, writer: { ...operator, source: 'operator_supplied_text' } };
-  const run = listAiRuns({ invocationId: payload.writerInvocationId, role: 'writer', status: 'complete', limit: 1 })[0];
-  if (!run || run.metadata.runId !== payload.runId || run.metadata.sessionId !== payload.sessionId
+  const run = listAiRuns({ invocationId: payload.writerInvocationId, status: 'complete', limit: 1 })[0];
+  if (!run || !['writer', 'reply_writer'].includes(run.role) || run.metadata.runId !== payload.runId || run.metadata.sessionId !== payload.sessionId
     || run.metadata.targetTweetId !== String(payload.targetTweetId)) throw new Error('Writer execution does not belong to this reply run and target.');
   return { operator, writer: { invocationId: run.invocationId, runtime: run.runtime,
     model: run.model, reasoning: run.reasoning, fallbackUsed: run.fallbackUsed } };
@@ -55,6 +55,7 @@ export async function generateActReply(payload, { generate = generateWriterOutpu
   if (output.decision === 'POST') validateActInput({ action: 'reply', text, targetTweetId, targetUrl });
   return { status: output.decision === 'POST' ? 'generated' : 'skipped', text,
     writerInvocationId: output.execution?.invocationId || null, writer: output.execution || null,
+    replyReview: String(output.replyReview || ''),
     operator, targetTweetId, targetUrl, candidateKey: candidateKey || null,
     ...(topicBrief ? { topicBrief: { collectionId: topicBrief.collectionId, briefId: topicBrief.briefId, paragraphIds: topicBrief.paragraphIds } } : {}),
     publicationAuthority: false };

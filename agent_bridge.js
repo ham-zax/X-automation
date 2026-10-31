@@ -1522,6 +1522,18 @@ async function main() {
     return;
   }
 
+  if (command === 'writer-generate') {
+    requireGrowthRunLease(payload.runId, payload.sessionId || '');
+    const workflow = inspectWorkflow(payload.key);
+    if (!workflow.draft) throw new Error('writer-generate requires an existing routed draft. Use create-draft first.');
+    const { generateDraftCandidate } = await import('./web_api.js');
+    const generated = await generateDraftCandidate(workflow.draft);
+    requireGrowthRunLease(payload.runId, payload.sessionId || '');
+    result({ draft: generated.saved, queueItem: generated.queueItem, analysis: generated.analysis,
+      decision: generated.output.decision, writer: generated.output.execution, publicationAuthority: false });
+    return;
+  }
+
   if (command === 'writer-packet') {
     const workflow = inspectWorkflow(payload.key);
     const pipeline = workflow.queueItem?.pipeline;
@@ -3202,7 +3214,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-generate|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 main().catch((error) => {

@@ -26,12 +26,12 @@ const good = () => ({ passed: true, ownerClaims: [], factualClaims: [], voiceIss
 test('Reply generation uses the small contract and normalizes the internal route', async () => {
   const p = packet();
   let seen;
-  const raw = { decision: 'POST', finalText: 'Love this direction.', evidenceUsed: [] };
+  const raw = { decision: 'POST', finalText: 'Love this direction.', evidenceUsed: [], replyReview: 'A: PASS 1-16. B: PASS 1-16. A selected.' };
   const output = await runtime.generateWriterOutput(p, 'LARGE MULTIFORMAT MANUAL', { skipReview: true, runAI: async request => {
     seen = request;
     return { output: raw, execution: { actualModel: 'fixture-luna' } };
   } });
-  assert.deepEqual(seen.schema.required, ['decision', 'finalText', 'evidenceUsed']);
+  assert.deepEqual(seen.schema.required, ['decision', 'finalText', 'evidenceUsed', 'replyReview']);
   assert.equal(validateStructuredOutput(raw, seen.schema).valid, true);
   assert.equal(seen.prompt.includes('LARGE MULTIFORMAT MANUAL'), false);
   assert.equal(seen.prompt.includes('systems_consequence_signature'), false);
@@ -114,9 +114,9 @@ test('Real bridge returns the Reply contract and accepts its lean output', () =>
   const draft = store.saveDraft({ ...drafting.createDraftScaffold(candidate, { pipeline: 'reply' }), editor: { pipeline: 'reply', behavior, evidenceUsed: [] } });
   const bridge = (command, payload) => JSON.parse(execFileSync(process.execPath, [path.join(repo, 'agent_bridge.js'), command], { cwd: scratch, input: JSON.stringify(payload), encoding: 'utf8' }));
   const prepared = bridge('writer-packet', { key: candidate.key });
-  assert.equal(prepared.packet.promptDocument, 'docs/REPLY_GENERATION_PROMPT.md');
+  assert.equal(prepared.packet.promptDocument, 'docs/REPLY_GENERATION_PROMPT_V2.md');
   assert.equal(prepared.contract, contracts.REPLY_CONTRACT);
-  assert.deepEqual(prepared.outputSchema.required, ['decision', 'finalText', 'evidenceUsed']);
+  assert.deepEqual(prepared.outputSchema.required, ['decision', 'finalText', 'evidenceUsed', 'replyReview']);
   assert.equal(prepared.packet.persona.voiceCalibration, undefined);
   bridge('apply-writer-output', { id: draft.id, generation: prepared.generation, output: { decision: 'POST', finalText: 'Love this direction.', evidenceUsed: [] } });
   const saved = store.getDraft(draft.id);

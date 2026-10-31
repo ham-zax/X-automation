@@ -4,7 +4,8 @@ This benchmark captures real Growth OS requests and uses native Harness²
 task-level recursion. It does not publish or change production settings.
 
 After the Reply integration, new Writer captures use the compact canonical
-`REPLY_GENERATION_PROMPT.md` contract and three-field reply schema. Historical
+`REPLY_GENERATION_PROMPT_V2.md` contract. The reply schema contains decision,
+finalText, evidenceUsed and replyReview, plus explicit topic citations when supplied. Historical
 reports retain their original full/lean packets as evidence. The offline helper's
 explicit style fragment remains available through its injected contract option.
 It does not change the production contract or a bridge caller's authority.

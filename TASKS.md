@@ -666,3 +666,12 @@ DeepSeek executor and Writer selection, and a read-only X Growth browser check.
 
 | id | status | depends | owner | acceptance | evidence |
 | DS-LIVE | review | PW-I | parent | Push current work, use DeepSeek V4.1 max for executor and Writer, start durable operator, check authenticated browser. | Pushed through 13f2193 before startup. Installed versioned deepseek.conf. Service starts 16:44:12 UTC, PID3675080, active/running. Journal confirms OpenCode DeepSeek V4.1 max, operator-status and browser commands. Timer enabled/active, user Linger=yes. Browser signed-in Profile href /ham_zax, exact test targets cleaned. OpenCode Writer SDK preflight fails before any model request. Pi Writer profile15 DeepSeek max passes real structured ready=true check, invocation1d35412f-f752-4b46-bdfa-f2926d95f853, no fallback. Startup accepted for review, no completed Growth Run or public-result claim. |
+
+## GLM Reply contract v2, 31 October
+
+TaskStartSnapshot: 6af9910. Owner selects the tested two-candidate GLM approach
+for production Replies. The owner then selects GLM for all writing. Preserve DeepSeek as the
+executor and orchestration model. Pause timer during the change while no operator is active.
+
+| id | status | depends | owner | acceptance | evidence |
+| RV2 | in-progress | DS-LIVE | parent | Separate reply_writer role selects GLM max. Reply v2 performs two candidates and 16 checks, returning selected text through existing act. All writing selects GLM. Existing Writer/draft generation is available through writer-generate. | Existing role/profile storage needs no schema migration. Source prompt: docs/research/peer-reply-experiment-2026-10-31/two-candidate-prompt.md. |

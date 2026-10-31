@@ -4,9 +4,9 @@ This document is the operating contract for any agent that researches, drafts, o
 
 ## Reply writing contract
 
-Replies use `docs/REPLY_GENERATION_PROMPT.md`, projected by `reply_contract.js`.
+Replies use `docs/REPLY_GENERATION_PROMPT_V2.md`, projected by `reply_contract.js`.
 `writer-packet` returns the compact packet, `contract`, `outputSchema` and the
-existing generation context for a Reply. Return `{decision, finalText, evidenceUsed}`
+existing generation context for a Reply. Return `{decision, finalText, evidenceUsed, replyReview}`
 to `apply-writer-output` with that generation context. Growth OS supplies the
 already selected `pipeline: reply`. For an explicitly supplied topic brief, also
 declare `briefParagraphIds` under the existing citation contract. No thesis or
@@ -14,9 +14,10 @@ follower-value explanation is requested from a Reply writer. Originals, Quotes
 and Threads retain the full Writer format described below.
 
 The structured Writer and attached/direct operator use the same Reply text.
-The Reply contract includes a silent check of source meaning, question premises
-and conversational purpose. That check runs inside writing, without a separate
-model call or a self-review object. It does not replace existing review gates.
+Reply v2 writes two candidates and checks each against all 16 rules from the
+owner-selected GLM prompt. `replyReview` stores candidates, numbered checks and
+selection. Only `finalText` is public. Both run in the same Writer call.
+These self-checks do not replace existing independent review requirements.
 Existing approval, duplicate, health, claim and uncertain-send rules still apply.
 The direct `act` path does not gain an independent Writer review from this change.
 For a reviewed Reply, accurate claims about its visible parent need no literal
@@ -25,9 +26,11 @@ Source quotes and quantities still bind, and semantic support still needs review
 Ordinary reactions need no factual claim entry. Declaring a factual product claim
 an opinion does not establish support or bypass existing assertion checks.
 
-The saved `writer` AI role selects the model through the existing AI settings.
+The saved `reply_writer` AI role selects the Reply model. The `writer` role
+selects the structured Writer for Originals, Quotes and Threads.
 Use `ai-config` to inspect the safe resolved profile. `ai-bind-role` selects an
-existing profile. Changing this role does not change the operator's runtime,
+existing profile. Without a separate Reply binding, `reply_writer` inherits
+`writer`. Changing a writing role does not change the operator's runtime,
 run lease or authority. No continuous daemon is needed for model selection.
 
 ## Operator and Writer selection
@@ -52,7 +55,7 @@ The browser lease and current publication gates remain in force.
   No extra Writer call is needed.
 - `profile` mode: call `reply-generate` with the current run/session, target URL,
   exact `card.sourceText`, selected ACT `behavior`, and optional `candidateKey`.
-  The saved `writer` role writes one Reply using the compact contract.
+  The saved `reply_writer` role writes one Reply using contract v2.
   It can use the same model or a different model from the operator.
   Pass generated `text` and `writerInvocationId` to `act` with the existing target
   and card fields. A skip ends that opportunity. Report a Writer failure.
@@ -62,7 +65,20 @@ The browser lease and current publication gates remain in force.
 Optional topic citations use the existing `topicBrief` selector.
 Existing Writer profile fallbacks still apply and appear in execution metadata.
 Originals and Threads retain their existing Writer and independent review path.
-No extra reply critic or automatic rewrite loop runs here.
+No extra reply critic runs. Candidate selection and any revision required by
+contract v2 happen inside the same Writer invocation.
+
+Select models in AI Settings under Reply Writer and Writer (Originals, Quotes,
+Threads), or use `ai-bind-role` with `role: reply_writer` or `role: writer`.
+The shared Writer setting changes those three standalone formats together.
+In profile mode, route and create a draft for each Original, Thread or Quote.
+Call `writer-generate` with its `key`, `runId` and `sessionId`. The command reuses
+existing generation, strategy selection, server review and draft persistence.
+It returns draft, queueItem, analysis, decision and Writer execution. It never
+publishes. Pass a Quote's saved body unchanged through `act` with existing
+editorial fields. Originals and Threads retain the approved queue path.
+The operator selects and orchestrates. The selected Writer supplies public text.
+The direct `act` command itself does not invoke a Quote Writer.
 
 Publication attempts record the configured operator and, when supplied, the
 Writer execution reference. The operator report identifies requested settings.

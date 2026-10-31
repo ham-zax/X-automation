@@ -1,14 +1,15 @@
 import { readFileSync } from 'node:fs';
 
-export const REPLY_CONTRACT = readFileSync(new URL('./docs/REPLY_GENERATION_PROMPT.md', import.meta.url), 'utf8').trim();
+export const REPLY_CONTRACT = readFileSync(new URL('./docs/REPLY_GENERATION_PROMPT_V2.md', import.meta.url), 'utf8').trim();
 
 export function replyOutputSchema(packet = {}) {
   return {
     type: 'object', additionalProperties: false,
-    required: ['decision', 'finalText', 'evidenceUsed', ...(packet.topicBrief ? ['briefParagraphIds'] : [])],
+    required: ['decision', 'finalText', 'evidenceUsed', 'replyReview', ...(packet.topicBrief ? ['briefParagraphIds'] : [])],
     properties: {
       decision: { enum: ['POST', 'DO_NOT_POST'] },
       finalText: { type: 'string' },
+      replyReview: { type: 'string' },
       evidenceUsed: { type: 'array', items: { type: 'string' } },
       ...(packet.topicBrief ? { briefParagraphIds: { type: 'array', items: { type: 'string' } } } : {}),
     },
@@ -41,7 +42,7 @@ export function projectReplyPacket(packet) {
     } } : {}),
     ...(packet.writingStrategy ? { writingStrategy: packet.writingStrategy } : {}),
     ...(packet.topicBrief ? { topicBrief: packet.topicBrief } : {}),
-    promptDocument: 'docs/REPLY_GENERATION_PROMPT.md',
+    promptDocument: 'docs/REPLY_GENERATION_PROMPT_V2.md',
   };
 }
 
@@ -56,5 +57,5 @@ export function normalizeReplyOutput(output, pipeline) {
 export function replyWorkflowInstruction(mode = 'profile') {
   return mode === 'operator'
     ? 'Reply writer mode is operator: write the reply yourself using the Reply contract, then use the existing act flow. No separate Writer call is needed.'
-    : 'Reply writer mode is profile: call reply-generate once with runId/sessionId, target URL/ID, exact card.sourceText and selected ACT behavior. If generated, pass its unchanged text and writerInvocationId to act. If skipped, move on. If it fails, report the failure instead of silently writing with another model.';
+    : 'Reply writer mode is profile: call reply-generate once through the saved reply_writer model with runId/sessionId, target URL/ID, exact card.sourceText and selected ACT behavior. If generated, pass its unchanged text and writerInvocationId to act. If skipped, move on. If it fails, report the failure instead of silently writing with another model. For Originals, Threads and Quotes, route and create a saved draft, then call writer-generate with its key and current runId/sessionId. Use its selected Writer text unchanged. For Quotes pass the saved text through act with existing editorial fields. Originals and Threads retain the approved queue flow. You orchestrate and select opportunities. Do not replace the selected Writer with your own public prose.';
 }

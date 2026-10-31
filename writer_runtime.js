@@ -79,7 +79,7 @@ export async function reviewWriterOutput(packet, output, { timeoutMs = 60_000, r
       discoveryVerification: packet.discoveryVerification,
       sources: contentSources(packet.candidate, packet.evidence) }),
   ].join('\n');
-  const result = await runAI({ role: 'writer', prompt, schema: REVIEW_SCHEMA, timeoutMs,
+  const result = await runAI({ role: packet.pipeline === 'reply' ? 'reply_writer' : 'writer', prompt, schema: REVIEW_SCHEMA, timeoutMs,
     metadata: { consumer: 'writer_content_review' } });
   return { ...result.output, reviewer: 'writer_runtime', execution: result.execution };
 }
@@ -125,7 +125,7 @@ export async function generateWriterOutput(packet, promptDocumentText, { timeout
     JSON.stringify(generationPacket, null, 2),
   ].join('\n');
   const result = await runAI({
-    role: 'writer',
+    role: packet.pipeline === 'reply' ? 'reply_writer' : 'writer',
     prompt,
     schema: isReply ? replyOutputSchema(packet) : OUTPUT_SCHEMA,
     timeoutMs,

@@ -29,7 +29,8 @@ const ROLE_LABELS: Record<string, string> = {
   editorial_scan: 'Editorial scan',
   editorial_final: 'Editorial final',
   audience_review: 'Audience review',
-  writer: 'Writer',
+  writer: 'Writer (Originals, Quotes, Threads)',
+  reply_writer: 'Reply Writer',
 }
 
 const RUNTIME_LABELS: Record<string, string> = {
