@@ -530,3 +530,18 @@ Lean comparison completes 6/6 calls in the frozen order. All six schemas pass.
 No generation worker uses tools in the recorded activity. Lean gives one closer
 peer reaction, but product testing/ranking persists. No production change earns
 acceptance. Report: voice-audit-2026-10-31/lean-reply/REPORT.md. Budget exhausted.
+
+## XR-14 Luna comparison, 31 October
+
+User confirms GPT-5.6 Luna max. Six dispatches authorized.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-LUNA | review | XR14-L | parent | Repeat identical six-request design with Luna5.6 max. Preserve outputs and compare factual and conversational fit separately. | lean-reply/luna-5.6 |
+
+Same source, requests, schemas and frozen order as DeepSeek. Provider/model/effort
+change together. Other agent proposal stays deferred until owner reviews findings.
+
+Luna5.6 comparison completes6/6. Both request files match DeepSeek bytes.
+All six schemas pass. Full replies are peer reactions in parent assessment.
+Lean still adds inspectability ranking. No clear capability inflation in these
+samples. One source, three samples/arm, not owner acceptance or a model ranking.
+Other agent proposal waits for owner review. See luna-5.6/REPORT.md.

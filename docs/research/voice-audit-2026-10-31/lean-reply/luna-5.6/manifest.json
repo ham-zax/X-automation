@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "max",
+  "completedDispatches": 6,
+  "schemaPass": 6,
+  "costUSD": null,
+  "files": {
+    "2-lean-output.json": "01e5cff57db057f651a6afaed7fb785855872cca5e9821e18861da36d1ca412e",
+    "1-full-output.json": "f853ed4595fc423e190241c77977064df1de2d5c000d78bbacd43c9b7011fb96",
+    "full-request.json": "9b59f6d0a1f20a353622da6e876ffc4ba8f3cf6908b75466a8ba987fc15b21ce",
+    "6-lean-receipt.json": "4d06d3beb51804f1f2607760cb4bbff5967b5571b60f37b636f2e413e3ba7866",
+    "6-lean-output.json": "4eddb33d9467c7c44ec1bb0fe3e08efe34e7b5fda83b0cadb451fc0b7879a773",
+    "3-lean-output.json": "c3225faa86ccbcc8c061aa1171a0a1d549b377c728132af6bab3d19e478a6be7",
+    "4-full-receipt.json": "b679ef6db281f8ad5bc09e4b95209ffb1e7ac715ebb0e7f48801dbcfc479d2e7",
+    "2-lean-receipt.json": "e360714f709687bf361451999e3b049d0a4d077fbb40327aafe6d7ea1231b6bf",
+    "REPORT.md": "1a68d882a6da700175ee3f91b7af9a678798e62531275019be8e12bb43fb7a70",
+    "lean-request.json": "fd353028d8df740f1bde0d36a70a9485ee540c3df4e9e90134e990c1e6c14480",
+    "5-full-receipt.json": "3dd40e48b9602494a05c7d93b34ba5e7382aeb64d6b9c228bf9c5c21de68df5c",
+    "1-full-receipt.json": "2eabd215cc3de2017b9cac448540773d26e6d6752554886285107c2e0491e02a",
+    "activity.json": "41ec82b4b2df9a004c709bc6c417a65c3f5775e6ab8bf2a48ee71219232706b9",
+    "3-lean-receipt.json": "d590094300056988e4fd29ff7f3ace22aa02bf9d5a3676691f073378bc86a433",
+    "4-full-output.json": "97e7ba825ed588aa7bc07192ad92f13a7d079dd310b825ca028092b15fe2d5c1",
+    "5-full-output.json": "cd8a847f25a5a20bb0a1da5dba1d1f2592c6b73fb8a11a52e3bf20009301d2a9",
+    "plan.json": "6ed85f00af39842cd608600c37d82728029c9883d4a44ef40b167b4900f48288"
+  }
+}
