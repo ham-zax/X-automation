@@ -272,6 +272,7 @@ test('default executor prompt is a compact scout and act loop with run and sessi
   const legacy = runner.operatorPrompt(base);
   const recovery = await readFile(path.join(root, 'docs/GROWTH_CONTEXT_RECOVERY.md'), 'utf8');
   for (const prompt of [executor, legacy]) assert.ok(prompt.includes(recovery));
+  for (const prompt of [executor, legacy]) assert.ok(prompt.includes('Write a reply as @ham_zax'));
   for (const text of ['scout', 'act', 'record-disposition', 'runId', 'sessionId `claive-s1`', 'https://x.com/notifications/mentions',
     'growth-run-begin', 'adapterType `claive_unattended`', 'ceilings.maxPublicMutations=25', 'ceilings.maxDurationMinutes=15']) {
     assert.ok(executor.includes(text), text);

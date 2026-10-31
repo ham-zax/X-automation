@@ -29,7 +29,7 @@ test('captures real schema and freezes packet, refusing extra fields and failed 
   writeFileSync(fixtureFile, JSON.stringify(fixture));
   assert.throws(() => call({ operation: 'prepare', caseId: 'VA-16', fixtureFile, outputDir: other, packetFile: path.join(dir, 'packet.json') }), error => error.status === 1 && /Frozen packet/.test(error.stdout));
   assert.deepEqual(load(dir, 'packet.json'), frozen);
-  const output = { decision: 'POST', pipeline: 'reply', thesis: '', finalText: 'Interesting approach to coding on a phone.', threadParts: [], semanticAnchors: [], evidenceUsed: [], media: { required: false, type: 'none', reason: '', source: '', altText: '' }, discussionQuestion: null, followValue: '', relationshipValue: null, profileProofValue: null, riskFlags: [] };
+  const output = { decision: 'POST', finalText: 'Interesting approach to coding on a phone.', evidenceUsed: [] };
   save(dir, 'model-output.json', { ...output, extra: true });
   assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');
   assert.ok(load(dir, 'inspection.json').schemaErrors.length);

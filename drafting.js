@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { normalizeReplyOutput } from './reply_contract.js';
 import { evaluateTechDiscoveryEvidence } from './discovery_verification.js';
 import {
   behaviorDecisionRequiresFactualEvidence,
@@ -332,11 +333,12 @@ export function buildWriterPacket({
       ...(hasHashtagExperiment ? { hashtagExperimentCount } : {}),
       emojiMax: 1,
     },
-    promptDocument: 'docs/POST_GENERATION_PROMPT.md',
+    promptDocument: pipeline === 'reply' ? 'docs/REPLY_GENERATION_PROMPT.md' : 'docs/POST_GENERATION_PROMPT.md',
   };
 }
 
 export function applyWriterOutput(draft, writerOutput = {}, { generationProvenance = null, writerPacket = null } = {}) {
+  writerOutput = normalizeReplyOutput(writerOutput, writerPacket?.pipeline || draft?.editor?.pipeline);
   const decision = writerOutput?.decision;
   const pipeline = writerOutput?.pipeline;
   if (!WRITER_DECISIONS.has(decision)) throw new Error(`Invalid writer decision: ${decision}`);

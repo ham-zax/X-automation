@@ -1,0 +1,68 @@
+[
+  {
+    "model": "deepseek",
+    "order": "forward",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "model": "glm",
+    "order": "forward",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "model": "deepseek",
+    "order": "reverse",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "model": "glm",
+    "order": "reverse",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "model": "deepseek",
+    "order": "focused",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "model": "glm",
+    "order": "focused",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  }
+]

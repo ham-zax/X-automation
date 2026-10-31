@@ -1,0 +1,16 @@
+{
+  "role": "writer",
+  "before": {
+    "primaryProfileId": 14,
+    "fallbackProfileId": 12
+  },
+  "after": {
+    "primaryProfileId": 1,
+    "fallbackProfileId": 12,
+    "model": "gpt-5.6-luna",
+    "reasoning": "max"
+  },
+  "source": "agent_bridge ai-bind-role result",
+  "otherRolesChanged": false,
+  "publicActions": 0
+}

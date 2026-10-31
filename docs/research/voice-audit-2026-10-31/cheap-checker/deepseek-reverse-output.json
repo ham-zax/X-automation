@@ -1,0 +1,68 @@
+{
+  "results": [
+    {
+      "id": "J",
+      "hasConcreteError": true,
+      "problems": [
+        {
+          "span": "Does it support git?",
+          "type": "answered_question",
+          "explanation": "The source already states that the app supports git from the phone, so this question is explicitly answered.",
+          "sourceQuote": "supports git from the phone"
+        }
+      ]
+    },
+    {
+      "id": "I",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "H",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "G",
+      "hasConcreteError": true,
+      "problems": [
+        {
+          "span": "pulling the repo now",
+          "type": "invented_owner_action",
+          "explanation": "The source says the authors share a quickstart repository. It does not attest that the reply author is pulling it now.",
+          "sourceQuote": "share a quickstart repo"
+        }
+      ]
+    },
+    {
+      "id": "F",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "E",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "D",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "C",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "B",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "A",
+      "hasConcreteError": false,
+      "problems": []
+    }
+  ]
+}

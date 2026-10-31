@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
+import { REPLY_CONTRACT, normalizeReplyOutput } from '../reply_contract.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const original = process.cwd();
@@ -44,14 +45,15 @@ async function main(input) {
       const style = input.styleFile ? await readFile(resolve(input.styleFile), 'utf8') : '';
       let request;
       if (lane === 'writer') {
-        const prompt = await readFile(path.join(root, 'docs/POST_GENERATION_PROMPT.md'), 'utf8');
-        request = await capture(runAI => runtime.generateWriterOutput(packet, prompt + (style ? `\n\nVOICE FRAGMENT:\n${style}` : ''), { runAI }));
+        const prompt = await readFile(path.join(root, 'docs/REPLY_GENERATION_PROMPT.md'), 'utf8');
+        const contract = prompt + (style ? `\n\nVOICE FRAGMENT:\n${style}` : '');
+        request = await capture(runAI => runtime.generateWriterOutput(packet, contract, { runAI, replyContractText: contract }));
       } else {
         const brief = await readFile(path.join(root, 'ops/systemd/arm/arm-growth-live.md'), 'utf8');
         const start = brief.indexOf('Writing a Reply:');
         const end = brief.indexOf('\nExecution:', start);
         if (start < 0 || end < 0) throw new Error('Attached reply instruction section is missing.');
-        const section = brief.slice(start, end);
+        const section = brief.slice(start, end).replace('{{REPLY_CONTRACT}}', REPLY_CONTRACT);
         request = { role: 'writer', prompt: `Limited instruction replay, not an attached browser run. Browser, room and history context are omitted.\n${section}\n\nFROZEN PACKET:\n${JSON.stringify(packet, null, 2)}${style ? `\n\nVOICE FRAGMENT:\n${style}` : ''}`, schema: { type: 'object', additionalProperties: false, required: ['decision', 'finalText'], properties: { decision: { enum: ['POST', 'DO_NOT_POST'] }, finalText: { type: 'string' } } } };
       }
       await write(files.request, request);
@@ -73,7 +75,7 @@ async function main(input) {
       await write(files.inspection, { status: 'blocked', schemaErrors: errors, exactText: output?.finalText ?? null, publicationAuthority: false });
       return { status: 'blocked', artifacts: { inspection: files.inspection } };
     }
-    const reviewOutput = state.lane === 'writer' ? output : { ...output, pipeline: 'reply', threadParts: [] };
+    const reviewOutput = state.lane === 'writer' ? normalizeReplyOutput(output, packet.pipeline) : { ...output, pipeline: 'reply', threadParts: [] };
     if (input.operation === 'review-request') {
       const reviewRequest = await capture(runAI => runtime.reviewWriterOutput(packet, reviewOutput, { runAI }));
       if (input.reviewStyleFile) reviewRequest.prompt += `\n\nOFFLINE REVIEW CALIBRATION:\n${await readFile(resolve(input.reviewStyleFile), 'utf8')}`;

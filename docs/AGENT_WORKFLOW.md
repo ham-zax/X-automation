@@ -2,6 +2,31 @@
 
 This document is the operating contract for any agent that researches, drafts, or queues content for this account.
 
+## Reply writing contract
+
+Replies use `docs/REPLY_GENERATION_PROMPT.md`, projected by `reply_contract.js`.
+`writer-packet` returns the compact packet, `contract`, `outputSchema` and the
+existing generation context for a Reply. Return `{decision, finalText, evidenceUsed}`
+to `apply-writer-output` with that generation context. Growth OS supplies the
+already selected `pipeline: reply`. For an explicitly supplied topic brief, also
+declare `briefParagraphIds` under the existing citation contract. No thesis or
+follower-value explanation is requested from a Reply writer. Originals, Quotes
+and Threads retain the full Writer format described below.
+
+The structured Writer and attached/direct operator use the same Reply text.
+Existing approval, duplicate, health, claim and uncertain-send rules still apply.
+The direct `act` path does not gain an independent Writer review from this change.
+For a reviewed Reply, accurate claims about its visible parent need no literal
+“the author says” wording. Other source reports retain attribution requirements.
+Source quotes and quantities still bind, and semantic support still needs review.
+Ordinary reactions need no factual claim entry. Declaring a factual product claim
+an opinion does not establish support or bypass existing assertion checks.
+
+The saved `writer` AI role selects the model through the existing AI settings.
+Use `ai-config` to inspect the safe resolved profile. `ai-bind-role` selects an
+existing profile. Changing this role does not change the operator's runtime,
+run lease or authority. No continuous daemon is needed for model selection.
+
 ## System objective
 
 The account is a **developer + builder in tech** account and social participant.

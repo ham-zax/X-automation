@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "sourceBaseline": "c02380b",
+  "nodeTests": {
+    "pass": 412,
+    "fail": 0,
+    "skip": 0
+  },
+  "pythonTests": {
+    "pass": 7,
+    "fail": 0
+  },
+  "independentGraphReviews": 1,
+  "cheapCheckerCalls": 6,
+  "publicationAcceptance": false,
+  "files": {
+    "writer-binding.json": "e2bf2c39a1910c102b33355b206f565457398a115ab0e1bd18efa83c184b53a5",
+    "review-repair-tests.log": "59236124383b4b9cf06116e5446f1d2e04d1ba67fbce6ae996dab39d3d9ae641",
+    "review-input.json": "fe34bedd750639bb5ddad8a24f0c6f3e625adb97208a19c86014b6fb11ff523d",
+    "review-receipt.json": "4fec690677145c9c40b6ea43eb7941d38fc606317240cef81d226516e3cf36ea",
+    "final-node-tests.log": "219a459ae9cc5d37ab454e8e188a137f4ec75d01f48f2894b295651121a4c5c4",
+    "python-tests.log": "029adb9f07c56bd7b2bb1fd6f21e484a5febdc02c7e9501a6a03ecf1b44a2426"
+  }
+}

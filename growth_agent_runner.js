@@ -1,4 +1,5 @@
 import { socialOperatorPrompt } from './ops/social_operator_contract.js';
+import { REPLY_CONTRACT } from './reply_contract.js';
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -14,6 +15,7 @@ import { GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { controllerTick } from './semantic_controller.js';
 
 const HOME = homedir();
+const REPLY_OPERATOR_CONTRACT = REPLY_CONTRACT.replace(/\n+/g, ' ');
 const REPO = path.resolve(process.env.X_GROWTH_REPO || path.dirname(fileURLToPath(import.meta.url)));
 const DEFAULT_RUNTIME = 'opencode';
 const DEFAULT_OPENCODE_BIN = path.join(HOME, '.opencode/bin/opencode');
@@ -285,13 +287,13 @@ Act outcomes (the \`status\` field of the act result):
 - \`confirmed_not_sent\` or \`needs_rewrite\`: nothing was sent. Fix the named problem and retry that same card ONCE.
 - \`closed_unresolved\`: the outcome is unknown. Never retry that target; keep its attempt ID for the summary and move on.
 - An \`error\` result: if it names an attempt ID with an unknown outcome, treat it as closed_unresolved. Otherwise repair the named technical problem once. If the bridge says rest hours, insufficient editorial evidence or missing verified urgency, DO NOT retry blindly; wait for a genuine later opportunity or provide actual new verifiable evidence.
-Writing:
+Writing: Reply realization contract (not standalone editorial formats): ${REPLY_OPERATOR_CONTRACT}
 - At most 280 characters. A quote's link counts as 25 characters, so quote text must be at most 255. The content must be additive to its exact observed source.
 - Plain, specific, developer/builder voice. Reply to what was actually said; do not restate the source; no generic praise.
 - An original must have its own angle; never near-copy an inspiration source.
 - No hashtags. No emoji unless the source uses them. No links in replies.
 - English unless the source is in another language; then answer in that language.
-- Persona: before your first draft and after every context compaction, read the active persona with \`echo '{"consumer":"writer"}' | npm run --silent agent -- persona-model\`. Write every reply, quote and original as that persona (\`slice.identity\`, \`voiceCalibration\`, \`languageRealization\`, \`affectPolicy\`, \`behaviorExamples\`, \`dailyTone\`), not as a neutral assistant. It allows opinion, humor and pushback as well as questions; pick what fits each card. Wording detail: docs/POST_GENERATION_PROMPT.md (optional).
+- Persona: before drafting and after compaction, read \`persona-model\`. For replies use the Reply contract above with the identity, affect boundary and verified provenance. Apply the full persona and docs/POST_GENERATION_PROMPT.md to standalone editorial formats. Present preference is not evidence of prior use or a current action.
 Stop:
 - Stop only after the available distinct sources have been meaningfully explored and two separately observed, successfully ingested discovery passes yield no worthwhile opportunities or new mentions. If collection is forbidden by run ceilings, finish with that actual reason instead of inferring no worthwhile work.
 - Also stop about 3 minutes before the time budget ends, or at a blocker (authentication, constrained account health, or a lease rejected by act).
@@ -330,6 +332,8 @@ EXPERIMENT MODE (owner decision): @ham_zax is a test account and the owner is ru
   return `You are the unattended reasoning operator for XGrowth in ${REPO}.
 
 This is an OPERATIONAL growth session, not a software-engineering task.
+
+Reply realization contract: ${REPLY_OPERATOR_CONTRACT}
 
 Execute this checklist first; it is included here so no separate discovery or historical-plan reading is needed:
 ${readFileSync(path.join(REPO, 'docs/GROWTH_AGENT_EXECUTION.md'), 'utf8')}

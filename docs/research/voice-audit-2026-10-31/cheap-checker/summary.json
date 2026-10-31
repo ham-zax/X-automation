@@ -1,0 +1,47 @@
+[
+  {
+    "run": "deepseek-focused-output.json",
+    "verdicts": {
+      "F": "not_factual",
+      "K": "supported",
+      "H": "unresolved",
+      "L": "not_factual"
+    }
+  },
+  {
+    "run": "deepseek-forward-output.json",
+    "errorsFlagged": [
+      "G",
+      "J"
+    ]
+  },
+  {
+    "run": "deepseek-reverse-output.json",
+    "errorsFlagged": [
+      "J",
+      "G"
+    ]
+  },
+  {
+    "run": "glm-focused-output.json",
+    "verdicts": {
+      "F": "not_factual",
+      "K": "supported",
+      "H": "unresolved",
+      "L": "not_factual"
+    }
+  },
+  {
+    "run": "glm-forward-output.json",
+    "errorsFlagged": [
+      "G",
+      "J"
+    ]
+  },
+  {
+    "run": "glm-reverse-output.json",
+    "errorsFlagged": [
+      "J"
+    ]
+  }
+]

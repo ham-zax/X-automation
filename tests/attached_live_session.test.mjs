@@ -20,7 +20,7 @@ after(async () => {
 
 const BASELINE = Object.freeze(['EE7FB04B22D884108A739F63B939DFB0', '805FD13B9236394CB0A18B0BBBB6FA7E']);
 const TARGET = 'A1B2C3D4E5F60718293A4B5C6D7E8F90';
-const BRIEF = 'Session {{SESSION}} owns {{OWNED_TAB}}.\n{{BROWSER_CONTRACT}}\n';
+const BRIEF = 'Session {{SESSION}} owns {{OWNED_TAB}}.\n{{BROWSER_CONTRACT}}\n{{REPLY_CONTRACT}}\n';
 let sequence = 0;
 
 function config(overrides = {}) {
@@ -129,6 +129,7 @@ test('success renders the exact owned target and releases that one lease once', 
   assert.ok(prompt.includes(TARGET));
   assert.ok(prompt.includes('Browser interface: agent-browser-cli'));
   assert.ok(prompt.includes(`Use only launcher-owned target ${TARGET}`));
+  assert.ok(prompt.includes('Write a reply as @ham_zax'));
   assert.equal(prompt.includes('`tab new '), false);
   assert.equal(prompt.includes('`tab close '), false);
   assert.equal(prompt.includes('{{'), false);

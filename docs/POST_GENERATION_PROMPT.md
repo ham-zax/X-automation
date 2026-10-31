@@ -5,6 +5,11 @@
 **Behavior contract:** `behavior.js`
 **Persona owner:** `persona.js`
 
+Runtime Replies use `REPLY_GENERATION_PROMPT.md` and the compact projection in
+`reply_contract.js`. This multi-format document remains the runtime contract for
+Originals, Quotes and Threads. Its historical Reply guidance does not add fields
+or prose to the compact Reply request.
+
 This document turns an already selected behavior into publication-ready text for `@ham_zax`. It does not choose publication authority and should not recompute the account's role when a valid behavior decision is supplied.
 
 The prompt is designed for a **human + AI** workflow. Upstream systems select purpose, mode, affect, depth, conversation stage, and format; the Writer realizes that decision; deterministic gates verify purpose and provenance; the governing workflow owns approval/send/publication.

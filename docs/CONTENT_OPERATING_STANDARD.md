@@ -76,6 +76,14 @@ Do not invent or imply owner facts that are not grounded, including:
 
 External facts remain sourced or clearly framed as analysis. Analytical judgment may be strong without becoming first-hand experience.
 
+For a Reply, its visible parent supplies conversational attribution for claims
+that accurately reflect that parent. Such claims still need semantic support,
+exact source excerpts and preserved qualifiers during review. They need not add
+“the author says” to the public text. This exception does not cover third-party
+evidence, Originals, Threads or the standalone Quote review contract. Immediate
+social affect and preferences need no factual claim entry or required opening.
+Neither present action claims nor past owner experience may be invented.
+
 A behavior decision cannot grant factual or autobiographical authority. Purpose, social mode, affect, information depth, route, and archetype may select a `personal_experience`-shaped act, but they cannot make the underlying experience true. First-person factual or experience claims require a separate human attestation bound to the exact draft text; changing that text invalidates the attestation.
 
 Autonomous approval also requires a passing `contentReview` bound to the exact public text/thread, source/evidence snapshot, behavior decision and active persona version. The configured Writer runtime performs one independent review within the generation deadline; it cannot silently skip review or retry until it obtains approval. An attached reasoning agent using `apply-writer-output` may supply the same explicit review object after checking every factual assertion and voice. Each factual claim records its exact public substring, source ID, verbatim supplied source excerpt, support status and whether an unverified source report is visibly attributed. Missing, failed or stale reviews block delegated approval and autonomous Reply execution. These model/agent reviews are evidence checks, not mathematical truth guarantees, and cannot grant owner attestation or publication authority.

@@ -527,6 +527,14 @@ No voice repair earns production acceptance. Optional review calibration stops
 classifying a congratulation as a fact while retaining unsupported product claims.
 Selected behavior is the next proposed variable to isolate, not a proven cause.
 
+Later user-authorized [Reply contract integration](research/REPLY_CONTRACT_INTEGRATION_2026-10-31.md)
+adds the compact Reply schema/persona projection, canonical instructions shared
+by Writer and direct operator, and contextual attribution for the exact parent
+on reviewed Replies. The Writer role now selects saved Luna5.6 max profile1.
+This supersedes the earlier report-only implementation hold. It does not close
+XG-06 or prove reliable 24x7 quality. Cheap checker trials retain known misses and
+do not install a new automatic critic. No public send occurs in the integration.
+
 ### Problem
 
 Several replies and draft directions drifted toward mini-essays: polished explanations, packaged takeaways, and advice to “developers” rather than participation in the actual conversation.

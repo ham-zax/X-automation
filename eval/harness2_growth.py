@@ -210,11 +210,11 @@ class GrowthAdapter:
         return json.loads(result.stdout)
 
     def _inputs_digest(self, task_id):
-        contract = REPO / ("docs/POST_GENERATION_PROMPT.md" if self.config["lane"] == "writer" else "ops/systemd/arm/arm-growth-live.md")
+        contract = REPO / ("docs/REPLY_GENERATION_PROMPT.md" if self.config["lane"] == "writer" else "ops/systemd/arm/arm-growth-live.md")
         owners = {p for pattern in ("*.js", "ops/**/*.js", "ops/**/*.mjs", "persona/*.json")
                   for p in REPO.glob(pattern) if p.is_file()}
         owners.update(REPO / name for name in ("eval/growth_reply.mjs", "eval/harness2_growth.py",
-                      "package.json", "package-lock.json") if (REPO / name).is_file())
+                      "docs/REPLY_GENERATION_PROMPT.md", "package.json", "package-lock.json") if (REPO / name).is_file())
         versions = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                     for p in sorted(owners)}
         return digest({"case": self._case(task_id), "contract": contract.read_text(),

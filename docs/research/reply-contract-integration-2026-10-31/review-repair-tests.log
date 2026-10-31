@@ -1,0 +1,25 @@
+✔ unsupported experience and benchmark regressions fail the shared gate (23.109635ms)
+✔ a reported adoption milestone supports a source-backed celebration (2.248051ms)
+✔ thread copying and repetition checks cover every part and recent thread bodies (3.278816ms)
+✔ arrays and links are accepted while actual scaffold markers are blocked (2.085931ms)
+✔ exact human attestation is preserved only when writer output keeps public text unchanged (34.799293ms)
+✔ autonomous review binds exact content, evidence, behavior and persona, and respects DO_NOT_POST (6.663553ms)
+✔ review source excerpts and units cannot be invented or substituted (1.008565ms)
+✔ independent writer review is bounded, and an unavailable reviewer preserves an editable candidate (3.090175ms)
+✔ persona calibration preserves uncertainty and factual authority (0.780404ms)
+✔ cached eligible replies lose eligibility when the current source or review changes (323.348764ms)
+✔ mission-agent approval fails before approval when no current content review exists (666.076105ms)
+✔ Reply generation uses the small contract and normalizes the internal route (31.950478ms)
+✔ Reply projection keeps explicit repair, relationship and research context (6.537352ms)
+✔ Non-Reply generation retains its existing document and schema (1.442567ms)
+✔ Visible parent attribution is contextual for Reply only (2.918735ms)
+✔ Reply review keeps factual and owner-action refusals while social acts need no claim entry (0.671644ms)
+✔ Real bridge returns the Reply contract and accepts its lean output (699.50155ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 17
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2482.682958

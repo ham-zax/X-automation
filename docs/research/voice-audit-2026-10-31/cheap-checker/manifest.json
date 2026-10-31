@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "modelCalls": 6,
+  "usage": null,
+  "costUSD": null,
+  "files": {
+    "focused-request.json": "c5177fccc7a7dda810b279e2cd6dfd6da62ba671734e35d5eb86f92a962f46e1",
+    "glm-reverse-output.json": "443f3040a4c8f312a2d80259564fe825d97df80c9be17426bd30a5e27c38755c",
+    "glm-focused-receipt.json": "0941faaa35f801de1d0aaaedc99fbd0a225e9cdd1b976db2ee8a6573c719a6f5",
+    "glm-forward-receipt.json": "6095e3e196ada0559545b53a6d2d350d0954707118a1d7a78dcc7d07b0e90b1f",
+    "deepseek-forward-receipt.json": "30097ddca9319970cccc6faa7999e3c46875b28f3bdb5bed41c7f68bdb1d9a8b",
+    "fixtures.json": "e9a8cb958929370187c4065309ba7578f7d26caaf5b134cf1088c98c4f380255",
+    "deepseek-reverse-output.json": "6603a4447ea2799bf9bfb123c1d70fc23358c6af754e154e6f826874be600c52",
+    "deepseek-focused-receipt.json": "587bcbbc5996212ab53d82549acca3581079d6980c512ab5a1c4ebd200d10300",
+    "deepseek-forward-output.json": "0521235853ce367a12da8bb57caf3814fa176c43e44c623b39be378fc835a2ea",
+    "deepseek-reverse-receipt.json": "2c37da071354c9c9d243ff8b5d151578d868d8af6455ba9d2e087270a2765a30",
+    "deepseek-focused-output.json": "4df00b250f9877d974cfd12a3f7e5112729d4a46d5f8ddb1e96d0605449225b3",
+    "summary.json": "3ccd87e18c735af1449c0309db4d7f6cd0d51b2a5d11c8ef22789c7e30c3389c",
+    "reverse-request.json": "2ef1f4465a984b7f6540dca9acefec7ee0ddca2a1aa0f947085971af850e213a",
+    "REPORT.md": "793ecea051acd5f14118a1f00fcd213ec6e38c9cd30b5ee2b3c8261a51f72f33",
+    "glm-forward-output.json": "88dd157a2b906c6dcca94fefe31104a20d64e02c3bda785761e2b9d1c59a3d48",
+    "glm-focused-output.json": "bb7b08916bea9caa4725963ef8608f12de906a5a8d2aae4a2a9ca73ea9aa51c1",
+    "activity.json": "ad772933583429303fd3a0c4233d56bf72c8a433bfef6721127ae5506f9bf1f4",
+    "glm-reverse-receipt.json": "1dac4d393539070735fbe667d3ca6131a2ed60126513d17e0c738dde993f3317",
+    "forward-request.json": "8fac5ed447192a912f26f61790e4322a2b6c2ec9eb7a74038590647c4032dad1"
+  }
+}

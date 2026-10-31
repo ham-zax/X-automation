@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A4e3f9f7f-b955-4009-8ee7-839ec9da7dc5:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "codex",
+  "model": "gpt-6-luna",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "max"
+    }
+  ],
+  "summary": "## Findings\n\n1. **P1 — Reply review can pass unreviewed facts.** Trigger: a nonnumeric factual claim is omitted from `factualClaims`, or the reviewer labels it `interpretation`. In [content_review.js](content_review.js), `checkReviewClaims()` checks omitted quantities but does not require coverage for other claims. Its interpretation branch also accepts “I think this is the first agent that can edit canvases”: the phrase starts with an allowed opinion prefix, and the guard does not catch “first” or “can edit.” The review can pass without evidence. **Correction:** Require claim coverage for factual assertions. Do not let an opinion label or first-person preface exempt an externally checkable claim. Keep pure reactions exempt.\n\n2. **P2 — Reply projection drops discovery verification.** Trigger: a Reply packet has discovery findings the Writer needs to avoid an unsupported claim. `buildWriterPacket()` creates `discoveryVerification`, but `projectReplyPacket()` in [reply_contract.js](reply_contract.js) omits it. The Reply Writer cannot see that context. **Correction:** Preserve `discoveryVerification` in the Reply projection.\n\n3. **P1 scope gap — The Luna Writer profile is still only planned.** The packet says the Writer still uses primary profile 14 with fallback 12, and says binding Luna profile 1 is future work. No role-binding change appears in the supplied diff. **Correction:** Bind the existing Writer role to profile 1 and retain fallback 12 before calling this integration complete.\n\n## Checks and limits\n\nRoute normalization appears sound: a conflicting Reply route throws, and the selected route supplies the internal pipeline and empty thread parts. The compact schema preserves evidence and topic citation fields. The projection also keeps relationship, owner evidence, operator context, writing strategy, and topic brief. The source-attribution exception is limited to the visible parent on Replies; other source claims still need visible attribution. The bridge saves a draft and does not grant publication authority.\n\nThe writer benchmark now selects the Reply contract, and its source glob includes `reply_contract.js`. The packet truncates the rest of the digest function, so I cannot assess whether optional style and review fragments affect the digest. The packet also has no source line numbers or runtime evidence.",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

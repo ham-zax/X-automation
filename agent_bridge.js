@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { REPLY_CONTRACT, projectReplyPacket, replyOutputSchema, normalizeReplyOutput } from './reply_contract.js';
 import { getDailyPersonaTone, setDailyPersonaTone, DAILY_TONE_RUBRIC } from './persona_tone.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -1545,7 +1546,8 @@ async function main() {
       writingStrategy: generation.writingStrategy,
       topicBrief,
     });
-    result({ packet, generation });
+    result({ packet: pipeline === 'reply' ? projectReplyPacket(packet) : packet, generation,
+      ...(pipeline === 'reply' ? { contract: REPLY_CONTRACT, outputSchema: replyOutputSchema(packet) } : {}) });
     return;
   }
 
@@ -1560,6 +1562,7 @@ async function main() {
     if (!['original', 'quote', 'thread', 'reply'].includes(pipeline)) {
       throw new Error(`apply-writer-output requires a routed text pipeline; current pipeline is ${pipeline || 'none'}.`);
     }
+    payload.output = normalizeReplyOutput(payload.output || {}, pipeline);
     if (payload.output?.pipeline !== pipeline) {
       throw new Error(`Writer pipeline mismatch: ${payload.output?.pipeline || 'missing'} !== ${pipeline}. Route the queue item first.`);
     }

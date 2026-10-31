@@ -101,6 +101,12 @@ All eighteen requested outputs are saved with assessments in the
 This supplements the earlier findings. Production code decisions remain pending
 review of both reports, as the owner requests.
 
+The owner later authorizes provisional integration. The compact Reply contract
+and existing Luna5.6 max Writer profile are now wired in the
+[integration checkpoint](REPLY_CONTRACT_INTEGRATION_2026-10-31.md).
+The experimental findings remain unchanged. Integration does not establish
+general quality acceptance or close the underlying investigation.
+
 ### Earlier evidence
 
 - [DeepSeek full/lean](voice-audit-2026-10-31/lean-reply/REPORT.md)

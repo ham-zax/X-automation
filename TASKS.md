@@ -603,3 +603,33 @@ reads show no tools. Both Luna models give peer reactions and direct answers.
 GLM improves some outputs but invents a present download and overstates code
 reversibility. Update both model/context findings and proposed-contract report.
 No model choice or code change is made. Owner reviews both reports next.
+
+## Reply contract production integration, 31 October
+
+User authorizes code integration and Luna use, plus continuing cheap-model tests.
+TaskStartSnapshot main c02380b, only pre-existing live-progress.json untracked.
+| id | status | depends | owner | acceptance | evidence |
+| RP-I | review | XR14-PM | parent | Reply contract reaches Writer and direct instructions, preserves other formats and authority, Luna selectable through existing profile. | REPLY_CONTRACT_IMPLEMENTATION_2026-10-31.md |
+| RP-C | review | - | parent, DeepSeek/GLM | Saved-case factual checker test, errors and valid reactions evaluated without style veto. | Initial four calls, then evidence-driven continuation under user renewed authority. |
+| RP-R | review | RP-I | independent reviewer | One final graph review, parent repairs one round and records checks. | One review per graph. Only Hamza marks done. |
+
+Cheap checker initial batch misses per-call scope and universal transfer claims.
+GLM also misses invented current action in reverse order. Add two calls to a
+focused claim-comparison batch with two error/control pairs. This tests semantic
+scope comparison, not another style review. No experiment result changes live
+review policy automatically. User permits evidence-driven extra calls.
+
+Reply integration final evidence: docs/research/REPLY_CONTRACT_INTEGRATION_2026-10-31.md.
+Canonical Reply module, schema/projection, both operator renderers and external
+bridge are wired. Original/Quote/Thread contract preserved. Parent-source Reply
+attribution is contextual. Interpretation guard retained. Existing fallback12
+retained. Writer primary changes14 to1, Luna5.6 max, through existing bridge and
+reads back. No other AI roles, services, AUTO_POST or public-send authority changes.
+One independent Luna6 max packet review identifies omitted discovery context.
+Parent restores it and binds attribution exemption to actual parent identity.
+The broader semantic claim-coverage finding reproduces in baseline and current
+code and is recorded as pre-existing, not repaired. Review packet predates final
+line compaction, benchmark override and model-binding readback. Parent checks
+those deltas. Focused38/38, runner/reply41/41, repair17/17, final full412/412,
+Python7/7. Cheap checker6 calls show shared scope interpretation and order effects.
+No new automatic cheap critic is installed. RP-I/RP-C/RP-R at review, not done.

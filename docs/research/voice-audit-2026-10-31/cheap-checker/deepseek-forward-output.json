@@ -1,0 +1,68 @@
+{
+  "results": [
+    {
+      "id": "A",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "B",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "C",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "D",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "E",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "F",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "G",
+      "hasConcreteError": true,
+      "problems": [
+        {
+          "span": "pulling the repo now",
+          "type": "invented_owner_action",
+          "explanation": "The reply claims the account owner is currently fetching the repository. No owner action is attested here.",
+          "sourceQuote": "@cjav_dev + i  share a quickstart repo"
+        }
+      ]
+    },
+    {
+      "id": "H",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "I",
+      "hasConcreteError": false,
+      "problems": []
+    },
+    {
+      "id": "J",
+      "hasConcreteError": true,
+      "problems": [
+        {
+          "span": "Does it support git?",
+          "type": "question_answered_in_source",
+          "explanation": "The source already answers this. It states the app runs git from the phone.",
+          "sourceQuote": "supports git from the phone"
+        }
+      ]
+    }
+  ]
+}

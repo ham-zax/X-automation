@@ -1,0 +1,12 @@
+test_pause_resume_budget_and_identity (test_growth_harness.ExchangeTests.test_pause_resume_budget_and_identity) ... ok
+test_response_cannot_change_hash_or_model_settings (test_growth_harness.ExchangeTests.test_response_cannot_change_hash_or_model_settings) ... ok
+test_node_error_includes_json_stdout (test_growth_harness.NativeCycleTests.test_node_error_includes_json_stdout) ... ok
+test_owner_changes_invalidate_completed_input_versions (test_growth_harness.NativeCycleTests.test_owner_changes_invalidate_completed_input_versions) ... ok
+test_real_native_cycle_pauses_and_resumes_without_model_launches (test_growth_harness.NativeCycleTests.test_real_native_cycle_pauses_and_resumes_without_model_launches) ... ok
+test_review_comparison_never_requests_a_solver_or_changes_source (test_growth_harness.NativeCycleTests.test_review_comparison_never_requests_a_solver_or_changes_source) ... ok
+test_surface_is_only_a_bounded_voice_fragment (test_growth_harness.NativeCycleTests.test_surface_is_only_a_bounded_voice_fragment) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.678s
+
+OK

@@ -28,9 +28,11 @@ export function reviewFingerprint({ units, pipeline, behavior, personaVersion, c
   return digest({ units, pipeline, decision, personaVersion, sources: contentSources(candidate, evidence) });
 }
 
-export function checkReviewClaims(review, { units, candidate, evidence = [], ownerEvidence = false }) {
+export function checkReviewClaims(review, { units, candidate, evidence = [], ownerEvidence = false, pipeline = '' }) {
   const text = clean(units.join('\n\n'));
-  const sources = new Map(contentSources(candidate, evidence).map(source => [source.id, source]));
+  const availableSources = contentSources(candidate, evidence);
+  const parentSource = availableSources.find(source => source.id === 'candidate');
+  const sources = new Map(availableSources.map(source => [source.id, source]));
   const failures = [];
   const claims = Array.isArray(review?.factualClaims) ? review.factualClaims : [];
   if (!Array.isArray(review?.factualClaims) || !Array.isArray(review?.ownerClaims)
@@ -75,7 +77,7 @@ export function checkReviewClaims(review, { units, candidate, evidence = [], own
     }
     const start = text.indexOf(assertion);
     const attributedText = text.slice(Math.max(0, start - 80), start + assertion.length);
-    if (source.status === 'source_claim' && (claim.attributed !== true
+    if (!(pipeline === 'reply' && source === parentSource) && source.status === 'source_claim' && (claim.attributed !== true
         || !/\b(?:reports?|reported|says?|said|claims?|claimed|according to|per the|source|post|announcement|docs?|paper|author)\b/i.test(attributedText))) {
       failures.push('An unverified source claim must be explicitly attributed.');
     }

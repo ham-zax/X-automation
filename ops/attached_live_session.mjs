@@ -3,6 +3,7 @@
 // exactly one tab through the existing lease, runs one bounded Claive child
 // under the existing runChild supervision, and always releases the lease.
 import { randomUUID } from 'node:crypto';
+import { REPLY_CONTRACT } from '../reply_contract.js';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,6 +72,7 @@ export async function runAttachedLiveSession(options = {}) {
     if (!contract) throw new Error('No browser contract for this target.');
     const prompt = template
       .replace('{{BROWSER_CONTRACT}}', () => contract)
+      .replace('{{REPLY_CONTRACT}}', () => REPLY_CONTRACT)
       .replaceAll('{{SESSION}}', () => sessionId)
       .replaceAll('{{OWNED_TAB}}', () => lease.targetId);
     if (prompt.includes('{{')) throw new Error('Unfilled placeholder in the brief.');

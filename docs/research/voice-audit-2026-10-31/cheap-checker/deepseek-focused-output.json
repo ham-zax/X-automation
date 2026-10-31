@@ -1,0 +1,36 @@
+{
+  "checks": [
+    {
+      "id": "F",
+      "kind": "preference",
+      "verdict": "not_factual",
+      "claim": "The diff cards on every tool call are what sell me.",
+      "sourceQuote": "every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+      "reason": "The sentence states personal approval, not a universal fact. The embedded detail, a diff card on every tool call, matches the source line exactly. No stronger claim is made."
+    },
+    {
+      "id": "K",
+      "kind": "factual_assertion",
+      "verdict": "supported",
+      "claim": "Every tool call has a card. Diff sheets and recorded check outcomes are available in chat.",
+      "sourceQuote": "Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat",
+      "reason": "Both sentences restate the source feature word for word in meaning. The universal scope, every tool call, is the same scope the source uses. Availability in chat is also stated by the source."
+    },
+    {
+      "id": "H",
+      "kind": "factual_assertion",
+      "verdict": "unresolved",
+      "claim": "A bad transfer does not come back.",
+      "sourceQuote": "what is the one action you would still never let it do without human approval?",
+      "reason": "The source asks an open question and states no fact about transfers or reversibility. The reply asserts a general property of transfers as an answer. The source quote gives no support and no contradiction, so the claim stays unresolved."
+    },
+    {
+      "id": "L",
+      "kind": "preference",
+      "verdict": "not_factual",
+      "claim": "Moving money needs my approval.",
+      "sourceQuote": "what is the one action you would still never let it do without human approval?",
+      "reason": "The reply answers a request for a personal approval rule. It states the author's own policy, not a universal fact. A personal approval preference makes no claim that needs source support."
+    }
+  ]
+}

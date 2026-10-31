@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Af173ad3f-723e-4609-9a38-a3c28e0d09a2",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Af173ad3f-723e-4609-9a38-a3c28e0d09a2",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Af173ad3f-723e-4609-9a38-a3c28e0d09a2>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Af173ad3f-723e-4609-9a38-a3c28e0d09a2:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Af173ad3f-723e-4609-9a38-a3c28e0d09a2",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Af173ad3f-723e-4609-9a38-a3c28e0d09a2:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\n  \"results\": [\n    {\n      \"id\": \"J\",\n      \"hasConcreteError\": true,\n      \"problems\": [\n        {\n          \"span\": \"Does it support git?\",\n          \"type\": \"answered_question\",\n          \"explanation\": \"The source already states that the app supports git from the phone, so this question is explicitly answered.\",\n          \"sourceQuote\": \"supports git from the phone\"\n        }\n      ]\n    },\n    {\n      \"id\": \"I\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"H\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"G\",\n      \"hasConcreteError\": true,\n      \"problems\": [\n        {\n          \"span\": \"pulling the repo now\",\n          \"type\": \"invented_owner_action\",\n          \"explanation\": \"The source says the authors share a quickstart repository. It does not attest that the reply author is pulling it now.\",\n          \"sourceQuote\": \"share a quickstart repo\"\n        }\n      ]\n    },\n    {\n      \"id\": \"F\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"E\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"D\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"C\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"B\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    },\n    {\n      \"id\": \"A\",\n      \"hasConcreteError\": false,\n      \"problems\": []\n    }\n  ]\n}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

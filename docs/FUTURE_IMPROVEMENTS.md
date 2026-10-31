@@ -1,5 +1,25 @@
 # Future improvement proposals
 
+## Reply contract integration, 31 October
+
+The compact Reply contract is now integrated. An old offline fixture still used
+the retired full reply schema and failed. Proposal: use the captured live schema
+when recording future experiments, and keep historical inputs explicitly dated.
+
+Embedding the canonical text initially exceeded the existing operator prompt
+line budget. The renderer now uses compact line breaks. Proposal: inspect prompt
+size before wiring shared documents into several renderers. Do not raise the
+budget merely to silence the test or create another prose copy.
+
+Independent review identifies a dropped discovery-verification field. The
+projection now preserves it. Proposal: evaluate context removal by responsibility,
+so explicit owner/evidence/repair context survives while analytical baggage shrinks.
+
+Cheap checker agreement misses or disputes embedded scope claims. A baseline/current
+witness also shows a pre-existing semantic interpretation gap. Proposal: evaluate
+that gap separately using unambiguous source contrasts and valid social controls.
+Do not claim that adding another model proves facts or install a new gate here.
+
 ## Offline reply experiment closeout, 29 October
 
 The native cycle finds no improved fragment. A short-prompt result fails to

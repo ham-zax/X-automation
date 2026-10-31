@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A05e904ba-266a-47fc-8cd4-be06187b9d0f",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A05e904ba-266a-47fc-8cd4-be06187b9d0f",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A05e904ba-266a-47fc-8cd4-be06187b9d0f>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A05e904ba-266a-47fc-8cd4-be06187b9d0f:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A05e904ba-266a-47fc-8cd4-be06187b9d0f",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A05e904ba-266a-47fc-8cd4-be06187b9d0f:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\n  \"checks\": [\n    {\n      \"id\": \"F\",\n      \"kind\": \"preference\",\n      \"verdict\": \"not_factual\",\n      \"claim\": \"The diff cards on every tool call are what sell me.\",\n      \"sourceQuote\": \"every tool call has a card, with diff sheets and recorded check outcomes available in chat\",\n      \"reason\": \"The sentence states personal approval, not a universal fact. The embedded detail, a diff card on every tool call, matches the source line exactly. No stronger claim is made.\"\n    },\n    {\n      \"id\": \"K\",\n      \"kind\": \"factual_assertion\",\n      \"verdict\": \"supported\",\n      \"claim\": \"Every tool call has a card. Diff sheets and recorded check outcomes are available in chat.\",\n      \"sourceQuote\": \"Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat\",\n      \"reason\": \"Both sentences restate the source feature word for word in meaning. The universal scope, every tool call, is the same scope the source uses. Availability in chat is also stated by the source.\"\n    },\n    {\n      \"id\": \"H\",\n      \"kind\": \"factual_assertion\",\n      \"verdict\": \"unresolved\",\n      \"claim\": \"A bad transfer does not come back.\",\n      \"sourceQuote\": \"what is the one action you would still never let it do without human approval?\",\n      \"reason\": \"The source asks an open question and states no fact about transfers or reversibility. The reply asserts a general property of transfers as an answer. The source quote gives no support and no contradiction, so the claim stays unresolved.\"\n    },\n    {\n      \"id\": \"L\",\n      \"kind\": \"preference\",\n      \"verdict\": \"not_factual\",\n      \"claim\": \"Moving money needs my approval.\",\n      \"sourceQuote\": \"what is the one action you would still never let it do without human approval?\",\n      \"reason\": \"The reply answers a request for a personal approval rule. It states the author's own policy, not a universal fact. A personal approval preference makes no claim that needs source support.\"\n    }\n  ]\n}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}
