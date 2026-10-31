@@ -1,0 +1,22 @@
+{
+  "model": "opencode2api/deepseek-v4.1-flash-free",
+  "variant": "max",
+  "order": [
+    "VA-16",
+    "VA-16",
+    "VA-16",
+    "VA-03",
+    "VA-14",
+    "VA-21"
+  ],
+  "budget": 6,
+  "change": "New contract, persona projection and schema bundled. Not the previous lean condition.",
+  "deviations": [
+    "Adds one clarification that project identity does not attest arbitrary experience.",
+    "Control intents authored for guide share, celebration and direct answer. Not historical generation traces."
+  ],
+  "limits": [
+    "VA-16 qualifier examples target known errors. Controls are previously exposed calibration cases, not held-out validation.",
+    "No automatic review or production code changes. No numerical acceptance threshold."
+  ]
+}

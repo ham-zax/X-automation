@@ -1,0 +1,68 @@
+[
+  {
+    "ordinal": 1,
+    "caseId": "VA-16",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 2,
+    "caseId": "VA-16",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 3,
+    "caseId": "VA-16",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 4,
+    "caseId": "VA-03",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 5,
+    "caseId": "VA-14",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 6,
+    "caseId": "VA-21",
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  }
+]

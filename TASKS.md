@@ -569,3 +569,21 @@ Grading persists. Two lean replies explicitly claim per-call diff cards without
 source support. No tool actions in recorded generation activity. Both requested
 model comparisons now have reports, raw outputs and receipts. No new proposal
 is run and no model or writing policy is promoted to production.
+
+## XR-14 proposed reply contract, 31 October
+
+User asks for model/context findings document, then offline test of other AI proposal.
+Document saved as docs/research/REPLY_MODEL_CONTEXT_FINDINGS_2026-10-31.md first.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-P | review | XR14-GLM, XR14-LUNA6 | parent | Six DeepSeek max calls test new lean contract, preserve outputs and assess role/facts separately. | proposed-reply-contract/plan.json |
+
+Budget6. Three Android repeats plus three previously exposed conversation controls.
+Two calls at a time under user parallel-work preference. Production review changes
+remain excluded. This is a different candidate from the prior lean request.
+
+Proposed contract completes6/6. All schemas pass. Android samples avoid the exact
+per-call diff inflation, release preserves can-create, and guide stays relevant.
+Explanatory takeaways persist. Approval answer still claims transfers never return.
+No clear invented owner biography. Mixed result, no production acceptance.
+Review/attribution implementation remains outside this generation experiment.
+See proposed-reply-contract/REPORT.md. Stop at six-call budget.
