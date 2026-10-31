@@ -1,0 +1,5 @@
+{
+  "decision": "POST",
+  "finalText": "Authorize a payment. An agent can prepare it, but a human should own the final yes.",
+  "evidenceUsed": []
+}

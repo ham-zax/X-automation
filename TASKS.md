@@ -587,3 +587,19 @@ Explanatory takeaways persist. Approval answer still claims transfers never retu
 No clear invented owner biography. Mixed result, no production acceptance.
 Review/attribution implementation remains outside this generation experiment.
 See proposed-reply-contract/REPORT.md. Stop at six-call budget.
+
+## XR-14 proposed contract across models, 31 October
+
+User authorizes18 calls: six each GLM5.3 max, Luna6 max and Luna5.6 max.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-PM | review | XR14-P | parent | Reuse exact proposed-contract requests, preserve18 outputs, update both findings reports before code decision. | proposed-reply-contract/model-comparisons/plan.json |
+
+Three concurrent model jobs under user parallel-work preference. No repeated
+DeepSeek calls, code edits, reviewer changes, live actions or new proposal.
+
+Cross-model candidate completes18/18 calls. Prompt/schema source files unchanged.
+All18 actual model/provider/max receipts match. All18 schemas pass and activity
+reads show no tools. Both Luna models give peer reactions and direct answers.
+GLM improves some outputs but invents a present download and overstates code
+reversibility. Update both model/context findings and proposed-contract report.
+No model choice or code change is made. Owner reviews both reports next.

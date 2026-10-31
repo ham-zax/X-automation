@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A090e2c8b-e8c6-4e77-8842-71e2fcd1c07b:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/glm-5.3-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\"decision\":\"POST\",\"finalText\":\"Anything that sends a message under my name — email, DMs, commit comments. Code is reversible, talking to other humans isn't. An agent can draft it all it wants; the send button stays human.\",\"evidenceUsed\":[]}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

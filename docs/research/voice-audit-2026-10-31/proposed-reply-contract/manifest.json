@@ -20,7 +20,7 @@
     "VA-21-request.json": "78ff3bde6c5967ebda2ca5cd4eb25cf3fe4287e2ae45047e4ea6eb5820ece672",
     "2-VA-16-receipt.json": "dceaf0b6b9aa47820c052f0ffa61c5c7296b6b565c75c42235ac7a1b2acd2673",
     "contract.txt": "e912f27cf5138ceecfc4d9ca843987f8e620d737eae75046554f5b92b30a5c47",
-    "REPORT.md": "0fa2a6a7e7f523a235d00d5677dbc6bd88b84f8523ad7a157434749354a33964",
+    "REPORT.md": "bab4097a85f0514e15d31efe2dcd27a11f4865b2a2dc9a85e128d32ed3f29bb4",
     "4-VA-03-receipt.json": "204518b3c71843d2b06d1b972f66a36d475318f93e13ddefb6a4911413511af5",
     "5-VA-14-output.json": "c0b97aec84dc9285276676ae47dd6b3c94eb39bda5efc97e878b604192684303",
     "activity.json": "e979cc25e822c9c29d55494a6f880e07910361fa43ed77767e2593436b3d5a98",
@@ -28,5 +28,7 @@
     "1-VA-16-receipt.json": "1abd4e5ea9c3d112aff08a55bcda686a909d16d94f93a7558761560105ef618c",
     "6-VA-21-output.json": "2a4a765d9e871786a3d81b8516b79b4af5271bc01ec0db46fe36bf9514c9b3c4",
     "plan.json": "f686bee173916750de9e925a1e75348d74a8ecb52b54fa4f1b91ea63a98a4965"
-  }
+  },
+  "reportBeforeModelContinuationSHA256": "0fa2a6a7e7f523a235d00d5677dbc6bd88b84f8523ad7a157434749354a33964",
+  "continuationManifest": "model-comparisons/manifest.json"
 }

@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A7c0d1d3b-2a28-4c15-a264-6a32430a29ff",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A7c0d1d3b-2a28-4c15-a264-6a32430a29ff",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A7c0d1d3b-2a28-4c15-a264-6a32430a29ff>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A7c0d1d3b-2a28-4c15-a264-6a32430a29ff:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A7c0d1d3b-2a28-4c15-a264-6a32430a29ff",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A7c0d1d3b-2a28-4c15-a264-6a32430a29ff:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/glm-5.3-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\"decision\":\"POST\",\"finalText\":\"Congrats on 1.6.0! A canvas the agent can create through a plugin and integrated docs you just ask the agent — that's a nice batch for one release 🎉\",\"evidenceUsed\":[]}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

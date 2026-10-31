@@ -1,0 +1,233 @@
+{
+  "budget": 18,
+  "concurrency": 3,
+  "jobs": [
+    {
+      "ordinal": 1,
+      "caseId": "VA-16",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 1,
+      "caseId": "VA-16",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 1,
+      "caseId": "VA-16",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "caseId": "VA-16",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "caseId": "VA-16",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "caseId": "VA-16",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "caseId": "VA-16",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "caseId": "VA-16",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "caseId": "VA-16",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "caseId": "VA-03",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "caseId": "VA-03",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "caseId": "VA-03",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "caseId": "VA-14",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "caseId": "VA-14",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "caseId": "VA-14",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "caseId": "VA-21",
+      "label": "glm-5.3",
+      "target": {
+        "providerInstanceId": "opencode",
+        "model": "opencode2api/glm-5.3-flash-free",
+        "options": {
+          "variant": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "caseId": "VA-21",
+      "label": "luna-6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "caseId": "VA-21",
+      "label": "luna-5.6",
+      "target": {
+        "providerInstanceId": "codex",
+        "model": "gpt-5.6-luna",
+        "options": {
+          "reasoningEffort": "max"
+        }
+      }
+    }
+  ],
+  "requests": {
+    "VA-14": "9b61e1059a6ff483f7e16fb988c5ac6f342d7e4fead90ce844b8edfe97fa2619",
+    "VA-03": "ef709e54adf78f28fa33a33191eb21f10d67485033001ef19310e3d6fa074801",
+    "VA-21": "78ff3bde6c5967ebda2ca5cd4eb25cf3fe4287e2ae45047e4ea6eb5820ece672",
+    "VA-16": "70f7beb7bb5c59b7155b365410726bc2b0ee7bc48bc3f0e81992fd6362cf8d85"
+  },
+  "scope": "Same proposed contract and source requests. No new writing or review changes. Content quality assessed separately from raw format.",
+  "limits": [
+    "Previously exposed calibration sources, not held-out validation.",
+    "Model, provider, effort and wall-clock execution differ. No numerical voice score or production acceptance."
+  ]
+}

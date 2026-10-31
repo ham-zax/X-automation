@@ -103,6 +103,23 @@ code changes. Six of six authorized model calls are consumed.
 
 ## Decision boundary
 
+### Later cross-model continuation
+
+The user subsequently asks for the same candidate on GLM5.3 max, Luna6 max and
+Luna5.6 max. Eighteen calls complete with unchanged request prompt/schema values.
+The [continuation report](model-comparisons/REPORT.md) records all eighteen replies.
+Both Luna models handle the social and direct-answer controls well in parent
+assessment. GLM improves several replies but fabricates a current download action
+and adds an unsupported code-reversibility explanation. Original DeepSeek outputs
+above remain unchanged. No formatting penalty enters content judgments.
+
+The proposal is therefore promising on some models and cases, not an accepted
+general repair. No model judge, production implementation, review-rule change or
+further experiment is authorized by these results alone. The next step is owner
+review of this report and REPLY_MODEL_CONTEXT_FINDINGS_2026-10-31.md.
+
+### Original DeepSeek boundary
+
 Retain the candidate as mixed experimental evidence. Do not promote it as a
 complete repair or rewrite production contracts from this set. A model capability
 limit is not established. Neither is one causal schema/persona/prompt component.

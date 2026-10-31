@@ -1,0 +1,110 @@
+[
+  {
+    "model": "glm-5.3",
+    "file": "1-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "glm-5.3",
+    "file": "2-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "glm-5.3",
+    "file": "3-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "glm-5.3",
+    "file": "4-VA-03-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "glm-5.3",
+    "file": "5-VA-14-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "glm-5.3",
+    "file": "6-VA-21-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "1-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "2-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "3-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "4-VA-03-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "5-VA-14-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-6",
+    "file": "6-VA-21-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "1-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "2-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "3-VA-16-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "4-VA-03-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "5-VA-14-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "model": "luna-5.6",
+    "file": "6-VA-21-output.json",
+    "valid": true,
+    "errors": []
+  }
+]

@@ -76,6 +76,33 @@ from these findings alone. The owner has not approved all illustrative replies.
 
 ## Evidence
 
+### Same proposed contract on the other models
+
+The later eighteen-call comparison uses the same proposed contract with Luna6
+max, Luna5.6 max and GLM5.3 max. Both Luna models give conversational Android
+replies, grounded guide/release reactions and direct approval preferences without
+unnecessary claims that all transfers or code changes are reversible/irreversible.
+Luna6 is generally shorter here. Luna5.6 often adds more feature explanation.
+Neither is established as reliably better than the other.
+
+GLM improves some source wording and gives a good release celebration. It still
+uses real-versus-demo framing. Its guide reply fabricates a current action,
+“pulling the repo now.” Its approval answer claims “Code is reversible,” which
+is too broad. DeepSeek's earlier candidate retains its own transfer overreach.
+
+The proposal is not proved better than full context for either Luna model, since
+both already gave suitable full-context reactions. The evidence supports selective
+experimentation, not a universal “lean is better” implementation rule. Current
+actions need provenance just as prior owner experience does. A good hypothetical
+preference is different from pretending to perform an action now.
+
+All eighteen requested outputs are saved with assessments in the
+[cross-model proposal report](voice-audit-2026-10-31/proposed-reply-contract/model-comparisons/REPORT.md).
+This supplements the earlier findings. Production code decisions remain pending
+review of both reports, as the owner requests.
+
+### Earlier evidence
+
 - [DeepSeek full/lean](voice-audit-2026-10-31/lean-reply/REPORT.md)
 - [Luna 5.6](voice-audit-2026-10-31/lean-reply/luna-5.6/REPORT.md)
 - [Luna 6](voice-audit-2026-10-31/lean-reply/luna-6/REPORT.md)
