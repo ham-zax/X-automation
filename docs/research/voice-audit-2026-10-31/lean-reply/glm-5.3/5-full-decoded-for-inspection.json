@@ -1,0 +1,29 @@
+{
+  "derivedOnly": true,
+  "originalFile": "5-full-output.json",
+  "output": {
+    "decision": "POST",
+    "pipeline": "reply",
+    "thesis": "A complete social-only enthusiast reaction: Hamza names phone-as-shipping-machine as exactly the workflow he wants and states the personal bar that would sell him.",
+    "finalText": "phone going from notification screen to the machine that ships the fix — exactly the workflow I want. if it holds up on a real repo and bad wifi, I'm sold.",
+    "threadParts": [],
+    "semanticAnchors": [],
+    "evidenceUsed": [],
+    "media": {
+      "required": false,
+      "type": "none",
+      "reason": "The complete act is the reaction itself; the conversation context is already visible, so any capture would repeat the parent post.",
+      "source": "",
+      "altText": ""
+    },
+    "discussionQuestion": null,
+    "followValue": "Shows recognizable taste through one specific reaction to a workflow idea, plus a playful concrete bar — a participation and personality asset, not a technical one, which fits the selected social-only depth.",
+    "relationshipValue": "Gives the author a real, answerable invitation (prove it on a real repo and bad wifi) instead of generic launch praise, opening a reciprocal thread with a builder.",
+    "profileProofValue": "Reinforces the account's workflow-outcome taste in one line without drifting into reviewer mode or implying first-hand testing of AndroidHarness.",
+    "riskFlags": []
+  },
+  "decodedSchema": {
+    "valid": true,
+    "errors": []
+  }
+}

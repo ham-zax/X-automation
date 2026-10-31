@@ -1,0 +1,12 @@
+{
+  "derivedOnly": true,
+  "originalFile": "6-lean-output.json",
+  "output": {
+    "decision": "POST",
+    "finalText": "The diff cards on every tool call are what sell me. An agent editing files on my phone blind is a no, one I can inspect step by step is a yes — MIT on top."
+  },
+  "decodedSchema": {
+    "valid": true,
+    "errors": []
+  }
+}

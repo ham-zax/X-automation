@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A5b802a67-5fd8-4a35-b53d-ff1babbf1a17",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A5b802a67-5fd8-4a35-b53d-ff1babbf1a17",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A5b802a67-5fd8-4a35-b53d-ff1babbf1a17>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A5b802a67-5fd8-4a35-b53d-ff1babbf1a17:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A5b802a67-5fd8-4a35-b53d-ff1babbf1a17",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A5b802a67-5fd8-4a35-b53d-ff1babbf1a17:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/glm-5.3-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "```json\n{\n  \"decision\": \"POST\",\n  \"finalText\": \"The diff cards on every tool call are what sell me. An agent editing files on my phone blind is a no, one I can inspect step by step is a yes — MIT on top.\"\n}\n```",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

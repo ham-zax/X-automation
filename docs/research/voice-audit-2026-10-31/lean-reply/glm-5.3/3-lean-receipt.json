@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Abfcb8ee9-4a23-4b3a-af3b-6d94cff7a96d:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "opencode",
+  "model": "opencode2api/glm-5.3-flash-free",
+  "options": [
+    {
+      "id": "variant",
+      "value": "max"
+    }
+  ],
+  "summary": "{\"decision\": \"POST\", \"finalText\": \"Okay, \\\"fix the bug — not just read the issue\\\" is a strong way to frame it. The diff cards on every tool call are the part I'd want: see exactly what changed before anything pushes.\"}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "file": "1-full-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "file": "2-lean-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "file": "3-lean-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "file": "4-full-output.json",
+    "valid": true,
+    "errors": []
+  },
+  {
+    "file": "5-full-output.json",
+    "valid": false,
+    "errors": [
+      {
+        "path": "$",
+        "message": "Expected type object."
+      }
+    ]
+  },
+  {
+    "file": "6-lean-output.json",
+    "valid": false,
+    "errors": [
+      {
+        "path": "$",
+        "message": "Expected type object."
+      }
+    ]
+  }
+]

@@ -1,0 +1,21 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "React to the idea of fixing a bug from a phone.",
+  "finalText": "A phone that takes you from bug report to actual code change? That’s a fun idea.",
+  "threadParts": [],
+  "semanticAnchors": [],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "A short text reaction is enough.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a specific, enthusiastic reaction without forcing a technical lesson.",
+  "relationshipValue": "Responds to the source’s central idea with a concise reaction.",
+  "profileProofValue": null,
+  "riskFlags": []
+}

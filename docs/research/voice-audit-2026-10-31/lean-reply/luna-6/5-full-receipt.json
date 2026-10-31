@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A94913eaa-e569-444d-a14a-66d273f1117a",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A94913eaa-e569-444d-a14a-66d273f1117a",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A94913eaa-e569-444d-a14a-66d273f1117a>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A94913eaa-e569-444d-a14a-66d273f1117a:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3A94913eaa-e569-444d-a14a-66d273f1117a",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253A94913eaa-e569-444d-a14a-66d273f1117a:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "codex",
+  "model": "gpt-6-luna",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "max"
+    }
+  ],
+  "summary": "{\n  \"decision\": \"POST\",\n  \"pipeline\": \"reply\",\n  \"thesis\": \"React to the idea of fixing a bug from a phone.\",\n  \"finalText\": \"A phone that takes you from bug report to actual code change? That’s a fun idea.\",\n  \"threadParts\": [],\n  \"semanticAnchors\": [],\n  \"evidenceUsed\": [],\n  \"media\": {\n    \"required\": false,\n    \"type\": \"none\",\n    \"reason\": \"A short text reaction is enough.\",\n    \"source\": \"\",\n    \"altText\": \"\"\n  },\n  \"discussionQuestion\": null,\n  \"followValue\": \"Shows a specific, enthusiastic reaction without forcing a technical lesson.\",\n  \"relationshipValue\": \"Responds to the source’s central idea with a concise reaction.\",\n  \"profileProofValue\": null,\n  \"riskFlags\": []\n}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

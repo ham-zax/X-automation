@@ -1,0 +1,27 @@
+{
+  "taskId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Afe5d6169-aacc-4fb6-aa19-7fbf0787af31",
+  "childThreadId": "thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Afe5d6169-aacc-4fb6-aa19-7fbf0787af31",
+  "link": "<t3-thread://v2/6e23e5cc-acc3-4ce4-baf6-859bcc2c7cbf/thread:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Afe5d6169-aacc-4fb6-aa19-7fbf0787af31>",
+  "childRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Afe5d6169-aacc-4fb6-aa19-7fbf0787af31:ordinal:1",
+  "childNodeId": "node:delegated-task:command%3Amcp%3A0c3fe670-d67f-4228-920b-9bfc013673b1%3Adelegate-task%3Afe5d6169-aacc-4fb6-aa19-7fbf0787af31",
+  "status": "completed",
+  "workState": "result_available",
+  "hasPendingChildRuns": false,
+  "latestTerminalRunId": "run:thread:thread%3Adelegated-task%3Acommand%253Amcp%253A0c3fe670-d67f-4228-920b-9bfc013673b1%253Adelegate-task%253Afe5d6169-aacc-4fb6-aa19-7fbf0787af31:ordinal:1",
+  "latestTerminalStatus": "completed",
+  "latestTerminalSummary": null,
+  "latestTerminalResultContextTransferId": null,
+  "providerInstanceId": "codex",
+  "model": "gpt-6-luna",
+  "options": [
+    {
+      "id": "reasoningEffort",
+      "value": "max"
+    }
+  ],
+  "summary": "{\"decision\":\"POST\",\"finalText\":\"The diff cards and remote commit check are the details that make this especially compelling.\"}",
+  "resultContextTransferId": null,
+  "hasPendingQuestion": false,
+  "pendingApproval": null,
+  "waitTimedOut": false
+}

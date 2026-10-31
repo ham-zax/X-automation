@@ -1,0 +1,60 @@
+[
+  {
+    "ordinal": 1,
+    "types": [
+      "user_message",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 2,
+    "types": [
+      "user_message",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 3,
+    "types": [
+      "user_message",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 4,
+    "types": [
+      "user_message",
+      "reasoning",
+      "reasoning",
+      "reasoning",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 5,
+    "types": [
+      "user_message",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  },
+  {
+    "ordinal": 6,
+    "types": [
+      "user_message",
+      "assistant_message",
+      "checkpoint"
+    ],
+    "hasMore": false
+  }
+]

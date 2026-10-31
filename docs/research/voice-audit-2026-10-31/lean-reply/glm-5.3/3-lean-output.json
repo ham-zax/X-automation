@@ -1,0 +1,4 @@
+{
+  "decision": "POST",
+  "finalText": "Okay, \"fix the bug — not just read the issue\" is a strong way to frame it. The diff cards on every tool call are the part I'd want: see exactly what changed before anything pushes."
+}

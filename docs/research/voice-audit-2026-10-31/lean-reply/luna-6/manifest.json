@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "completedGenerations": 6,
+  "availabilityWorkers": 1,
+  "rawSchemaPass": 6,
+  "costUSD": null,
+  "productionChange": false,
+  "files": {
+    "2-lean-output.json": "e5b99b0d20f417e12e889d8bfa5ce87949968181dcbb1473ac991ec4d4b94af7",
+    "1-full-output.json": "dbde705d11781eb3213d32e6f63d7c40710f46c74c3a3c0342854a8e3a0720b0",
+    "full-request.json": "9b59f6d0a1f20a353622da6e876ffc4ba8f3cf6908b75466a8ba987fc15b21ce",
+    "6-lean-receipt.json": "99ac43fff939b8262d040d65132a0edff77ed00dbd2342713836fc0ed20d6205",
+    "6-lean-output.json": "3ecbf55682c3f07d78ea6996a0b60a435cef0c646ff4766e31ed1e03fa1995e5",
+    "3-lean-output.json": "4bfad63f85ea1d96c38beefdfb35d9031130fcacffb9d3580534b64dc034dac9",
+    "4-full-receipt.json": "5c07e45f73762216c7f1ff471b64fc4a3f921a675f8a955fb0676db7facde37e",
+    "2-lean-receipt.json": "122dfb7d0691773d54972143c0cb5b082920b3d19e21c11718bc7af0c4f71291",
+    "REPORT.md": "ac15f98cc35632f651a7f19da19f6d6e79c8a36e5b162fe553f60d1bde98109d",
+    "lean-request.json": "fd353028d8df740f1bde0d36a70a9485ee540c3df4e9e90134e990c1e6c14480",
+    "5-full-receipt.json": "ec6491a9afd1e114561dd2f1bd61d6f5e31fded6d5d4b6ed98faad23fb5c4b35",
+    "availability-receipt.json": "15c2f371d060c32a101021c2f665e3d779a9cf4a17f1bc73daf726fb4b87a660",
+    "1-full-receipt.json": "930d4b4fc9aa8abafd439d1f01ca8ed6789d4cc9c9150dff7310e8249761c791",
+    "activity.json": "49d40e2642e93b3f923a3e5801af0569c894d823b91d3a82eb4e265472ca58fe",
+    "3-lean-receipt.json": "7461e41a9bd95b1b34ae099b460427458d77ec492d94938ebdf04691d236d3df",
+    "4-full-output.json": "0f450a5e613858ff95d15c6b07cd8cfd03ccfbd857af3bc3c36d0e109677e77e",
+    "5-full-output.json": "c010a7da0c2bc335c4ab35e303a711ccaef2911ea091999afbef5169c674f4ed",
+    "plan.json": "b51f59808269e6edc69c5869e6de09d1f070d0a998d689f4f3d4f8c0937eac72"
+  }
+}

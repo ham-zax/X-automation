@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "completedGenerations": 6,
+  "availabilityWorkers": 0,
+  "rawSchemaPass": 4,
+  "costUSD": null,
+  "productionChange": false,
+  "files": {
+    "schema-checks.json": "a7e2a0453caab2973f0dfc31390c9a59b6a2b1c75ad957fb9338a74c76d67be1",
+    "2-lean-output.json": "514867d0d4f069840463935bec1aaf9e970e607c00351d60f83a735e14c7af60",
+    "1-full-output.json": "3ce3263efa1a559498c9ada6cc1bfbe696b367f1c20e4e667d24181fab9bf3c0",
+    "full-request.json": "9b59f6d0a1f20a353622da6e876ffc4ba8f3cf6908b75466a8ba987fc15b21ce",
+    "5-full-decoded-for-inspection.json": "231001d8bd13b2dd3d90e8ca1b01aa42b9b6fa83d26e89d351f5249687b8bd14",
+    "6-lean-receipt.json": "44e62972f68528c990ebd0c6faa490820f70accd5a4cc0df3ad67e873ce3c6d6",
+    "6-lean-output.json": "223ead7bd29149db5cc4e2bb6ac0dbd1ac375fe73d4d29ab29a23eae19bc31d2",
+    "3-lean-output.json": "4d4447df8bd150d2514c6508cc2b56d282acd70a0c5a497511af8dbd2fe341c5",
+    "4-full-receipt.json": "9818770bf37a1e4b7794d335645e50125feb56dec003b822b0842aba3f304461",
+    "2-lean-receipt.json": "0dd948c52ab910867097a812e9d29d7739f316bff572d7d70743c886cb874be9",
+    "REPORT.md": "67744a27e00524bb71a24a30cc1cadc84a324aeba3927a55011a38a03c8f3567",
+    "lean-request.json": "fd353028d8df740f1bde0d36a70a9485ee540c3df4e9e90134e990c1e6c14480",
+    "5-full-receipt.json": "342f010fb3d63f70c7ecab7b43b03454687acd47db019ba6833d1dbbb574f060",
+    "6-lean-decoded-for-inspection.json": "1308313675e3578d7756be85822ec139a90e292fd4cb9651a1d1395ef1ec7e29",
+    "1-full-receipt.json": "914929214737716ef6193ad13123d966dbffdfc753aee5e68686bdccaf2cce3c",
+    "activity.json": "22c937d4da84a9274c2fc17eb45b3e79b48502d34896c2963de5edf1eb068022",
+    "3-lean-receipt.json": "b30440a4879124aacf938cf8f033a9615ab7f21fb3309446d986210b350f9477",
+    "4-full-output.json": "1ff89b992ccf8f727d442614738689c6dcb991e86f2279c95263f00df35e6445",
+    "5-full-output.json": "6e0b1a7d9221635c70787e9689f0717cfe650e4fcc9f901d7d7dcc9b5650257d",
+    "plan.json": "249be08514c9b7831406051cbbb279ef09e93df97590a29b1a553c3decf9097e"
+  }
+}

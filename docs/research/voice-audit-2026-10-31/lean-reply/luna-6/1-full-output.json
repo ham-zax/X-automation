@@ -1,0 +1,21 @@
+{
+  "decision": "POST",
+  "pipeline": "reply",
+  "thesis": "Show a specific preference for phones as tools for building.",
+  "finalText": "I’m much more interested in phones as tools for making things than as another place to monitor them.",
+  "threadParts": [],
+  "semanticAnchors": [],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The short reaction needs no media.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a clear taste for tools that help people build.",
+  "relationshipValue": "Adds a specific reaction to the idea in the post.",
+  "profileProofValue": null,
+  "riskFlags": []
+}

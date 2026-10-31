@@ -545,3 +545,27 @@ All six schemas pass. Full replies are peer reactions in parent assessment.
 Lean still adds inspectability ranking. No clear capability inflation in these
 samples. One source, three samples/arm, not owner acceptance or a model ranking.
 Other agent proposal waits for owner review. See luna-5.6/REPORT.md.
+
+## XR-14 GLM and Luna6 request, 31 October
+
+User authorizes same six-call comparison per model at highest exposed effort.
+| id | status | depends | owner | acceptance | evidence |
+| XR14-GLM | review | XR14-LUNA | parent | Identical full/lean requests, six GLM5.3 max calls, honest output assessment. | lean-reply/glm-5.3 |
+| XR14-LUNA6 | review | XR14-LUNA | parent | Same comparison with Luna6 max when exposed. | Catalog currently exposes only gpt-5.6-luna. No substitute dispatch. |
+
+Direct explicit gpt-6-luna max launch succeeds despite stale catalog listing.
+One availability worker returns JSON, not a writing sample. Six generation calls
+follow unchanged plan. User authorizes parallel calls. Two Luna calls run together
+alongside the existing GLM work. Seven Luna dispatches including availability.
+
+Luna6 completes6/6 generations plus one availability worker. Actual receipts
+report gpt-6-luna max. Both requests match earlier bytes. All schemas pass.
+Full replies are peer reactions. Lean has loose UI labels in two replies.
+No clear imposed test in this set. GLM remaining calls continue separately.
+
+GLM completes6/6 generations. Four raw outputs validate. Two fenced JSON
+summaries fail raw-object validation, while separately decoded objects validate.
+Grading persists. Two lean replies explicitly claim per-call diff cards without
+source support. No tool actions in recorded generation activity. Both requested
+model comparisons now have reports, raw outputs and receipts. No new proposal
+is run and no model or writing policy is promoted to production.
