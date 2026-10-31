@@ -649,3 +649,12 @@ No new experiment calls, automatic critic, mandatory Writer receipt or host chan
 
 | id | status | depends | owner | acceptance | evidence |
 | OW-D | review | OW-I | parent | Current guides describe selectable operator/Writer and correct entry points. Remove completed duplicate plans. Preserve historical evidence. | Current workflow, runner protocol, execution checklist, service guide and README updated. Historical reports carry continuation pointers. Two completed implementation plans removed after reference migration. No source or host changes. Only Hamza marks done. |
+
+## Peer writing refinement, 31 October
+
+TaskStartSnapshot: 05b31a3. Owner requests DeepSeek-first Reply improvements and
+improvements to the existing shared Original/Quote prompt. Keep the model
+configurable. No new reviewer, runtime, schema, test or publication gate.
+
+| id | status | depends | owner | acceptance | evidence |
+| PW-I | review | OW-D | parent | Refine the existing Reply and Original/Quote contracts from the peer-loop checkpoint. Preserve creative acts and current interfaces. | Checkpoint archived in docs/research/DEEPSEEK_PEER_LOOP_CHECKPOINT_2026-10-31.md. Existing Reply and shared Original/Quote prompts refined. Workflow and integration report updated. Parent inspected prompt diff and runtime ownership. No new model evaluation, tests, schema, model settings or publication changes. |

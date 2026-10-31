@@ -14,6 +14,9 @@ follower-value explanation is requested from a Reply writer. Originals, Quotes
 and Threads retain the full Writer format described below.
 
 The structured Writer and attached/direct operator use the same Reply text.
+The Reply contract includes a silent check of source meaning, question premises
+and conversational purpose. That check runs inside writing, without a separate
+model call or a self-review object. It does not replace existing review gates.
 Existing approval, duplicate, health, claim and uncertain-send rules still apply.
 The direct `act` path does not gain an independent Writer review from this change.
 For a reviewed Reply, accurate claims about its visible parent need no literal

@@ -114,3 +114,60 @@ Future DeepSeek/GLM optimization can use the same offline replay without replaci
 publication rules or growing another general framework. The broader quality issue
 remains open for owner assessment of real unpublished outputs. No further model
 experiment, deployment, public action or policy change starts from this report.
+
+## Peer-loop refinement, 31 October, after 05b31a3
+
+Owner requests DeepSeek as a first-class writing option. The archived
+[peer-loop checkpoint](DEEPSEEK_PEER_LOOP_CHECKPOINT_2026-10-31.md) records the
+separate fictional-post experiments. It is evidence, not a runtime instruction.
+The tested self-check helps in one comparison and gives a smaller difference
+on fresh posts. Naturalness and extra fact-check instructions do not establish
+a general improvement. Reviewers disagree on several reasonable social acts.
+
+The recurring concrete failures justify a provisional contract refinement:
+unstated investigation details, assumed completed repairs, unnecessary questions,
+repeated approval and paraphrases. Preserve jokes, preferences, disagreement,
+support and relevant capability questions. No form alone establishes quality.
+
+The compact Reply contract now meets the author's act, checks question premises,
+uses available thread context and performs a silent source/meaning self-check.
+It retains the existing POST/DO_NOT_POST schema and selected behavior. No model
+must produce an explanation, evidence essay or separate self-review artifact.
+No extra critic, retry loop, dependency or model restriction is introduced.
+The same contract reaches the selected Writer and direct operator. DeepSeek
+can fill either role through existing configuration. Saved model choices do
+not change with this prompt revision.
+
+### Originals and Quotes
+
+These formats already use the shared POST_GENERATION_PROMPT.md through the
+existing Writer. They do not have separate compact runtime contracts. The owner
+authorizes improving that existing prompt instead of adding more contract files.
+
+Original: lead with the update, idea, observation, joke or opinion. Supply enough
+context to stand alone. Keep one purpose, verified owner facts and grounded
+source claims. Do not force a takeaway, follower pitch or invented personal story.
+
+Quote: let the source carry its own announcement. Add Hamza's reaction for his
+timeline, with the selected social or technical purpose. Preserve source scope
+and existing attribution rules. Recommend Reply when the thought belongs in a
+direct exchange. Do not silently change the selected pipeline.
+
+Both sections and the shared final edit now state those requirements directly.
+The shared self-check handles unsupported premises while preserving creativity.
+This changes wording, not the full output schema or existing source requirements.
+No dedicated Original/Quote compact packet is added in this revision.
+
+### Execution and limits
+
+Reply operator mode still writes directly. Profile mode invokes the selected
+Writer through reply-generate, then passes its text through act. Originals and
+Threads use the existing Writer, server-side independent review and approved
+queue. Quotes retain their existing direct-act or structured Writer route and
+editorial requirements. A self-check is no replacement for those requirements.
+
+No live tweet, Quote or Reply is written or published by this revision.
+No new model experiment or quality improvement measurement is claimed. The exact
+revised contract has not been evaluated on fresh DeepSeek outputs. The next useful
+evaluation compares the previous and revised contracts with the same DeepSeek
+settings and fresh conversation context. Separate source errors from taste.

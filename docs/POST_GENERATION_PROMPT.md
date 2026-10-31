@@ -414,7 +414,11 @@ Realize the selected purpose. Valid Original jobs include:
 - humor or social observation that belongs on the main profile;
 - source-based synthesis that becomes Hamza's own account object.
 
-An Original should strengthen why somebody follows `@ham_zax`, not merely repeat the source account.
+Give a reader enough context to understand what you are saying without opening another post. Lead with the actual update, observation, idea, joke or opinion. Develop that one purpose and stop. Do not manufacture a general engineering lesson or a reason to follow the account inside the public text.
+
+For source-based posts, distinguish what the source establishes from your interpretation. Preserve uncertainty, scope and plans. An attempted repair is not a successful repair. Use supplied primary evidence for factual technical claims. For build logs and results, use verified owner evidence. Without it, express the idea or proposal honestly rather than inventing a first-person story. Opinions, humor and imagined examples remain valid when their meaning is clear.
+
+If the supplied material offers no suitable standalone contribution, return `DO_NOT_POST`. Do not invent a result, controversy or hook to fill the format.
 
 If the public value is access to a repository, tool, guide, dataset, or other resource, include a usable action path. Do not remove a useful resource link merely to make the post shorter.
 
@@ -431,9 +435,11 @@ A Quote may be selected for:
 - a useful question;
 - connection to Hamza's work, stance, or account narrative.
 
-The combination must create a purposeful account object, not necessarily a new information object.
+Write for the people who will see the source on Hamza's timeline. Make his response clear: why he is sharing it, what he thinks, or what the joke or celebration adds. The purpose can be social. It does not need a technical verdict or a hidden flaw.
 
-A short `this is huge`-type reaction is valid only when the source, relationship, selected affect, and reason to exist make it specific rather than generic activity.
+Use the visible source without retelling it. Preserve its qualifiers, and distinguish the author's report from independent verification. A strong opinion need not become an unsupported capability claim or invented owner experience. Existing attribution and evidence requirements still apply.
+
+A question fits when it opens a meaningful discussion. Do not make the creator defend their launch or perform an unasked test to justify sharing it. If the contribution only makes sense as a direct exchange with the author, prefer a Reply recommendation. If no suitable contribution remains, return `DO_NOT_POST`. A writing recommendation does not change the selected route or grant publication authority.
 
 #### THREAD
 
@@ -524,7 +530,7 @@ A question may seek technical information, invite elaboration, continue a relati
 
 Do not append a question merely to increase comments. `Thoughts?`, `Agree?`, `Comment YES`, and artificial A/B prompts are invalid when they have no real conversational purpose.
 
-Omit the question when the selected act is already complete.
+Omit the question when the selected act is already complete. Check that the source or supplied thread has not answered it. A question can ask about an unknown capability, but must not assume an unstated defect, completed result or implementation. Avoid turning a social exchange into an interview or giving the author work with no conversational purpose.
 
 ### STEP 8 — COMPREHENSION AND PROPORTIONALITY EDIT
 
@@ -577,7 +583,9 @@ A screenshot/chart/code/diagram should support the selected purpose, not serve a
 
 ### STEP 12 — BOUNDED CRITIQUE AND FINAL CUT
 
-Before finalizing a useful-tech discovery, privately examine the draft through three lenses: reader (does the first line explain a concrete benefit without bait?), fact-checker (is every capability, compatibility, cost and setup claim grounded and the originator credited?), and Hamza (does this sound like the active persona and give a distinct reason to follow?). If one lens fails, revise only the unsupported or weak parts and reconsider the route; at most two bounded internal passes, then return `DO_NOT_POST` or needs-review rather than looping endlessly. No self-assigned review may override the existing independent content review, media, attestation or publication gates.
+Before returning, silently check the selected act, source meaning and concrete claims. Look for an invented cause, timing, outcome, implementation, owner experience or question premise. Keep opinions, hypothetical examples and clear humor as those acts rather than treating them as factual reports. Revise the unsupported or distracting wording without erasing the voice.
+
+Check the format: an Original stands alone, a Quote adds Hamza's response to its visible source, and a Thread develops one purpose across its parts. Do not force a technical benefit or follower pitch into a social act. If no suitable contribution remains, return `DO_NOT_POST`. Return the required output without a self-check transcript. This is part of writing, not another model call, a reviewer attestation or publication authority. Existing independent review, evidence, media and publication gates remain in place.
 
 Perform one compression pass.
 
