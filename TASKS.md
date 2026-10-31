@@ -609,7 +609,7 @@ No model choice or code change is made. Owner reviews both reports next.
 User authorizes code integration and Luna use, plus continuing cheap-model tests.
 TaskStartSnapshot main c02380b, only pre-existing live-progress.json untracked.
 | id | status | depends | owner | acceptance | evidence |
-| RP-I | review | XR14-PM | parent | Reply contract reaches Writer and direct instructions, preserves other formats and authority, Luna selectable through existing profile. | REPLY_CONTRACT_IMPLEMENTATION_2026-10-31.md |
+| RP-I | review | XR14-PM | parent | Reply contract reaches Writer and direct instructions, preserves other formats and authority, Luna selectable through existing profile. | docs/research/REPLY_CONTRACT_INTEGRATION_2026-10-31.md |
 | RP-C | review | - | parent, DeepSeek/GLM | Saved-case factual checker test, errors and valid reactions evaluated without style veto. | Initial four calls, then evidence-driven continuation under user renewed authority. |
 | RP-R | review | RP-I | independent reviewer | One final graph review, parent repairs one round and records checks. | One review per graph. Only Hamza marks done. |
 
@@ -638,9 +638,14 @@ No new automatic cheap critic is installed. RP-I/RP-C/RP-R at review, not done.
 
 User authorizes implementation. TaskStartSnapshot e9f2f2e, main. Preserve live-progress.json.
 | id | status | depends | owner | acceptance | evidence |
-| OW-I | review | RP-R | parent | Selectable attached operator and operator/profile Reply writer, existing act flow and model provenance. | docs/plans/OPERATOR_WRITER_SPLIT_2026-10-31.md. Existing focused checks 46/46. Disposable generation check: operator zero calls, profile one call, skip and OpenCode model selection pass. |
+| OW-I | review | RP-R | parent | Selectable attached operator and operator/profile Reply writer, existing act flow and model provenance. | docs/AGENT_WORKFLOW.md, Operator and Writer selection. Existing focused checks 46/46. Disposable generation check: operator zero calls, profile one call, skip and OpenCode model selection pass. |
 | OW-R | review | OW-I | parent | Inspect scoped diff and minimal existing checks under the owner's latest simplicity direction. | Parent inspected command, generation, telemetry and claim seams. Syntax and diff checks pass. No live model, browser, send, deployment or full-suite acceptance. No new tests, hashes or extra review worker. Only Hamza marks done. |
 
 Implementation stays inline because command and reply changes share owners.
 The latest owner direction replaces the earlier binding and broad-check proposal.
 No new experiment calls, automatic critic, mandatory Writer receipt or host changes.
+
+## Documentation consolidation, 31 October
+
+| id | status | depends | owner | acceptance | evidence |
+| OW-D | review | OW-I | parent | Current guides describe selectable operator/Writer and correct entry points. Remove completed duplicate plans. Preserve historical evidence. | Current workflow, runner protocol, execution checklist, service guide and README updated. Historical reports carry continuation pointers. Two completed implementation plans removed after reference migration. No source or host changes. Only Hamza marks done. |

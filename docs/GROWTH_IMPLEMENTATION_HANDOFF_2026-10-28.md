@@ -1,5 +1,10 @@
 # Growth OS implementation handoff, 28 October 2026
 
+Historical checkpoint. Later Reply integration and configurable operator/Writer
+work supersede its writing/runtime guidance. Read `TASKS.md`, `AGENT_WORKFLOW.md`
+and `research/REPLY_CONTRACT_INTEGRATION_2026-10-31.md` for the later checkpoint.
+Keep the dated evidence below as history, not a deployment claim.
+
 Read `TASKS.md` first for current task status, dependencies, evidence and dispatch
 budget. `docs/X_GROWTH_ISSUES.md` owns the findings. The implementation plan is
 `docs/plans/GROWTH_ISSUE_IMPLEMENTATION_2026-10-28.md`.

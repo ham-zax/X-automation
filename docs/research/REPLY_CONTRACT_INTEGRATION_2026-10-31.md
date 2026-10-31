@@ -1,5 +1,12 @@
 # Reply contract integration and continued checker tests
 
+Continuation: commit `7880df5` makes the attached operator configurable and adds
+optional profile-based Reply generation. Operator mode writes directly.
+The current contract lives in `../AGENT_WORKFLOW.md`. Model bindings described
+below record this experiment's state, not a permanent runtime requirement.
+The continuation passes 46 existing checks and a disposable generation check.
+No live runtime, browser, publication or deployment check accompanies it.
+
 ## Delivered behavior
 
 The user authorizes provisional code integration after the model comparisons.

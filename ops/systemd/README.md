@@ -1,54 +1,48 @@
-# X Test user services
+# Growth OS user services
 
-**ARM current runtime (2026-10-10):** use `ops/systemd/arm/x-test-growth-agent.service`, which runs Claive + Codex `gpt-6-luna`, not the historical Pi configuration described later in this document. The authenticated browser lives only on ARM; `agent-browser-cli` is the live default and typed `webharness-mcp` is opt-in for a new run. The old model-rotation watchdog `x-test-watch.timer` is disabled. For exact operational settings, see `docs/ARM_24X7_HANDOFF.md` under Current deployment. Do not use the historical `model.conf` failover steps to change the Codex worker.
+Current repository guidance: 31 October 2026, implementation commit `7880df5`.
+Production checkout: `/home/ubuntu/repo/x_test` on ARM. WSL is test-only.
+Do not start a second operator against another database copy.
 
-**ARM attached-live session:** `ops/systemd/arm/attached-live.conf` (a drop-in for `x-test-growth-agent.service`) runs `ops/systemd/arm/arm-growth-live.sh` from the production checkout. The script fills `ops/systemd/arm/arm-growth-live.md` (the agent brief) and starts one bounded claive session. Edit these files here, pull on ARM, and copy the drop-in to `~/.config/systemd/user/x-test-growth-agent.service.d/` followed by `systemctl --user daemon-reload` when it changes. `experiment.conf` and `runtime-paths.conf` are the other drop-ins in that directory.
+## Attached operator
 
-These units are rollout artifacts for the production checkout in `/home/hamza/repo/x_test`.
+The versioned ARM service is `arm/x-test-growth-agent.service`.
+Its `arm/attached-live.conf` drop-in selects `arm/arm-growth-live.sh`.
+That shell starts `ops/attached_live_session.mjs`, which renders the live brief,
+leases one browser target, supervises the selected agent and releases the target.
+The drop-in supplies a 60-second stop timeout for cleanup.
 
-The dashboard is a read/review service; live X work belongs to the attached reasoning operator:
+The operator runtime, model and supported reasoning effort are configurable.
+Reply writing can use the operator itself or the saved Writer role.
+See [model selection](../../docs/AGENT_WORKFLOW.md#operator-and-writer-selection)
+and the [live brief](arm/arm-growth-live.md). No Luna model lock remains.
+The default attached runtime still uses Claive/Codex when no override exists.
+Changing code or settings does not install units, enable timers or grant authority.
 
-- `x-test-automation.service` is a retired artifact. Continuous `automation.js` operation is disabled. Do not install, enable, or start it. A human or reasoning agent may explicitly invoke `npm run automation:once` for one bounded maintenance cycle.
-- `x-test-growth-agent.timer` / `x-test-growth-agent.service` — approximately every 5 minutes wake the browser-capable reasoning operator for timely discovery; the owner rest/urgent/quality policy prevents clockwork publishing. The reasoning runtime follows `docs/GROWTH_RUN_PROTOCOL.md`; it does not grant itself authority and it does not bypass publication attempts or reconciliation.
+The service without the attached drop-in runs `growth_agent_runner.js` instead.
+That entry point runs one finite controller tick. It does not launch the retired
+elapsed-time browser loop. Do not confuse the two entry points.
 
-Install and load:
+## Deployment and inspection
+
+Use [Production operations](../../docs/PRODUCTION_OPERATIONS.md) for release,
+private access, backup, restore and rollback. Use ARM units for production.
+Do not install the historical WSL units into the ARM account.
+Check the installed service and drop-ins before reporting deployment status:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cp /home/hamza/repo/x_test/ops/systemd/x-test-dashboard.service ~/.config/systemd/user/
-cp /home/hamza/repo/x_test/ops/systemd/x-test-growth-agent.service ~/.config/systemd/user/
-cp /home/hamza/repo/x_test/ops/systemd/x-test-growth-agent.timer ~/.config/systemd/user/
-systemctl --user daemon-reload
-```
-
-Enable and start when ready:
-
-```bash
-systemctl --user enable x-test-dashboard.service x-test-growth-agent.timer
-systemctl --user start x-test-dashboard.service
-systemctl --user start x-test-growth-agent.timer
-```
-
-Inspect:
-
-```bash
-systemctl --user status x-test-dashboard.service x-test-growth-agent.timer --no-pager
+systemctl --user cat x-test-growth-agent.service
+systemctl --user status x-test-growth-agent.service x-test-growth-agent.timer --no-pager
 systemctl --user list-timers x-test-growth-agent.timer --no-pager
-journalctl --user -u x-test-dashboard.service -u x-test-growth-agent.service -n 100 --no-pager
+journalctl --user -u x-test-growth-agent.service -n 100 --no-pager
 ```
 
-Before starting the units, build the release with `npm ci`, `npm ci --prefix ui`, and `npm run ui:build`. The dashboard unit executes `node dashboard.js` against those prebuilt assets; it never installs or builds during startup. Stop any hand-launched dashboard or automation process. Do not run a terminal-owned daemon and the corresponding systemd service at the same time.
+Build dashboard assets before deployment through the release procedure.
+Services do not install dependencies or build assets at startup.
+The timer wakes the configured service. Owner policy and claim gates decide
+whether public action is permitted. Missed wakes create no publishing quota.
 
-The Growth Agent service is `Type=oneshot`; the timer probes approximately every 5 minutes for fresh urgent opportunities without catch-up bursts (`Persistent=false`). An active service coalesces timer wakes. The runner loads `.env` and supports `X_GROWTH_AGENT_RUNTIME=opencode|codex|claude|pi|claive|muse`; each runtime needs its own authenticated model account and configured WebHarness browser tools. OpenCode remains the default, with the existing configurable model default; model availability and live browser access require a deployment check. It uses the installed CLI's `--standalone` mode to keep its private server inside the supervised process group. Claude uses noninteractive `dontAsk` permission mode and explicit bridge/browser tool permissions. Broker aliases must match those permissions or use direct `browser-fast` / `browser-devtools` MCP registrations.
-
-**Historical Pi mode (not the current ARM deployment):** `pi` is a supported headless-Linux runtime: it runs `pi --print --no-session --offline --no-extensions --no-approve --tools read,bash` with the prompt as the last argument, takes `X_GROWTH_AGENT_MODEL` as `provider/model` (on ARM until 2026-10-08, `opencode2api/muse-spark-1.3-contributor-free`), and reads `X_GROWTH_PI_BIN` (default `~/.local/bin/pi`) and `X_GROWTH_PI_THINKING` (default `high`). It defaults to `X_GROWTH_BROWSER_TARGET=linux`: X is driven through the Agent Browser CLI (`X_GROWTH_AGENT_BROWSER_CLI`, default `~/.local/bin/agent-browser`) attached to the persistent Chromium on `X_GROWTH_BROWSER_CDP_PORT` (default 9222), and the run records an authentication blocker instead of logging in when that browser is not signed in as `@ham_zax`. Pi has no OS sandbox or per-command allowlist, so the prompt's hard boundaries are the only guard; run it as an unprivileged user. `X_GROWTH_REPO` overrides the repository path (default: the runner's own directory).
-
-ARM now runs the claive Codex runtime (`gpt-6-luna`, yolo) rather than the Pi runtime described above; see `docs/ARM_24X7_HANDOFF.md` for the current deployment.
-
-`X_GROWTH_AGENT_WINDOW_MINUTES` defaults to 20 and accepts 1–480 minutes. A window contains fresh sequential Growth Runs of at most 20 minutes and 25 public mutation attempts per pass (resource accounting, not a posting quota). Another pass begins only after a completed ceiling finish with zero investigating or closed-unresolved attempts, current Live delegation, unconstrained health and no competing lease. No worthwhile work ends the window early. Each runtime has a pass deadline with at most two minutes for exit/reconciliation, capped by the remaining overall window; expiry kills the process group and preserves uncertain attempts for recovery. The service has a nine-hour outer timeout and never automatically restarts a failed runtime.
-
-For example, set `X_GROWTH_AGENT_RUNTIME=claude` and `X_GROWTH_AGENT_WINDOW_MINUTES=120` in the private `.env` to configure a two-hour window before an intentional `npm run growth-agent` invocation. These values do not enable a timer or grant public authority. Production mode requires explicit `AI_ALLOW_RUNTIME_MANAGED=true`; configure provider-side billing limits because external reasoning sessions cannot be token-capped by Growth OS. The unattended prompt verifies the Windows X account before beginning the run and follows concrete `growth-run-next.claim` targets instead of treating browser-owned work as blocked by missing daemon API credentials.
-
-Do not enable the Growth Agent timer merely because delegation is Live. First verify `operator-readiness` reports the intended browser account, no active uncertain-write blocker, and a working reasoning/runtime path. An already-active operator lease causes a scheduled wake to coalesce instead of starting a competing operator.
-
-Release, private access, backup, restoration and rollback: [Production operations](../../docs/PRODUCTION_OPERATIONS.md). These are owner-run rollout instructions; changing the files does not deploy or enable services.
+Continuous `automation.js` and the old model-rotation watchdog are retired.
+Do not enable their services. The dashboard remains an inspection interface.
+Historical deployment evidence lives in `docs/ARM_24X7_HANDOFF.md`.
+No host installation or current service inspection accompanies this doc update.

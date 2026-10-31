@@ -215,65 +215,40 @@ Read these dimensions independently:
 
 A heartbeat proves recent runtime attachment only. Growth Run begin/resume/next and run-bound claim/send activity maintain liveness automatically for the operator-lease lifetime; the reasoning model does not schedule heartbeat housekeeping. Consequential authority and capability are still rechecked at claim/send time.
 
-## Unattended runner
+## Unattended operator and controller
 
-`growth_agent_runner.js` launches the configured reasoning runtime and tells it to use this exact protocol rather than inventing a parallel loop.
+The ARM attached operator starts through `ops/systemd/arm/arm-growth-live.sh`.
+`ops/attached_live_session.mjs` renders the live brief, leases one browser target,
+runs the configured operator and releases its owned target on exit.
+The versioned `attached-live.conf` selects this entry point for the service.
+Changing repository files does not install that drop-in or restart a service.
 
-Default runtime: OpenCode. Override with:
+Select the runtime with `X_GROWTH_AGENT_RUNTIME` and its supported model with
+`X_GROWTH_AGENT_MODEL`. `X_GROWTH_AGENT_REASONING` selects supported effort.
+The attached default remains Claive/Codex, Luna6 at max when no override exists.
+Models are configurable. Growth OS no longer enforces the old Luna model lock.
+The chosen runtime still needs working credentials and browser tools.
+The attached launcher currently requires Linux and `agent-browser-cli`.
+Claive/Codex retains its existing sandbox bypass. A model choice grants no
+publication authority.
 
-- `X_GROWTH_AGENT_RUNTIME=opencode|codex|claude|pi|claive`
-- `X_GROWTH_AGENT_MODEL=<provider/model>`
-- `X_GROWTH_OPENCODE_BIN=<path>`
-- `X_GROWTH_CODEX_BIN=<path>`
-- `X_GROWTH_CLAIVE_BIN=<path>` (defaults to `~/.local/bin/claive`)
+`X_GROWTH_REPLY_WRITER_MODE=operator` uses the operator's own reply text.
+`profile` calls `reply-generate` through the saved Writer role, then passes its
+text and invocation reference to `act`. See `AGENT_WORKFLOW.md` for the payload
+and model selection contract. Existing configured Writer fallbacks remain visible
+in execution metadata. No extra automatic reply critic runs.
 
-The `claive` adapter launches tracked model turns within each bounded pass.
-`X_GROWTH_CLAIVE_ENGINE=muse|pi|codex` selects the engine (default Muse). Muse uses
-`muse-spark-1.3-contributor`, `xhigh` reasoning, and its filesystem/network sandbox.
-Pi uses only `opencode2api`, `max` reasoning, and inherits its current global
-model when `X_GROWTH_AGENT_MODEL` is empty. Pi has no OS sandbox; the operational
-prompt restricts it to Growth OS bridge operations and the browser lane.
-Codex is locked to `gpt-6-luna` at `max` reasoning with web search and runs with
-`CLAIVE_CODEX_YOLO=1` (no Codex sandbox; the prompt is the only guard), as on ARM.
-No engine automatically switches provider/model. The temporary prompt is removed
-on success or failure. Workers operate through the same Growth Run bridge and
-authenticated browser lane; Claive never grants publication authority. Inspect
-workers with `claive list` / `claive show ID` and scheduler readiness with
-`operator-readiness`.
+The ordinary `growth_agent_runner.js` entry point instead runs one finite
+cache-fed controller tick. `executor` aliases that path and `legacy` is rejected.
+It does not launch the retired elapsed-time browser loop. Do not use historical
+Pi continuation or watchdog recipes to configure the attached operator.
 
-If Pi exits normally while its durable run is active, the launcher may continue
-up to four total model turns within the original deadline, retaining the same
-Pi history, bridge session, Growth Run and exact claim authority. It checks the
-current delegation before each continuation. A send-started or investigating
-attempt restricts the follow-up to reconciliation; it never authorizes another
-send. Provider failures stop immediately. Exhausting the turn/deadline limit
-closes the run as partial through the canonical finish path.
-
-Other runtimes may start one fresh continuation only when the unfinished run
-created no publication attempt. That continuation has a new session/run and
-must obtain its own claim. Neither path switches provider or model, bypasses
-bridge gates, or restores authority to a closed attempt.
-
-Windows agents run `node ops/windows-dialog-recovery.mjs --dismiss` before
-initial observation and when navigation stalls. This native UI Automation
-fallback cancels only an exact “Leave site?” dialog in the WebHarness Chrome
-profile and verifies its absence; omit `--dismiss` for inspection only. It never
-clicks Leave or a publication button. Re-observe afterward, and reconcile any
-already-started publication without retrying it. A successful page snapshot
-alone does not establish that a native dialog is gone.
-
-To use Claive with the existing user timer, install
-`ops/systemd/x-test-growth-agent-claive.conf` as
-`~/.config/systemd/user/x-test-growth-agent.service.d/claive.conf`, reload the
-user systemd manager, then enable `x-test-growth-agent.timer`. Verify the runtime
-and authenticated account before enabling recurring runs. The supplied drop-in
-selects Pi with its existing model. Stop recurring work
-with `systemctl --user disable --now x-test-growth-agent.timer`; also stop
-`x-test-growth-agent.service` to end an in-flight worker.
-
-The systemd timer wakes the runner roughly every 5 minutes for fresher breaking-event discovery. This does not imply 5-minute publishing: the rest/editorial claim policy decides whether any public action is permitted. Overlapping invocations coalesce through the existing operator lease. Missed invocations do not create catch-up bursts.
-
-The background `automation.js` service remains separate and must not automate browser/X mutation surfaces. It may continue source refresh, measurement, preparation, and compliant official-X-API work.
+The timer schedules service invocations. It does not schedule public posts.
+Only one operator may use the production account. Existing run leases, owner
+policy, claims and uncertain-send recovery remain authoritative.
+Continuous `automation.js` operation is retired. Do not enable that daemon.
+Deployment and rollback instructions live in `PRODUCTION_OPERATIONS.md`.
+Check the installed service separately before claiming live deployment.
 
 ## Social actions: Likes, Follows and Reposts
 

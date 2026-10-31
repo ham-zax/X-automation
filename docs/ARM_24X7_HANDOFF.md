@@ -1,5 +1,11 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+Historical deployment record, not the current configuration guide.
+For current repository behavior, use `ops/systemd/README.md`,
+`docs/AGENT_WORKFLOW.md` and `TASKS.md`. Commit `7880df5` removes the old
+model lock and adds operator/profile Reply writing. Installed host state needs
+its own check. “Current deployment” below means verified on 10 October only.
+
 October 28 local continuation: read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md`
 and `TASKS.md` first. The deployment claims below are dated October 10.
 This run does not check current ARM state or authorize historical restart commands.

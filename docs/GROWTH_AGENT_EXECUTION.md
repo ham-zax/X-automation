@@ -6,45 +6,23 @@ Use `npm run --silent agent -- COMMAND` with JSON on stdin. Read the complete
 result after the command exits; an `error` field means failure even if a shell
 pipeline hid the exit code.
 
-## Runner prompt modes
+## Current execution paths
 
-`growth_agent_runner.js` sends one of two prompts to each unattended pass,
-chosen by `GROWTH_AGENT_MODE`:
+The ARM attached launcher runs one configured reasoning agent with the live
+brief in `ops/systemd/arm/arm-growth-live.md`. The launcher owns its browser tab
+and cleanup. It uses the selected runtime, model and reasoning settings.
+See `AGENT_WORKFLOW.md`, section “Operator and Writer selection”, for settings.
 
-- `executor` (default): a compact scout, write, act loop with opportunity-led, independently evaluated Reply/Quote/Original decisions. It runs `scout`,
-  handles T0 mentions, T1 conversations and source-linked T2 Original/Thread opportunities.
-  Direct text Reply/Quote actions use `act` with the run/session ID;
-  every Original/Thread (including a single-text Original) uses the existing queue,
-  main-feed approval, browser claim/send-start and reconciliation recipe below.
-  Useful-tech discoveries require material primary evidence IDs for delegated
-  standalone Original/Thread approval. It does not embed this entire document. Both modes embed `docs/GROWTH_CONTEXT_RECOVERY.md` for
-  startup and post-compaction recovery; executor reads "Recover an unfinished
-  publication" below when `growth-run-next` recommends `recover_attempt`.
-- `legacy` (`GROWTH_AGENT_MODE=legacy`): the previous multi-step prompt, which
-  embeds this whole document.
+`X_GROWTH_REPLY_WRITER_MODE=operator` lets that agent write Replies directly.
+`profile` uses one `reply-generate` invocation through the saved Writer role.
+Both pass text through existing `act` publication checks.
+Originals and Threads keep their existing Writer and independent review path.
 
-Both modes share the same run begin, lease, continuation, deadline and
-transcript behavior. The mode only changes the prompt text.
-
-## Child failure backoff
-
-Each reasoning child exit is classified as `ok`, `rate_limited`,
-`provider_error`, `deadline` or `other` (`classifyChildResult`, patterns in
-`CHILD_FAILURE_PATTERNS`). After consecutive `rate_limited` or `provider_error`
-failures, the next invocation waits min(2^n, 30) minutes, where n is the failure
-count (2, 4, 8, 16, 30, 30). An `ok` exit resets the count. `deadline` and
-`other` are logged but do not change it. A failed child is never relaunched in
-the same invocation.
-
-The state is one JSON object `{ consecutiveFailures, lastKind, lastAt,
-notBefore }`, written atomically (temp file, then rename) with mode 0600. The
-default path is `${XDG_STATE_HOME:-$HOME/.local/state}/x_test/growth-runner-backoff.json`;
-the parent directory is created on write with mode 0700. Set
-`X_GROWTH_AGENT_BACKOFF_FILE` to use another path. Set
-`X_GROWTH_AGENT_BACKOFF=off` to disable the gate. A missing or corrupt file means
-no backoff. Classification reads the last 16 KiB of the child's combined
-stdout/stderr. `runChild` forwards that output unchanged as it arrives, so a
-429 or 5xx line in the output is what drives `rate_limited` or `provider_error`.
+`npm run growth-agent` uses a different entry point. Its default controller mode
+runs one finite cache-fed tick and exits. `executor` is an alias for that tick.
+`legacy` is retired and rejected. These settings do not start an attached agent.
+The retired elapsed-time loop and its continuation recipe are not current
+operating instructions. Existing run recovery and publication rules below apply.
 
 ## Resume work before discovery
 

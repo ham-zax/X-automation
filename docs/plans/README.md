@@ -1,6 +1,14 @@
 # Implementation Plan Index
 
-These files are the authoritative execution sequence for the network-first growth system. Phases 1A-1D and 2-6 plus the shared AI runtime/provider layer are implemented. The plan files now serve as executable design/history for the current runtime and remaining optional work.
+`TASKS.md` at the repository root owns active task status and dependencies.
+These plans retain design history and scoped proposals. They do not override
+current code, operating contracts or later owner decisions. Phases 1A-1D and
+2-6 plus the shared AI runtime/provider layer are implemented.
+Current operator/Writer settings live in `../AGENT_WORKFLOW.md`.
+Reply integration evidence lives in `../research/REPLY_CONTRACT_INTEGRATION_2026-10-31.md`.
+Completed Reply integration and operator/Writer implementation plans are removed.
+Their final interfaces and evidence remain in those documents and `TASKS.md`.
+Git history retains the original plans.
 
 Do not implement later phases by inventing interfaces that earlier plans have not established yet.
 

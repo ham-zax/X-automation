@@ -35,7 +35,9 @@ Local Node.js human+AI operating system for `@ham_zax`. The runtime discovers so
 - [`docs/RELATIONSHIP_INTELLIGENCE.md`](docs/RELATIONSHIP_INTELLIGENCE.md) — implemented target scoring, relationship profiles/events/stages, Engage Next discovery/follow-up workflow, and network analytics contracts.
 - [`docs/ACCOUNT_HEALTH_AND_VISIBILITY.md`](docs/ACCOUNT_HEALTH_AND_VISIBILITY.md) — implemented HEALTHY/WATCH/CONSTRAINED observability, provenance-preserving Under-the-Hood snapshots, soft saturation/repetition diagnostics, Network Quality, and InteractionYield.
 - [`docs/ALGORITHM_EVIDENCE_LEDGER.md`](docs/ALGORITHM_EVIDENCE_LEDGER.md) — non-authoritative evidence registry separating code-backed mechanisms, official policy, account observations, hypotheses, and retired claims.
-- [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — canonical behavior-realization contract for the final Writer.
+- [`docs/REPLY_GENERATION_PROMPT.md`](docs/REPLY_GENERATION_PROMPT.md) — compact Reply contract shared by the Writer and operator.
+- [`docs/POST_GENERATION_PROMPT.md`](docs/POST_GENERATION_PROMPT.md) — Writer contract for Originals, Quotes and Threads.
+- [`ops/systemd/README.md`](ops/systemd/README.md) — current ARM entry points and configurable operator/Writer setup.
 - [`docs/research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md`](docs/research/x_creator_phase2/V4_RESEARCH_REASSESSMENT.md) — verified V4 corpus/reply reassessment and research-to-production limits.
 - [`docs/research/x_creator_phase2/HAMZA_X_PERSONA_EXPERIMENT.md`](docs/research/x_creator_phase2/HAMZA_X_PERSONA_EXPERIMENT.md) — experimental persona/behavior model, not permanent doctrine.
 - [`docs/plans/X_CONTENT_PERSONA_SYSTEM_OVERHAUL.md`](docs/plans/X_CONTENT_PERSONA_SYSTEM_OVERHAUL.md) — V4-reanchored doctrine/runtime/persona migration plan.

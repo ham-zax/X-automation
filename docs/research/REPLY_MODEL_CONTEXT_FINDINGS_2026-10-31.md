@@ -1,5 +1,9 @@
 # Reply content findings before implementation
 
+Historical experiment results. Runtime integration now uses the compact Reply
+contract. Operator and Writer selection live in `../AGENT_WORKFLOW.md`.
+Later implementation does not establish live quality acceptance for every model.
+
 This document records parent assessments of actual reply text. Markdown, fences
 and output formatting do not reduce the content assessment. Separate protocol
 checks remain available in each raw experiment. No model is selected for deployment.

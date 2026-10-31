@@ -1,5 +1,10 @@
 # Growth OS: problem statement and evidence for independent assessment
 
+Historical problem brief. Subsequent compact Reply integration and configurable
+operator/Writer implementation appear in `REPLY_CONTRACT_INTEGRATION_2026-10-31.md`
+and `../AGENT_WORKFLOW.md`. The experiments below remain evidence of the older
+conditions, not a statement that implementation still awaits a decision.
+
 Date: 31 October 2026. Repository: `/home/ubuntu/repo/x_test`.
 Account: `@ham_zax`. Latest experiment commit: `651cb33`.
 Purpose: give an independent frontier model enough context to assess the problem.

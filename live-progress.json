@@ -1,0 +1,60 @@
+{
+  "timestamp": "2026-10-13T20:45:26.089Z",
+  "sessionId": "luna-arm-20261013T203844Z-15053765",
+  "runId": "4f998cb0-7c83-40c3-bad8-f154c7ce4f55",
+  "passNumber": 1,
+  "stage": "finished_and_browser_cleaned",
+  "verifiedAccount": {
+    "handle": "ham_zax",
+    "profileUrl": "https://x.com/ham_zax",
+    "browserTargetId": "859DF883189AD94358C9CDD99F711E2B"
+  },
+  "leaseStatus": {
+    "status": "none",
+    "active": false
+  },
+  "confirmedActions": {
+    "reply": 0,
+    "quote": 0,
+    "repost": 0,
+    "original": 0,
+    "thread": 0,
+    "like": 0,
+    "follow": 0
+  },
+  "actionUrls": [],
+  "skips": [
+    "Rest window active at 02:14 Asia/Kolkata; urgentCandidates=0; no public action taken.",
+    "For You: five candidates rejected for no purposeful action, expired opportunity, or already acted source; one promoted XBusiness post skipped by ingest.",
+    "Older mentions/replies reviewed; no new response or urgent signal warranted an action."
+  ],
+  "failures": [],
+  "unresolvedAttemptIds": [],
+  "ownedBrowserTargetId": "859DF883189AD94358C9CDD99F711E2B",
+  "passSummary": {
+    "forYouAccepted": 5,
+    "forYouPromotedSkipped": 1,
+    "nicheSearches": [
+      "coding agent",
+      "open weights",
+      "sqlite OR postgres"
+    ],
+    "scoutUrgentCandidates": 0,
+    "accountHealth": "watch"
+  },
+  "runStatus": "completed",
+  "reconciliation": {
+    "publicationAttempts": 0,
+    "confirmedPublished": 0,
+    "closedUnresolved": 0,
+    "investigating": 0,
+    "unresolvedAttemptIds": []
+  },
+  "browserCleanup": {
+    "ownedTargetId": "859DF883189AD94358C9CDD99F711E2B",
+    "closed": true,
+    "ownedTargetAbsent": true,
+    "baselineTabsPreserved": true,
+    "remainingTabCount": 9
+  }
+}
