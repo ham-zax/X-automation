@@ -1,5 +1,22 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+## Owner stop checkpoint — 1 November 2026
+
+Hamza requests a complete stop until an explicit re-arm instruction. The user
+operator timer is disabled and inactive. The operator service has no process.
+The authenticated owner stop endpoint sets Growth Operator delegation to
+stopped, revision 3. There is no active Growth Run, lease or unfinished send.
+Do not restart or re-enable the operator from older deployment instructions.
+Read-only inspection and owner-requested maintenance remain allowed.
+
+The last completed run a4a4e5c9-e55a-4b4d-9e9f-3a584cd35b6c has five confirmed
+published Replies. Its record includes humor, a reaction, open-source project
+support and a building-in-public answer. One Trending read preserved older
+results. One response refresh hit HTTP 429. Launcher cleanup later reported one
+extra tab of uncertain ownership. No unowned tab was closed. This cleanup
+warning remains a future investigation item, not permission to resume now.
+The 20 historical closed-unresolved attempts remain unchanged.
+
 ## Timer and bootstrap repair, 1 November 2026
 
 The installed cadence override cleared all inherited timer expressions and then

@@ -10,6 +10,15 @@ Your global instructions cover tools, working style and the engineering workflow
 file adds only what is specific to this repository. Where the two disagree on how to
 operate X or Growth OS state, this file wins.
 
+## Owner stop instruction — 1 November 2026
+
+Hamza explicitly stops the live Growth OS operator until he asks to re-arm it.
+Do not start the operator, enable its timer, begin a live Growth Run, or publish
+on the account without that new instruction. Read-only inspection and requested
+maintenance remain allowed. Older live-operation instructions do not supersede
+this stop. The timer is disabled, the service is stopped, and the saved Growth
+Operator delegation is stopped. Re-arming requires a new explicit owner request.
+
 ## What you are trying to do
 
 - Goal: relevant follower growth for a **developer + builder in tech** identity, through
