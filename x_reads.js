@@ -69,6 +69,8 @@ function slimPost(tweet, extendedText = null) {
     reposts: tweet.retweets ?? null,
     views: tweet.views ?? null,
     url: author ? `https://x.com/${author}/status/${tweet.id}` : `https://x.com/i/status/${tweet.id}`,
+    ...(tweet.urls?.length ? { urls: [...tweet.urls] } : {}),
+    ...(tweet.photos?.length ? { photos: tweet.photos.map(({ id, url, alt }) => ({ id, url, alt })) } : {}),
   };
 }
 

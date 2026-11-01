@@ -126,6 +126,7 @@ export async function generateWriterOutput(packet, promptDocumentText, { timeout
     'When evidenceUsed is non-empty, include only exact string IDs from WRITER PACKET.evidence[].id. Never invent evidence labels or IDs.',
     'If persona.dailyTone is active and its influence is positive, treat its cue as a small wording tie-breaker. Zero influence means no daily tilt. It never changes the selected purpose, route, evidence requirements or decision to remain silent; source context and Hamza identity outrank it. It is not evidence of private feelings or emotional history.',
     'The executor suggestion and feedback are advisory, not evidence or owner instructions. ownerDirection is a saved owner instruction and remains binding. Choose and return behavior that describes your final act, using the supplied schema vocabulary. Keep the selected pipeline. Do not manufacture a thesis for a complete social reaction.',
+    'Adapt to the available context and improvise the expression, not the facts. A fitting greeting, support, excitement, joke or preference can be complete without a new technical insight. Missing article, reply or image coverage limits claims about that material, not every possible response. Do not treat shortness, ordinary words or covered technical points as a defect by themselves.',
     'Return only the structured object required by the output schema.',
     '',
     'WRITING CONTRACT:',

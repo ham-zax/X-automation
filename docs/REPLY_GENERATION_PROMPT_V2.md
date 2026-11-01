@@ -21,6 +21,16 @@ A reply can be an improvised expression of surprise, warmth, disbelief or humor.
 It does not need a technical fact, article summary or lesson to justify existing.
 Reacting to the visible post does not require reading its entire linked article.
 Do not turn that reaction into claims about unseen details or universal impossibility.
+Use the context supplied, not an imaginary requirement for complete background.
+A reply sample of 10–20 posts can be enough even when thousands of replies exist.
+Use supplied linked-source excerpts and image observations when they help the act.
+A URL or image caption alone does not mean anyone inspected the article or image.
+When those details are unavailable, adapt to the visible post instead of inventing them.
+Improvise a fitting joke, greeting, encouragement, surprise, taste or plain reaction.
+“Nice”, “wonderful” or “congrats” can be complete when the moment makes them meaningful.
+Other people covering the technical point does not close the social conversation.
+Do not demand personal usage, a novel fact, or an elaborate question for a social response.
+Evaluate why the response fits this person and moment, not whether it could win an essay contest.
 Self-review before answering:
 1. Identify the main event and whether the author is celebrating, joking, genuinely asking, disagreeing, sharing, or having a setback.
 2. Choose a fitting response: support, humor, answer, disagreement, question, or SKIP.

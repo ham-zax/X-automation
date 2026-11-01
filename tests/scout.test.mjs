@@ -112,7 +112,7 @@ test('Original editorial review is not suppressed by fixed intervals or a daily 
   ]) {
     const result = build({ attempts });
     assert.ok(originalCard(result), 'editorial review remains possible');
-    assert.equal(originalCard(result).reason.requiresEditorialEvidence, true);
+    assert.equal(originalCard(result).reason.requiresEditorialReview, true);
     assert.equal(result.pace.nextOriginalAt, null);
   }
 });

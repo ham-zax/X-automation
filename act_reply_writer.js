@@ -1,6 +1,7 @@
 import { buildWriterPacket, applyWriterOutput } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { REPLY_CONTRACT, projectReplyPacket, replyOutputSchema } from './reply_contract.js';
+import { xRead } from './x_reads.js';
 import { extractTweetIdFromUrl, validateActInput } from './act.js';
 import { getCandidate, getDraftByCandidate, saveDraft, upsertCandidates, ensureQueueItem, saveQueueItem, getBlockingActAttemptForTarget, requireActWriterSelection, recordServerWriterGeneration, runStoreTransaction } from './store.js';
 
@@ -20,52 +21,82 @@ export function replyModelProvenance(payload) {
 
 // Both fields contain observed, untrusted context. Oversized excerpts must be
 // selected explicitly by the operator rather than silently clipped mid-claim.
+function preparationError(message) {
+  return Object.assign(new Error(message), {
+    code: 'reply_input_invalid', retryable: true, phase: 'preparation',
+    nextStep: 'Correct the input and retry reply-generate. Omit conversationContext to collect a bounded reply sample automatically. This command never sends.',
+  });
+}
+
 function observedReplyContext(payload) {
   const conversationContext = payload.conversationContext ?? null;
   const evidence = payload.evidence ?? [];
-  if (!Array.isArray(evidence)) throw new Error('reply-generate evidence must be an array.');
+  if (!Array.isArray(evidence)) throw preparationError('reply-generate evidence must be an array.');
   if (evidence.some(item => !item || typeof item !== 'object' || !item.id || !item.resolvedUrl
     || typeof item.summary !== 'string' || typeof item.partial !== 'boolean'
     || !['source_claim', 'primary_supported'].includes(item.status))) {
-    throw new Error('Evidence requires id, resolvedUrl, observed summary and partial coverage flag.');
+    throw preparationError('Evidence requires id, resolvedUrl, observed summary, status and partial coverage flag.');
   }
   if (conversationContext !== null && (typeof conversationContext !== 'object' || Array.isArray(conversationContext)
     || typeof conversationContext.sourceUrl !== 'string' || !conversationContext.sourceUrl.trim()
     || typeof conversationContext.partial !== 'boolean' || !Array.isArray(conversationContext.posts)
     || conversationContext.posts.some(post => !post || typeof post.id !== 'string' || !post.id.trim()
       || typeof post.url !== 'string' || !post.url.trim() || typeof post.text !== 'string'))) {
-    throw new Error('conversationContext requires sourceUrl, partial and observed posts with id, url and text.');
+    throw preparationError('conversationContext requires sourceUrl, partial and observed posts with id, url and text.');
   }
   if (JSON.stringify({ conversationContext, evidence }).length > 16000) {
-    throw new Error('Reply context exceeds 16000 characters. Select bounded excerpts and mark partial coverage.');
+    throw preparationError('Reply context exceeds 16000 characters. Select bounded excerpts and mark partial coverage.');
   }
   return { conversationContext, evidence };
 }
 
 // Preparation only. The bridge checks the lease before and after this call.
 // Existing AI execution records own provenance. No claim or publication is made.
-export async function generateActReply(payload, { generate = generateWriterOutput, env = process.env } = {}) {
-  if (!payload.runId || !payload.sessionId) throw new Error('reply-generate requires runId and sessionId.');
+export async function generateActReply(payload, { generate = generateWriterOutput, env = process.env, readContext = xRead } = {}) {
+  if (!payload.runId || !payload.sessionId) throw preparationError('reply-generate requires runId and sessionId.');
   const targetUrl = String(payload.targetUrl || '').trim();
   const targetTweetId = String(payload.targetTweetId || extractTweetIdFromUrl(targetUrl)).trim();
   let url;
-  try { url = new URL(targetUrl); } catch { throw new Error('reply-generate requires an exact X status targetUrl.'); }
+  try { url = new URL(targetUrl); } catch { throw preparationError('reply-generate requires an exact X status targetUrl.'); }
   if (url.protocol !== 'https:' || url.hostname !== 'x.com' || !/^\d{5,25}$/.test(targetTweetId)
-    || extractTweetIdFromUrl(targetUrl) !== targetTweetId) throw new Error('reply-generate target URL and ID must match.');
+    || extractTweetIdFromUrl(targetUrl) !== targetTweetId) throw preparationError('reply-generate target URL and ID must match.');
   const sourceText = String(payload.card?.sourceText || '').trim();
-  if (!sourceText) throw new Error('reply-generate requires the exact observed card.sourceText.');
-  if (payload.behavior?.decision !== 'ACT') throw new Error('reply-generate requires an explicit ACT behavior.');
+  if (!sourceText) throw preparationError('reply-generate requires the exact observed card.sourceText.');
+  if (payload.behavior != null && payload.behavior.decision !== 'ACT') {
+    throw preparationError('Optional behavior must be an ACT suggestion, or omit behavior and let the Writer choose.');
+  }
   if (getBlockingActAttemptForTarget(targetTweetId)) throw new Error('reply-generate target has an existing publication fence.');
   const candidateKey = String(payload.candidateKey || '').trim();
   const savedAtStart = getCandidate(candidateKey || targetUrl);
   const draftAtStart = getDraftByCandidate(candidateKey || targetUrl);
-  if (savedAtStart && extractTweetIdFromUrl(savedAtStart.url) !== targetTweetId) throw new Error('reply-generate candidate does not match targetUrl.');
+  if (savedAtStart && extractTweetIdFromUrl(savedAtStart.url) !== targetTweetId) throw preparationError('reply-generate candidate does not match targetUrl.');
+  const context = observedReplyContext(payload);
+  if (!context.conversationContext) {
+    // Collect once at the source owner instead of asking an executor to recreate
+    // reader output by hand. A failed sample does not block a source-only act.
+    let sample;
+    try { sample = await readContext({ kind: 'replies', id: targetTweetId, mode: 'top', limit: 20 }); }
+    catch { sample = { ok: false }; }
+    const observed = sample?.ok === true;
+    context.conversationContext = { sourceUrl: targetUrl, partial: true, posts: [],
+      readStatus: observed ? 'observed' : 'unavailable',
+      note: observed ? 'Bounded reply sample, not complete coverage.' : 'Reply sample unavailable. A fitting reaction to the observed source is still possible.' };
+    for (const post of observed && Array.isArray(sample.posts) ? sample.posts.slice(0, 20) : []) {
+      if (!post?.id || !post.url || typeof post.text !== 'string') continue;
+      context.conversationContext.posts.push(post);
+      if (JSON.stringify(context).length > 16000) {
+        context.conversationContext.posts.pop();
+        break;
+      }
+    }
+    observedReplyContext(context);
+  }
   const candidate = { ...savedAtStart, key: candidateKey || targetUrl, source: 'x', url: targetUrl,
     title: `@${url.pathname.split('/')[1]}`, text: sourceText };
-  const context = observedReplyContext(payload);
   const writerBase = draftAtStart || { body: '', editor: { pipeline: 'reply' } };
   const packet = buildWriterPacket({ candidate, ...context, queueItem: { pipeline: 'reply', behavior: payload.behavior },
     draft: writerBase, topicBrief: payload.resolvedTopicBrief || null });
+  packet.suggestedBehavior = payload.behavior || null;
   if (payload.feedback) packet.executorFeedback = String(payload.feedback);
   const operator = operatorModelReport(env);
   const mode = env.X_GROWTH_REPLY_WRITER_MODE || 'profile';

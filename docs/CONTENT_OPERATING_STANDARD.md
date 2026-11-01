@@ -14,6 +14,36 @@ The universal principle is:
 
 A social-only action can be valid. A purposeless activity-maximizing action cannot.
 
+## Adaptive context and improvisation
+
+Read enough for the intended act, not every possible detail. The operator reads
+exact source text and a bounded sample of relevant replies, usually 10–20.
+When a link matters, open it with the available web reader or browser and gather
+useful excerpts. When an image matters, a capable operator inspects the actual
+image and supplies observations with its source URL. Reading a caption is not
+viewing an image. Video playback is optional, not a condition for participation.
+
+Use replies, links and images together when useful. Missing material does not
+block every response. Adapt the response to what is actually visible. Interpret
+ordinary conversational meaning in good faith. Improvise the expression and
+social act without inventing owner history, measurements or unseen details.
+
+A brief greeting, “nice”, congratulations, a joke or excitement can fulfill a
+real social purpose. Existing technical answers do not exhaust that purpose.
+Do not reject a response solely because it is short, familiar, nontechnical or
+not a new insight. Do not broadcast the same reaction indiscriminately.
+
+Apply the same judgment across formats. Replies join the visible exchange.
+Quotes may share a source with a short reaction or opinion. Originals make their
+object or occasion clear without a compulsory lesson. Threads use multiple posts
+when the idea benefits from a sequence, not to inflate a short social reaction.
+Source-dependent factual claims retain their evidence and review requirements.
+
+A preparation or read failure is an operational blocker, not a content rejection.
+Correct recoverable requests and retry preparation with the selected Writer.
+If the same error repeats without progress, defer with an expiry and report it.
+Publication uncertainty remains separate. Never resend an uncertain public action.
+
 ---
 
 # 1. Authority and evidence boundary
@@ -62,7 +92,7 @@ social_presence
 
 The system must be able to state why the action should exist in this context.
 
-A label is not proof of purpose. `relationship`, `humor`, or `discovery` cannot be used as a loophole for generic engagement filler.
+A label alone is not proof of purpose. The source, occasion or exchange supplies the reason to participate. A natural social response needs no novelty pitch or technical payload.
 
 ## 2.2 Factual and biographical provenance
 

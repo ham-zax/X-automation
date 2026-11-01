@@ -3225,6 +3225,10 @@ async function main() {
 }
 
 main().catch((error) => {
-  process.stderr.write(`${JSON.stringify({ error: error.message })}\n`);
+  process.stderr.write(`${JSON.stringify({ error: error.message,
+    ...(error.code === 'reply_input_invalid' ? {
+      code: error.code, retryable: error.retryable, phase: error.phase, nextStep: error.nextStep,
+    } : {}),
+  })}\n`);
   process.exit(1);
 });

@@ -58,7 +58,7 @@ export function parseStatusUrl(url) {
 }
 
 // Applies to every T1 card; returned once per scout read instead of in each card.
-export const SCOUT_CARD_GUIDANCE = 'Choose a Reply for direct conversation; a Quote only for a genuinely different valuable perspective; for source-backed Original/Thread inspect and route the exact candidate key through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. No score/style label authorizes an action.';
+export const SCOUT_CARD_GUIDANCE = 'Choose a Reply for direct conversation; a Quote when the source plus a fitting reaction or perspective belongs on the profile; for source-backed Original/Thread inspect and route the exact candidate key through the governed editorial path when its standalone utility merits that work; a Repost via social-discover when unchanged sharing is better. A fitting greeting, congratulations, joke or reaction can be complete. Covered technical points do not rule out a social response. No score/style label authorizes an action.';
 
 export function buildScoutCards(input = {}) {
   const now = Number(input.now);
@@ -211,10 +211,10 @@ export function buildScoutCards(input = {}) {
     reason: {
       summary: window.rest
         ? 'Rest window: no ordinary original. Only a genuinely verified major launch/breakthrough with explicit recent primary-source evidence may interrupt sleep.'
-        : 'Independent original editorial review, NOT a posting task. Prefer replies. Only publish when a timely first-hand insight, specific reader benefit, distinct angle and verified sources make it worth space on a small personal timeline. Otherwise skip without drafting. No quota.',
+        : 'Consider an Original or Thread when a clear observation, opinion, joke, social moment, owned update or useful technical idea belongs on the profile. First-hand experience and a novel technical insight are not universal requirements. Supply evidence for factual claims that need it. Use a Thread only when sequence helps. Independent review and queue approval still apply. No quota.',
       inspiration,
       xDiscoveryInspirations, // advisory: exact existing candidate keys, not new queue cards
-      requiresEditorialEvidence: true,
+      requiresEditorialReview: true,
       audienceSelectivity: input.audience?.selectivity ?? 100,
       editorialMinimum: policy?.lanes?.original?.editorialMinimum ?? 80,
       contentGuidance: policy?.editorial?.voiceGuidance || null,

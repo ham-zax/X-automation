@@ -439,11 +439,6 @@ function genericQuote(text) {
   return /^\s*(?:this is (?:huge|great|wild|massive)(?: for developers)?|huge for developers|game changer|big news|we are so back)[.!]?\s*$/i.test(String(text || ''));
 }
 
-function genericSocialFiller(text) {
-  return isGenericSocialPraise(text)
-    || /^\s*(?:nice|great|cool|awesome|amazing|solid)\s+(?:project|build|work|idea|tool)[.!]?\s*$/i.test(String(text || ''));
-}
-
 function normalizeOwnerClaimGrammar(text) {
   return String(text || '')
     .replace(/[’]/g, "'")
@@ -503,6 +498,11 @@ function behaviorContextSupported(behavior, { pipeline, candidate, relationship,
   if (!behavior || behavior.decision !== 'ACT' || !behavior.reasonToExist) return false;
   if (!behaviorDecisionSupportsSocialOnly(behavior)) return true;
 
+  // The Writer selects the contextual social act. Keyword heuristics do not
+  // overrule that selection merely because the source has no launch/humor cue.
+  // Factual review, exact-generation binding and publication authority still apply.
+  if (draft?.editor?.writerBehaviorSelected === true && String(candidate?.text || '').trim()) return true;
+
   if (pipeline === 'reply' || pipeline === 'quote') {
     return socialPurposeContextAvailable({
       purpose: behavior.primaryPurpose,
@@ -519,7 +519,7 @@ function behaviorContextSupported(behavior, { pipeline, candidate, relationship,
 function socialActRealized(behavior, { pipeline, draft } = {}) {
   if (!behaviorDecisionSupportsSocialOnly(behavior) || !['reply', 'quote'].includes(pipeline)) return true;
   const text = draftEvidenceText(draft, pipeline);
-  return Boolean(String(text || '').trim()) && !genericSocialFiller(text);
+  return Boolean(String(text || '').trim());
 }
 
 function blocks(text) {

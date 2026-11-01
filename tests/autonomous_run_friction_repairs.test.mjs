@@ -606,7 +606,7 @@ await test('social-only autonomous reply above the priority floor no longer requ
   assert.equal(evaluation.exactReply, 'That AI agent tooling milestone is worth celebrating — congrats on shipping it.');
 });
 
-await test('support purpose accepts concrete participation in a creator showcase without making generic filler sufficient', async () => {
+await test('support purpose accepts concrete or brief context-fitting participation in a creator showcase', async () => {
   const sourceText = 'I built a physical Codex pet for OpenAI Dev Day! Should I make more to give away? And what features?';
   const exactReply = 'Definitely make more. Feature request: it purrs when a PR merges and gives a quiet angry chirp every time CI fails.';
   assert.equal(behavior.socialPurposeContextAvailable({ purpose: 'support', sourceText }), true);
@@ -676,7 +676,7 @@ await test('support purpose accepts concrete participation in a creator showcase
     recentReplies: [],
     recentReplyArchetypes: [],
   });
-  assert.equal(generic.publishable, false);
+  assert.equal(generic.publishable, true, 'Brief praise fits this explicit creator showcase without a new technical point.');
   const live = await autonomous.ensureAutonomousReplyLiveDecision(queued, { grant: store.getAutonomousReplyGrantState() });
   assert.equal(live.decision?.decision, 'eligible_live', JSON.stringify({ reason: live.reason, evaluation: live.evaluation }));
   assert.equal(live.decision?.exactReply, exactReply);

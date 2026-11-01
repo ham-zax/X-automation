@@ -54,8 +54,11 @@ The browser lease and current publication gates remain in force.
 - `operator` mode: the operator writes Replies itself, then calls `act`.
   No extra Writer call is needed.
 - `profile` mode: call `reply-generate` with the current run/session, target URL,
-  exact `card.sourceText`, suggested ACT `behavior`, and optional `candidateKey`.
-  The Writer chooses the fitting act. Include observed `conversationContext` and
+  exact `card.sourceText`, and optional `candidateKey` and ACT `behavior` suggestion.
+  The Writer chooses the fitting act. Without `conversationContext`, preparation
+  collects one Top sample of up to 20 replies. Read failures produce an explicit
+  unavailable sample and still allow a fitting source-only response. Supplied
+  context avoids the extra read. Include observed `conversationContext` and
   available `evidence` when needed. `conversationContext` contains `sourceUrl`,
   `partial` and `posts`, each with `id`, `url` and observed `text`. Evidence entries carry `id`, `resolvedUrl`,
   `summary`, `status`, `partial` and optional `location`. Context and evidence total
@@ -64,10 +67,22 @@ The browser lease and current publication gates remain in force.
   It can use the same model or a different model from the operator.
   Pass generated `text`, `draftId`, `writerInvocationId` and saved `behavior`
   to `act` with the existing target
-  and card fields. A skip ends that opportunity. Report a Writer failure.
-  Do not silently substitute another model.
+  and card fields. A content skip ends that opportunity. An operational failure
+  does not mean the content is unsuitable. `reply_input_invalid` includes
+  `retryable:true`, `phase:"preparation"` and a corrective `nextStep`. Correct
+  the input and retry preparation. If the same error repeats without progress,
+  defer with an expiry and report it. Never retry an uncertain public send or
+  silently substitute another model.
 
 `reply-generate` returns preparation only. It takes no claim and sends nothing.
+The operator gathers useful linked-source context through web tools and inspects
+relevant images with an image-capable model. `x-read` exposes expanded `urls` and
+`photos` metadata. Writers receive the supplied observations as text evidence,
+not raw image attachments. Do not claim visual inspection from a URL alone.
+Use `sourceKind:"image_observation"`, the image source URL and `partial:true`
+for bounded image observations. Ordinary reactions do not require exhaustive
+source, image or thread coverage. The adaptive policy in
+`CONTENT_OPERATING_STANDARD.md` applies to every authoring format.
 Optional topic citations use the existing `topicBrief` selector.
 Existing Writer profile fallbacks still apply and appear in execution metadata.
 Originals and Threads retain their existing Writer and independent review path.

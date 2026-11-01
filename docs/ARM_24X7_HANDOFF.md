@@ -1,5 +1,43 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+## Adaptive participation update, 1 November 2026
+
+The owner clarifies that improvisation and adaptive context collection are core
+behavior, not exceptions. The operator uses exact posts, a useful reply sample,
+linked-source excerpts and actual image observations as the situation needs.
+Missing background limits dependent claims, not every social response. The
+shared operating standard, both Writer prompts and live brief now state this.
+
+Reply preparation collects up to 20 Top replies when conversationContext is
+omitted. It retains complete sampled posts within the existing context budget,
+marks coverage partial and marks a failed sample unavailable. A source-only
+reaction remains possible. Optional executor behavior stays optional through
+projection. The final Writer-selected ACT behavior remains required for a send.
+Invalid preparation input carries a retryable error and corrective next step.
+The operator repairs it or uses an expiring defer instead of a permanent skip.
+
+Source reads now preserve expanded links and photo URL/alt metadata. The
+operator can inspect images with its vision tools. Writer calls receive textual
+observations as evidence, not raw image attachments. No claim of automatic
+visual inspection, video understanding or universal model capability is made.
+
+Social purpose gates accept the Writer's contextual act without a fixed source
+keyword or a prior relationship. Brief praise is no longer rejected merely for
+being brief. Scout no longer requires every Original to supply first-hand
+insight. Its internal card now says requiresEditorialReview, not a universal
+requiresEditorialEvidence. Independent standalone review, exact text binding,
+publication claims, account policy and uncertain-send protection remain active.
+
+All 412 existing serial JavaScript checks pass after updating the obsolete brief-praise
+assertion and the renamed scout-card field. Disposable checks cover automatic
+bounded samples, unavailable replies, optional suggestions, corrective errors,
+photo/link metadata, brief social payoff and preservation of the supplied source.
+No new permanent test file, dependency, schema table or hash gate is added.
+Three unsent candidates rejected for request-format errors or a generic greeting
+are cleared for reconsideration after checking their publication fences.
+Live results after activation need a fresh observation. Code checks do not
+establish voice quality, visual understanding or follower growth.
+
 ## Discovery cadence update, 1 November 2026
 
 The owner requests alternating fresh Trending and For You reads, 150 seconds
