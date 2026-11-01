@@ -1,0 +1,14 @@
+{
+  "id": "2116787522923892798",
+  "author": "jurlycat",
+  "text": "Opus plans. DeepSeek implements. A test runner checks the result.\n\nThat’s the architecture behind Cheap Agent, an open-source tool for Claude Code.\n\nOpus writes a task specification. A cheaper worker reads the code, writes a failing test, and implements the fix inside an isolated git worktree.\n\nThe harness runs the tests itself. Passing changes land uncommitted for human review. If the worker gets stuck, a Sonnet helper can take over.\n\nIn the author’s feature demo:\n154k → 57k Opus tokens. A 63% reduction.\n\nOn small SWE-bench Verified subsets:\n\n→ Everyday bugs: 59% fewer Opus tokens, both setups solved 7/7.\n→ Hard bugs: 55% fewer Opus tokens, Cheap Agent solved 6/9 versus 7/9 for plain Opus.\n\nThese are author-reported results from small samples. Savings measure Opus tokens; total cost also includes workers and helpers.\n\nWhat makes this interesting is the context budget.\n\nEvery source file, test log, and retry handled by a worker reduces what the expensive model needs to process.\n\nGive the planner concise results, give workers clear boundaries, and build an escalation path for failures.\n\nThe orchestration architecture can matter as much as the model you choose.\n\nhttps://t.co/FsrPaYUKRB",
+  "textSource": "note_tweet",
+  "inReplyTo": null,
+  "conversationId": "2116787522923892798",
+  "at": "2026-11-01T07:00:48.000Z",
+  "likes": 28,
+  "replies": 25,
+  "reposts": 5,
+  "views": 778,
+  "url": "https://x.com/jurlycat/status/2116787522923892798"
+}

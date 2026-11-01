@@ -49,3 +49,21 @@ reactions do not need a technical contribution or a full linked-article reading.
 The evidence and approval snapshots now include current editorial/source state.
 The final review is bounded, not an independent inspection of every changed file.
 No second final reviewer is dispatched after the repair round.
+
+Live follow-up after implementation commit0a9f2bd: the configured Agent Browser
+reads the authenticated @ham_zax profile and five fresh For You cards. The first
+snapshot only shows navigation/loading. Waiting for an article resolves that
+observation gap. Two separately owned tabs close cleanly with no warnings. The
+trusted HTTP reader then retrieves the full note_tweet for jurlycat's Cheap Agent
+post, posted2026-11-01T07:00:48Z. Live source/packet/request/output are preserved.
+Terra6.1 medium generates one additional unpublished live-source Reply:
+
+> The uncommitted handoff is a nice touch. The harness can check the work, and a human still gets to review the diff before it lands.
+
+This seventh author capture belongs to the bounded live follow-up, not the six
+frozen comparison captures. It is preparation only. No Growth Run or publication
+claim starts, and no send occurs. It does not check the whole live claim/send path.
+The parent finds the reaction grounded in the visible post. Owner voice acceptance
+and repeated live reliability remain unestablished. No technical lesson is required.
+The dashboard restarts onto the committed code and its content_review endpoint
+returns HTTP200. The continuous operator and timer remain stopped.

@@ -15,7 +15,9 @@ The evaluator imports the active contract and separates diagnostic review failur
 See `docs/research/production-reply-failure-2026-11-01/repair-terra-medium/README.md`
 and its OPERATIONS.md for actual evidence and limits. The ledger records their integration state.
 The operator and timer remain stopped pending bounded live acceptance.
-The final review found issues, followed by a parent repair round and focused checks. Historical entries below are dated evidence, not current deployment.
+The final review found issues, followed by a parent repair round and focused checks. A later bounded read-only live check passes with an unpublished Terra Reply.
+The dashboard loads the committed repair. Public sending and sustained operation
+remain untested. Historical entries below are dated evidence, not current deployment.
 No retained historical document or private backup is removed by this update.
 
 

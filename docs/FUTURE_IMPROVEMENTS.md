@@ -135,3 +135,21 @@ from a static writing simulation. No production change follows from these propos
 The first request reconstruction check finds a baseline newline added by print().
 The manifest records the exact suffix. Proposal: capture request bytes before
 dispatch in future experiments. Preserve the current request hash check.
+
+## November 1 repair retrospective proposals
+
+The initial handoff probe misses the UI scorer's queue-first behavior. Proposal:
+when changing the behavior contract again, include the real web generation and
+approval caller in the existing focused acceptance route. The corrected disposable
+probe already shows that seam, without adding a permanent test suite here.
+
+The first real standalone review reveals an optional schema property that Codex
+rejects. Proposal: consider a lightweight strict-schema check inside the existing
+profile test before a future model migration. Do not add another model call to
+every reply. No CI, hook, test or new validator is implemented by this proposal.
+
+Two interpretation rules drift and reject a plain social preference. The current
+repair shares their check, but lexical rules cannot prove arbitrary prose true.
+Proposal: future review calibration must separate social expression from factual
+assertions using diverse held-out cases before changing this boundary again.
+Do not treat more banned phrases as voice calibration or imply a perfect verifier.

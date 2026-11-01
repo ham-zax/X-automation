@@ -3,9 +3,9 @@
 The operator service is failed. Its timer is inactive. No new Growth Run starts.
 Terra6.1 medium authors through writer/reply_writer profile17. Sol6.1 high reviews
 through content_review profile18. DeepSeek remains the executor. No fallback binds.
-The running dashboard still loads the older code. Its role-filter endpoint rejects
-content_review. The unfiltered endpoint reads the new run receipts correctly.
-The dashboard needs a restart after integration. This is not a model failure.
+Before integration the dashboard process loads older code and rejects the new
+content_review filter. After commit0a9f2bd the dashboard restarts. The same endpoint
+returns HTTP200 with a content_review receipt. The older failure is process drift.
 
 The attached launcher now uses the existing persistent failure backoff. The exact
 “Free usage limit reached” message classifies as rate_limited. A disposable failed
@@ -31,4 +31,5 @@ The report therefore provides an aggregate disposition, not a full74-row audit.
 All74 remain due/uncaptured here. All20 closed-unresolved outcomes remain unknown.
 A later authenticated collector can add only observations it actually sees and
 must preserve their real capture time. This checkpoint neither resends old work
-nor invents recovered measurements. Current live authentication remains to check.
+nor invents recovered measurements. The later bounded browser check confirms the authenticated @ham_zax profile.
+Historical measurement windows remain uncaptured. No recovery is claimed.
