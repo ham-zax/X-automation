@@ -967,3 +967,27 @@ Brief retrospective: code review finds missed downstream queue consumers and an
 unbound editorial snapshot. The first true Codex review call exposes the optional
 schema incompatibility. Proposals, not more code, are appended to the existing
 FUTURE_IMPROVEMENTS.md. No global instructions, tests or skills change.
+
+Owner explicitly renews continuous24x7 operation after the bounded live check.
+The parent enables the existing user timer and starts the operator. Linger=yes.
+DeepSeek V4.1 max executes, Terra6.1 medium writes, Sol6.1 high reviews. The first
+launcher reports a real owned browser target and deadline. No public send is
+inferred from active service state. A cadence drop-in retains30-minute activation
+wakes, which can expire during the35-minute session. The versioned base timer
+changes to OnUnitInactiveSec=5min so a follow-up also occurs after each exit.
+Deploy the exact versioned timer, reload systemd and restart only the timer.
+The running operator and its owned target stay untouched. No authority changes.
+
+Owner scope correction: “24x7” describes the architecture goal during implementation,
+not authority to launch production now. The parent's preceding activation inference
+is retracted. Operator service and timer are stopped. Timer autostart is disabled
+so a reboot cannot launch it before the later model/deployment decision. The first
+attempt ends with a provider quota error and exact owned-target cleanup. The next
+wake is deferred by backoff. No new Growth Run or public action is established.
+The existing Pi profile test succeeds for the same DeepSeek model, but no operator
+runtime/model is switched. DeepSeek Flash adaptation and deployment stay deferred.
+
+Keep the versioned OnUnitInactiveSec=5min timer repair as architecture work. It
+ensures a follow-up after finite sessions instead of only timing from startup.
+The timer is validated and its installed definition read back. No production
+activation is part of delivery. Commit/push the remaining scoped timer/docs work.

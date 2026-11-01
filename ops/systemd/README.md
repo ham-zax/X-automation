@@ -111,3 +111,10 @@ Attached sessions classify child quota/provider failures and use the existing
 persistent growth-runner-backoff.json delay. The launcher reports actual deadline
 and elapsed timestamps. Deferred launches allocate no browser tab or model child.
 No automatic model substitution occurs. A timer wake does not prove a public action.
+
+November1 scope correction: 24x7 is the architecture goal. Deployment and DeepSeek
+Flash adaptation are deferred by the owner. The operator and timer are stopped,
+and timer autostart is disabled. The versioned timer uses OnUnitInactiveSec=5min
+so each finite session can schedule its successor after exit when later enabled.
+Existing activation-cadence drop-ins can coexist. systemd does not start a second
+copy of an already-running service. No operator runtime/model switch is deployed.

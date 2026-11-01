@@ -2,6 +2,12 @@
 
 ## Current repair checkpoint, 1 November 2026
 
+Latest owner scope: implement the architecture for24x7 use, commit and push.
+Keep production stopped and timer autostart disabled. DeepSeek Flash adaptation
+and actual deployment are later decisions. The earlier brief activation reflects
+a parent misunderstanding, not the current authority. No model switch follows.
+
+
 TASKS.md owns the GQ repair status. The active execution update in
 `docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md` supersedes earlier model
 assignments. Terra6.1 medium writes Replies, Originals, Quotes and Threads for
