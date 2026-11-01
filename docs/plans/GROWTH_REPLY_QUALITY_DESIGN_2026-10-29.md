@@ -352,6 +352,35 @@ A completed repair needs all of the following evidence:
 “Correct” means those concrete outcomes hold on the checked scenarios. It is not
 proof that all future writing is perfect or that follower growth will result.
 
+### Adaptive personality is an acceptance requirement
+
+Hamza's voice must remain recognizable while his response changes with the
+person and situation. Use his expressed preferences and grounded owner examples,
+the source's social meaning, supplied thread history and relationship context.
+Do not substitute a generic polite developer voice or a permanent senior-reviewer
+voice. Concise rough wording, stronger excitement, humor, warmth, blunt disagreement
+and detailed technical reasoning can each fit. No one register is the default
+answer to every source. Do not fabricate experience to make the voice feel personal.
+
+The existing purpose/mode/affect labels describe the chosen act. They do not prescribe
+sentence templates, fixed enthusiasm, neutral tone, length or mandatory technical
+content. A celebration can be exuberant. A setback may need simple acknowledgment.
+An invited technical discussion can use precise vocabulary. Reject unnecessary
+decoding, not individual words such as denominator. A familiar relationship can
+permit teasing that would be misplaced toward a stranger. Use actual context,
+not an invented relationship.
+
+Terra must assess situational fit and Hamza's requested voice separately from
+factual support. A response can be accurate and still fail because it is bland,
+patronizing, needlessly analytical or unlike what Hamza wants to say. Reference
+replies illustrate possibilities, not target strings or the evaluator's preferred
+personality. Hamza's rejection overrides a polished reference or a PASS label.
+
+The checks protect source meaning, owner facts, exact output and sending authority.
+They must not become an expanding list of prohibited expressions or a requirement
+to flatten creative affect. The two-candidate process remains available to explore
+different fitting reactions, not to satisfy a fixed distribution of social modes.
+
 ### Scope, constraints and skills
 
 This plan covers the two rejected live replies, the pasted audit's issues 1.1–2.4,
@@ -519,6 +548,10 @@ Pass article excerpts when making claims about the article. The Writer does not
 browse. If excerpts are unavailable, omit article-specific judgments or choose a
 response supported by the visible post. Do not turn every simple reaction into
 an external research job. Missing media must not erase a readable caption.
+Bound excerpts using the existing request/context budget, preserving source URL
+and location. Mark partial coverage and omitted sections explicitly. The Writer
+must not infer that an article lacks something merely because the selected
+excerpt omits it. Do not silently truncate a qualifier or conclusion to fit.
 
 Acceptance: raw and normalized text agree on the known long-post examples. The
 actual Writer request contains supplied excerpts/context without asserting unseen
@@ -538,8 +571,11 @@ mutable interfaces and must not be delegated in parallel.
 
 - Separate human direction, observed evidence and executor suggestions in the
   actual packet. Remove the command to realize an executor-authored thesis.
-  GLM returns its selected behavior using the existing vocabulary. Validate and
-  persist that behavior with the selected text before existing gates inspect it.
+  GLM returns its selected behavior using the existing vocabulary. Validate the
+  raw returned enum values before normalization can supply defaults. Invalid or
+  missing required values return a preparation error. Do not silently choose
+  neutral, synthesis or judgment. This validates metadata, not writing style.
+  Persist the valid selected behavior with the selected text before gates inspect it.
   In profile mode, replace the proposed packet behavior with this selected behavior
   before applyWriterOutput, draftReviewContext, reviewWriterOutput, quality scoring
   and purpose/health/policy gates. The saved draft/editor and corresponding queue
@@ -595,7 +631,9 @@ not quotas or a statistical reliability estimate. No call runs during planning.
 
 Terra 6.1 Medium supplies unpublished reference responses and evaluates the exact
 source/context/output. It sees actual output, not only the Writer's self-check.
-Assess social fit, meaning, factual support, usefulness and first-read clarity.
+Assess social fit, meaning, factual support, usefulness, first-read clarity and
+Hamza's adaptive personality requirement above. Accurate but lifeless or wrongly
+patronizing output does not pass solely because every factual claim is supported.
 Allow criticism when invited or warranted. Allow strong excitement without claiming
 humans could never find the bugs. Do not penalize humor, shortness, questions or
 silence by form. Do not treat agreement with Terra's wording as acceptance.
@@ -754,3 +792,36 @@ production output, gold labels or quality measurements:
 These examples do not become required templates. Hamza may prefer more excitement,
 a different reaction or silence. Later acceptance evaluates actual source/output
 fit rather than similarity to a reference sentence.
+
+### Reception of the independent review of 767aaba
+
+The supplied review supports the direction but is not an executed implementation
+check. Its duration alone neither validates nor discredits its findings.
+The parent compares its claims with the actual plan and current code:
+
+- Accept the need to reject invalid Writer behavior values before normalization
+  applies defaults. GQ3 now states that boundary explicitly.
+- Accept bounded article excerpts with explicit partial-coverage indicators, using
+  the existing request budget. GQ2 now states that requirement. Excerpts alone do
+  not prove the Writer will preserve meaning.
+- Keep GQ3 as one coherent shared-interface slice, as already specified.
+- Reject an added candidate-hash requirement: the plan uses saved exact text and
+  existing publication records, without new cryptographic tracking.
+- Correct “race condition”: caller-first behavior precedence can cause the mismatch
+  deterministically. Concurrency is not established as its cause.
+- Correct “guarantees,” “airtight” and “eliminates corruption”: these are intended
+  invariants awaiting implementation evidence, not results of plan review.
+- Correct “no new schema”: the existing behavioral vocabulary stays, but structured
+  candidate audits and Writer-selected behavior do require a coordinated payload
+  change. Callers must migrate together.
+- Do not adopt the claim that cached Harness² passes actually hid prior behavior
+  changes without the corresponding run evidence. The confirmed defect is stale
+  contract loading/fingerprinting and the resulting risk of invalid comparisons.
+- Correct budget attribution: GQ4 proposes six GLM generation captures. Terra
+  support/evaluation has its own bounded dispatch budget.
+- Provider quota handling is an operational task. Free-tier exhaustion does not
+  establish a writing defect and does not authorize a hidden provider/model switch.
+
+No source code, production prompts, model settings, tests or public actions change
+as part of receiving this review. The operator and timer stay stopped. These
+clarifications improve the plan, not the claimed state of the implementation.

@@ -716,3 +716,12 @@ Plan evaluation taskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b
 Terra verdict NEEDS_REVISION on one interface ambiguity, corrected in the plan by
 the parent. Plan and evidence checks only. No implementation, tests, model-quality
 measurements, services or public actions change. Implementation tasks remain open.
+
+November 1 owner clarification: adaptation to Hamza's personality and situation is
+an explicit quality requirement, not a fixed register or sentiment template.
+The parent checks the independent review of767aaba and amends the plan: validate
+raw Writer enum values before defaults, mark partial article excerpts, and assess
+voice separately from factual support. Hash requirements, concurrency causation,
+guaranteed repairs and alleged historical cache effects are not accepted as
+established. No implementation, tests, model calls or public restart accompanies
+these plan changes. GQ1 remains the first open implementation task.
