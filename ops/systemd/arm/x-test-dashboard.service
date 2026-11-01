@@ -4,6 +4,7 @@ Description=X Test dashboard
 [Service]
 Type=simple
 WorkingDirectory=/home/ubuntu/repo/x_test
+Environment=X_GROWTH_CONFIG_FILE=/home/ubuntu/repo/x_test/ops/systemd/arm/growth-agent.yaml
 ExecStart=/bin/bash -c 'exec /usr/local/bin/node dashboard.js'
 Restart=on-failure
 RestartSec=5

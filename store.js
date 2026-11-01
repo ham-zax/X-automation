@@ -48,6 +48,7 @@ import {
 } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
 import { contentSources } from './content_review.js';
+import { growthRoleConfig } from './growth_config.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -7187,6 +7188,41 @@ function resolveExplicitAiProfile(profile) {
 
 export function resolveAiProfileForRole(role, explicitProfile = null) {
   const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
+  const configuredRole = explicitProfile == null ? growthRoleConfig(normalizedRole) : null;
+  if (configuredRole) {
+    const yamlProfile = (profileConfig, profileRole) => {
+      if (!profileConfig || typeof profileConfig !== 'object' || Array.isArray(profileConfig)) {
+        throw new DomainValidationError(`Growth YAML role ${profileRole} must be a profile map.`);
+      }
+      const runtime = String(profileConfig.runtime || '').trim();
+      const model = String(profileConfig.model || '').trim();
+      if (!runtime || !model) throw new DomainValidationError(`Growth YAML role ${profileRole} requires runtime and model.`);
+      const isDirect = runtime === 'direct_api';
+      const normalized = normalizeAiProfileInput({
+        name: profileConfig.name || `Growth YAML ${profileRole}`,
+        runtime,
+        providerKind: profileConfig.providerKind || (isDirect ? 'openai_compatible' : 'runtime_managed'),
+        protocol: profileConfig.protocol || (isDirect ? 'responses' : 'runtime_native'),
+        model,
+        reasoning: profileConfig.reasoning || '',
+        runtimeProfile: profileConfig.runtimeProfile || '',
+        baseUrl: profileConfig.baseUrl || '',
+        secretRef: profileConfig.secretRef || '',
+        settings: profileConfig.settings || {},
+        enabled: profileConfig.enabled !== false,
+      });
+      return { id: null, ...normalized, compatibility: false, createdAt: null, updatedAt: null };
+    };
+    const profile = yamlProfile(configuredRole, normalizedRole);
+    const fallbackProfile = configuredRole.fallback ? yamlProfile(configuredRole.fallback, `${normalizedRole}.fallback`) : null;
+    return {
+      role: normalizedRole,
+      source: `yaml:${configuredRole.sourceRole}`,
+      profile,
+      fallbackProfile,
+      binding: null,
+    };
+  }
   const binding = getAiRoleBinding(normalizedRole);
   if (['reply_writer', 'content_review'].includes(normalizedRole) && !binding && explicitProfile == null) {
     return { ...resolveAiProfileForRole('writer'), role: normalizedRole, source: 'writer', binding: null };

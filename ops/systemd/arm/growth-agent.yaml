@@ -1,0 +1,46 @@
+# Growth OS runtime configuration. The service reads this file at each session.
+# Change models or role bindings here. Use secretRef for a secret reference only.
+version: 1
+
+operator:
+  runtime: claive
+  engine: codex
+  model: gpt-6-luna
+  reasoning: max
+  replyWriterMode: profile
+  browserTarget: linux
+  browserInterface: agent-browser-cli
+  browserMcpServer: xgrowth_browser
+  browserFastBackend: cloakbrowser
+  cdpPort: '9222'
+  windowMinutes: 20
+
+roles:
+  continuous_scan:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  editorial_scan:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  editorial_final:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  audience_review:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  writer:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  reply_writer:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max
+  content_review:
+    runtime: codex
+    model: gpt-6-luna
+    reasoning: max

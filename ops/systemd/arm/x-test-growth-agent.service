@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/home/ubuntu/repo/x_test
 Environment=X_GROWTH_AGENT_SCHEDULED=1
+Environment=X_GROWTH_CONFIG_FILE=/home/ubuntu/repo/x_test/ops/systemd/arm/growth-agent.yaml
 Environment=X_GROWTH_AGENT_RUNTIME=claive
 Environment=X_GROWTH_CLAIVE_ENGINE=codex
 Environment=CODEX_WORKER_BINARY=/home/ubuntu/.local/bin/codex

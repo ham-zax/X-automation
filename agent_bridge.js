@@ -52,6 +52,7 @@ import {
 import { rankMainFeedItems, recommendMainFeedSchedule } from './scheduler.js';
 import { assessDiscoveryQuality, classifyNiche, getActiveContentGroups, getActiveNicheProfile, recommendDistributionAction } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
+import { loadGrowthConfig } from './growth_config.js';
 import {
   EDITORIAL_OBJECTIVES,
   dismissEditorialRecommendation,
@@ -1218,7 +1219,14 @@ function safeAiRole(role) {
 
 function safeAiConfig() {
   const settings = getAiRuntimeSettings();
+  const growthConfig = loadGrowthConfig({ env: process.env });
   return {
+    configuration: growthConfig ? {
+      sourcePath: growthConfig.sourcePath,
+      version: growthConfig.version,
+      operator: growthConfig.operator,
+      roles: Object.keys(growthConfig.roles),
+    } : null,
     profiles: listAiProfiles({ limit: 500 }).map(safeAiProfile),
     defaultProfileId: settings.defaultProfileId,
     defaultProfile: safeAiProfile(settings.defaultProfile),

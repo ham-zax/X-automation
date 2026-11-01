@@ -13,6 +13,7 @@ import {
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
 import { GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { controllerTick } from './semantic_controller.js';
+import { loadGrowthConfig } from './growth_config.js';
 
 const HOME = homedir();
 const REPLY_OPERATOR_CONTRACT = REPLY_CONTRACT.replace(/\n+/g, ' ');
@@ -75,48 +76,55 @@ export function runtimeConfig(env = process.env) {
   if (env.NODE_ENV === 'production' && env.AI_ALLOW_RUNTIME_MANAGED !== 'true') {
     throw new Error('Production reasoning runtimes require AI_ALLOW_RUNTIME_MANAGED=true and provider-side billing limits.');
   }
-  const runtime = String(env.X_GROWTH_AGENT_RUNTIME || DEFAULT_RUNTIME).trim().toLowerCase();
+  const growthConfig = loadGrowthConfig({ env });
+  const operator = growthConfig?.operator || {};
+  const configured = (key, envKey, fallback) => {
+    const yamlValue = operator[key];
+    if (yamlValue !== undefined && yamlValue !== null && yamlValue !== '') return yamlValue;
+    const envValue = env[envKey];
+    return envValue !== undefined && envValue !== null && envValue !== '' ? envValue : fallback;
+  };
+  const runtime = String(configured('runtime', 'X_GROWTH_AGENT_RUNTIME', DEFAULT_RUNTIME)).trim().toLowerCase();
   if (!RUNTIMES.includes(runtime)) {
     throw new Error(`Unsupported X_GROWTH_AGENT_RUNTIME=${runtime}. Expected ${RUNTIMES.join(', ')}.`);
   }
-  const claiveEngine = String(env.X_GROWTH_CLAIVE_ENGINE || 'muse').trim().toLowerCase();
+  const claiveEngine = String(configured('engine', 'X_GROWTH_CLAIVE_ENGINE', 'muse')).trim().toLowerCase();
   if (runtime === 'claive' && !['muse', 'pi', 'codex'].includes(claiveEngine)) {
     throw new Error('X_GROWTH_CLAIVE_ENGINE must be muse, pi, or codex.');
   }
   const defaultModel = runtime === 'opencode' ? DEFAULT_OPENCODE_MODEL : runtime === 'pi' ? DEFAULT_PI_MODEL : (runtime === 'claive' && claiveEngine === 'muse') || runtime === 'muse' ? CLAIVE_MODEL
     : runtime === 'claive' && claiveEngine === 'codex' ? CLAIVE_CODEX_MODEL : '';
-  const model = String(env.X_GROWTH_AGENT_MODEL || defaultModel).trim();
+  const model = String(configured('model', 'X_GROWTH_AGENT_MODEL', defaultModel)).trim();
   // Pi is the headless-Linux runtime: its browser is the persistent CDP Chromium, not a Windows tab.
-  const browserTarget = String(env.X_GROWTH_BROWSER_TARGET || (runtime === 'pi' ? 'linux' : 'windows')).trim().toLowerCase();
+  const browserTarget = String(configured('browserTarget', 'X_GROWTH_BROWSER_TARGET', runtime === 'pi' ? 'linux' : 'windows')).trim().toLowerCase();
   if (!BROWSER_TARGETS.includes(browserTarget)) {
     throw new Error(`Unsupported X_GROWTH_BROWSER_TARGET=${browserTarget}. Expected windows or linux.`);
   }
-  const reasoning = String(env.X_GROWTH_AGENT_REASONING || '').trim().toLowerCase();
-  const replyWriterMode = String(env.X_GROWTH_REPLY_WRITER_MODE || 'profile').trim().toLowerCase();
+  const reasoning = String(configured('reasoning', 'X_GROWTH_AGENT_REASONING', '')).trim().toLowerCase();
+  const replyWriterMode = String(configured('replyWriterMode', 'X_GROWTH_REPLY_WRITER_MODE', 'profile')).trim().toLowerCase();
   if (!['operator', 'profile'].includes(replyWriterMode)) throw new Error('X_GROWTH_REPLY_WRITER_MODE must be operator or profile.');
-  const thinking = String(reasoning || env.X_GROWTH_PI_THINKING || DEFAULT_PI_THINKING).trim().toLowerCase();
+  const thinking = String(configured('thinking', 'X_GROWTH_PI_THINKING', reasoning || DEFAULT_PI_THINKING)).trim().toLowerCase();
   if (!PI_THINKING_LEVELS.includes(thinking)) {
     throw new Error(`Unsupported X_GROWTH_PI_THINKING=${thinking}. Expected ${PI_THINKING_LEVELS.join(', ')}.`);
   }
-  const cdpPort = String(env.X_GROWTH_BROWSER_CDP_PORT || DEFAULT_CDP_PORT).trim();
+  const cdpPort = String(configured('cdpPort', 'X_GROWTH_BROWSER_CDP_PORT', DEFAULT_CDP_PORT)).trim();
   if (!/^\d{2,5}$/.test(cdpPort)) throw new Error('X_GROWTH_BROWSER_CDP_PORT must be a port number.');
-  const agentBrowserCli = String(env.X_GROWTH_AGENT_BROWSER_CLI
-    || (browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
-  const browserInterface = String(env.X_GROWTH_BROWSER_INTERFACE
-    || 'agent-browser-cli')
+  const agentBrowserCli = String(configured('agentBrowserCli', 'X_GROWTH_AGENT_BROWSER_CLI',
+    browserTarget === 'linux' ? DEFAULT_LINUX_AGENT_BROWSER : DEFAULT_WEBHARNESS_AGENT_BROWSER));
+  const browserInterface = String(configured('browserInterface', 'X_GROWTH_BROWSER_INTERFACE', 'agent-browser-cli'))
     .trim().toLowerCase();
   if (!BROWSER_INTERFACES.includes(browserInterface)) {
     throw new Error(`X_GROWTH_BROWSER_INTERFACE must be ${BROWSER_INTERFACES.join(' or ')}.`);
   }
-  const browserMcpServer = String(env.X_GROWTH_BROWSER_MCP_SERVER || 'xgrowth_browser').trim();
+  const browserMcpServer = String(configured('browserMcpServer', 'X_GROWTH_BROWSER_MCP_SERVER', 'xgrowth_browser')).trim();
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(browserMcpServer)) {
     throw new Error('X_GROWTH_BROWSER_MCP_SERVER must be a simple MCP server name.');
   }
-  const browserFastBackend = String(env.X_GROWTH_BROWSER_FAST_BACKEND || 'cloakbrowser').trim().toLowerCase();
+  const browserFastBackend = String(configured('browserFastBackend', 'X_GROWTH_BROWSER_FAST_BACKEND', 'cloakbrowser')).trim().toLowerCase();
   if (!['chrome', 'cloakbrowser'].includes(browserFastBackend)) {
     throw new Error('X_GROWTH_BROWSER_FAST_BACKEND must be chrome or cloakbrowser.');
   }
-  const windowMinutes = Number(env.X_GROWTH_AGENT_WINDOW_MINUTES || 20);
+  const windowMinutes = Number(configured('windowMinutes', 'X_GROWTH_AGENT_WINDOW_MINUTES', 20));
   if (!Number.isFinite(windowMinutes) || windowMinutes < 1 || windowMinutes > 480) {
     throw new Error('X_GROWTH_AGENT_WINDOW_MINUTES must be between 1 and 480.');
   }
@@ -134,22 +142,23 @@ export function runtimeConfig(env = process.env) {
     thinking,
     reasoning,
     replyWriterMode,
-    experiment: ['1', 'true', 'yes'].includes(String(env.X_GROWTH_AGENT_EXPERIMENT || '').trim().toLowerCase()),
-    agentMode: growthAgentMode(env),
+    experiment: ['1', 'true', 'yes'].includes(String(configured('experiment', 'X_GROWTH_AGENT_EXPERIMENT', '')).trim().toLowerCase()),
+    agentMode: growthAgentMode({ ...env, GROWTH_AGENT_MODE: configured('agentMode', 'GROWTH_AGENT_MODE', env.GROWTH_AGENT_MODE || 'controller') }),
     executable: runtime === 'claive'
-      ? String(env.X_GROWTH_CLAIVE_BIN || DEFAULT_CLAIVE_BIN)
+      ? String(configured('claiveBin', 'X_GROWTH_CLAIVE_BIN', DEFAULT_CLAIVE_BIN))
       : runtime === 'muse'
-      ? String(env.X_GROWTH_MUSE_BIN || 'muse')
+      ? String(configured('museBin', 'X_GROWTH_MUSE_BIN', 'muse'))
       : runtime === 'opencode'
-      ? String(env.X_GROWTH_OPENCODE_BIN || DEFAULT_OPENCODE_BIN)
+      ? String(configured('opencodeBin', 'X_GROWTH_OPENCODE_BIN', DEFAULT_OPENCODE_BIN))
       : runtime === 'codex'
-        ? String(env.X_GROWTH_CODEX_BIN || DEFAULT_CODEX_BIN)
+        ? String(configured('codexBin', 'X_GROWTH_CODEX_BIN', DEFAULT_CODEX_BIN))
         : runtime === 'pi'
-          ? resolvePiBin(env)
-          : String(env.X_GROWTH_CLAUDE_BIN || 'claude'),
+          ? String(configured('piBin', 'X_GROWTH_PI_BIN', resolvePiBin(env)))
+          : String(configured('claudeBin', 'X_GROWTH_CLAUDE_BIN', 'claude')),
     // Native codex executable for the ephemeral bounded-lane runtimeExecution
     // (Claive->Codex passes both executables; native codex reuses its own).
-    codexExecutable: String(env.X_GROWTH_CODEX_BIN || DEFAULT_CODEX_BIN),
+    codexExecutable: String(configured('codexExecutable', 'X_GROWTH_CODEX_BIN', configured('codexBin', 'X_GROWTH_CODEX_BIN', DEFAULT_CODEX_BIN))),
+    configFile: growthConfig?.sourcePath || null,
   };
 }
 

@@ -27,11 +27,15 @@ Ordinary reactions need no factual claim entry. Declaring a factual product clai
 an opinion does not establish support or bypass existing assertion checks.
 
 The saved `reply_writer` AI role selects the Reply model. The `writer` role
-selects the structured Writer for Originals, Quotes and Threads.
+selects the structured Writer for Originals, Quotes and Threads. The ARM
+operator can override both database bindings, plus every other AI role, with
+`ops/systemd/arm/growth-agent.yaml`. YAML applies on the next call and does not
+write SQLite state.
 Use `ai-config` to inspect the safe resolved profile. `ai-bind-role` selects an
-existing profile. Without a separate Reply binding, `reply_writer` inherits
-`writer`. Changing a writing role does not change the operator's runtime,
-run lease or authority. No continuous daemon is needed for model selection.
+existing profile when YAML does not configure that role. Without a YAML role,
+`reply_writer` also inherits `writer`. An explicit command profile wins over
+YAML. Changing a writing role does not change the operator's runtime, run lease
+or authority. No continuous daemon is needed for model selection.
 
 ## Operator and Writer selection
 

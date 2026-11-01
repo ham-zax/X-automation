@@ -55,7 +55,9 @@ export async function runAttachedLiveSession(options = {}) {
   const run = options.run || runChild;
   const operator = { runtime: config.runtime, engine: config.runtime === 'claive' ? config.claiveEngine : null,
     model: config.model || null, reasoning: config.reasoning || (config.runtime === 'pi' ? config.thinking : null),
-    replyWriterMode: config.replyWriterMode || 'profile', source: 'launcher_command_configuration' };
+    replyWriterMode: config.replyWriterMode || 'profile',
+    source: config.configFile ? 'yaml_configuration' : 'launcher_command_configuration',
+    ...(config.configFile ? { configFile: config.configFile } : {}) };
 
   const backoffFile = process.env.X_GROWTH_AGENT_BACKOFF_FILE || path.join(stateDir, 'growth-runner-backoff.json');
   const backoffEnabled = backoffGateEnabled();
@@ -111,6 +113,7 @@ export async function runAttachedLiveSession(options = {}) {
       X_GROWTH_OPERATOR_REASONING: operator.reasoning || '',
       X_GROWTH_REPLY_WRITER_MODE: operator.replyWriterMode,
     };
+    if (config.configFile) command.env.X_GROWTH_CONFIG_FILE = config.configFile;
     console.log(`Attached operator: ${JSON.stringify(operator)}`);
     const childStartedAt = Date.now();
     console.log(`Attached session deadline: ${JSON.stringify({ startedAt: childStartedAt, deadlineAt: childStartedAt + CHILD_TIMEOUT_MS, timeoutMs: CHILD_TIMEOUT_MS })}`);

@@ -14,7 +14,9 @@ Source normalization preserves extended note text without changing the trusted p
 The evaluator imports the active contract and separates diagnostic review failures.
 See `docs/research/production-reply-failure-2026-11-01/repair-terra-medium/README.md`
 and its OPERATIONS.md for actual evidence and limits. The ledger records their integration state.
-The operator and timer remain stopped pending bounded live acceptance.
+The operator and timer run only after an explicit owner re-arm. The current
+selection is read from `arm/growth-agent.yaml`, and each later session uses the
+file that exists when it starts.
 The final review found issues, followed by a parent repair round and focused checks. A later bounded read-only live check passes with an unpublished Terra Reply.
 The dashboard loads the committed repair. Public sending and sustained operation
 remain untested. Historical entries below are dated evidence, not current deployment.
@@ -34,10 +36,23 @@ leases one browser target, supervises the selected agent and releases the target
 The drop-in supplies a 60-second stop timeout for cleanup.
 
 The operator runtime, model and supported reasoning effort are configurable.
-Reply writing can use the operator itself or the saved Writer role.
+The attached service reads `arm/growth-agent.yaml` on each session. That file
+can select the operator and every AI role, including Writer, Reply Writer and
+content review. YAML role profiles override saved database bindings. Explicit
+profiles passed by a command remain authoritative. A missing role keeps the
+saved binding. A changed YAML file applies to the next operator or AI call.
+Malformed YAML fails before browser allocation or model dispatch.
+Reply writing can use the operator itself or the configured Reply Writer role.
 See [model selection](../../docs/AGENT_WORKFLOW.md#operator-and-writer-selection)
 and the [live brief](arm/arm-growth-live.md). No Luna model lock remains.
 The default attached runtime still uses Claive/Codex when no override exists.
+
+Inspect the active source and resolved roles with:
+
+```bash
+X_GROWTH_CONFIG_FILE=/home/ubuntu/repo/x_test/ops/systemd/arm/growth-agent.yaml \
+  npm run --silent agent -- ai-config
+```
 
 Discovery alternates Trending and For You in the live brief. Trending runs at
 0:00, For You at 2:30, then each source repeats every five minutes when work
@@ -89,7 +104,8 @@ whether public action is permitted. Missed wakes create no publishing quota.
 Continuous `automation.js` and the old model-rotation watchdog are retired.
 Do not enable their services. The dashboard remains an inspection interface.
 Historical deployment evidence lives in `docs/ARM_24X7_HANDOFF.md`.
-No host installation or current service inspection accompanies this doc update.
+The installed ARM operator and dashboard point to the same YAML file. A unit
+reload is needed only after changing the unit pointer, not after editing YAML.
 
 ## DeepSeek selection, 31 October
 
@@ -142,11 +158,11 @@ so each finite session can schedule its successor after exit when later enabled.
 Existing activation-cadence drop-ins can coexist. systemd does not start a second
 copy of an already-running service. No operator runtime/model switch is deployed.
 
-Latest live selection: install ops/systemd/arm/luna.conf as the service drop-in
-luna.conf after checks. It overrides the older DeepSeek selection without deleting
-that selectable configuration. The operator uses Luna 6 max. Writer and reviewer
-bindings remain saved Growth OS AI settings. Current engine inventory permits this
-exact Claive Codex model and effort. Luna supports medium or max only. Max is
-its highest available effort.
+Latest live selection: install `ops/systemd/arm/luna.conf` as the service drop-in
+after checks. It points the service at `arm/growth-agent.yaml`. The current file
+selects Luna 6 max for the operator and all seven AI roles. Current engine
+inventory permits this Claive Codex model and effort. Luna supports medium or
+max only. Max is its highest available effort. Edit the YAML to select another
+supported model or effort. Do not edit generated or installed copies first.
 Only enable the user timer under the owner's live authorization. Individual sessions
 stay bounded and obey saved rest, health, grant, claim and reconciliation rules.
