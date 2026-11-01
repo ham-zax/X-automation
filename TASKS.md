@@ -1019,3 +1019,11 @@ Terra-medium Writer roles and Sol-high content_review. Claive engine inventory
 explicitly permits this exact model/effort. No worker dispatch or model fallback.
 Start the durable operator and timer under the latest explicit live authorization.
 Observe actual run/claim/output state. A service start alone is not a public result.
+
+Live Terra deployment readback: Claive worker0fc3545c087f runs Codex Terra6.1 medium.
+Operator session luna-arm-20261101T113958Z-479eebd3 begins Growth Run
+a3333e78-eb83-46f7-ba75-57d3f1faf877. The live checkpoint records pass1 complete,
+no failures or unresolved attempts, and zero confirmed public sends. Zero sends
+is not a quality defect by itself. The service and timer are active, timer enabled,
+and Linger=yes. Writer roles remain Terra medium, reviewer Sol high. Public voice
+quality and confirmed publication remain pending actual output and owner judgment.
