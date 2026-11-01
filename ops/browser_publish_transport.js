@@ -16,7 +16,8 @@ function runWhBrowser(args, { timeoutMs = 30000 } = {}) {
 }
 
 function fastObserve(tab = null, scope = 'compact') {
-  const payload = tab ? { scope, tab } : { scope };
+  const selectedTab = tab || process.env.X_GROWTH_OPERATOR_BROWSER_TAB;
+  const payload = selectedTab ? { scope, tab: selectedTab } : { scope };
   return runWhBrowser(['fast', 'observe', JSON.stringify(payload)]);
 }
 

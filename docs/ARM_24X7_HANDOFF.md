@@ -1,5 +1,29 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+## Timer and bootstrap repair, 1 November 2026
+
+The installed cadence override cleared all inherited timer expressions and then
+added a thirty-minute wake. The versioned cadence.conf now resets and declares
+both OnActiveSec=1min and OnUnitInactiveSec=5min. The installed effective timer
+shows those two expressions and no thirty-minute expression after reload.
+
+The next live session had one confirmed Reply and one confirmed-not-sent
+attempt due to BROWSER_FAST_PIN_INIT_UNCERTAIN. The WebHarness provider checked
+its bootstrap tab inventory immediately after Chrome acknowledged closeTarget.
+A controlled reproduction shows delayed inventory removal triggers the old
+single check. WebHarness commit 8aef462 adds bounded read-only inventory checks
+after one close request. Persistent targets or browser changes still fail.
+All 37 provider tests and the delayed/persistent/changed-browser probe pass.
+
+Growth OS now passes the launcher's exact owned reading tab into the publication
+transport. Its initial observation no longer asks WebHarness for an unscoped
+default tab. Explicit composer IDs still win. All 73 affected Growth OS checks
+and a transport argument probe pass. The CLI fast provider stops cleanly for
+reload while the shared browser and existing content tabs remain available.
+No uncertain publication is retried. Other existing MCP provider processes
+load the helper update on their own next restart, not through this CLI restart.
+Sustained live behavior after these repairs still needs observation.
+
 ## First adaptive live outcome, 1 November 2026
 
 Run 5582b042-d198-40b8-8300-6533d6b8c67f confirms one Reply:

@@ -46,6 +46,18 @@ For You uses the authenticated owned browser tab and `x-for-you-ingest`.
 The reasoning agent follows this cadence within a finite session. Slow work,
 rest hours and the existing gap between sessions can delay collection.
 The systemd timer starts sessions, not individual discovery passes.
+The versioned `arm/cadence.conf` replaces the old host-only thirty-minute override.
+Its empty `OnActiveSec` resets the entire inherited timer list, then declares
+one initial wake after a minute and a wake five minutes after session exit.
+Install it at `~/.config/systemd/user/x-test-growth-agent.timer.d/cadence.conf`,
+reload the user manager, and restart the timer. Check `TimersMonotonic` for
+`OnUnitInactiveUSec=5min`; an active timer alone does not prove the cadence.
+
+The launcher passes its owned target as `X_GROWTH_OPERATOR_BROWSER_TAB`.
+The publication transport uses it for its initial read instead of allocating an
+unused default blank page. Explicit composer targets still take precedence.
+WebHarness closes only proven bootstrap pages. It waits for their disappearance
+with bounded inventory reads after one exact close request.
 The launcher reads the brief at session startup. An active session keeps its
 already-rendered brief until it ends.
 

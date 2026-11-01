@@ -154,6 +154,7 @@ test('success renders the exact owned target and releases that one lease once', 
   ]);
   assert.deepEqual(command.env, {
     CODEX_WORKER_BINARY: '/fake/codex',
+    X_GROWTH_OPERATOR_BROWSER_TAB: TARGET,
     CLAIVE_CODEX_YOLO: '1',
     CLAIVE_CODEX_USE_USER_CONFIG: '1',
     X_GROWTH_OPERATOR_RUNTIME: 'claive',

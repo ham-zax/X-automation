@@ -105,6 +105,7 @@ export async function runAttachedLiveSession(options = {}) {
     }, prompt, { promptFile, workspace: repoDir });
     if (config.runtime === 'claive') command.args.push('--turn-timeout', '2700');
     command.env = { ...command.env, CODEX_WORKER_BINARY: config.codexExecutable,
+      X_GROWTH_OPERATOR_BROWSER_TAB: lease.targetId,
       X_GROWTH_OPERATOR_RUNTIME: config.runtime,
       X_GROWTH_OPERATOR_MODEL: config.model || '',
       X_GROWTH_OPERATOR_REASONING: operator.reasoning || '',
