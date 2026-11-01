@@ -1,5 +1,18 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+## Discovery cadence update, 1 November 2026
+
+The owner requests alternating fresh Trending and For You reads, 150 seconds
+apart. The live brief starts with Trending, then For You, then repeats.
+Trending refreshes `x_momentum` through the existing bridge collector.
+Both sources feed the saved candidates ranked by `scout`. The agent records
+source, timing, freshness and collection errors in live progress. Slow work,
+rest hours and session boundaries can delay the nominal five-minute source
+cadence. Active sessions retain their rendered brief until the next launch.
+The live collector check returns seven candidates with no error and no old
+snapshot fallback. A disposable launcher render includes the new cadence.
+Repeated live timing under the updated brief remains unobserved at this point.
+
 ## Current repair checkpoint, 1 November 2026
 
 Latest owner scope: after the implementation checks pass, start live operation

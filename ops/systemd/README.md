@@ -38,6 +38,17 @@ Reply writing can use the operator itself or the saved Writer role.
 See [model selection](../../docs/AGENT_WORKFLOW.md#operator-and-writer-selection)
 and the [live brief](arm/arm-growth-live.md). No Luna model lock remains.
 The default attached runtime still uses Claive/Codex when no override exists.
+
+Discovery alternates Trending and For You in the live brief. Trending runs at
+0:00, For You at 2:30, then each source repeats every five minutes when work
+fits the interval. Trending uses `growth-refresh {"kind":"x_momentum"}`.
+For You uses the authenticated owned browser tab and `x-for-you-ingest`.
+The reasoning agent follows this cadence within a finite session. Slow work,
+rest hours and the existing gap between sessions can delay collection.
+The systemd timer starts sessions, not individual discovery passes.
+The launcher reads the brief at session startup. An active session keeps its
+already-rendered brief until it ends.
+
 Changing code or settings does not install units, enable timers or grant authority.
 
 The service without the attached drop-in runs `growth_agent_runner.js` instead.
