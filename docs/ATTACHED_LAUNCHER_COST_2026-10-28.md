@@ -45,7 +45,7 @@ cannot run it.
 | `ops/systemd/arm/arm-growth-live.md` | Current brief and command sheet | Working copy, modified by the current run |
 | `ops/browser_operator_contract.js` | Browser paragraph source | Only the browser contract |
 | `agent_bridge.js` | `queue` handler and `compactQueue` | Current source |
-| `docs/plans/XGROWTH_HANDOFF_2026-10-13.md` | Historical cost section | Hand-recorded |
+| [historical handoff](https://github.com/ham-zax/X-automation/blob/b4dc6cf/docs/plans/XGROWTH_HANDOFF_2026-10-13.md) | Historical cost section | Hand-recorded |
 | `docs/X_GROWTH_ISSUES.md` and the XR-15 packet | Acceptance and limits | Read only |
 
 The current Claive registry has no live-labeled worker for this checkout. The

@@ -2,11 +2,12 @@
 
 ## Current repair checkpoint, 1 November 2026
 
-Latest owner scope: implement the architecture for24x7 use, commit and push.
-Keep production stopped and timer autostart disabled. DeepSeek Flash adaptation
-and actual deployment are later decisions. The earlier brief activation reflects
-a parent misunderstanding, not the current authority. No model switch follows.
-
+Latest owner scope: after the implementation checks pass, start live operation
+with Terra and inspect its behavior. All412 serial JS and7 Python checks pass.
+The versioned terra.conf selects a Terra6.1 medium operator through Claive Codex.
+Writer roles select Terra medium. Content review selects Sol high. The earlier
+architecture-only stop remains historical, superseded by this live instruction.
+Live publication and owner quality acceptance still need observed outcomes.
 
 TASKS.md owns the GQ repair status. The active execution update in
 `docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md` supersedes earlier model
@@ -33,8 +34,7 @@ For current repository behavior, use `ops/systemd/README.md`,
 model lock and adds operator/profile Reply writing. Installed host state needs
 its own check. “Current deployment” below means verified on 10 October only.
 
-October 28 local continuation: read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md`
-and `TASKS.md` first. The deployment claims below are dated October 10.
+Current continuation: read `TASKS.md` first. The deployment claims below are dated October 10.
 This run does not check current ARM state or authorize historical restart commands.
 
 Written for the next agent (any model) to take over. This file lives in a public repository: it names no secrets, addresses or key paths. Server access details are in Hamza's private `myservers` repository.

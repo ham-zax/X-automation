@@ -50,7 +50,7 @@ timers, or send to X during implementation. Tests use disposable state, one heav
 | XR-20-A | review | XR-12, XR-20 | OpenCode DeepSeek max; parent acceptance | One bounded recent topic sample with optional exact-parent replies saves immutable attributed artifacts and reads through the bridge. | T6. Exact packet in plan. Implementation taskId `node:delegated-task:command%3Amcp%3Ab3251fe2-bc41-4f3f-8b35-c90125eee1ac%3Adelegate-task%3Af70e8b52-6dd9-4177-8896-a98cf7b63bbe`. Parent inspected artifact/window/provenance boundaries. Focused tests pass 20/20. Log `/tmp/xgrowth-xr20a-parent-20261028.log`. No real topic, repository artifact, live collection or source completeness claim. |
 | XR-20-B | review | XR-20-A | OpenCode DeepSeek max; parent acceptance | Numbered sourced draft briefs distinguish reports, tested evidence and opinion, with expiry and immutable provenance. | T7. Implementation taskId `node:delegated-task:command%3Amcp%3Ab3251fe2-bc41-4f3f-8b35-c90125eee1ac%3Adelegate-task%3A534fa7b4-2e16-4abd-b87f-a84b8de2fbaf`. Parent inspected source expiry, JSON commit marker, canonical citations and persona digest checks. Parent focused tests pass 19/19. Log `/tmp/xgrowth-xr20b-parent-20261028.log`. No new persona facts or approval writes. Real-topic/owner acceptance remains separate. |
 | XR-20-C | review | XR-20-B | OpenCode DeepSeek max; parent acceptance | Optional brief citations reach existing writing/event owners with exact paragraph references and preserved authority. | Implementation taskId `node:delegated-task:command%3Amcp%3Ab3251fe2-bc41-4f3f-8b35-c90125eee1ac%3Adelegate-task%3A6401e2ff-031f-4eba-9710-c03b27a409b1`. Parent inspected ID resolution before side effects, separate research context, compact draft/event provenance and omission behavior. Worker focused tests 33/33, log `/tmp/xgrowth-xr20c-final-20261028.log`. Parent integrated suite passes all eight citation cases. Final graph review covers the additive contract before further implementation. Voice/outcome acceptance remains blocked under XR-14. |
-| XR-21 | review | XR-18 | parent | Local documentation distinguishes current implementation, dated production checks and historical claims. Unchecked deployment stays unknown. | `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md` links the ledger and labels October 10/13/14 ARM records by date. Historical handoffs point to the new index. Issue statuses distinguish the initial baseline from later uncommitted repairs. September inventory preserved. No startup command becomes restart authority. |
+| XR-21 | review | XR-18 | parent | Local documentation distinguishes current implementation, dated production checks and historical claims. Unchecked deployment stays unknown. | [historical handoff](https://github.com/ham-zax/X-automation/blob/b4dc6cf/docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md) links the ledger and labels October 10/13/14 ARM records by date. Historical handoffs point to the new index. Issue statuses distinguish the initial baseline from later uncommitted repairs. September inventory preserved. No startup command becomes restart authority. |
 | XR-R | review | XR-02, XR-01, XR-03-04, XR-05, XR-07, XR-09, XR-10, XR-11, XR-12, XR-13, XR-16, XR-19, XR-22, XR-20, XR-20-A, XR-20-B, XR-20-C, XR-21 | independent reviewer | One graph review reports concrete failures against issue acceptance and preserved authority. Parent records focused checks and a single serial full suite after integration. | Exact review packet in plan. Review taskId `node:delegated-task:command%3Amcp%3Ab3251fe2-bc41-4f3f-8b35-c90125eee1ac%3Adelegate-task%3A74811362-c29d-4a76-a05b-669daf087d3e` completed. One medium follower-ingestion interaction and two documentation defects. Parent repaired them in one graph-end round, using the second XR-02 risk repair allowance. Partial-profile regressions failed before repair, then 22/22 focused checks passed. Log `/tmp/xgrowth-review-repairs-20261028.log`. Topic/citation and trust boundaries passed independent review. Historical synthetic zeros need evidence before correction. Blocked operational/owner tasks remain visible. |
 
 ## Active checkpoint
@@ -709,8 +709,8 @@ Evidence taskId node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62
 | GQ5 | review | GQ4 | parent | Runtime failures, timing, disposition and cleanup diagnostics remain truthful without silent fallback. | Plan GQ5. |
 | GQ6 | review | GQ5 | parent | Measurement and uncertainty backlog has an accurate disposition without replaying writes. | Plan GQ6. |
 | GQ7 | review | GQ6 | parent | Current docs and all issue dispositions agree with evidence. | Plan GQ7. |
-| GQ-R | review | GQ7 | Terra Medium + parent | One final graph review, bounded repair/recheck and scoped commit/push. | Proposed execution review, not started. |
-| GQ-L | review | GQ-R | owner | Explicitly authorized bounded live observation, confirmed output/cleanup and owner quality acceptance. | Owner stopped operator. No restart authorized by this planning work. |
+| GQ-R | review | GQ7 | Terra xhigh + parent | One final graph review, bounded repair/recheck and scoped commit/push. | Bounded final review found five issues. Parent fixes and probes pass. Full serial JS suite412/412 and Python7/7 pass after fixture migration. |
+| GQ-L | in-progress | GQ-R | parent + owner | Authorized Terra live operation with truthful public outcomes and owner voice assessment. | Fresh read-only observation passed earlier. Owner now authorizes live Terra startup after all checks pass. |
 
 Plan evaluation taskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Af606ce6b-f1a1-4d9f-9b29-ddd9f910961f.
 Terra verdict NEEDS_REVISION on one interface ambiguity, corrected in the plan by
@@ -991,3 +991,31 @@ Keep the versioned OnUnitInactiveSec=5min timer repair as architecture work. It
 ensures a follow-up after finite sessions instead of only timing from startup.
 The timer is validated and its installed definition read back. No production
 activation is part of delivery. Commit/push the remaining scoped timer/docs work.
+
+Owner requests removal of obsolete documentation and conditional live operation
+with Terra. Delete the unused V1 Reply prompt and the superseded October13/28
+handoffs. Current pointers use ARM_24X7_HANDOFF.md. Historical citations use pinned
+Git links. Preserve corpus, incident evidence, reports and current contracts.
+The expanded serial JS suite finds16 contract-migration failures across412 tests.
+They exercise legacy manual act defaults, old Writer output and diagnostic review
+semantics. Update affected existing fixtures, without adding new test cases.
+One real projection defect also appears: projectReplyPacket loses suggestedBehavior
+and executorFeedback when projecting an already projected packet. Preserve those
+canonical fields so repeated projection remains stable. Do not arm until checks pass.
+The intended live setup is Terra6.1 medium operator/Writer, Sol6.1 high review.
+No new worker dispatch is created. The original4/4 budget remains exhausted.
+
+Expanded acceptance now passes: all412 serial JS tests and7 Python harness tests.
+The16 previous failures use superseded fixtures/defaults. Updated fixtures preserve
+manual-mode grant/duplicate tests and supply the current structured Writer contract.
+No test cases are removed. The evaluator now expects failed optional diagnostic
+review to remain separate from delivery, as production does. Repeated Reply
+projection preserves the canonical suggested behavior/feedback fields. Three
+obsolete docs are removed and pointers repaired. Corpus and evidence are retained.
+
+Owner condition is met for implementation checks, not future quality guarantees.
+Deploy versioned terra.conf after committing: Claive Codex Terra6.1 medium operator,
+Terra-medium Writer roles and Sol-high content_review. Claive engine inventory
+explicitly permits this exact model/effort. No worker dispatch or model fallback.
+Start the durable operator and timer under the latest explicit live authorization.
+Observe actual run/claim/output state. A service start alone is not a public result.

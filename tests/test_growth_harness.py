@@ -99,7 +99,8 @@ class NativeCycleTests(unittest.TestCase):
             root = Path(tmp)
             adapter = self.adapter(root / "run")
             (root / "docs").mkdir()
-            (root / "docs/REPLY_GENERATION_PROMPT.md").write_text("writing contract")
+            (root / "docs/REPLY_GENERATION_PROMPT_V2.md").write_text("writing contract")
+            (root / "reply_contract.js").write_text('export const REPLY_CONTRACT_FILE = "docs/REPLY_GENERATION_PROMPT_V2.md";')
             owner = root / "writer_runtime.js"
             owner.write_text("first schema and review")
             with patch.object(h, "REPO", root):

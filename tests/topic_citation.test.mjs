@@ -1,3 +1,5 @@
+import { replyOutput, selectedBehavior } from './writer_fixture.mjs';
+process.env.X_GROWTH_REPLY_WRITER_MODE = 'operator'; // Explicit manual authoring lane.
 // XR-20-C: explicit saved-brief paragraph citations for the external Writer
 // commands and confirmed act events. Fixtures use disposable state only.
 import assert from 'node:assert/strict';
@@ -323,6 +325,7 @@ const behavior = {
 
 function writtenOutput(pipeline, briefParagraphIds) {
   return {
+    ...(pipeline === 'reply' ? replyOutput(behavior, 'The narrow path is worth watching, but the report stays attributed and the take stays mine.') : { behavior: selectedBehavior(behavior) }),
     decision: 'POST',
     pipeline,
     thesis: 'Keep the saved research context attributed.',

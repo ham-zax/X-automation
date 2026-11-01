@@ -1,3 +1,4 @@
+import { selectedBehavior } from './writer_fixture.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -74,7 +75,7 @@ test('exact human attestation is preserved only when writer output keeps public 
     attestedAt: Date.now(), textHash: createHash('sha256').update(item.body).digest('hex') };
   assert.equal(score(item).publishable, true);
   const packet = drafting.buildWriterPacket({ candidate, queueItem: { pipeline: 'original', behavior }, draft: item });
-  const output = { decision: 'POST', pipeline: 'original', finalText: item.body, threadParts: [], evidenceUsed: [], media: { type: 'none', required: false } };
+  const output = { behavior: selectedBehavior(packet.behavior), decision: 'POST', pipeline: 'original', finalText: item.body, threadParts: [], evidenceUsed: [], media: { type: 'none', required: false } };
   const same = drafting.applyWriterOutput(item, output, { writerPacket: packet });
   assert.ok(same.editor.ownerEvidence);
   const edited = drafting.applyWriterOutput(item, { ...output, finalText: `${item.body} A new claim.` }, { writerPacket: packet });
@@ -111,7 +112,7 @@ test('independent writer review is bounded, and an unavailable reviewer preserve
   const calls = [];
   const output = await runtime.generateWriterOutput(packet, 'No fabricated facts.', { timeoutMs: 5000, runAI: async request => {
     calls.push(request);
-    if (calls.length === 1) return { output: { decision: 'POST', pipeline: 'original', finalText: opener, threadParts: [], evidenceUsed: [] }, execution: {} };
+    if (calls.length === 1) return { output: { behavior: selectedBehavior(packet.behavior), decision: 'POST', pipeline: 'original', finalText: opener, threadParts: [], evidenceUsed: [] }, execution: {} };
     throw new Error('Synthetic reviewer timeout');
   } });
   assert.equal(calls.length, 2);

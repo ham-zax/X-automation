@@ -1,3 +1,4 @@
+import { selectedBehavior } from './writer_fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -310,6 +311,7 @@ try {
       attributed: false, supportAssessment: claimAssessment });
     const rawReview = { passed: true, factualClaims, ownerClaims: [], voiceIssues: [], issues: [] };
     const writerOutput = {
+      behavior: selectedBehavior(packet.behavior),
       decision: 'POST', pipeline: 'original', finalText: draft.body, threadParts: [],
       evidenceUsed: [String(evidence.id)], media: { type: 'none', required: false },
       contentReview: { ...rawReview, reviewer: 'writer_runtime',

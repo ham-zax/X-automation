@@ -1,3 +1,4 @@
+import { replyOutput, selectedBehavior } from './writer_fixture.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -26,12 +27,12 @@ const good = () => ({ passed: true, ownerClaims: [], factualClaims: [], voiceIss
 test('Reply generation uses the small contract and normalizes the internal route', async () => {
   const p = packet();
   let seen;
-  const raw = { decision: 'POST', finalText: 'Love this direction.', evidenceUsed: [], replyReview: 'A: PASS 1-16. B: PASS 1-16. A selected.' };
+  const raw = replyOutput(p.behavior);
   const output = await runtime.generateWriterOutput(p, 'LARGE MULTIFORMAT MANUAL', { skipReview: true, runAI: async request => {
     seen = request;
     return { output: raw, execution: { actualModel: 'fixture-luna' } };
   } });
-  assert.deepEqual(seen.schema.required, ['decision', 'finalText', 'evidenceUsed', 'replyReview']);
+  assert.deepEqual(seen.schema.required, ['decision', 'finalText', 'evidenceUsed', 'behavior', 'replyReview']);
   assert.equal(validateStructuredOutput(raw, seen.schema).valid, true);
   assert.equal(seen.prompt.includes('LARGE MULTIFORMAT MANUAL'), false);
   assert.equal(seen.prompt.includes('systems_consequence_signature'), false);
@@ -57,12 +58,12 @@ test('Reply projection keeps explicit repair, relationship and research context'
   assert.deepEqual(projected.topicBrief, p.topicBrief);
   assert.deepEqual(projected.writingStrategy, p.writingStrategy);
   assert.deepEqual(projected.currentDraft.gates, p.currentDraft.gates);
-  assert.equal(projected.currentDraft.editor.operatorContext, 'Owner context');
+  assert.equal(projected.currentDraft.editor.executorFeedback, 'Owner context');
   assert.equal(projected.currentDraft.editor.thesis, undefined);
   assert.deepEqual(contracts.projectReplyPacket(projected), projected);
   assert.ok(contracts.replyOutputSchema(p).required.includes('briefParagraphIds'));
   assert.throws(() => drafting.applyWriterOutput({ editor: { pipeline: 'reply' } },
-    { decision: 'POST', finalText: 'A reply.', evidenceUsed: ['invented'] }, { writerPacket: p }), /not supplied/);
+    { ...replyOutput(p.behavior, 'A reply.'), evidenceUsed: ['invented'] }, { writerPacket: p }), /not supplied/);
 });
 
 test('Non-Reply generation retains its existing document and schema', async () => {
@@ -70,7 +71,7 @@ test('Non-Reply generation retains its existing document and schema', async () =
   let seen;
   await runtime.generateWriterOutput(p, 'ORIGINAL CONTRACT', { skipReview: true, runAI: async request => {
     seen = request;
-    return { output: { decision: 'POST', pipeline: 'original', finalText: 'An original.', evidenceUsed: [] } };
+    return { output: { decision: 'POST', pipeline: 'original', finalText: 'An original.', evidenceUsed: [], behavior: selectedBehavior(p.behavior) } };
   } });
   assert.ok(seen.schema.required.includes('thesis'));
   assert.ok(seen.schema.required.includes('followValue'));
@@ -116,9 +117,9 @@ test('Real bridge returns the Reply contract and accepts its lean output', () =>
   const prepared = bridge('writer-packet', { key: candidate.key });
   assert.equal(prepared.packet.promptDocument, 'docs/REPLY_GENERATION_PROMPT_V2.md');
   assert.equal(prepared.contract, contracts.REPLY_CONTRACT);
-  assert.deepEqual(prepared.outputSchema.required, ['decision', 'finalText', 'evidenceUsed', 'replyReview']);
+  assert.deepEqual(prepared.outputSchema.required, ['decision', 'finalText', 'evidenceUsed', 'behavior', 'replyReview']);
   assert.equal(prepared.packet.persona.voiceCalibration, undefined);
-  bridge('apply-writer-output', { id: draft.id, generation: prepared.generation, output: { decision: 'POST', finalText: 'Love this direction.', evidenceUsed: [] } });
+  bridge('apply-writer-output', { id: draft.id, generation: prepared.generation, output: replyOutput(behavior) });
   const saved = store.getDraft(draft.id);
   assert.equal(saved.body, 'Love this direction.');
   assert.equal(saved.editor.pipeline, 'reply');

@@ -53,7 +53,7 @@ The review does not inspect today's ARM services, browser, model logs, or live X
 No tests ran during the initial revalidation. Later implementation evidence appears in each status and in `TASKS.md`.
 Evidence bullets describe the initial baseline unless dated otherwise. Source line numbers may move after repairs.
 Hamza separately authorized local implementation. Recording a task here grants no deployment, public send, timer or owner-policy authority.
-Read `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md` for the current local checkpoint and dated production records.
+Read `docs/ARM_24X7_HANDOFF.md` for the current local checkpoint and dated production records.
 
 Final graph review found three additional defects within existing tasks.
 XR-02 now rejects synthetic follower evidence at ingestion. XR-11's command sheet

@@ -1,3 +1,4 @@
+import { replyOutput } from './writer_fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
@@ -29,7 +30,7 @@ test('captures real schema and freezes packet, refusing extra fields and failed 
   writeFileSync(fixtureFile, JSON.stringify(fixture));
   assert.throws(() => call({ operation: 'prepare', caseId: 'VA-16', fixtureFile, outputDir: other, packetFile: path.join(dir, 'packet.json') }), error => error.status === 1 && /Frozen packet/.test(error.stdout));
   assert.deepEqual(load(dir, 'packet.json'), frozen);
-  const output = { decision: 'POST', finalText: 'Interesting approach to coding on a phone.', evidenceUsed: [], replyReview: 'A: PASS 1-16. B: FAIL 8. A selected.' };
+  const output = replyOutput(frozen.behavior, 'Interesting approach to coding on a phone.');
   save(dir, 'model-output.json', { ...output, extra: true });
   assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');
   assert.ok(load(dir, 'inspection.json').schemaErrors.length);
@@ -44,7 +45,8 @@ test('captures real schema and freezes packet, refusing extra fields and failed 
   assert.deepEqual(load(dir, 'review-request.json').schema, canonicalReview.schema);
   assert.deepEqual(load(dir, 'model-output.json'), output);
   save(dir, 'review-output.json', review);
-  assert.equal(call({ operation: 'inspect', outputDir: dir }).status, 'blocked');
+  assert.equal(call({ operation: 'inspect', outputDir: dir }).status, 'inspected');
+  assert.equal(load(dir, 'inspection.json').diagnosticStatus, 'blocked');
   assert.ok(load(dir, 'inspection.json').reviewFailures.length);
   save(dir, 'model-output.json', { ...output, extra: true });
   assert.equal(call({ operation: 'review-request', outputDir: dir }).status, 'blocked');

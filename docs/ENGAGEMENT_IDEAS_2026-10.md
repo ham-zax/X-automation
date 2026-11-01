@@ -1,6 +1,6 @@
 # Engagement ideas from the 13–14 October 2026 session
 
-October 28 continuation: `docs/GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md` and
+October 28 continuation: `docs/ARM_24X7_HANDOFF.md` and
 `TASKS.md` own the local checkpoint. Current source supersedes old code-gap claims.
 The dated stop record below remains history. Startup commands grant no new authority.
 

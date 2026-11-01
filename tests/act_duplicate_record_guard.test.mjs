@@ -1,4 +1,5 @@
 import test, { after } from 'node:test';
+process.env.X_GROWTH_REPLY_WRITER_MODE = 'operator'; // This file exercises the explicit manual authoring lane.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';

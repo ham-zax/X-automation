@@ -118,3 +118,10 @@ and timer autostart is disabled. The versioned timer uses OnUnitInactiveSec=5min
 so each finite session can schedule its successor after exit when later enabled.
 Existing activation-cadence drop-ins can coexist. systemd does not start a second
 copy of an already-running service. No operator runtime/model switch is deployed.
+
+Latest live selection: install ops/systemd/arm/terra.conf as the service drop-in
+terra.conf after checks. It overrides the older DeepSeek selection without deleting
+that selectable configuration. Operator and Writer use Terra6.1 medium. Sol high
+reviews. Current engine inventory permits this exact Claive Codex model/effort.
+Only enable the user timer under the owner's live authorization. Individual sessions
+stay bounded and obey saved rest, health, grant, claim and reconciliation rules.

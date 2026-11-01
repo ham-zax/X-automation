@@ -40,7 +40,7 @@ export function projectReplyPacket(packet) {
   const draft = packet.currentDraft;
   return {
     pipeline: 'reply', candidate: packet.candidate,
-    suggestedBehavior: packet.behavior,
+    suggestedBehavior: packet.suggestedBehavior ?? packet.behavior,
     ownerDirection: packet.ownerDirection || null,
     executorFeedback: packet.executorFeedback || '',
     suggestionPolicy: 'The executor suggests an act. Choose the act that fits the actual conversation. The suggestion is not evidence or an owner instruction.',
@@ -61,7 +61,7 @@ export function projectReplyPacket(packet) {
     ...(packet.discoveryVerification ? { discoveryVerification: packet.discoveryVerification } : {}),
     ...(draft ? { currentDraft: {
       body: draft.body || '',
-      editor: { finalText: draft.editor?.finalText || '', executorFeedback: packet.ownerDirection ? '' : draft.editor?.operatorContext || '' },
+      editor: { finalText: draft.editor?.finalText || '', executorFeedback: packet.ownerDirection ? '' : draft.editor?.executorFeedback || draft.editor?.operatorContext || '' },
       ...(draft.gates ? { gates: draft.gates } : {}),
     } } : {}),
     ...(packet.writingStrategy ? { writingStrategy: packet.writingStrategy } : {}),

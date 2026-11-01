@@ -16,7 +16,7 @@ Do not implement later phases by inventing interfaces that earlier plans have no
 
 Current local issue implementation: [Growth OS issues, 28 October 2026](GROWTH_ISSUE_IMPLEMENTATION_2026-10-28.md).
 The root `TASKS.md` owns its active task status and evidence.
-Read [the dated implementation handoff](../GROWTH_IMPLEMENTATION_HANDOFF_2026-10-28.md)
+Read [the dated implementation handoff](../ARM_24X7_HANDOFF.md)
 for local changes, historical deployment records and remaining acceptance.
 
 ```text
