@@ -1,5 +1,24 @@
 # Growth OS user services
 
+## Current ARM repair status, 1 November 2026
+
+TASKS.md owns the GQ repair status. The active execution update in
+`docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md` supersedes earlier model
+assignments. Terra6.1 medium writes Replies, Originals, Quotes and Threads for
+repair evidence. Sol6.1 high performs complex review. DeepSeek orchestrates.
+The separate content_review role stays configurable and inherits Writer if unbound.
+Reply v2 has structured candidates/checks/selection and a Writer-selected behavior.
+Profile act requires the exact saved generation. Quote also needs current server
+review. Originals/Threads keep reviewed approved queues. No new approval authority.
+Source normalization preserves extended note text without changing the trusted pin.
+The evaluator imports the active contract and separates diagnostic review failures.
+See `docs/research/production-reply-failure-2026-11-01/repair-terra-medium/README.md`
+and its OPERATIONS.md for actual evidence and limits. The ledger records their integration state.
+The operator and timer remain stopped pending bounded live acceptance.
+The final review found issues, followed by a parent repair round and focused checks. Historical entries below are dated evidence, not current deployment.
+No retained historical document or private backup is removed by this update.
+
+
 Current repository guidance: 31 October 2026, implementation commit `7880df5`.
 Production checkout: `/home/ubuntu/repo/x_test` on ARM. WSL is test-only.
 Do not start a second operator against another database copy.
@@ -85,3 +104,8 @@ existing independent review. Profile-mode operators use that command for
 Originals, Threads and Quotes instead of writing public prose themselves.
 Quotes still publish through act and its editorial checks. Originals and Threads
 still use the approved queue. These generation commands grant no authority.
+
+Attached sessions classify child quota/provider failures and use the existing
+persistent growth-runner-backoff.json delay. The launcher reports actual deadline
+and elapsed timestamps. Deferred launches allocate no browser tab or model child.
+No automatic model substitution occurs. A timer wake does not prove a public action.

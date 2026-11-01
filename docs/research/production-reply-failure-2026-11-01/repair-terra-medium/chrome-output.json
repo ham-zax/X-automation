@@ -1,0 +1,230 @@
+{
+  "decision": "POST",
+  "finalText": "A good reminder to check Chrome’s version.",
+  "behavior": {
+    "schemaVersion": 1,
+    "decision": "ACT",
+    "pipeline": "reply",
+    "primaryPurpose": "social_presence",
+    "secondaryPurposes": [],
+    "socialMode": "curious_peer",
+    "affectStrategy": "neutral",
+    "affectProvenance": "none",
+    "informationDepth": "social_only",
+    "conversationStage": "initial",
+    "reasonToExist": "Acknowledges the update prompt without claiming knowledge of Hamza’s Chrome version.",
+    "selectionSource": "editorial_ai",
+    "personaModelVersion": "hamza-v1-alpha-2026-10-02",
+    "provenance": {
+      "ownerFactsAllowed": false,
+      "ownerExperienceAllowed": false,
+      "sourceClaims": [],
+      "ownerClaims": [],
+      "restrictions": [],
+      "summary": ""
+    },
+    "selectedAt": null
+  },
+  "replyReview": {
+    "candidates": [
+      {
+        "id": "A",
+        "text": "A good reminder to check Chrome’s version.",
+        "checks": [
+          {
+            "rule": 1,
+            "status": "PASS",
+            "detail": "The author shares a security finding and asks about updating."
+          },
+          {
+            "rule": 2,
+            "status": "PASS",
+            "detail": "The reply acknowledges the update prompt."
+          },
+          {
+            "rule": 3,
+            "status": "PASS",
+            "detail": "The reply does not claim an unknown update status."
+          },
+          {
+            "rule": 4,
+            "status": "PASS",
+            "detail": "No explicit boundary is crossed."
+          },
+          {
+            "rule": 5,
+            "status": "PASS",
+            "detail": "The reply does not judge the author's work."
+          },
+          {
+            "rule": 6,
+            "status": "PASS",
+            "detail": "The reply does not appoint a test or priority."
+          },
+          {
+            "rule": 7,
+            "status": "PASS",
+            "detail": "The reply does not present the source as a new lesson."
+          },
+          {
+            "rule": 8,
+            "status": "PASS",
+            "detail": "The reply invents no experience or event."
+          },
+          {
+            "rule": 9,
+            "status": "PASS",
+            "detail": "The reply preserves the source's distinctions."
+          },
+          {
+            "rule": 10,
+            "status": "PASS",
+            "detail": "The reply makes no prediction."
+          },
+          {
+            "rule": 11,
+            "status": "PASS",
+            "detail": "The reply asks no question."
+          },
+          {
+            "rule": 12,
+            "status": "PASS",
+            "detail": "The reply asks for no details."
+          },
+          {
+            "rule": 13,
+            "status": "PASS",
+            "detail": "The reply assigns no task to the author."
+          },
+          {
+            "rule": 14,
+            "status": "PASS",
+            "detail": "The reply diminishes no achievement or setback."
+          },
+          {
+            "rule": 15,
+            "status": "PASS",
+            "detail": "The wording expresses a personal judgment."
+          },
+          {
+            "rule": 16,
+            "status": "PASS",
+            "detail": "The response is complete and concise."
+          }
+        ]
+      },
+      {
+        "id": "B",
+        "text": "That’s a good reason to check which Chrome version you’re on.",
+        "checks": [
+          {
+            "rule": 1,
+            "status": "PASS",
+            "detail": "The author shares a security finding and asks about updating."
+          },
+          {
+            "rule": 2,
+            "status": "PASS",
+            "detail": "The reply acknowledges the update prompt."
+          },
+          {
+            "rule": 3,
+            "status": "PASS",
+            "detail": "The reply does not claim an unknown update status."
+          },
+          {
+            "rule": 4,
+            "status": "PASS",
+            "detail": "No explicit boundary is crossed."
+          },
+          {
+            "rule": 5,
+            "status": "PASS",
+            "detail": "The reply does not judge the author's work."
+          },
+          {
+            "rule": 6,
+            "status": "PASS",
+            "detail": "The reply does not appoint a test or priority."
+          },
+          {
+            "rule": 7,
+            "status": "PASS",
+            "detail": "The reply does not present the source as a new lesson."
+          },
+          {
+            "rule": 8,
+            "status": "PASS",
+            "detail": "The reply invents no experience or event."
+          },
+          {
+            "rule": 9,
+            "status": "PASS",
+            "detail": "The reply preserves the source's distinctions."
+          },
+          {
+            "rule": 10,
+            "status": "PASS",
+            "detail": "The reply makes no prediction."
+          },
+          {
+            "rule": 11,
+            "status": "PASS",
+            "detail": "The reply asks no question."
+          },
+          {
+            "rule": 12,
+            "status": "PASS",
+            "detail": "The reply asks for no details."
+          },
+          {
+            "rule": 13,
+            "status": "PASS",
+            "detail": "The reply assigns no task to the author."
+          },
+          {
+            "rule": 14,
+            "status": "PASS",
+            "detail": "The reply diminishes no achievement or setback."
+          },
+          {
+            "rule": 15,
+            "status": "PASS",
+            "detail": "The wording expresses a personal judgment."
+          },
+          {
+            "rule": 16,
+            "status": "PASS",
+            "detail": "The response is complete and concise."
+          }
+        ]
+      }
+    ],
+    "selection": "A",
+    "reason": "A acknowledges the prompt without assuming or asserting anyone’s update status."
+  },
+  "evidenceUsed": [],
+  "pipeline": "reply",
+  "threadParts": [],
+  "execution": {
+    "invocationId": "375387e7-3198-4e57-b046-83ea1d7e330d",
+    "attempt": 1,
+    "runtime": "codex",
+    "provider": "runtime_managed",
+    "model": "gpt-6.1-terra",
+    "reasoning": "medium",
+    "profileId": 17,
+    "profileSource": "role",
+    "fallbackUsed": false,
+    "startedAt": 1793529801308,
+    "completedAt": 1793529812151,
+    "inputTokens": null,
+    "cachedInputTokens": null,
+    "outputTokens": null,
+    "reasoningTokens": null,
+    "outputTokenLimit": null,
+    "costUsd": null,
+    "modelCalls": null,
+    "toolCalls": null
+  }
+}

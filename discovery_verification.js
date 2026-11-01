@@ -3,6 +3,7 @@
 // This is a conservative, inspectable provenance/coverage gate, not a semantic
 // theorem prover: the independent reviewer must assess truth and contradictions.
 import { extractViralStyleFeatures } from './viral_style.js';
+import { isSubjectiveInterpretation } from './content_review.js';
 
 export const DISCOVERY_VERIFICATION_VERSION = 2;
 const MATERIAL_PRIMARY_KINDS = new Set(['github_readme', 'github_release', 'official_documentation']);
@@ -150,8 +151,7 @@ export function evaluateTechDiscoveryEvidence({
         continue;
       }
       if (claim.status === 'interpretation') {
-        if (!/^(?:i (?:think|believe|prefer|would)|my take|to me|the (?:real|interesting|useful|important) (?:part|lesson|bit|point)|worth (?:noting|watching)|why i (?:care|like)|this (?:feels|looks)|what matters)/i.test(segment)
-          || /\b(?:supports?|compatible|works? (?:on|with)|can run|runs? on|requires?|includes?|free|paid|costs?|version|all devices|every device)\b/i.test(segment)) {
+        if (!isSubjectiveInterpretation(segment)) {
           failures.push('UNSUPPORTED_INTERPRETATION_CLASS');
         }
         continue;

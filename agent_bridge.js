@@ -1527,10 +1527,10 @@ async function main() {
     const workflow = inspectWorkflow(payload.key);
     if (!workflow.draft) throw new Error('writer-generate requires an existing routed draft. Use create-draft first.');
     const { generateDraftCandidate } = await import('./web_api.js');
-    const generated = await generateDraftCandidate(workflow.draft);
+    const generated = await generateDraftCandidate(workflow.draft, { runId: payload.runId, sessionId: payload.sessionId });
     requireGrowthRunLease(payload.runId, payload.sessionId || '');
     result({ draft: generated.saved, queueItem: generated.queueItem, analysis: generated.analysis,
-      decision: generated.output.decision, writer: generated.output.execution, publicationAuthority: false });
+      decision: generated.output.decision, writerInvocationId: generated.output.execution?.invocationId || null, writer: generated.output.execution, publicationAuthority: false });
     return;
   }
 
@@ -1889,7 +1889,13 @@ async function main() {
     if (payload.runId) {
       requireGrowthRunLease(payload.runId, payload.sessionId || '', Date.now());
     }
-    const card = payload.card && typeof payload.card === 'object' ? payload.card : {};
+    let selectedWriter = null;
+    if (['reply', 'quote'].includes(validated.action) && (process.env.X_GROWTH_REPLY_WRITER_MODE || 'profile') === 'profile') {
+      selectedWriter = (await import('./store.js')).requireActWriterSelection({ ...payload, ...validated,
+        behavior: payload.behavior || payload.editorial?.behavior, personaVersion: getPersonaModelSummary().version });
+    }
+    const card = selectedWriter ? { ...payload.card, sourceText: getCandidate(selectedWriter.draft.candidateKey)?.text || '' }
+      : payload.card && typeof payload.card === 'object' ? payload.card : {};
     const author = String(card.author || payload.targetUsername ||
       (String(validated.targetUrl || '').match(/^https:\/\/x\.com\/([A-Za-z0-9_]+)\/status\//) || [])[1] || '').replace(/^@/, '');
     const observation = actModule.validateActObservation(payload.observation, {
@@ -1933,12 +1939,13 @@ async function main() {
       targetTweetId: validated.targetTweetId,
       targetUrl: validated.targetUrl,
       targetUsername: author,
-      candidateKey: validated.candidateKey || card.cardId || null,
-      editorial: payload.editorial || null,
+      candidateKey: selectedWriter?.draft.candidateKey || validated.candidateKey || card.cardId || null,
+      editorial: selectedWriter ? { ...payload.editorial, behavior: selectedWriter.draft.editor.behavior } : payload.editorial || null,
       runId: payload.runId || null,
       claimHolder: String(payload.sessionId || 'act_bridge'),
-      modelProvenance: validated.action === 'reply'
-        ? (await import('./act_reply_writer.js')).replyModelProvenance({ ...payload, targetTweetId: validated.targetTweetId }) : null,
+      writerSelection: { draftId: payload.draftId, writerInvocationId: payload.writerInvocationId, personaVersion: getPersonaModelSummary().version },
+      modelProvenance: ['reply', 'quote'].includes(validated.action)
+        ? (await import('./act_reply_writer.js')).replyModelProvenance({ ...payload, ...validated, candidateKey: selectedWriter?.draft.candidateKey || validated.candidateKey }) : null,
     });
     const drive = await actModule.driveBrowserSend({
       intentUrl,

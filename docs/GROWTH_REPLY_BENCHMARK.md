@@ -5,7 +5,7 @@ task-level recursion. It does not publish or change production settings.
 
 After the Reply integration, new Writer captures use the compact canonical
 `REPLY_GENERATION_PROMPT_V2.md` contract. The reply schema contains decision,
-finalText, evidenceUsed and replyReview, plus explicit topic citations when supplied. Historical
+finalText, evidenceUsed, selected behavior and a structured replyReview, plus explicit topic citations when supplied. Historical
 reports retain their original full/lean packets as evidence. The offline helper's
 explicit style fragment remains available through its injected contract option.
 It does not change the production contract or a bridge caller's authority.
@@ -80,7 +80,7 @@ uv run --no-project --python /home/ubuntu/repo/harness2/.venv/bin/python python 
 ```
 
 The default configuration chooses writer lane, fixed public fixtures,
-DeepSeek V4.1 Flash Free max as solver, and Terra high as reviewer/editor.
+Terra 6.1 medium as the author, Sol 6.1 high as reviewer, and Terra medium as editor. All targets remain configurable.
 The default ceiling is 24 logical T3 request reservations. This is not a hard
 provider model-call, token, or monetary cap. A T3 worker may make internal
 requests. The parent ledger also counts engineering and final review dispatches.
@@ -216,3 +216,12 @@ PYTHONDONTWRITEBYTECODE=1 uv run --no-project --python /home/ubuntu/repo/harness
 The Python check drives a mocked complete cycle through the actual Harness²
 library. It launches no live model. Tests exercise the offline protocol and
 isolation. They do not prove better replies, live reliability, or follower growth.
+
+GQ1 production alignment: Writer replay imports the active contract from
+reply_contract.js and captures generation with skipReview=true, as reply-generate
+does. The direct instruction replay expands its workflow in operator mode. Both
+remain limited offline replays, not full live runs. Any review-request/inspection
+review is an explicit diagnostic sidecar. Its diagnosticStatus is separate from
+preparation status and never establishes a production review or send authority.
+The existing Harness² input identity resolves the active contract export, includes
+its bytes and the live brief, and preserves historical runs unchanged.

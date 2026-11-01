@@ -2,6 +2,7 @@
 // fast lane: every failure reports `fallback: 'browser'` and the authorized browser
 // observation remains the route that always works. Nothing here can mutate X.
 import 'dotenv/config';
+import { captureNoteTexts } from './x_post_text.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -52,13 +53,14 @@ async function loadScraper({ dir, env }) {
   return { Scraper: (await import('xactions/client')).Scraper, source: 'xactions-installed' };
 }
 
-function slimPost(tweet) {
+function slimPost(tweet, extendedText = null) {
   if (!tweet?.id) return null;
   const author = tweet.username || null;
   return {
     id: String(tweet.id),
     author,
-    text: String(tweet.text || ''),
+    text: extendedText?.text ?? String(tweet.text || ''),
+    textSource: extendedText?.textSource || 'client_text',
     inReplyTo: tweet.inReplyToStatusId ? String(tweet.inReplyToStatusId) : null,
     conversationId: tweet.conversationId ? String(tweet.conversationId) : null,
     at: tweet.timeParsed ? new Date(tweet.timeParsed).toISOString() : null,
@@ -97,16 +99,23 @@ function clampLimit(value, fallback) {
 
 export async function createXReader({ dir, env = process.env, scraper: injected, handle } = {}) {
   const ownHandle = String(handle || env.X_ACCOUNT || 'ham_zax').replace(/^@/, '');
+  const sourceTexts = new Map();
   let scraper = injected;
   let source = injected ? 'injected' : null;
   if (!scraper) {
     if (!env.AUTH_TOKEN) throw new Error('AUTH_TOKEN is missing.');
     const loaded = await loadScraper({ dir, env });
     source = loaded.source;
-    scraper = new loaded.Scraper({ fetch: (url, options = {}) => fetch(url, {
-      ...options,
-      signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(READ_TIMEOUT_MS)]) : AbortSignal.timeout(READ_TIMEOUT_MS),
-    }) });
+    scraper = new loaded.Scraper({ fetch: async (url, options = {}) => {
+      const response = await fetch(url, {
+        ...options,
+        signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(READ_TIMEOUT_MS)]) : AbortSignal.timeout(READ_TIMEOUT_MS),
+      });
+      if (response.ok && /json/i.test(response.headers.get('content-type') || '')) {
+        captureNoteTexts(await response.clone().json(), sourceTexts);
+      }
+      return response;
+    } });
     const cookies = [{ name: 'auth_token', value: env.AUTH_TOKEN }];
     if (env.CT0) cookies.push({ name: 'ct0', value: env.CT0 });
     await scraper.setCookies(cookies);
@@ -115,7 +124,7 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
   async function search(query, limit, mode = SEARCH_MODES.latest) {
     const posts = [];
     for await (const tweet of scraper.searchTweets(query, limit, mode)) {
-      const post = slimPost(tweet);
+      const post = slimPost(tweet, sourceTexts.get(String(tweet?.id)));
       if (post) posts.push(post);
       if (posts.length >= limit) break;
     }
@@ -123,7 +132,8 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
   }
 
   async function post(id) {
-    const found = slimPost(await scraper.getTweet(tweetId(id, 'post')));
+    const raw = await scraper.getTweet(tweetId(id, 'post'));
+    const found = slimPost(raw, sourceTexts.get(String(raw?.id)));
     if (!found) throw new Error('Post not found.');
     return found;
   }

@@ -2,7 +2,7 @@ import { buildWriterPacket, applyWriterOutput } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { REPLY_CONTRACT, projectReplyPacket, replyOutputSchema } from './reply_contract.js';
 import { extractTweetIdFromUrl, validateActInput } from './act.js';
-import { getCandidate, getBlockingActAttemptForTarget, listAiRuns } from './store.js';
+import { getCandidate, getDraftByCandidate, saveDraft, upsertCandidates, ensureQueueItem, saveQueueItem, getBlockingActAttemptForTarget, requireActWriterSelection, recordServerWriterGeneration, runStoreTransaction } from './store.js';
 
 export function operatorModelReport(env = process.env) {
   return { runtime: env.X_GROWTH_OPERATOR_RUNTIME || 'unknown', model: env.X_GROWTH_OPERATOR_MODEL || null,
@@ -11,12 +11,35 @@ export function operatorModelReport(env = process.env) {
 
 export function replyModelProvenance(payload) {
   const operator = operatorModelReport();
-  if (!payload.writerInvocationId) return { operator, writer: { ...operator, source: 'operator_supplied_text' } };
-  const run = listAiRuns({ invocationId: payload.writerInvocationId, status: 'complete', limit: 1 })[0];
-  if (!run || !['writer', 'reply_writer'].includes(run.role) || run.metadata.runId !== payload.runId || run.metadata.sessionId !== payload.sessionId
-    || run.metadata.targetTweetId !== String(payload.targetTweetId)) throw new Error('Writer execution does not belong to this reply run and target.');
-  return { operator, writer: { invocationId: run.invocationId, runtime: run.runtime,
-    model: run.model, reasoning: run.reasoning, fallbackUsed: run.fallbackUsed } };
+  if ((process.env.X_GROWTH_REPLY_WRITER_MODE || 'profile') === 'operator') {
+    return { operator, writer: { ...operator, source: 'operator_supplied_text' } };
+  }
+  const selected = requireActWriterSelection({ ...payload, action: payload.action || 'reply', behavior: payload.behavior || payload.editorial?.behavior });
+  return { operator, writer: selected.writer };
+}
+
+// Both fields contain observed, untrusted context. Oversized excerpts must be
+// selected explicitly by the operator rather than silently clipped mid-claim.
+function observedReplyContext(payload) {
+  const conversationContext = payload.conversationContext ?? null;
+  const evidence = payload.evidence ?? [];
+  if (!Array.isArray(evidence)) throw new Error('reply-generate evidence must be an array.');
+  if (evidence.some(item => !item || typeof item !== 'object' || !item.id || !item.resolvedUrl
+    || typeof item.summary !== 'string' || typeof item.partial !== 'boolean'
+    || !['source_claim', 'primary_supported'].includes(item.status))) {
+    throw new Error('Evidence requires id, resolvedUrl, observed summary and partial coverage flag.');
+  }
+  if (conversationContext !== null && (typeof conversationContext !== 'object' || Array.isArray(conversationContext)
+    || typeof conversationContext.sourceUrl !== 'string' || !conversationContext.sourceUrl.trim()
+    || typeof conversationContext.partial !== 'boolean' || !Array.isArray(conversationContext.posts)
+    || conversationContext.posts.some(post => !post || typeof post.id !== 'string' || !post.id.trim()
+      || typeof post.url !== 'string' || !post.url.trim() || typeof post.text !== 'string'))) {
+    throw new Error('conversationContext requires sourceUrl, partial and observed posts with id, url and text.');
+  }
+  if (JSON.stringify({ conversationContext, evidence }).length > 16000) {
+    throw new Error('Reply context exceeds 16000 characters. Select bounded excerpts and mark partial coverage.');
+  }
+  return { conversationContext, evidence };
 }
 
 // Preparation only. The bridge checks the lease before and after this call.
@@ -34,13 +57,16 @@ export async function generateActReply(payload, { generate = generateWriterOutpu
   if (payload.behavior?.decision !== 'ACT') throw new Error('reply-generate requires an explicit ACT behavior.');
   if (getBlockingActAttemptForTarget(targetTweetId)) throw new Error('reply-generate target has an existing publication fence.');
   const candidateKey = String(payload.candidateKey || '').trim();
-  const saved = candidateKey ? getCandidate(candidateKey) : null;
-  if (saved && extractTweetIdFromUrl(saved.url) !== targetTweetId) throw new Error('reply-generate candidate does not match targetUrl.');
-  const candidate = { ...saved, key: candidateKey || targetUrl, source: 'x', url: targetUrl,
+  const savedAtStart = getCandidate(candidateKey || targetUrl);
+  const draftAtStart = getDraftByCandidate(candidateKey || targetUrl);
+  if (savedAtStart && extractTweetIdFromUrl(savedAtStart.url) !== targetTweetId) throw new Error('reply-generate candidate does not match targetUrl.');
+  const candidate = { ...savedAtStart, key: candidateKey || targetUrl, source: 'x', url: targetUrl,
     title: `@${url.pathname.split('/')[1]}`, text: sourceText };
-  const packet = buildWriterPacket({ candidate, queueItem: { pipeline: 'reply', behavior: payload.behavior },
-    draft: payload.feedback ? { body: '', editor: { pipeline: 'reply', operatorContext: String(payload.feedback) } } : null,
-    topicBrief: payload.resolvedTopicBrief || null });
+  const context = observedReplyContext(payload);
+  const writerBase = draftAtStart || { body: '', editor: { pipeline: 'reply' } };
+  const packet = buildWriterPacket({ candidate, ...context, queueItem: { pipeline: 'reply', behavior: payload.behavior },
+    draft: writerBase, topicBrief: payload.resolvedTopicBrief || null });
+  if (payload.feedback) packet.executorFeedback = String(payload.feedback);
   const operator = operatorModelReport(env);
   const mode = env.X_GROWTH_REPLY_WRITER_MODE || 'profile';
   if (!['operator', 'profile'].includes(mode)) throw new Error('Reply writer mode must be operator or profile.');
@@ -49,14 +75,37 @@ export async function generateActReply(payload, { generate = generateWriterOutpu
   const output = await generate(packet, REPLY_CONTRACT, { skipReview: true,
     metadata: { runId: payload.runId, sessionId: payload.sessionId, targetTweetId, operator } });
   if (!['POST', 'DO_NOT_POST'].includes(output.decision)) throw new Error('Writer returned an invalid Reply decision.');
-  const text = String(output.finalText || '').trim();
-  const applied = applyWriterOutput({ body: '', editor: { pipeline: 'reply' } }, output, { writerPacket: packet });
+  const text = String(output.finalText || '');
+  if (text !== text.trim()) throw new Error('Writer public text must not contain surrounding whitespace.');
+  const applied = applyWriterOutput(writerBase, output, { writerPacket: packet });
   const topicBrief = applied.editor.topicBrief || null;
   if (output.decision === 'POST') validateActInput({ action: 'reply', text, targetTweetId, targetUrl });
+  let saved = null;
+  if (output.decision === 'POST') {
+    saved = runStoreTransaction(() => {
+      if (!savedCandidateMatches(candidate, savedAtStart) || getBlockingActAttemptForTarget(targetTweetId)) {
+        throw new Error('Reply source or publication fence changed during generation.');
+      }
+      const current = getDraftByCandidate(candidate.key);
+      if (current?.updatedAt !== draftAtStart?.updatedAt) throw new Error('Reply draft changed during generation.');
+      upsertCandidates([candidate]);
+      const queue = ensureQueueItem(candidate.key, { pipeline: 'reply', lane: 'engagement', status: 'drafting' });
+      saveQueueItem({ ...queue, behavior: applied.editor.behavior });
+      const prepared = saveDraft({ ...current, ...applied, id: current?.id, candidateKey: candidate.key, status: 'draft' }, { expectedUpdatedAt: draftAtStart?.updatedAt });
+      recordServerWriterGeneration(prepared, { execution: output.execution, runId: payload.runId, sessionId: payload.sessionId, packet });
+      return prepared;
+    });
+  }
   return { status: output.decision === 'POST' ? 'generated' : 'skipped', text,
     writerInvocationId: output.execution?.invocationId || null, writer: output.execution || null,
-    replyReview: String(output.replyReview || ''),
-    operator, targetTweetId, targetUrl, candidateKey: candidateKey || null,
+    draftId: saved?.id || null, behavior: saved?.editor?.behavior || null,
+    replyReview: output.replyReview,
+    operator, targetTweetId, targetUrl, candidateKey: candidate.key,
     ...(topicBrief ? { topicBrief: { collectionId: topicBrief.collectionId, briefId: topicBrief.briefId, paragraphIds: topicBrief.paragraphIds } } : {}),
     publicationAuthority: false };
+}
+
+function savedCandidateMatches(candidate, before) {
+  const current = getCandidate(candidate.key);
+  return before ? current?.text === before.text && current?.url === before.url : !current;
 }

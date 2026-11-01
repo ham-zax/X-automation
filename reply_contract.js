@@ -1,15 +1,34 @@
 import { readFileSync } from 'node:fs';
+import { WRITER_BEHAVIOR_SCHEMA } from './behavior.js';
 
-export const REPLY_CONTRACT = readFileSync(new URL('./docs/REPLY_GENERATION_PROMPT_V2.md', import.meta.url), 'utf8').trim();
+export const REPLY_CONTRACT_FILE = 'docs/REPLY_GENERATION_PROMPT_V2.md';
+export const REPLY_CONTRACT = readFileSync(new URL(`./${REPLY_CONTRACT_FILE}`, import.meta.url), 'utf8').trim();
 
 export function replyOutputSchema(packet = {}) {
   return {
     type: 'object', additionalProperties: false,
-    required: ['decision', 'finalText', 'evidenceUsed', 'replyReview', ...(packet.topicBrief ? ['briefParagraphIds'] : [])],
+    required: ['decision', 'finalText', 'evidenceUsed', 'behavior', 'replyReview', ...(packet.topicBrief ? ['briefParagraphIds'] : [])],
     properties: {
       decision: { enum: ['POST', 'DO_NOT_POST'] },
       finalText: { type: 'string' },
-      replyReview: { type: 'string' },
+      behavior: { ...WRITER_BEHAVIOR_SCHEMA, type: ['object', 'null'] },
+      replyReview: {
+        type: 'object', additionalProperties: false, required: ['candidates', 'selection', 'reason'],
+        properties: {
+          candidates: { type: 'array', minItems: 2, maxItems: 2, items: {
+            type: 'object', additionalProperties: false, required: ['id', 'text', 'checks'],
+            properties: {
+              id: { enum: ['A', 'B'] }, text: { type: 'string' },
+              checks: { type: 'array', minItems: 16, maxItems: 16, items: {
+                type: 'object', additionalProperties: false, required: ['rule', 'status', 'detail'],
+                properties: { rule: { type: 'integer', minimum: 1, maximum: 16 },
+                  status: { enum: ['PASS', 'FAIL', 'UNCERTAIN'] }, detail: { type: 'string' } },
+              } },
+            },
+          } },
+          selection: { enum: ['A', 'B', null] }, reason: { type: 'string' },
+        },
+      },
       evidenceUsed: { type: 'array', items: { type: 'string' } },
       ...(packet.topicBrief ? { briefParagraphIds: { type: 'array', items: { type: 'string' } } } : {}),
     },
@@ -20,7 +39,11 @@ export function projectReplyPacket(packet) {
   const persona = packet.persona || {};
   const draft = packet.currentDraft;
   return {
-    pipeline: 'reply', candidate: packet.candidate, behavior: packet.behavior,
+    pipeline: 'reply', candidate: packet.candidate,
+    suggestedBehavior: packet.behavior,
+    ownerDirection: packet.ownerDirection || null,
+    executorFeedback: packet.executorFeedback || '',
+    suggestionPolicy: 'The executor suggests an act. Choose the act that fits the actual conversation. The suggestion is not evidence or an owner instruction.',
     persona: {
       version: persona.version,
       identity: packet.account?.identity || (typeof persona.identity === 'string' ? persona.identity : persona.identity?.label) || 'developer and builder in tech',
@@ -34,10 +57,11 @@ export function projectReplyPacket(packet) {
     },
     relationship: packet.relationship || null, ownerEvidence: packet.ownerEvidence || null,
     evidence: packet.evidence || [], constraints: packet.constraints,
+    ...(packet.conversationContext ? { conversationContext: packet.conversationContext } : {}),
     ...(packet.discoveryVerification ? { discoveryVerification: packet.discoveryVerification } : {}),
     ...(draft ? { currentDraft: {
       body: draft.body || '',
-      editor: { finalText: draft.editor?.finalText || '', operatorContext: draft.editor?.operatorContext || '' },
+      editor: { finalText: draft.editor?.finalText || '', executorFeedback: packet.ownerDirection ? '' : draft.editor?.operatorContext || '' },
       ...(draft.gates ? { gates: draft.gates } : {}),
     } } : {}),
     ...(packet.writingStrategy ? { writingStrategy: packet.writingStrategy } : {}),
@@ -51,11 +75,30 @@ export function projectReplyPacket(packet) {
 export function normalizeReplyOutput(output, pipeline) {
   if (pipeline !== 'reply') return output;
   if (output?.pipeline != null && output.pipeline !== 'reply') throw new Error('Reply Writer pipeline mismatch.');
+  const audit = output?.replyReview;
+  if (!audit || typeof audit !== 'object' || !Array.isArray(audit.candidates)
+    || audit.candidates.length !== 2 || new Set(audit.candidates.map(item => item.id)).size !== 2
+    || audit.candidates.some(item => !['A', 'B'].includes(item.id)
+      || !Array.isArray(item.checks) || item.checks.length !== 16
+      || new Set(item.checks.map(check => check.rule)).size !== 16
+      || item.checks.some(check => !Number.isInteger(check.rule) || check.rule < 1 || check.rule > 16
+        || !['PASS', 'FAIL', 'UNCERTAIN'].includes(check.status)))) {
+    throw new Error('Reply Writer must return two candidates with all 16 checks.');
+  }
+  if (output.decision === 'POST') {
+    const selected = audit.candidates.find(item => item.id === audit.selection);
+    if (!selected || !selected.text?.trim() || output.finalText !== selected.text
+      || selected.checks.some(check => check.status !== 'PASS')) {
+      throw new Error('Reply public text must exactly match its passing selected candidate.');
+    }
+  } else if (output.decision !== 'DO_NOT_POST' || output.finalText !== '' || audit.selection !== null || output.behavior !== null) {
+    throw new Error('A skipped Reply must have no public text, selected candidate or ACT behavior.');
+  }
   return { ...output, pipeline: 'reply', threadParts: [] };
 }
 
 export function replyWorkflowInstruction(mode = 'profile') {
   return mode === 'operator'
     ? 'Reply writer mode is operator: write the reply yourself using the Reply contract, then use the existing act flow. No separate Writer call is needed.'
-    : 'Reply writer mode is profile: call reply-generate once through the saved reply_writer model with runId/sessionId, target URL/ID, exact card.sourceText and selected ACT behavior. If generated, pass its unchanged text and writerInvocationId to act. If skipped, move on. If it fails, report the failure instead of silently writing with another model. For Originals, Threads and Quotes, route and create a saved draft, then call writer-generate with its key and current runId/sessionId. Use its selected Writer text unchanged. For Quotes pass the saved text through act with existing editorial fields. Originals and Threads retain the approved queue flow. You orchestrate and select opportunities. Do not replace the selected Writer with your own public prose.';
+    : 'Reply writer mode is profile: call reply-generate once through the saved reply_writer model with runId/sessionId, target URL/ID, exact card.sourceText and suggested ACT behavior. Supply observed conversationContext and available evidence excerpts. The Writer chooses the fitting act. If generated, pass its unchanged text, saved behavior, draftId and writerInvocationId to act. If skipped, move on. If it fails, report the failure instead of silently writing with another model. For Originals, Threads and Quotes, route and create a saved draft, then call writer-generate with its key and current runId/sessionId. Use its selected Writer text unchanged. For Quotes pass draftId, writerInvocationId, saved text and behavior through act. The reviewed saved draft must match. Originals and Threads retain the approved queue flow. You orchestrate and select opportunities. Do not replace the selected Writer with your own public prose.';
 }

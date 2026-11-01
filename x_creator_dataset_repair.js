@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { decodeText, textFromRaw } from './x_post_text.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Scraper, GRAPHQL_ENDPOINTS, buildGraphQLUrl } from 'xactions/client';
@@ -101,25 +102,6 @@ function unwrapTweetResult(value) {
   return result?.legacy ? result : null;
 }
 
-function decodeText(value) {
-  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
-  return String(value || '').replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (match, token) => {
-    if (token[0] !== '#') return named[token.toLowerCase()] ?? match;
-    const hex = token[1]?.toLowerCase() === 'x';
-    const codePoint = Number.parseInt(token.slice(hex ? 2 : 1), hex ? 16 : 10);
-    return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : match;
-  });
-}
-
-function textFromRaw(raw) {
-  const note = raw?.note_tweet?.note_tweet_results?.result
-    || raw?.note_tweet_results?.result
-    || raw?.note_tweet?.result;
-  if (typeof note?.text === 'string' && note.text.trim()) {
-    return { text: decodeText(note.text).trim(), textSource: 'note_tweet' };
-  }
-  return { text: decodeText(raw?.legacy?.full_text ?? raw?.legacy?.text ?? '').trim(), textSource: 'legacy_full_text' };
-}
 
 function normalizeMedia(legacy) {
   const media = legacy?.extended_entities?.media || legacy?.entities?.media || [];

@@ -1,0 +1,252 @@
+{
+  "measurements": {
+    "dueCount": 74,
+    "due": [
+      {
+        "queueItemId": 2579,
+        "tweetId": "2093286158302417292",
+        "windowMinutes": 1440,
+        "dueAt": 1787999701059
+      },
+      {
+        "queueItemId": 2617,
+        "tweetId": "2093354610237063478",
+        "windowMinutes": 1440,
+        "dueAt": 1788016024081
+      },
+      {
+        "queueItemId": 3085,
+        "tweetId": "2093396429444419796",
+        "windowMinutes": 1440,
+        "dueAt": 1788026081436
+      },
+      {
+        "queueItemId": 3276,
+        "tweetId": "2093460867291779569",
+        "windowMinutes": 1440,
+        "dueAt": 1788041348939
+      },
+      {
+        "queueItemId": 3245,
+        "tweetId": "2093468503076692129",
+        "windowMinutes": 1440,
+        "dueAt": 1788043160554
+      },
+      {
+        "queueItemId": 3223,
+        "tweetId": "2093581753760059885",
+        "windowMinutes": 15,
+        "dueAt": 1787984661621
+      },
+      {
+        "queueItemId": 3223,
+        "tweetId": "2093581753760059885",
+        "windowMinutes": 60,
+        "dueAt": 1787987361621
+      },
+      {
+        "queueItemId": 3223,
+        "tweetId": "2093581753760059885",
+        "windowMinutes": 360,
+        "dueAt": 1788005361621
+      },
+      {
+        "queueItemId": 3223,
+        "tweetId": "2093581753760059885",
+        "windowMinutes": 1440,
+        "dueAt": 1788070161621
+      },
+      {
+        "queueItemId": 4650,
+        "tweetId": "2093604679884427657",
+        "windowMinutes": 15,
+        "dueAt": 1787990127000
+      }
+    ]
+  },
+  "reconciliation": {
+    "activeCount": 0,
+    "investigatingCount": 0,
+    "sendStartedCount": 0,
+    "claimedCount": 0,
+    "closedUnresolvedCount": 20,
+    "mainFeedBlockingAttemptId": null,
+    "mainFeedBlockingQueueItemId": null
+  },
+  "lastRun": {
+    "runId": "aa30a004-c358-49d3-be76-eb3b9513876a",
+    "status": "partial",
+    "stopReason": "resource_ceiling_reached",
+    "startedAt": 1793469512321,
+    "finishedAt": 1793524353937,
+    "actions": {
+      "replies": 3,
+      "quotes": 0,
+      "reposts": 0,
+      "originals": 0,
+      "total": 3
+    }
+  },
+  "unresolvedAttempts": [
+    {
+      "attemptId": "1e363f31-eaca-44c1-b95c-1017f2a9b6fc",
+      "queueItemId": 972713,
+      "targetUrl": "https://x.com/chinazhidx/status/2109605275929853963",
+      "createdAt": 1791807734962,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "c8a99266-b68c-46d9-986e-a5c2671ac279",
+      "queueItemId": 957643,
+      "targetUrl": "https://x.com/Israfilv2/status/2109522211577188403",
+      "createdAt": 1791790553887,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "1e1fb01b-5a4f-42e6-8ce2-beaaca967bf0",
+      "queueItemId": 782817,
+      "targetUrl": "https://x.com/trq212/status/2108312534222778407",
+      "createdAt": 1791496088574,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "afa489bd-a1df-4b00-b8c7-94334bd3680a",
+      "queueItemId": 781424,
+      "targetUrl": "https://x.com/DanKornas/status/2108287657411563976",
+      "createdAt": 1791495536218,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "e3b0d03d-8fd0-4592-a164-491ac938a4df",
+      "queueItemId": 775000,
+      "targetUrl": "https://x.com/theo/status/2108174634655117653",
+      "createdAt": 1791470959266,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "da68d7c7-24d2-4f4f-8b9d-c904c1ae9a78",
+      "queueItemId": 763723,
+      "targetUrl": "",
+      "createdAt": 1791456455522,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "79f8f60e-66fd-426b-a574-b8466f962dfc",
+      "queueItemId": 743384,
+      "targetUrl": "",
+      "createdAt": 1791409274409,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "635d74bb-a7b5-448d-a039-062cc4145f22",
+      "queueItemId": 747220,
+      "targetUrl": "",
+      "createdAt": 1791362197772,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "fb8b7ab8-5ab8-40a9-9f84-e19637614b2c",
+      "queueItemId": 730510,
+      "targetUrl": "https://x.com/karrisaarinen/status/2107676903553585155",
+      "createdAt": 1791358127751,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "44e05e5a-66d3-4b1b-a3f8-d1b05e31d6d6",
+      "queueItemId": 59932,
+      "targetUrl": "",
+      "createdAt": 1789136990299,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "e7dbecec-8573-4886-b1a4-1fc1492055cb",
+      "queueItemId": 59724,
+      "targetUrl": "",
+      "createdAt": 1789135509694,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "a2fec589-6692-4f76-89d3-22c3c3c29bee",
+      "queueItemId": 62215,
+      "targetUrl": "",
+      "createdAt": 1789128681061,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "dc468a7a-d275-4da0-b8c4-cb23833412e8",
+      "queueItemId": 61698,
+      "targetUrl": "",
+      "createdAt": 1789124967621,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "b56e7e53-5eb2-48d0-a0e4-36c7cf84ba5f",
+      "queueItemId": 55165,
+      "targetUrl": "",
+      "createdAt": 1789116611752,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "c665b426-f6dd-4025-81e5-e83be97c18da",
+      "queueItemId": 55701,
+      "targetUrl": "",
+      "createdAt": 1789115371669,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "89c8e910-43cd-4cc1-a1df-ee6f25c1b0a3",
+      "queueItemId": 47544,
+      "targetUrl": "",
+      "createdAt": 1789091492926,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "b531c202-d87d-40b8-8d90-5386b8ff1556",
+      "queueItemId": 50759,
+      "targetUrl": "",
+      "createdAt": 1789088073892,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "e286b4df-0e65-43f5-ac9f-60b022ef1b45",
+      "queueItemId": 42617,
+      "targetUrl": "",
+      "createdAt": 1789078845922,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "ee18c0f4-593a-4522-9ea8-7b2592d0bf05",
+      "queueItemId": 42743,
+      "targetUrl": "",
+      "createdAt": 1789078395811,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    },
+    {
+      "attemptId": "dc463031-285f-4047-ae5f-691a60057fd3",
+      "queueItemId": 20826,
+      "targetUrl": "",
+      "createdAt": 1788859934089,
+      "state": "closed_unresolved",
+      "outputUrl": null
+    }
+  ]
+}

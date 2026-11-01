@@ -130,6 +130,10 @@ import {
   retireLearnedRule,
   runStoreTransaction,
   saveDraft,
+  recordServerWriterGeneration,
+  requireWriterSourceSnapshot,
+  writerEditorialSnapshot,
+  saveQueueItem,
   saveGrowthFocusObjective,
   saveNicheProfile,
   startGrowthOperatorDelegation,
@@ -706,7 +710,7 @@ function writerEditorialContext(candidate, queueItem) {
 // sources whose canonical draft candidate is not itself a source post.
 export function buildGeneratedWriterPacket({ candidate, queueItem, draft, strategyGeneration, editorialContext }) {
   const username = String(queueItem.targetUsername || candidate.username || candidate.authorUsername || candidate.author || '').replace(/^@/, '').trim();
-  return buildWriterPacket({
+  const packet = buildWriterPacket({
     candidate, queueItem, draft,
     evidence: editorialContext.evidence,
     sourceCandidates: listQueueSources(queueItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean),
@@ -718,9 +722,11 @@ export function buildGeneratedWriterPacket({ candidate, queueItem, draft, strate
     health: getAccountHealthSummary().health,
     writingStrategy: strategyGeneration.writingStrategy,
   });
+  packet.editorialSnapshot = writerEditorialSnapshot(queueItem);
+  return packet;
 }
 
-export async function generateDraftCandidate(current) {
+export async function generateDraftCandidate(current, executionContext = {}) {
   const candidate = getCandidate(current.candidateKey);
   if (!candidate) throw validationError('Draft source candidate not found.');
   const queueItem = getQueueItemByCandidate(candidate.key) || ensureCandidateWorkflow(candidate.key).queueItem;
@@ -736,7 +742,7 @@ export async function generateDraftCandidate(current) {
   const packet = buildGeneratedWriterPacket({ candidate, queueItem, draft: current,
     strategyGeneration, editorialContext });
   const promptDocumentText = await fs.readFile(path.resolve(packet.promptDocument), 'utf8');
-  const output = await generateWriterOutput(packet, promptDocumentText, { skipReview: true });
+  const output = await generateWriterOutput(packet, promptDocumentText, { skipReview: true, metadata: executionContext });
   const latestDraft = getDraft(current.id);
   const latestQueue = getQueueItem(queueItem.id);
   if (!latestDraft || latestDraft.updatedAt !== current.updatedAt || latestDraft.status !== current.status || !latestQueue || latestQueue.status !== queueItem.status || latestQueue.pipeline !== queueItem.pipeline) {
@@ -752,10 +758,19 @@ export async function generateDraftCandidate(current) {
     writerExecutionSource: 'writer_runtime',
   });
   const next = applyWriterOutput(writerBase, output, { generationProvenance, writerPacket: packet });
-  let analysis = evaluateDraftQuality(candidate, next, pipeline, {
-    relevanceOverride: queueItem.relevance?.humanOverride || null,
+  let analysis;
+  let saved = runStoreTransaction(() => {
+    requireWriterSourceSnapshot(packet);
+    const beforeSave = getDraft(current.id);
+    const queue = getQueueItem(queueItem.id);
+    if (beforeSave?.updatedAt !== current.updatedAt || queue?.status !== queueItem.status || queue?.pipeline !== pipeline) {
+      throw Object.assign(validationError('Draft or queue changed during generation.'), { code: 'DRAFT_CONFLICT', status: 409 });
+    }
+    if (queue.status !== 'drafting') routeCandidate(candidate.key, pipeline, { actor: 'agent' });
+    saveQueueItem({ ...getQueueItem(queueItem.id), behavior: next.editor.behavior });
+    analysis = evaluateDraftQuality(candidate, next, pipeline, { relevanceOverride: queueItem.relevance?.humanOverride || null });
+    return saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' }, { expectedUpdatedAt: getDraft(current.id).updatedAt });
   });
-  let saved = saveDraft({ ...next, gates: analysis.gates, qualityScore: analysis.score, status: 'draft' }, { expectedUpdatedAt: current.updatedAt });
   // The server executes the independent review; browser/API input cannot
   // mint its attestation. A failed review leaves the draft editable.
   const reviewed = await independentlyReviewAndSaveDraft(saved, packet, output);
@@ -764,9 +779,7 @@ export async function generateDraftCandidate(current) {
     relevanceOverride: queueItem.relevance?.humanOverride || null,
   });
   saved = saveDraft({ ...saved, gates: analysis.gates, qualityScore: analysis.score });
-  if (queueItem.status !== 'drafting' || queueItem.pipeline !== pipeline) {
-    routeCandidate(candidate.key, pipeline, { actor: 'agent' });
-  }
+  if (output.decision === 'POST') runStoreTransaction(() => recordServerWriterGeneration(saved, { execution: output.execution, ...executionContext, packet }));
   return { saved, queueItem: getQueueItemByCandidate(candidate.key), output, analysis };
 }
 
@@ -3214,6 +3227,7 @@ function applyEditorPayload(current, payload) {
     updated.editor = {
       ...(updated.editor || {}),
       operatorContext: String(payload.operatorContext || '').trim().slice(0, 12_000),
+      operatorContextSource: 'human_web',
     };
   }
   if (payload.body !== undefined) {

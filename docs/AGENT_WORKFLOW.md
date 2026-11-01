@@ -54,10 +54,16 @@ The browser lease and current publication gates remain in force.
 - `operator` mode: the operator writes Replies itself, then calls `act`.
   No extra Writer call is needed.
 - `profile` mode: call `reply-generate` with the current run/session, target URL,
-  exact `card.sourceText`, selected ACT `behavior`, and optional `candidateKey`.
+  exact `card.sourceText`, suggested ACT `behavior`, and optional `candidateKey`.
+  The Writer chooses the fitting act. Include observed `conversationContext` and
+  available `evidence` when needed. `conversationContext` contains `sourceUrl`,
+  `partial` and `posts`, each with `id`, `url` and observed `text`. Evidence entries carry `id`, `resolvedUrl`,
+  `summary`, `status`, `partial` and optional `location`. Context and evidence total
+  at most 16000 characters. Select partial excerpts explicitly rather than clipping.
   The saved `reply_writer` role writes one Reply using contract v2.
   It can use the same model or a different model from the operator.
-  Pass generated `text` and `writerInvocationId` to `act` with the existing target
+  Pass generated `text`, `draftId`, `writerInvocationId` and saved `behavior`
+  to `act` with the existing target
   and card fields. A skip ends that opportunity. Report a Writer failure.
   Do not silently substitute another model.
 
@@ -65,23 +71,27 @@ The browser lease and current publication gates remain in force.
 Optional topic citations use the existing `topicBrief` selector.
 Existing Writer profile fallbacks still apply and appear in execution metadata.
 Originals and Threads retain their existing Writer and independent review path.
-No extra reply critic runs. Candidate selection and any revision required by
+No extra reply critic runs. Independent standalone reviews use content_review. Candidate selection and any revision required by
 contract v2 happen inside the same Writer invocation.
 
 Select models in AI Settings under Reply Writer and Writer (Originals, Quotes,
 Threads), or use `ai-bind-role` with `role: reply_writer` or `role: writer`.
+The independent reviewer has its own `content_review` role. An unbound reviewer
+inherits Writer, preserving the same-model option with a fresh review invocation.
 The shared Writer setting changes those three standalone formats together.
 In profile mode, route and create a draft for each Original, Thread or Quote.
 Call `writer-generate` with its `key`, `runId` and `sessionId`. The command reuses
 existing generation, strategy selection, server review and draft persistence.
-It returns draft, queueItem, analysis, decision and Writer execution. It never
-publishes. Pass a Quote's saved body unchanged through `act` with existing
-editorial fields. Originals and Threads retain the approved queue path.
+It returns draft, queueItem, analysis, decision, writerInvocationId and Writer execution. It never
+publishes. Pass a Quote's saved body, draftId, writerInvocationId and behavior
+unchanged through `act` with existing editorial fields. Its current saved review
+must pass. Changed text, source, context or conflicting behavior needs regeneration. Originals and Threads retain the approved queue path.
 The operator selects and orchestrates. The selected Writer supplies public text.
 The direct `act` command itself does not invoke a Quote Writer.
 
 Publication attempts record the configured operator and, when supplied, the
-Writer execution reference. The operator report identifies requested settings.
+Writer execution reference. Profile Reply/Quote claims require the exact saved
+selection. The operator report identifies requested settings.
 It does not establish a provider's hidden routing. The Writer execution records
 its reported model and fallback. The reference is for audit, not proof that text
 remains unchanged. The existing `act` checks still decide publication eligibility.

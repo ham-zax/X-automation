@@ -580,7 +580,7 @@ export function runChild(command, { cwd = REPO, timeoutMs, killGraceMs = 5_000, 
 
 // Patterns are matched against the output tail that runChild captures from a failed child.
 export const CHILD_FAILURE_PATTERNS = Object.freeze({
-  rate_limited: /\b429\b|rate limit|quota|too many requests/i,
+  rate_limited: /\b429\b|rate limit|quota|too many requests|(?:free )?usage limit reached/i,
   provider_error: /\b5\d{2}\b|overloaded|ECONNRESET|ETIMEDOUT|socket hang up|provider[\s_-]*error/i,
 });
 

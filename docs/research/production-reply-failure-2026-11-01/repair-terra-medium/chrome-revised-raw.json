@@ -1,0 +1,216 @@
+{
+  "output": {
+    "decision": "POST",
+    "finalText": "A four-bug chain that gets code outside the sandbox from one page is wild.",
+    "behavior": {
+      "primaryPurpose": "social_presence",
+      "secondaryPurposes": [],
+      "socialMode": "curious_peer",
+      "affectStrategy": "match",
+      "affectProvenance": "strategic",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "A brief reaction fits the striking attack chain in the post."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "A four-bug chain that gets code outside the sandbox from one page is wild.",
+          "checks": [
+            {
+              "rule": 1,
+              "status": "PASS",
+              "detail": "Responds to the reported attack chain."
+            },
+            {
+              "rule": 2,
+              "status": "PASS",
+              "detail": "Offers a fitting reaction."
+            },
+            {
+              "rule": 3,
+              "status": "PASS",
+              "detail": "The update question is a rhetorical nudge."
+            },
+            {
+              "rule": 4,
+              "status": "PASS",
+              "detail": "No explicit boundary is breached."
+            },
+            {
+              "rule": 5,
+              "status": "PASS",
+              "detail": "Does not judge the author's work."
+            },
+            {
+              "rule": 6,
+              "status": "PASS",
+              "detail": "Does not appoint a test or priority."
+            },
+            {
+              "rule": 7,
+              "status": "PASS",
+              "detail": "Reacts without presenting a lesson."
+            },
+            {
+              "rule": 8,
+              "status": "PASS",
+              "detail": "The attack details come from the source."
+            },
+            {
+              "rule": 9,
+              "status": "PASS",
+              "detail": "Preserves the reported chain and outcome."
+            },
+            {
+              "rule": 10,
+              "status": "PASS",
+              "detail": "Makes no prediction."
+            },
+            {
+              "rule": 11,
+              "status": "PASS",
+              "detail": "Asks no question."
+            },
+            {
+              "rule": 12,
+              "status": "PASS",
+              "detail": "Asks no question."
+            },
+            {
+              "rule": 13,
+              "status": "PASS",
+              "detail": "Offers no assignment."
+            },
+            {
+              "rule": 14,
+              "status": "PASS",
+              "detail": "Does not diminish an achievement or joke about a setback."
+            },
+            {
+              "rule": 15,
+              "status": "PASS",
+              "detail": "“wild” expresses a reaction."
+            },
+            {
+              "rule": 16,
+              "status": "PASS",
+              "detail": "The reaction is complete."
+            }
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Four bugs chained into a sandbox escape from opening a page. That's a striking result.",
+          "checks": [
+            {
+              "rule": 1,
+              "status": "PASS",
+              "detail": "Responds to the reported attack chain."
+            },
+            {
+              "rule": 2,
+              "status": "PASS",
+              "detail": "Offers a fitting reaction."
+            },
+            {
+              "rule": 3,
+              "status": "PASS",
+              "detail": "The update question is a rhetorical nudge."
+            },
+            {
+              "rule": 4,
+              "status": "PASS",
+              "detail": "No explicit boundary is breached."
+            },
+            {
+              "rule": 5,
+              "status": "PASS",
+              "detail": "Does not judge the author's work."
+            },
+            {
+              "rule": 6,
+              "status": "PASS",
+              "detail": "Does not appoint a test or priority."
+            },
+            {
+              "rule": 7,
+              "status": "PASS",
+              "detail": "Reacts without presenting a lesson."
+            },
+            {
+              "rule": 8,
+              "status": "PASS",
+              "detail": "The attack details come from the source."
+            },
+            {
+              "rule": 9,
+              "status": "PASS",
+              "detail": "Preserves the reported chain and outcome."
+            },
+            {
+              "rule": 10,
+              "status": "PASS",
+              "detail": "Makes no prediction."
+            },
+            {
+              "rule": 11,
+              "status": "PASS",
+              "detail": "Asks no question."
+            },
+            {
+              "rule": 12,
+              "status": "PASS",
+              "detail": "Asks no question."
+            },
+            {
+              "rule": 13,
+              "status": "PASS",
+              "detail": "Offers no assignment."
+            },
+            {
+              "rule": 14,
+              "status": "PASS",
+              "detail": "Does not diminish an achievement or joke about a setback."
+            },
+            {
+              "rule": 15,
+              "status": "PASS",
+              "detail": "“striking” expresses a reaction."
+            },
+            {
+              "rule": 16,
+              "status": "PASS",
+              "detail": "The reaction is complete."
+            }
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "A sounds more natural as a brief peer reaction and retains the concrete detail that prompted it."
+    },
+    "evidenceUsed": []
+  },
+  "execution": {
+    "invocationId": "863be58a-0f7f-44bb-8831-5b62e3239fb1",
+    "attempt": 1,
+    "runtime": "codex",
+    "provider": "runtime_managed",
+    "model": "gpt-6.1-terra",
+    "reasoning": "medium",
+    "profileId": 17,
+    "profileSource": "role",
+    "fallbackUsed": false,
+    "startedAt": 1793529921744,
+    "completedAt": 1793529930885,
+    "inputTokens": null,
+    "cachedInputTokens": null,
+    "outputTokens": null,
+    "reasoningTokens": null,
+    "outputTokenLimit": null,
+    "costUsd": null,
+    "modelCalls": null,
+    "toolCalls": null
+  }
+}

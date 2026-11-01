@@ -1733,7 +1733,7 @@ export interface AIProfileView {
 }
 
 export interface AIRoleView {
-  role: 'continuous_scan' | 'editorial_scan' | 'editorial_final' | 'audience_review' | 'writer' | 'reply_writer'
+  role: 'continuous_scan' | 'editorial_scan' | 'editorial_final' | 'audience_review' | 'writer' | 'reply_writer' | 'content_review'
   activity: 'not_active' | 'configured' | 'unconfigured'
   primaryProfileId: number | null
   fallbackProfileId: number | null

@@ -1,0 +1,68 @@
+{
+  "behavior": {
+    "primaryPurpose": "social_presence",
+    "secondaryPurposes": [],
+    "socialMode": "opinionated_peer",
+    "affectStrategy": "neutral",
+    "affectProvenance": "none",
+    "informationDepth": "social_only",
+    "conversationStage": "initial",
+    "reasonToExist": "Express a preference for adapting responses to the conversation."
+  },
+  "decision": "DO_NOT_POST",
+  "pipeline": "thread",
+  "thesis": "",
+  "finalText": "",
+  "threadParts": [
+    "A good reply doesn't always need to teach someone something.",
+    "Sometimes the right response is a joke, a celebration, or a simple show of support."
+  ],
+  "semanticAnchors": [],
+  "evidenceUsed": [],
+  "media": {
+    "required": false,
+    "type": "none",
+    "reason": "The reaction stands alone as text.",
+    "source": "",
+    "altText": ""
+  },
+  "discussionQuestion": null,
+  "followValue": "Shows a preference for conversation that fits the moment.",
+  "relationshipValue": null,
+  "profileProofValue": "Expresses the account's social voice.",
+  "riskFlags": [
+    "The idea fits in one post. A thread adds no necessary depth."
+  ],
+  "contentReview": {
+    "passed": false,
+    "available": false,
+    "factualClaims": [],
+    "ownerClaims": [],
+    "voiceIssues": [],
+    "issues": [
+      "Content review unavailable; review the draft again before autonomous approval."
+    ],
+    "reviewer": "writer_runtime"
+  },
+  "execution": {
+    "invocationId": "389a0008-153f-4a82-af1f-e05c3ff7b00a",
+    "attempt": 1,
+    "runtime": "codex",
+    "provider": "runtime_managed",
+    "model": "gpt-6.1-terra",
+    "reasoning": "medium",
+    "profileId": 17,
+    "profileSource": "role",
+    "fallbackUsed": false,
+    "startedAt": 1793530592456,
+    "completedAt": 1793530600737,
+    "inputTokens": null,
+    "cachedInputTokens": null,
+    "outputTokens": null,
+    "reasoningTokens": null,
+    "outputTokenLimit": null,
+    "costUsd": null,
+    "modelCalls": null,
+    "toolCalls": null
+  }
+}

@@ -225,6 +225,46 @@ export function validateBehaviorDecision(input, {
   return { valid: errors.length === 0, errors, behavior };
 }
 
+// Writer choices use the existing vocabulary, without normalization fallbacks.
+export const WRITER_BEHAVIOR_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['primaryPurpose', 'secondaryPurposes', 'socialMode', 'affectStrategy', 'affectProvenance', 'informationDepth', 'conversationStage', 'reasonToExist'],
+  properties: {
+    primaryPurpose: { enum: ACTION_PURPOSES },
+    secondaryPurposes: { type: 'array', items: { enum: ACTION_PURPOSES } },
+    socialMode: { enum: SOCIAL_MODES }, affectStrategy: { enum: AFFECT_STRATEGIES },
+    affectProvenance: { enum: AFFECT_PROVENANCE }, informationDepth: { enum: INFORMATION_DEPTHS },
+    conversationStage: { enum: CONVERSATION_STAGES }, reasonToExist: { type: 'string' },
+  },
+};
+
+export function writerSelectedBehavior(input, { pipeline, personaVersion = '' } = {}) {
+  for (const [field, schema] of Object.entries(WRITER_BEHAVIOR_SCHEMA.properties)) {
+    const value = input?.[field];
+    if (schema.enum ? !schema.enum.includes(value)
+      : schema.type === 'array' ? !Array.isArray(value) || value.some(item => !schema.items.enum.includes(item))
+        : typeof value !== 'string' || !value.trim()) {
+      throw new Error(`Writer selected an invalid behavior.${field}.`);
+    }
+  }
+  const checked = validateBehaviorDecision({ ...input, decision: 'ACT', selectionSource: 'editorial_ai', personaModelVersion: personaVersion }, { pipeline, requireAct: true });
+  if (!checked.valid) throw new Error(`Invalid Writer behavior: ${checked.errors.join(' ')}`);
+  return checked.behavior;
+}
+
+export function draftSelectedBehavior(draft, requested, pipeline) {
+  const saved = draft?.editor?.behavior;
+  if (!draft?.editor?.writerBehaviorSelected) return normalizeBehaviorDecision(requested || saved || {}, { pipeline });
+  if (requested) {
+    const keys = ['decision', ...WRITER_BEHAVIOR_SCHEMA.required];
+    const normalized = normalizeBehaviorDecision(requested, { pipeline });
+    if (keys.some(key => JSON.stringify(normalized[key]) !== JSON.stringify(saved?.[key]))) {
+      throw new Error('Caller behavior conflicts with the saved Writer selection.');
+    }
+  }
+  return normalizeBehaviorDecision(saved, { pipeline });
+}
+
 export function behaviorDecisionSupportsSocialOnly(input = {}) {
   const behavior = normalizeBehaviorDecision(input);
   if (behavior.primaryPurpose && SOCIAL_PURPOSES.has(behavior.primaryPurpose)) return true;

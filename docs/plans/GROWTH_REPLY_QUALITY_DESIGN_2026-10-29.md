@@ -318,6 +318,16 @@ the amended text. No repair implementation or public restart accompanies this
 document. TaskStartSnapshot: 83dd296, main.
 TASKS.md owns current dependencies, statuses, dispatch IDs and budgets.
 
+### Active execution update
+
+The owner starts implementation and permits a bounded fresh live test after the
+repaired path passes assessment. Latest model clarification: Terra6.1 medium
+writes Replies, Originals, Quotes and Threads as evidence during this upgrade.
+Terra6.1 xhigh or Sol6.1 handles complex work. Sol6.1 high is selected for review.
+DeepSeek retains orchestration. Earlier GLM-author/Terra-evaluator assignments
+below describe the original proposal and are superseded by this update.
+All roles stay configurable. A model pass does not promise future quality.
+
 ### Goal and acceptance
 
 Produce replies, Originals, Quotes and Threads that fit Hamza's developer/builder

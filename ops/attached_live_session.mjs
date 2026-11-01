@@ -7,7 +7,7 @@ import { REPLY_CONTRACT, replyWorkflowInstruction } from '../reply_contract.js';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runtimeConfig, runChild, commandFor } from '../growth_agent_runner.js';
+import { runtimeConfig, runChild, commandFor, classifyChildResult, readBackoffState, writeBackoffState, nextBackoffState, backoffGateEnabled } from '../growth_agent_runner.js';
 import { browserOperatorContract } from './browser_operator_contract.js';
 import { leaseAgentBrowserTab } from './agent_browser_session.js';
 
@@ -57,6 +57,15 @@ export async function runAttachedLiveSession(options = {}) {
     model: config.model || null, reasoning: config.reasoning || (config.runtime === 'pi' ? config.thinking : null),
     replyWriterMode: config.replyWriterMode || 'profile', source: 'launcher_command_configuration' };
 
+  const backoffFile = process.env.X_GROWTH_AGENT_BACKOFF_FILE || path.join(stateDir, 'growth-runner-backoff.json');
+  const backoffEnabled = backoffGateEnabled();
+  const previousBackoff = readBackoffState(backoffFile);
+  if (backoffEnabled && previousBackoff.notBefore > Date.now()) {
+    console.log(`Attached operator backoff: ${JSON.stringify({ kind: previousBackoff.lastKind, notBefore: previousBackoff.notBefore })}`);
+    return { sessionId, status: 'backoff', targetId: null, operator };
+  }
+  const startedAt = Date.now();
+
   let lease;
   let failure = null;
   let cleanup = null;
@@ -102,6 +111,8 @@ export async function runAttachedLiveSession(options = {}) {
       X_GROWTH_REPLY_WRITER_MODE: operator.replyWriterMode,
     };
     console.log(`Attached operator: ${JSON.stringify(operator)}`);
+    const childStartedAt = Date.now();
+    console.log(`Attached session deadline: ${JSON.stringify({ startedAt: childStartedAt, deadlineAt: childStartedAt + CHILD_TIMEOUT_MS, timeoutMs: CHILD_TIMEOUT_MS })}`);
     await run(command, { cwd: repoDir, timeoutMs: CHILD_TIMEOUT_MS, killGraceMs: KILL_GRACE_MS });
   } catch (error) {
     failure = error;
@@ -119,6 +130,12 @@ export async function runAttachedLiveSession(options = {}) {
   if (stopSignal && !failure) failure = new Error(`Attached live session interrupted by ${stopSignal}.`);
   if (cleanup) console.log(`Owned browser target cleanup: ${JSON.stringify(cleanup)}`);
   else if (cleanupError) console.error(`Owned browser target cleanup failed: ${boundedText(cleanupError)}`);
+  const failureKind = failure ? classifyChildResult({ exitCode: failure.exitCode, deadlineExpired: failure.deadlineExpired, tail: failure.outputTail || '' }) : 'ok';
+  console.log(`Attached session outcome: ${JSON.stringify({ kind: failureKind, elapsedMs: Date.now() - startedAt, exitCode: failure?.exitCode ?? null })}`);
+  if (backoffEnabled && ['ok', 'rate_limited', 'provider_error'].includes(failureKind)) {
+    try { writeBackoffState(backoffFile, nextBackoffState(previousBackoff, failureKind, Date.now())); }
+    catch { console.error('Attached failure backoff could not be saved.'); }
+  }
   if (failure) {
     for (const warning of Array.isArray(cleanup?.warnings) ? cleanup.warnings : []) {
       console.error(`Owned browser target cleanup warning: ${String(warning).slice(0, ERROR_TEXT_LIMIT)}`);
@@ -132,7 +149,7 @@ export async function runAttachedLiveSession(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runAttachedLiveSession()
-    .then(result => console.log(`Attached live session finished: ${result.sessionId}, browser target ${result.targetId}`))
+    .then(result => console.log(result.status === 'backoff' ? `Attached live session deferred: ${result.sessionId}` : `Attached live session finished: ${result.sessionId}, browser target ${result.targetId}`))
     .catch(error => {
       console.error(`Attached live session failed: ${boundedText(error)}`);
       process.exitCode = 1;

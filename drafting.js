@@ -8,6 +8,8 @@ import {
   normalizeBehaviorDecision,
   socialPurposeContextAvailable,
   validateBehaviorDecision,
+  writerSelectedBehavior,
+  draftSelectedBehavior,
 } from './behavior.js';
 import { getActivePersonaModel, getPersonaSlice, selectBehaviorDecision } from './persona.js';
 import { assessActionRelevance } from './strategy.js';
@@ -122,6 +124,7 @@ function writerEvidenceItem(item) {
     resolvedUrl: String(item?.resolvedUrl || ''),
     title: String(item?.title || ''),
     summary: String(item?.summary || ''),
+    ...(item?.partial != null ? { partial: item.partial === true, location: String(item.location || '') } : {}),
     observedAt: item?.observedAt == null ? null : Number(item.observedAt),
   };
 }
@@ -206,6 +209,7 @@ export function buildWriterPacket({
   health = {},
   writingStrategy = null,
   topicBrief = null,
+  conversationContext = null,
 } = {}) {
   const pipeline = ensurePipeline(queueItem?.pipeline || draft?.editor?.pipeline || 'original');
   const sourceStyle = extractViralStyleFeatures({ text: candidate?.text || '' });
@@ -248,6 +252,7 @@ export function buildWriterPacket({
     },
     pipeline,
     behavior: behaviorValidation.behavior,
+    ownerDirection: draft?.editor?.operatorContextSource === 'human_web' ? String(draft.editor.operatorContext || '') : null,
     persona: getPersonaSlice('writer'),
     discoveryVerification: evaluateTechDiscoveryEvidence({
       pipeline, candidate, sourceCandidates, evidence,
@@ -262,6 +267,7 @@ export function buildWriterPacket({
         : { status: 'disabled', observationalShapeOnly: true, examples: [], limitation: 'Historical presentation references require a saved Apply selection.' },
     },
     candidate: {
+      key: candidate?.key || '',
       source: candidate?.source ?? null,
       author: candidateAuthor(candidate),
       text: candidate?.text ?? '',
@@ -299,6 +305,7 @@ export function buildWriterPacket({
       : null,
     evidence: (Array.isArray(evidence) ? evidence : []).map(writerEvidenceItem).filter(Boolean),
     ...(topicBrief != null ? { topicBrief } : {}),
+    ...(conversationContext != null ? { conversationContext } : {}),
     editorial: editorialRecommendation ? {
       recommendationId: editorialRecommendation.id ?? null,
       thesis: editorialRecommendation.thesis ?? '',
@@ -355,7 +362,8 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
   const topicBrief = writerPacket?.topicBrief && typeof writerPacket.topicBrief === 'object'
     && !Array.isArray(writerPacket.topicBrief) ? writerPacket.topicBrief : null;
   const briefParagraphIds = validateWriterBriefParagraphIds(writerOutput?.briefParagraphIds, topicBrief, decision);
-  const behaviorValidation = validateBehaviorDecision(writerPacket?.behavior, { pipeline, requireAct: true });
+  const chosenBehavior = decision === 'POST' ? writerSelectedBehavior(writerOutput.behavior, { pipeline, personaVersion: writerPacket?.persona?.version }) : writerPacket?.behavior;
+  const behaviorValidation = validateBehaviorDecision(chosenBehavior, { pipeline, requireAct: true });
   if (!behaviorValidation.valid) throw new Error(`Writer output is missing a valid selected behavior: ${behaviorValidation.errors.join(' ')}`);
 
   const editor = {
@@ -366,7 +374,9 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     threadParts: asStringArray(writerOutput?.threadParts),
     semanticAnchors: asStringArray(writerOutput?.semanticAnchors).filter(Boolean),
     evidenceUsed,
-    ...(pipeline === 'reply' ? { replyReview: String(writerOutput?.replyReview || '') } : {}),
+    ...(pipeline === 'reply' ? { replyReview: writerOutput.replyReview } : {}),
+    writerBehaviorSelected: decision === 'POST',
+    ...(writerPacket ? { writerContext: { evidence: writerPacket.evidence || [], conversationContext: writerPacket.conversationContext || null } } : {}),
     ...(topicBrief && briefParagraphIds.length
       ? { topicBrief: topicBriefEditorMetadata(topicBrief, briefParagraphIds) }
       : {}),
@@ -386,7 +396,10 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
     notes: String(writerOutput?.notes ?? '').trim(),
   };
   const operatorContext = String(draft?.editor?.operatorContext || '').trim();
-  if (operatorContext) editor.operatorContext = operatorContext;
+  if (operatorContext) {
+    editor.operatorContext = operatorContext;
+    editor.operatorContextSource = draft.editor.operatorContextSource || 'executor';
+  }
   if (writerOutput?.relationshipValue != null) editor.relationshipValue = String(writerOutput.relationshipValue).trim();
   if (writerOutput?.profileProofValue != null) editor.profileProofValue = String(writerOutput.profileProofValue).trim();
 
@@ -411,7 +424,7 @@ export function applyWriterOutput(draft, writerOutput = {}, { generationProvenan
   }
   if (writerOutput.contentReview) {
     next.editor.contentReview = bindContentReview(writerOutput.contentReview, draftReviewContext(next, writerPacket.candidate, {
-      pipeline, behavior: writerPacket.behavior, evidence: writerPacket.evidence,
+      pipeline, behavior: editor.behavior, evidence: writerPacket.evidence,
       personaVersion: writerPacket.persona?.version,
     }), { reviewer: 'external_agent', execution: null });
   }
@@ -469,8 +482,9 @@ function ownerEvidenceValid(draft, pipeline) {
 export function draftReviewContext(draft, candidate, context = {}) {
   const pipeline = context.pipeline || draft?.editor?.pipeline || 'original';
   return { units: contentUnits(draft, pipeline), pipeline,
-    behavior: normalizeBehaviorDecision(context.behavior || draft?.editor?.behavior || {}, { pipeline }),
+    behavior: draftSelectedBehavior(draft, context.behavior, pipeline),
     personaVersion: context.personaVersion || getActivePersonaModel().version,
+    ownerDirection: { text: draft?.editor?.operatorContext || '', source: draft?.editor?.operatorContextSource || '' },
     candidate, evidence: context.evidence || [], ownerEvidence: ownerEvidenceValid(draft, pipeline) };
 }
 
@@ -641,7 +655,7 @@ export function evaluateDraftGates(draft, candidate, {
   const units = contentUnits(draft, pipeline);
   const primaryText = units[0] || '';
   const combinedText = pipeline === 'thread' ? units.join('\n\n') : primaryText;
-  const behavior = normalizeBehaviorDecision(requestedBehavior || draft?.editor?.behavior || {}, { pipeline });
+  const behavior = draftSelectedBehavior(draft, requestedBehavior, pipeline);
   const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
   const failures = [];
   const warnings = [];
@@ -922,7 +936,7 @@ export function reviewGrowthPackaging(draft, candidate, context = {}) {
   const firstLine = String(units[0] || '').split('\n')[0].trim();
   const editor = draft?.editor || {};
   const blockers = [];
-  const behavior = normalizeBehaviorDecision(context.behavior || editor.behavior || {}, { pipeline });
+  const behavior = draftSelectedBehavior(draft, context.behavior, pipeline);
   const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
   const strategyMode = context.strategyMode ?? null;
   const strategyLabel = strategyMode === 'apply' ? 'Use for this draft' : strategyMode === 'suggest' ? 'Advice only' : strategyMode === 'off' ? 'No influence' : 'Missing decision';
@@ -1035,7 +1049,7 @@ export function scoreDraft(draft, candidate, context = {}) {
 
   const gates = evaluateDraftGates(draft, candidate, context);
   const growthPackaging = reviewGrowthPackaging(draft, candidate, context);
-  const behavior = normalizeBehaviorDecision(context.behavior || draft?.editor?.behavior || {}, { pipeline });
+  const behavior = draftSelectedBehavior(draft, context.behavior, pipeline);
   const behaviorValidation = validateBehaviorDecision(behavior, { pipeline, requireAct: true });
   const purpose = behaviorValidation.valid && gates.checks?.purposeIntegrity === true ? 10 : 0;
   const clarity = text && gates.checks?.understandable === true ? 10 : text ? 4 : 0;

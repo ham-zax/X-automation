@@ -702,15 +702,15 @@ Evidence taskId node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62
 
 | id | status | depends | owner | acceptance | evidence |
 | GQ0 | review | RV2-D | parent + Terra Medium | Evidence-grounded complete repair plan, issue dispositions and evaluation boundaries. | Evidence and plan evaluation complete. Terra requests one clarification about authoritative Writer-selected behavior. Parent checks code and incorporates that rule and conflicting-caller acceptance into GQ3. No re-review or runtime pass claimed. |
-| GQ1 | open | GQ0 | parent | Evaluator captures production contract, projection, schema, workflow and review mode. | Plan GQ1. |
-| GQ2 | open | GQ1 | parent | Preserve long-source text and deliver needed source/thread context without bypassing upstream trust. | Plan GQ2. |
-| GQ3 | open | GQ2 | parent | GLM owns the fitting act, saved behavior matches text, exact Writer handoff and reviewed Quote claim hold. | Plan GQ3, one shared-interface implementation owner. |
-| GQ4 | open | GQ3 | parent + Terra Medium | Bounded unpublished GLM outputs pass evidence-grounded Terra assessment, preserving owner judgment. | Proposed six GLM captures, not active. |
-| GQ5 | open | GQ4 | parent | Runtime failures, timing, disposition and cleanup diagnostics remain truthful without silent fallback. | Plan GQ5. |
-| GQ6 | open | GQ5 | parent | Measurement and uncertainty backlog has an accurate disposition without replaying writes. | Plan GQ6. |
-| GQ7 | open | GQ6 | parent | Current docs and all issue dispositions agree with evidence. | Plan GQ7. |
-| GQ-R | open | GQ7 | Terra Medium + parent | One final graph review, bounded repair/recheck and scoped commit/push. | Proposed execution review, not started. |
-| GQ-L | blocked | GQ-R | owner | Explicitly authorized bounded live observation, confirmed output/cleanup and owner quality acceptance. | Owner stopped operator. No restart authorized by this planning work. |
+| GQ1 | review | GQ0 | parent | Evaluator captures production contract, projection, schema, workflow and review mode. | Plan GQ1. |
+| GQ2 | review | GQ1 | parent | Preserve long-source text and deliver needed source/thread context without bypassing upstream trust. | Plan GQ2. |
+| GQ3 | review | GQ2 | parent | The chosen Writer owns the fitting act, saved behavior matches text, exact Writer handoff and reviewed Quote claim hold. | Plan GQ3, one shared-interface implementation owner. |
+| GQ4 | review | GQ3 | parent + Sol High | Bounded Terra-medium author outputs receive independent contextual assessment. | Six captures complete. Corrected standalone reviews pass. Support3/4 assessment starts next. |
+| GQ5 | review | GQ4 | parent | Runtime failures, timing, disposition and cleanup diagnostics remain truthful without silent fallback. | Plan GQ5. |
+| GQ6 | review | GQ5 | parent | Measurement and uncertainty backlog has an accurate disposition without replaying writes. | Plan GQ6. |
+| GQ7 | review | GQ6 | parent | Current docs and all issue dispositions agree with evidence. | Plan GQ7. |
+| GQ-R | review | GQ7 | Terra Medium + parent | One final graph review, bounded repair/recheck and scoped commit/push. | Proposed execution review, not started. |
+| GQ-L | in-progress | GQ-R | owner | Explicitly authorized bounded live observation, confirmed output/cleanup and owner quality acceptance. | Owner stopped operator. No restart authorized by this planning work. |
 
 Plan evaluation taskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Af606ce6b-f1a1-4d9f-9b29-ddd9f910961f.
 Terra verdict NEEDS_REVISION on one interface ambiguity, corrected in the plan by
@@ -733,3 +733,221 @@ uses this for adaptive expression, not a fixed viral formula or imported owner
 biography. The newer review corroborates saved cases but does not establish that
 16-check load caused rationalization or that a past quota failure is still current.
 No implementation, tests, model generation, credential change or public restart.
+
+Execution authorized by Hamza on November1 after corpus review. TaskStartSnapshot
+d74cd04, main, clean tree. Existing unrelated worktree remains untouched. Start
+GQ1 first. Activate the proposed six GLM captures and four Terra6.1 Medium support/
+evaluation dispatches. No model substitution. No new tests or hash machinery.
+A bounded live observation with fresh source collection is now authorized after
+the repaired path passes Terra's assessment. Counts remain ceilings, not quotas.
+Continuous unattended timer operation is not resumed merely by this permission.
+Change necessity GQ1: the observed retired-contract replay cannot be corrected by
+documentation alone. Edit existing evaluator and canonical contract exports only.
+TDD off/skipped. Verify captured requests and existing input identity locally.
+
+GQ1 parent evidence: canonical REPLY_CONTRACT_FILE export drives the replay and
+existing Python cache identity. Fresh VA-16 writer/direct captures load v2, carry
+reply_writer role and contain no REPLY placeholders. Writer capture skips runtime
+independent review. Extra inspection review has diagnosticStatus, separate from
+preparation status. Node and Python syntax plus diff checks pass. No model calls
+or tests run. GQ2 is active: raw note text is lost at the pinned Tweet parser.
+Read-only Terra input/evaluation evidence check is the next support dispatch.
+
+Owner model update during execution: Terra6.1 xhigh is the chosen production
+author for Replies, Originals, Quotes and Threads. GLM5.3 max is the selected
+cheap content-review model. Separate role bindings remain configurable. DeepSeek
+remains orchestration. This supersedes the plan's earlier GLM-author assignment.
+No live restart precedes corrected handoff and output assessment. Terra's first
+execution evidence check found diagnostic delivery coupling and recommended a
+reader-scoped exact-ID note-text map. Parent applies both at existing owners.
+Support taskId node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Ae4dfa622-ae4d-4afc-831a-dc0381d3f200. Execution support1/4 used.
+
+Latest owner clarification supersedes the prior model update: Terra6.1 medium
+writes the evidence Replies, Originals, Quotes and Threads during the upgrade.
+Terra6.1 xhigh or Sol6.1 handles complex work. Parent selects Sol6.1 high for the
+remaining independent review. Models remain configurable. DeepSeek orchestrates.
+The former GLM-review assignment was a parent interpretation and does not apply.
+
+GQ2 parent evidence: a disposable fake-fetch probe uses the actual pinned
+Tweet.fromGraphQL parser. Note text, visibility wrappers, legacy-only and missing
+notes, entities, emoji, display ranges and nested exact IDs pass. Original JSON
+remains unchanged. No upstream pin or dependency changes. Supplied observation
+context/excerpts now reaches the Writer with source/coverage fields and a 16000
+character total ceiling. Oversized input is refused, never silently clipped.
+
+GQ3 starts one coherent migration: Writer-selected existing behavior vocabulary,
+structured A/B audit, exact selected public text, saved generation and claim-time
+comparison. A private record in existing app_state binds the saved Writer selection.
+No new table or hash is added. A separate content_review role permits independent
+model choice. No authority, AUTO_POST or live timer change accompanies this work.
+
+Model bindings now use existing profile17 Terra6.1 medium for writer/reply_writer
+and profile18 Sol6.1 high for content_review, without fallback. The authenticated
+profile API and ai-bind-role apply the settings. Readback confirms exact models
+and efforts. DeepSeek bindings remain unchanged. An unpublished Chrome authoring
+capture starts through the real Writer runtime. No run, claim or send starts.
+
+GQ3 disposable acceptance probe passes: source/excerpt coverage reaches the
+projected request. The Writer changes suggested judgment to celebration. Saved
+and review behavior agree. Stale caller behavior, changed text, missing invocation,
+and selected-text contamination are rejected before any claim/browser call.
+Existing reader/response checks pass13/13. No new test file is added.
+
+Terra medium author capture1 succeeds with the requested exact model/effort.
+Public text: “A good reminder to check Chrome’s version.” Its two candidates
+reduce the story to the rhetorical update question. Parent rejects this as bland
+and insufficiently responsive to the achievement. Syntax/schema success is not a
+voice pass. The contract now distinguishes genuine questions from rhetorical hooks
+and permits mentioning a source detail as the target of a reaction. No specific
+Chrome wording or compulsory excitement is added. Capture2 tests that change.
+
+GQ3 Quote seam probe passes in disposable state: failed or caller-only review is
+refused. Exact server-reviewed selection is accepted. Changed source is refused.
+UI build passes. Revised Chrome capture2 uses Terra6.1 medium and returns:
+“A four-bug chain that gets code outside the sandbox from one page is wild.”
+The parent finds this more responsive and accurate than capture1. Independent
+quality assessment remains pending. Real author captures2/6 consumed. No sends.
+
+GQ1 diagnostic probe passes: malformed optional review JSON yields
+status=inspected and diagnosticStatus=blocked with separate diagnostic errors.
+No factual/voice pass is inferred. Temporary replay state is removed.
+
+Checkpoint before the immediate GQ3 publication-boundary review: worktree base
+is d74cd04. GQ1/GQ2 are at review. GQ3 remains in-progress. Parent completes the
+minimum migration and disposable handoff/Quote checks. The independently reviewed
+boundary is profile-mode exact Writer text/behavior/context and Quote review.
+This is the risk-override slice review, not the final graph review. Support2/4
+is reserved for Sol6.1 high. Remaining author captures4/6 cover Redis and the
+Original/Quote/Thread formats requested in the latest owner clarification.
+The earlier six-Reply scenario proposal is superseded by this all-format sample.
+Uncovered reply controls and general reliability remain explicit limits.
+The operator/timer remain stopped. No commit or public action is made yet.
+
+GQ3 immediate risk review starts, support2/4. Sol6.1 high, shared read-only scope.
+TaskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Ade447445-b19a-4c0f-b584-736e6f7ee549.
+The parent resumes on its completion. No polling or second graph review starts.
+
+GQ3 immediate review requests changes with four Major findings. Parent checks
+source flow and accepts all four: queue behavior was stale during scoring,
+direct Reply lost saved owner direction, owner-direction changes did not stale
+references, and an awaited review could attest a refreshed source it never saw.
+One bounded repair round updates the canonical queue selection before scoring,
+preserves saved owner direction separately from executor feedback, includes
+direction/provenance in exact selection and review material, and compares the
+actual packet source with storage inside generation/review save transactions.
+No live action follows the failed review. Sol review task is complete.
+
+GQ3 parent repair evidence: the disposable probe imports the actual web generation,
+review/save path and store. Fake responses change suggested judgment to celebration.
+Quote and Original generation now save matching queue behavior and reach review.
+Direct Reply preserves saved human_web direction despite executor feedback.
+Changing owner direction invalidates selection, trusted review and review fingerprint.
+Candidate changes during either Writer or reviewer await reject before attestation.
+All four reviewed findings pass. The first fixture run lacked the read-only docs
+link and failed before generation. The corrected fixture passes and removes state.
+No new test file, model dispatch or public action is used by that repair probe.
+GQ3 moves to review. GQ4 captures Redis, Original, Quote and Thread through the
+real Terra-medium author runtime, with Sol-high review for standalone formats.
+
+GQ4 author captures6/6 complete. Redis asks about the overage/unused-quota tradeoff.
+Original expresses the no-mandatory-lesson preference. Quote reacts to the sandbox
+escape. Thread chooses DO_NOT_POST because the idea fits one post. The three
+standalone review attempts fail with schema_unsupported before a review result.
+The reviewer schema contains an optional supportAssessment property, which Codex
+strict structured output rejects. Parent makes that field required and nullable,
+preserving the existing substantive discovery checks. Saved author outputs will
+be reviewed again without new author generation. No model fallback or send.
+
+GQ4 reviewer schema repair succeeds on saved Original and Quote outputs using
+Sol6.1 high. Both bound reviews pass without factual or voice issues. This does
+not override Hamza's preferences. The Thread review is still completing. Parent
+archives six author outputs and limitations in repair-terra-medium/README.md.
+The remaining support3/4 call assesses those actual outputs and context, not
+self-review PASS labels. Final graph review stays reserved as support4/4.
+
+The skipped Thread diagnostic review rejects a subjective writing preference due
+to the deterministic required-opener regex. This reproduces the pre-existing
+calibration mismatch described in the plan. Parent removes only that positive
+phrase requirement. Quantity, product-capability and owner-evidence checks remain.
+The Thread remains DO_NOT_POST and cannot gain authority from a review change.
+
+GQ4 calibration probe also isolates singular “support” in “show of support” as a
+false capability match. The capability guard now recognizes “supports” or “support
+for” instead of that bare noun. A saved Thread review rebinds successfully after
+both corrections. Its DO_NOT_POST remains unchanged. Disposable checks accept
+plain opinion/social support and still reject capability and quantity claims
+labeled interpretation. Original/Quote corrected reviews pass. No author rerun.
+Six captures are a bounded readiness sample, not proof of general reliability.
+Next: support3/4 independent assessment, then GQ5–GQ7, final graph review and the
+explicitly bounded live observation. Operator/timer remain stopped. No commit yet.
+
+Support3/4 starts: Sol6.1 high assesses the six actual author outputs and sources.
+TaskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Afc17cb26-4c5f-4d2e-90d9-133c648c22f6.
+Completion resumes the parent. The final graph review remains reserved as4/4.
+
+Support3/4 completes: revised Chrome, Redis, Original and Quote pass contextual
+assessment. Thread passes as a sensible skip, not proof of sustained thread
+writing. Initial Chrome fails. No material writing issue survives in the later
+captures. Bounded readiness only, no owner endorsement or live reliability claim.
+GQ4 moves to review. GQ5 begins at the existing child-failure/backoff owner.
+
+GQ5 parent checks: existing lifecycle/runner/lease checks50/50 pass. Disposable
+quota child proves rate_limited, one exact release, and no second child/allocation
+inside durable backoff. Deadline logs now use the actual child start. Historical
+early-finish cause remains unproven. No live provider availability is inferred.
+GQ5 moves to review. GQ6 supported bridge inventory records74 due and20 unknown
+closed-unresolved attempts. Ten due identities and all20 unknown identities are
+archived in operational-backlog.json. No historical measurement can be reconstructed
+from a later counter. Remaining64 due identities are not individually inspected.
+GQ6 moves to review with that explicit coverage limit and no state recovery claim.
+Operations report records failed service/inactive timer and stale dashboard process.
+GQ7 starts documentation closure. GQ-L remains pending after final graph review.
+
+GQ7 active workflow, content standard, benchmark, ARM handoff, systemd guide and
+issue inventory now describe the current contract/roles, exact references,
+self-review versus independent review, source correction and deployment limits.
+Historical records and private backups remain intact. UI build passes after role
+addition. Parent reviews the scoped diff. GQ7 moves to review. The single final
+graph review starts as support4/4 with Terra6.1 xhigh per the owner's complex-work
+model choice. It includes the prior four Major fixes and reviewer calibration.
+After its result: one bounded parent fix round, verification, commit/push, and
+bounded live source observation. No continuous timer restart is implied.
+
+GQ-R final graph review starts as support4/4: Terra6.1 xhigh, read-only.
+TaskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3A6d360df7-ff02-44de-ad46-0d1167fda437.
+Completion resumes the parent. No dispatch budget remains for another review.
+
+GQ-R final review completes with unresolved blockers, not integration acceptance.
+Terra xhigh reports: interpretation can bypass factual support, editorial evidence
+can change during reviewer await, discovery keeps the old opinion/support guard,
+Reply context metadata is incomplete, and an existing Original/Thread approval
+can outlive a source refresh. Candidate-text snapshot repair itself holds.
+Reviewer inspects a bounded subset, not every file. No complete graph pass claimed.
+Parent has not applied this final finding set yet. One inline repair round remains.
+All4 support dispatches are used. No new worker is authorized under this budget.
+Progress checkpoint: GQ1–GQ7 at review with listed coverage limits, GQ-R in-progress
+with these findings, GQ-L pending. HEAD remains d74cd04. Repairs remain uncommitted.
+Operator service failed, timer inactive. No public action during the repair run.
+
+GQ-R parent final repair round checks all five findings. Editorial packet snapshots
+now bind selected evidence and linked sources during the save/attestation transaction.
+Existing approval fingerprints include current source and editorial selection;
+mission Original/Thread/Quote claims require trusted current independent review
+regardless of discovery classification. Context now requires source/coverage and
+post identities, and evidence status is mandatory. Both interpretation gates share
+one check without a required opening phrase. The reported Chrome assertion and
+opinion-prefixed variant fail. Plain surprise, normative preference and social
+support pass. These are bounded syntactic checks, not semantic truth proofs.
+Independent semantic review still owns entailment and embedded factual claims.
+The contract explicitly permits improvised reactions without article analysis.
+
+Final disposable findings probe passes: changed editorial selection during review
+rejects attestation, source/selection changes alter approval identity, undocumented
+context/evidence shapes reject, and discovery accepts the same subjective wording.
+The earlier four-Major repair probe passes again. Existing focused checks63/63,
+UI production build, syntax and diff checks pass. No full-suite claim. No further
+independent review occurs after this parent repair round, within the4/4 budget.
+GQ-R moves to review on that limited evidence, not a complete independent graph pass.
+Next: scoped commit/push and bounded read-only live observation. No continuous wake
+or public sending is enabled. The user clarification permits improvisation and
+simple wow responses. No technical contribution is required under every source.

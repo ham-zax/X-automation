@@ -3,7 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
-import { REPLY_CONTRACT, normalizeReplyOutput } from '../reply_contract.js';
+import { REPLY_CONTRACT, REPLY_CONTRACT_FILE, replyWorkflowInstruction, normalizeReplyOutput } from '../reply_contract.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const original = process.cwd();
@@ -41,20 +41,19 @@ async function main(input) {
       if (packet.pipeline !== 'reply' || !isDeepStrictEqual(packet.candidate, expected.candidate)
         || !isDeepStrictEqual(packet.behavior, expected.behavior)) throw new Error('Frozen packet does not match this reply source or behavior. Use a fresh run root.');
       if (input.packetFile) await writeFile(files.packet, await readFile(resolve(input.packetFile))); else await write(files.packet, packet);
-      await write(files.case, { lane, candidate, draft, omissions: ['blank recent and history state', 'no owner attestations', 'no browser, room or thread context', 'fixture behavior is not a generation trace'], publicationAuthority: false });
+      await write(files.case, { lane, candidate, draft, contractFile: REPLY_CONTRACT_FILE, productionReviewMode: 'self-review-only', diagnosticReview: true, omissions: ['blank recent and history state', 'no owner attestations', 'no browser, room or thread context', 'fixture behavior is not a generation trace'], publicationAuthority: false });
       const style = input.styleFile ? await readFile(resolve(input.styleFile), 'utf8') : '';
       let request;
       if (lane === 'writer') {
-        const prompt = await readFile(path.join(root, 'docs/REPLY_GENERATION_PROMPT.md'), 'utf8');
-        const contract = prompt + (style ? `\n\nVOICE FRAGMENT:\n${style}` : '');
-        request = await capture(runAI => runtime.generateWriterOutput(packet, contract, { runAI, replyContractText: contract }));
+        const contract = REPLY_CONTRACT + (style ? `\n\nVOICE FRAGMENT:\n${style}` : '');
+        request = await capture(runAI => runtime.generateWriterOutput(packet, contract, { runAI, skipReview: true, replyContractText: contract }));
       } else {
         const brief = await readFile(path.join(root, 'ops/systemd/arm/arm-growth-live.md'), 'utf8');
         const start = brief.indexOf('Writing a Reply:');
         const end = brief.indexOf('\nExecution:', start);
         if (start < 0 || end < 0) throw new Error('Attached reply instruction section is missing.');
-        const section = brief.slice(start, end).replace('{{REPLY_CONTRACT}}', REPLY_CONTRACT);
-        request = { role: 'writer', prompt: `Limited instruction replay, not an attached browser run. Browser, room and history context are omitted.\n${section}\n\nFROZEN PACKET:\n${JSON.stringify(packet, null, 2)}${style ? `\n\nVOICE FRAGMENT:\n${style}` : ''}`, schema: { type: 'object', additionalProperties: false, required: ['decision', 'finalText'], properties: { decision: { enum: ['POST', 'DO_NOT_POST'] }, finalText: { type: 'string' } } } };
+        const section = brief.slice(start, end).replace('{{REPLY_CONTRACT}}', () => REPLY_CONTRACT).replace('{{REPLY_WORKFLOW}}', () => replyWorkflowInstruction('operator'));
+        request = { role: 'reply_writer', prompt: `Limited instruction replay, not an attached browser run. Browser, room and history context are omitted.\n${section}\n\nFROZEN PACKET:\n${JSON.stringify(packet, null, 2)}${style ? `\n\nVOICE FRAGMENT:\n${style}` : ''}`, schema: { type: 'object', additionalProperties: false, required: ['decision', 'finalText'], properties: { decision: { enum: ['POST', 'DO_NOT_POST'] }, finalText: { type: 'string' } } } };
       }
       await write(files.request, request);
       return { status: 'prepared', artifacts: { packet: files.packet, case: files.case, request: files.request } };
@@ -86,9 +85,8 @@ async function main(input) {
     const reviewRequest = await read(files['review-request']);
     let review;
     try { review = await read(path.join(dir, 'review-output.json')); } catch (error) {
-      if (!(error instanceof SyntaxError)) throw error;
-      await write(files.inspection, { status: 'blocked', schemaErrors: ['Review output is not valid JSON.'], exactText: output.finalText, publicationAuthority: false });
-      return { status: 'blocked', artifacts: { inspection: files.inspection } };
+      if (!(error instanceof SyntaxError) && error.code !== 'ENOENT') throw error;
+      review = null;
     }
     const reviewValidation = ai.validateStructuredOutput(review, reviewRequest.schema);
     let draft = state.draft, actError = null, bound = null, score = null;
@@ -97,13 +95,13 @@ async function main(input) {
       draft = { ...draft, body: output.finalText, editor: { pipeline: 'reply', finalText: output.finalText, behavior: packet.behavior } };
       if (output.decision === 'POST') try { act.validateActInput({ action: 'reply', text: output.finalText, targetTweetId: state.candidate.sourceId, targetUrl: state.candidate.url }); } catch (e) { actError = e.message; }
     }
-    const context = { pipeline: 'reply', behavior: packet.behavior, evidence: packet.evidence, personaVersion: packet.persona?.version };
+    const context = { pipeline: 'reply', behavior: draft.editor?.behavior || packet.behavior, evidence: packet.evidence, personaVersion: packet.persona?.version };
     if (reviewValidation.valid) {
       bound = content.bindContentReview(review, drafting.draftReviewContext(draft, state.candidate, context));
       draft.editor.contentReview = bound;
       score = drafting.scoreDraft(draft, state.candidate, context);
     }
-    const inspection = { status: !reviewValidation.valid || !bound?.passed || actError ? 'blocked' : output.decision === 'DO_NOT_POST' ? 'do-not-post' : 'inspected', exactText: output.finalText, decision: output.decision, schemaErrors: reviewValidation.errors, reviewFailures: bound?.issues || [], review: bound, actError, score, publicationAuthority: false };
+    const inspection = { status: actError ? 'blocked' : output.decision === 'DO_NOT_POST' ? 'do-not-post' : 'inspected', productionReviewMode: state.productionReviewMode, diagnosticReview: true, diagnosticStatus: !reviewValidation.valid || !bound?.passed ? 'blocked' : 'passed', exactText: output.finalText, decision: output.decision, schemaErrors: [], diagnosticSchemaErrors: reviewValidation.errors, reviewFailures: bound?.issues || [], review: bound, actError, score, publicationAuthority: false };
     await write(files.inspection, inspection);
     return { status: inspection.status, artifacts: { inspection: files.inspection } };
   } finally { process.chdir(original); await rm(scratch, { recursive: true, force: true }); }

@@ -1,0 +1,45 @@
+{
+  "review": {
+    "passed": true,
+    "ownerClaims": [],
+    "factualClaims": [],
+    "voiceIssues": [],
+    "issues": [],
+    "reviewer": "writer_runtime",
+    "execution": {
+      "invocationId": "b99fc2ab-3dde-4b2d-a6ac-f65110fd451b",
+      "attempt": 1,
+      "runtime": "codex",
+      "provider": "runtime_managed",
+      "model": "gpt-6.1-sol",
+      "reasoning": "high",
+      "profileId": 18,
+      "profileSource": "role",
+      "fallbackUsed": false,
+      "startedAt": 1793530675637,
+      "completedAt": 1793530684021,
+      "inputTokens": null,
+      "cachedInputTokens": null,
+      "outputTokens": null,
+      "reasoningTokens": null,
+      "outputTokenLimit": null,
+      "costUsd": null,
+      "modelCalls": null,
+      "toolCalls": null
+    }
+  },
+  "bound": {
+    "schemaVersion": 1,
+    "reviewer": "external_agent",
+    "execution": null,
+    "reviewedAt": 1793530684029,
+    "fingerprint": "01445aee802c29e8d5a9972dff413c05a7b48736722fb96dc3144494155034e8",
+    "personaVersion": "hamza-v1-alpha-2026-10-02",
+    "factualClaims": [],
+    "ownerClaims": [],
+    "available": true,
+    "voiceIssues": [],
+    "issues": [],
+    "passed": true
+  }
+}

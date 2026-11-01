@@ -31,6 +31,7 @@ const ROLE_LABELS: Record<string, string> = {
   audience_review: 'Audience review',
   writer: 'Writer (Originals, Quotes, Threads)',
   reply_writer: 'Reply Writer',
+  content_review: 'Content reviewer',
 }
 
 const RUNTIME_LABELS: Record<string, string> = {

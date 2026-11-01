@@ -1,7 +1,7 @@
 import { DomainValidationError } from './errors.js';
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'fs';
-import { legacyBehaviorDecision, normalizeBehaviorDecision } from './behavior.js';
+import { legacyBehaviorDecision, normalizeBehaviorDecision, draftSelectedBehavior } from './behavior.js';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -47,6 +47,7 @@ import {
   setActiveNicheProfile,
 } from './strategy.js';
 import { extractViralStyleFeatures } from './viral_style.js';
+import { contentSources } from './content_review.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
@@ -64,7 +65,7 @@ export const ACCOUNT_HEALTH_OBSERVATION_TYPES = [
 export const AI_RUNTIME_TYPES = Object.freeze(['direct_api', 'codex', 'opencode', 'opencode2', 'agy', 'pi']);
 export const AI_PROVIDER_KINDS = Object.freeze(['openai', 'openrouter', 'openai_compatible', 'runtime_managed']);
 export const AI_PROTOCOLS = Object.freeze(['responses', 'chat_completions', 'runtime_native']);
-export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer', 'reply_writer']);
+export const AI_ROLES = Object.freeze(['continuous_scan', 'editorial_scan', 'editorial_final', 'audience_review', 'writer', 'reply_writer', 'content_review']);
 export const SOURCE_SNAPSHOT_KINDS = Object.freeze([
   'x_latest',
   'x_momentum',
@@ -1543,6 +1544,10 @@ function independentReviewMaterial(queueItem, draft) {
     draftId: draft?.id ?? null,
     candidateKey: String(draft?.candidateKey || ''),
     units: queueItem?.pipeline === 'thread' ? draft?.threadParts || [] : [draft?.body || ''],
+    source: { text: getCandidate(draft?.candidateKey)?.text || '', url: getCandidate(draft?.candidateKey)?.url || '' },
+    editorialSnapshot: writerEditorialSnapshot(queueItem),
+    behavior: draft?.editor?.behavior || null,
+    direction: { text: draft?.editor?.operatorContext || '', source: draft?.editor?.operatorContextSource || '' },
     evidenceUsed: draft?.editor?.evidenceUsed || [],
     evidence: getEditorialEvidenceForQueue(queueItem)
       .filter(item => (draft?.editor?.evidenceUsed || []).map(String).includes(String(item.id))),
@@ -1560,7 +1565,8 @@ export function hasTrustedIndependentWriterReview(queueItem, draft) {
     return recorded.version === 1 && recorded.hash === hashCanonical(independentReviewMaterial(queueItem, draft));
   } catch { return false; }
 }
-export function recordServerIndependentWriterReview(draft) {
+export function recordServerIndependentWriterReview(draft, packet) {
+  requireWriterSourceSnapshot(packet);
   const queueItem = getQueueItemByCandidate(draft?.candidateKey);
   if (!queueItem?.id || !draft?.id || draft.editor?.contentReview?.reviewer !== 'writer_runtime'
     || draft.editor.contentReview.passed !== true) {
@@ -1577,6 +1583,85 @@ export function recordServerIndependentWriterReview(draft) {
   return { attested: true, draftId: persisted.id, attestedAt: record.attestedAt };
 }
 
+// Check the observed packet inside each save transaction, not after an await.
+export function writerEditorialSnapshot(queueItem) {
+  if (!queueItem?.id) return { selection: null, evidence: [], sources: [] };
+  return {
+    selection: getLatestEditorialSelectionForQueueItem(queueItem?.id) || null,
+    evidence: contentSources(null, getEditorialEvidenceForQueue(queueItem)),
+    sources: listQueueSources(queueItem?.id).map(source => getCandidate(source.candidateKey)).filter(Boolean)
+      .map(candidate => ({ key: candidate.key, text: candidate.text || '', url: candidate.url || '' }))
+      .sort((a, b) => a.key.localeCompare(b.key)),
+  };
+}
+
+export function requireWriterSourceSnapshot(packet) {
+  const candidate = packet?.candidate;
+  const current = candidate?.key ? getCandidate(candidate.key) : null;
+  if (packet?.editorialSnapshot && JSON.stringify(packet.editorialSnapshot)
+    !== JSON.stringify(writerEditorialSnapshot(getQueueItemByCandidate(candidate.key)))) {
+    throw new DomainValidationError('Editorial selection or evidence changed during Writer generation or review. Reload and regenerate.');
+  }
+  if (!current || String(current.text || '') !== String(candidate.text || '')
+    || String(current.url || '') !== String(candidate.url || '')) {
+    throw new DomainValidationError('Source changed during Writer generation or review. Reload and regenerate.');
+  }
+}
+
+// Exact Writer selection uses existing private app state. Caller draft edits cannot
+// mint this server record. No new table or publication authority is introduced.
+const WRITER_GENERATION_KEY = 'server_writer_generation_v1:';
+function writerGenerationMaterial(draft) {
+  const candidate = getCandidate(draft.candidateKey);
+  return {
+    candidateKey: draft.candidateKey, pipeline: draft.editor?.pipeline,
+    body: draft.body, threadParts: draft.threadParts || [], behavior: draft.editor?.behavior,
+    context: draft.editor?.writerContext || null,
+    direction: { text: draft.editor?.operatorContext || '', source: draft.editor?.operatorContextSource || '' },
+    replyReview: draft.editor?.replyReview || null, personaVersion: draft.editor?.personaModelVersion,
+    sourceText: candidate?.text || '', sourceUrl: candidate?.url || '',
+  };
+}
+
+export function recordServerWriterGeneration(draft, { execution, runId = null, sessionId = null, packet } = {}) {
+  requireWriterSourceSnapshot(packet);
+  const current = getDraft(draft.id);
+  const role = current?.editor?.pipeline === 'reply' ? 'reply_writer' : 'writer';
+  const run = execution?.invocationId && listAiRuns({ invocationId: execution.invocationId, status: 'complete', limit: 1 })[0];
+  if (!current || !run || run.role !== role || !current.editor?.writerBehaviorSelected
+    || (runId != null && (run.metadata.runId !== runId || run.metadata.sessionId !== sessionId))) {
+    throw new DomainValidationError('A completed Writer execution and its saved selection are required.');
+  }
+  const record = { draftId: current.id, invocationId: run.invocationId, runId, sessionId,
+    writer: { invocationId: run.invocationId, runtime: run.runtime, model: run.model,
+      reasoning: run.reasoning, fallbackUsed: run.fallbackUsed },
+    material: writerGenerationMaterial(current) };
+  db.prepare('INSERT INTO app_state(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+    .run(WRITER_GENERATION_KEY + current.id, JSON.stringify(record));
+  return record;
+}
+
+export function requireActWriterSelection({ draftId, writerInvocationId, action, text, targetUrl, targetTweetId,
+  candidateKey = null, runId, sessionId, behavior = null, personaVersion = null } = {}) {
+  const draft = getDraft(Number(draftId));
+  const stored = draft && db.prepare('SELECT value FROM app_state WHERE key = ?').get(WRITER_GENERATION_KEY + draft.id)?.value;
+  const record = stored ? json(stored, null) : null;
+  if (!record || record.invocationId !== writerInvocationId || record.runId !== runId || record.sessionId !== sessionId
+    || draft.editor?.pipeline !== action || draft.editor?.decision !== 'POST' || draft.body !== text
+    || (candidateKey && draft.candidateKey !== candidateKey)
+    || record.material.sourceUrl !== targetUrl
+    || String(targetUrl || '').match(/status\/(\d+)/)?.[1] !== String(targetTweetId)
+    || JSON.stringify(record.material) !== JSON.stringify(writerGenerationMaterial(draft))
+    || (personaVersion != null && record.material.personaVersion !== personaVersion)) {
+    throw new DomainValidationError('Profile act requires the exact saved Writer text, invocation, context, run, session and target. Regenerate changed content.');
+  }
+  draftSelectedBehavior(draft, behavior, action);
+  if (action === 'quote' && !hasTrustedIndependentWriterReview(getQueueItemByCandidate(draft.candidateKey), draft)) {
+    throw new DomainValidationError('Quote requires a current passing server-side review for its exact saved draft and context.');
+  }
+  return { draft, writer: record.writer };
+}
+
 export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
   const material = canonicalPublicationMaterial(queueItem, draft, candidate);
   const gateMaterial = draft?.gates || {};
@@ -1585,6 +1670,8 @@ export function computeApprovalFingerprint(queueItem, draft, candidate = null) {
     .map(value => String(value || '').trim()).filter(Boolean))].sort();
   const evidenceById = new Map(getEditorialEvidenceForQueue(queueItem).map(row => [String(row.id), row]));
   const evidenceReviewHash = hashCanonical({ evidenceIds,
+    sourceContext: { text: (candidate || getCandidate(draft?.candidateKey))?.text || '', url: (candidate || getCandidate(draft?.candidateKey))?.url || '' },
+    editorialSnapshot: writerEditorialSnapshot(queueItem),
     evidence: evidenceIds.map(id => evidenceById.get(id) || { id, unavailable: true }),
     contentReview: draft?.editor?.contentReview || null,
   });
@@ -1900,6 +1987,7 @@ export function claimActPublication({
   runId = null,
   claimHolder = '',
   modelProvenance = null,
+  writerSelection = null,
   now = Date.now(),
 } = {}) {
   const pipeline = String(action || '').trim().toLowerCase();
@@ -1951,6 +2039,13 @@ export function claimActPublication({
   const approvedContentHash = hashCanonical(body);
 
   return runStoreTransaction(() => {
+    if ((process.env.X_GROWTH_REPLY_WRITER_MODE || 'profile') === 'profile') {
+      const selected = requireActWriterSelection({ ...writerSelection, action: pipeline, text: body,
+        targetUrl, targetTweetId: targetId, candidateKey, runId, sessionId: holder, behavior: editorial?.behavior });
+      if (key !== selected.draft.candidateKey) throw new DomainValidationError('act candidate must match the Writer draft.');
+      editorial = { ...editorial, behavior: selected.draft.editor.behavior };
+      modelProvenance = { ...modelProvenance, writer: selected.writer };
+    }
     const activityDecision = requireAutonomousActivity({ action: pipeline, now: timestamp, runId,
       editorial, candidateKey: String(targetUrl || '').trim() || key });
     if (!getCandidate(key)) {
@@ -3018,6 +3113,8 @@ export function claimQueueItemForPublication(id, {
       }
       if (getAccountHealthSummary({ now: timestamp }).health.state === 'constrained') return null;
       const draft = scheduleCheck?.draft;
+      if (['original', 'thread', 'quote'].includes(preItem.pipeline)
+        && (!preItem.approvalSnapshot?.evidenceReviewHash || !draft || !hasTrustedIndependentWriterReview(preItem, draft))) return null;
       const sourceCandidates = listQueueSources(preItem.id).map(source => getCandidate(source.candidateKey)).filter(Boolean);
       if (requiresTechDiscoveryVerification({ pipeline: preItem.pipeline, candidate: scheduleCheck?.candidate, sourceCandidates })) {
         if (!preItem.approvalSnapshot?.evidenceReviewHash || !draft) return null;
@@ -7091,7 +7188,7 @@ function resolveExplicitAiProfile(profile) {
 export function resolveAiProfileForRole(role, explicitProfile = null) {
   const normalizedRole = requireAiEnum(role, AI_ROLE_SET, 'AI role');
   const binding = getAiRoleBinding(normalizedRole);
-  if (normalizedRole === 'reply_writer' && !binding && explicitProfile == null) {
+  if (['reply_writer', 'content_review'].includes(normalizedRole) && !binding && explicitProfile == null) {
     return { ...resolveAiProfileForRole('writer'), role: normalizedRole, source: 'writer', binding: null };
   }
   let profile = resolveExplicitAiProfile(explicitProfile);

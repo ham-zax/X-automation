@@ -22,9 +22,9 @@ sys.dont_write_bytecode = True
 REPO = Path(__file__).resolve().parents[1]
 SAFE_ID = re.compile(r"[a-zA-Z0-9_-]{1,100}\Z")
 DEFAULT_TARGETS = {
-    "solver": {"providerInstanceId": "opencode", "model": "opencode2api/deepseek-v4.1-flash-free", "options": {"variant": "max"}},
-    "reviewer": {"providerInstanceId": "codex", "model": "gpt-6.1-terra", "options": {"reasoningEffort": "high"}},
-    "editor": {"providerInstanceId": "codex", "model": "gpt-6.1-terra", "options": {"reasoningEffort": "high"}},
+    "solver": {"providerInstanceId": "codex", "model": "gpt-6.1-terra", "options": {"reasoningEffort": "medium"}},
+    "reviewer": {"providerInstanceId": "codex", "model": "gpt-6.1-sol", "options": {"reasoningEffort": "high"}},
+    "editor": {"providerInstanceId": "codex", "model": "gpt-6.1-terra", "options": {"reasoningEffort": "medium"}},
 }
 
 
@@ -210,11 +210,15 @@ class GrowthAdapter:
         return json.loads(result.stdout)
 
     def _inputs_digest(self, task_id):
-        contract = REPO / ("docs/REPLY_GENERATION_PROMPT.md" if self.config["lane"] == "writer" else "ops/systemd/arm/arm-growth-live.md")
+        active_contract = subprocess.run(
+            ["node", "--input-type=module", "-e",
+             "import {REPLY_CONTRACT_FILE} from './reply_contract.js'; process.stdout.write(REPLY_CONTRACT_FILE)"],
+            cwd=REPO, check=True, capture_output=True, text=True, timeout=10).stdout
+        contract = REPO / (active_contract if self.config["lane"] == "writer" else "ops/systemd/arm/arm-growth-live.md")
         owners = {p for pattern in ("*.js", "ops/**/*.js", "ops/**/*.mjs", "persona/*.json")
                   for p in REPO.glob(pattern) if p.is_file()}
         owners.update(REPO / name for name in ("eval/growth_reply.mjs", "eval/harness2_growth.py",
-                      "docs/REPLY_GENERATION_PROMPT.md", "package.json", "package-lock.json") if (REPO / name).is_file())
+                      active_contract, "ops/systemd/arm/arm-growth-live.md", "package.json", "package-lock.json") if (REPO / name).is_file())
         versions = {p.relative_to(REPO).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                     for p in sorted(owners)}
         return digest({"case": self._case(task_id), "contract": contract.read_text(),
@@ -274,7 +278,10 @@ class GrowthAdapter:
     def delivered(self, run_dir):
         path = Path(run_dir)
         inspection = path / "inspection.json"
-        return inspection.exists() and (path / "review-request.json").exists() and not read(inspection).get("schemaErrors")
+        if not inspection.exists():
+            return False
+        result = read(inspection)
+        return result.get("status") in ("inspected", "do-not-post") and not result.get("schemaErrors")
 
     def review_existing(self, source_dir, style_file=None):
         """Review frozen output without another generation or publication authority."""

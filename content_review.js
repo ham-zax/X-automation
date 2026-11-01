@@ -20,12 +20,28 @@ export function contentSources(candidate, evidence = []) {
   ].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-export function reviewFingerprint({ units, pipeline, behavior, personaVersion, candidate, evidence = [] }) {
+export function reviewFingerprint({ units, pipeline, behavior, personaVersion, candidate, evidence = [], ownerDirection = null }) {
   // Only decision fields affect review; timestamps/selection metadata do not.
   const decision = Object.fromEntries(['decision', 'primaryPurpose', 'secondaryPurposes', 'socialMode',
     'informationDepth', 'affectStrategy', 'affectProvenance', 'conversationStage', 'reasonToExist']
     .map(key => [key, behavior?.[key] ?? null]));
-  return digest({ units, pipeline, decision, personaVersion, sources: contentSources(candidate, evidence) });
+  return digest({ units, pipeline, decision, personaVersion, ownerDirection, sources: contentSources(candidate, evidence) });
+}
+
+// This check recognizes subjective wording, not factual truth. The independent
+// reviewer still owns semantic entailment and must extract embedded facts.
+export function isSubjectiveInterpretation(value) {
+  const text = clean(value);
+  if (factualQuantities(text).length || /\b(?:supports|support for|compatible|works? (?:on|with)|can run|runs? on|requires?|includes?|free|paid|costs?|version|all devices|every device)\b/i.test(text)) return false;
+  // An opinion cue cannot excuse a separate third-person factual predicate.
+  const predicates = [...text.matchAll(/\b(?:[A-Z][\w.-]*|it|they|this|that)\s+(?:(?:[\w-]+ly|always|never|also|now)\s+)*([a-z]+s)\b/g)];
+  if (predicates.some(match => {
+    if (['feels', 'looks', 'seems', 'sounds'].includes(match[1])) return false;
+    if (match[1] !== 'is') return true;
+    const complement = text.slice(match.index + match[0].length).trim();
+    return !/^(?:(?:really|so|pretty|quite) )?(?:wild|exciting|interesting|fun|cool|great|awful|amazing|surprising)[.!?]*$/i.test(complement);
+  })) return false;
+  return /\b(?:i (?:think|believe|prefer|would|like|love|hate)|my take|to me|feels?|seems?|sounds?|should|ought|need|needs|good|right|wrong|wild|wow|whoa|congrats|congratulations|support|fun|interesting|useful|important)\b/i.test(text);
 }
 
 export function checkReviewClaims(review, { units, candidate, evidence = [], ownerEvidence = false, pipeline = '' }) {
@@ -47,9 +63,7 @@ export function checkReviewClaims(review, { units, candidate, evidence = [], own
     if (claim.status === 'interpretation') {
       // Opinions are not a loophole for omitted product facts or numbers.
       // The discovery-specific gate additionally checks full sentence coverage.
-      if (!/^(?:i (?:think|believe|prefer|would)|my take|to me|the (?:real|interesting|useful|important) (?:part|lesson|bit|point)|worth (?:noting|watching)|why i (?:care|like)|this (?:feels|looks)|what matters)/i.test(assertion)
-        || factualQuantities(assertion).length > 0
-        || /\b(?:supports?|compatible|works? (?:on|with)|can run|runs? on|requires?|includes?|free|paid|costs?|version|all devices|every device)\b/i.test(assertion)) {
+      if (!isSubjectiveInterpretation(assertion)) {
         failures.push('A material assertion cannot be classified as subjective interpretation.');
       }
       continue;
