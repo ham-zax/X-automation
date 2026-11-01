@@ -674,4 +674,14 @@ for production Replies. The owner then selects GLM for all writing. Preserve Dee
 executor and orchestration model. Pause timer during the change while no operator is active.
 
 | id | status | depends | owner | acceptance | evidence |
-| RV2 | in-progress | DS-LIVE | parent | Separate reply_writer role selects GLM max. Reply v2 performs two candidates and 16 checks, returning selected text through existing act. All writing selects GLM. Existing Writer/draft generation is available through writer-generate. | Existing role/profile storage needs no schema migration. Source prompt: docs/research/peer-reply-experiment-2026-10-31/two-candidate-prompt.md. |
+| RV2 | review | DS-LIVE | parent | Separate reply_writer role selects GLM max. Reply v2 performs two candidates and 16 checks, returning selected text through existing act. All writing selects GLM. Existing Writer/draft generation is available through writer-generate. | Existing role/profile storage needs no schema migration. Source prompt: docs/research/peer-reply-experiment-2026-10-31/two-candidate-prompt.md. |
+
+November 1 parent completion check: 705fa70 pushed. Current bindings confirm
+writer and reply_writer use GLM 5.3 max without fallback. Nonwriting roles and
+the executor use DeepSeek. Focused existing contract, bridge, benchmark and
+launcher checks pass 54/54. UI build passes. Dashboard restarts with current
+role controls. The stopped run aa30a004-c358-49d3-be76-eb3b9513876a recommends
+finish with resource_ceiling_reached and has no active publication attempts.
+Parent finishes it as partial through the bridge. Service and enabled timer
+resume active. No new public result is claimed. writer-generate's first live
+Original/Quote use remains unobserved. Only Hamza marks done.
