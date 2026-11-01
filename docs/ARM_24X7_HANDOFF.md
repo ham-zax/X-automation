@@ -1,5 +1,22 @@
 # ARM 24/7 operator handoff — current as of 2026-10-10
 
+## First adaptive live outcome, 1 November 2026
+
+Run 5582b042-d198-40b8-8300-6533d6b8c67f confirms one Reply:
+https://x.com/ham_zax/status/2116872438721982568
+The publication attempt ef47bd0a-3a24-4284-af79-9caa1ef67a1f is confirmed_published.
+Terra wrote a greeting accepting a developer's connection invitation. No new
+technical point was required. This is one bounded outcome, not a quality rate.
+
+The operator then stopped because act reported a different composer target.
+Source inspection shows act intentionally creates a temporary composer and
+attempts to close it in finally. The launcher separately owns the reading tab.
+The browser contract and brief now distinguish these responsibilities. A
+composer ID difference alone does not require a capability stop. Account,
+source-target, direct-command ownership and uncertain-send checks still apply.
+The launcher confirms cleanup of its own tab. No independent observation of
+the composer cleanup or sustained operation is claimed by this checkpoint.
+
 ## Adaptive participation update, 1 November 2026
 
 The owner clarifies that improvisation and adaptive context collection are core
