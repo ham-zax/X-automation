@@ -690,3 +690,29 @@ Original/Quote use remains unobserved. Only Hamza marks done.
 
 | id | status | depends | owner | acceptance | evidence |
 | RV2-D | review | RV2 | parent | Trace the two rejected live replies through executor intent, Writer candidates/checks and confirmed publication. Diagnose before further prompt changes. | docs/research/REPLY_PRODUCTION_FAILURE_2026-11-01.md and four original request/output records. DeepSeek prescribes the critical thesis, GLM realizes and rationalizes it. Owner rejects quality despite working model routing. No source/prompt repair or model experiment. Service is stopped, timer explicitly stopped to preserve the owner request. Only Hamza marks done. |
+
+## Systematic writing and runtime repair plan, 1 November
+
+Plan owner: docs/plans/GROWTH_REPLY_QUALITY_DESIGN_2026-10-29.md, section
+“Production repair plan, 1 November 2026”. Baseline83dd296. Planning only.
+Planning dispatch budget2 consumed: Terra6.1 Medium evidence collection and
+same-model plan evaluation complete. One plan correction incorporated inline. No implementation or production restart.
+Execution budgets in the proposal are not active until execution is authorized.
+Evidence taskId node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Aca4c20da-e74c-4da1-abf1-2b1f236e462f.
+
+| id | status | depends | owner | acceptance | evidence |
+| GQ0 | review | RV2-D | parent + Terra Medium | Evidence-grounded complete repair plan, issue dispositions and evaluation boundaries. | Evidence and plan evaluation complete. Terra requests one clarification about authoritative Writer-selected behavior. Parent checks code and incorporates that rule and conflicting-caller acceptance into GQ3. No re-review or runtime pass claimed. |
+| GQ1 | open | GQ0 | parent | Evaluator captures production contract, projection, schema, workflow and review mode. | Plan GQ1. |
+| GQ2 | open | GQ1 | parent | Preserve long-source text and deliver needed source/thread context without bypassing upstream trust. | Plan GQ2. |
+| GQ3 | open | GQ2 | parent | GLM owns the fitting act, saved behavior matches text, exact Writer handoff and reviewed Quote claim hold. | Plan GQ3, one shared-interface implementation owner. |
+| GQ4 | open | GQ3 | parent + Terra Medium | Bounded unpublished GLM outputs pass evidence-grounded Terra assessment, preserving owner judgment. | Proposed six GLM captures, not active. |
+| GQ5 | open | GQ4 | parent | Runtime failures, timing, disposition and cleanup diagnostics remain truthful without silent fallback. | Plan GQ5. |
+| GQ6 | open | GQ5 | parent | Measurement and uncertainty backlog has an accurate disposition without replaying writes. | Plan GQ6. |
+| GQ7 | open | GQ6 | parent | Current docs and all issue dispositions agree with evidence. | Plan GQ7. |
+| GQ-R | open | GQ7 | Terra Medium + parent | One final graph review, bounded repair/recheck and scoped commit/push. | Proposed execution review, not started. |
+| GQ-L | blocked | GQ-R | owner | Explicitly authorized bounded live observation, confirmed output/cleanup and owner quality acceptance. | Owner stopped operator. No restart authorized by this planning work. |
+
+Plan evaluation taskId: node:delegated-task:command%3Amcp%3Afa8bf9c8-43e1-4f65-b527-8b62cacd745e%3Adelegate-task%3Af606ce6b-f1a1-4d9f-9b29-ddd9f910961f.
+Terra verdict NEEDS_REVISION on one interface ambiguity, corrected in the plan by
+the parent. Plan and evidence checks only. No implementation, tests, model-quality
+measurements, services or public actions change. Implementation tasks remain open.
