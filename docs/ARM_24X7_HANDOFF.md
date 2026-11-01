@@ -112,9 +112,9 @@ Repeated live timing under the updated brief remains unobserved at this point.
 ## Current repair checkpoint, 1 November 2026
 
 Latest owner scope: after the implementation checks pass, start live operation
-with Terra and inspect its behavior. All412 serial JS and7 Python checks pass.
-The versioned terra.conf selects a Terra6.1 medium operator through Claive Codex.
-Writer roles select Terra medium. Content review selects Sol high. The earlier
+with Luna and inspect its behavior. All412 serial JS and7 Python checks pass.
+The versioned luna.conf selects a Luna 6 max operator through Claive Codex.
+Writer and review roles use their saved Growth OS AI settings. The earlier
 architecture-only stop remains historical, superseded by this live instruction.
 Live publication and owner quality acceptance still need observed outcomes.
 
