@@ -376,6 +376,13 @@ patronizing, needlessly analytical or unlike what Hamza wants to say. Reference
 replies illustrate possibilities, not target strings or the evaluator's preferred
 personality. Hamza's rejection overrides a polished reference or a PASS label.
 
+Corpus calibration: the parent rereads the August style_report.csv and the
+creator CSV, then checks a varied set of promoted V4 replies and matched parents.
+The dated reading is recorded in the existing V4_RESEARCH_REASSESSMENT.md under
+x_creator_phase2. The original September finding already rejects an ideal tweet
+shape. Use this as evidence for expressive range, not as Hamza's biography or a
+viral formula. Do not add the full corpus to runtime prompts or copy author style.
+
 The checks protect source meaning, owner facts, exact output and sending authority.
 They must not become an expanding list of prohibited expressions or a requirement
 to flatten creative affect. The two-candidate process remains available to explore
@@ -825,3 +832,18 @@ The parent compares its claims with the actual plan and current code:
 No source code, production prompts, model settings, tests or public actions change
 as part of receiving this review. The operator and timer stay stopped. These
 clarifications improve the plan, not the claimed state of the implementation.
+
+### Follow-up external review and corpus context
+
+The newer external review supplies accurate request/output excerpts and historical
+service timestamps. Those excerpts corroborate the saved two-case failure path.
+They are not evidence that all poor writing has that cause. Its claim that doing
+16 checks in one call caused rationalization remains a hypothesis. The observed
+fact is that the checks rationalized these outputs. A structured audit improves
+extractability, not independent judgment or factual correctness.
+
+The09:15:32 usage-limit event establishes a failure of that OpenCode execution
+path at that time. It does not prove current quota state, that every routing path
+is unavailable or that credentials must be replaced. GQ5 must distinguish those
+conditions before selecting a repair. No model or credential switch accompanies
+this review. The owner stop remains effective regardless of provider availability.

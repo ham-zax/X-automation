@@ -481,3 +481,78 @@ Its role is to constrain the overhaul:
 The strongest V4-supported account model is:
 
 > **real work + visible judgment + useful artifacts + live participation + recurring people + ordinary social behavior, with depth and affect selected by context rather than one response function.**
+
+
+## 1 November 2026: qualitative rereading for the production writing repair
+
+This section records a fresh local reading. It does not alter the September
+results, verify old product claims or identify a universal viral-writing formula.
+The operator and timer remain stopped. No X collection or model generation runs.
+
+### Located inputs and limits
+
+- `.viral-style-research/style_report.csv`: the August collection contains170 rows
+  across100 usernames, observed20 August2026. Its sampleKind values include107
+  viral_seed rows,62 author_control rows and1 targeted row. It is not170 viral hits.
+- `docs/research/x_creator_phase2/posts.csv`: 4,517 rows across51 creator handles.
+  Stored post dates span4 September2025 through3 September2026. This is an authored
+  Original/Quote corpus, not the account's paired reply history.
+- `corpus_v4/authored_posts.jsonl` and `corpus_v4/replies.jsonl`: use the promoted
+  text and available context for interpreting those examples. The CSV alone can
+  retain older text limitations. The V4 provenance and clipping fields still matter.
+
+Reading method: inspect10 high-like rows from distinct authors in the August CSV,
+12 distinct-author high-like rows from the creator CSV,18 short unclipped V4 replies
+selected deterministically by hash(id) within author,8 matched-parent reply examples,
+and3 longer unclipped reply excerpts. Overlap exists between these selections.
+This is a deliberately varied qualitative sample, not a random population estimate.
+The long excerpts serve as controls against turning shortness into a rule. This
+reading does not claim every row, parent, image or reply context was examined.
+
+DuckDB reads the existing CSV/JSONL directly. The short-reply query partitions by
+creatorHandle, orders by hash(id), excludes textPossiblyClipped, limits text length
+to239 characters, then takes18 handles in sorted order. The paired sample joins
+inReplyToStatusId to authored_posts.id, excludes self-replies, takes one hashed
+row per creator and limits the result to8 handles. Missing parents remain unknown.
+High-like selection illustrates visible styles, not the causes of high engagement.
+
+### Observable expression and what transfers
+
+| Record | Observed expression | Supported lesson and limit |
+|---|---|---|
+| twtayaan /2083569189512708600 | “Nobody warned me the final boss was Kubernetes.” | A direct joke can be the whole post. Do not infer a mandatory joke or factual project history for Hamza. |
+| bcherny /2027527707626774768 | “Proud to work at Anthropic.” | Expressed affect can stand without analysis. Its employment fact belongs to that author. |
+| LinusEkenstam /2091777442025263216 | “I did not expect it to be THIS fun” | Excitement can be explicit and unpolished. The source includes a video that this reading does not inspect. |
+| addyosmani /2090118810640482390 | “Great ship! Congrats!” | The matched parent announces a release. A complete social reaction need not add a missing benchmark. |
+| alexalbert__ /2056766301557932045 | “Welcome to the team!” | The matched parent announces joining Anthropic. The reply fits that relationship. Do not invent the same relationship for Hamza. |
+| DrJimFan /2091648216106479916 | Two raised-hands emojis | The matched parent describes a follower milestone. A nontechnical acknowledgment is observable, without proving causal value for growth. |
+| bindureddy /2095607331237351473 | “Hard to be patient, if it's indeed AGI” | The matched parent discusses waiting for access. Playful impatience responds to that moment. It does not establish the underlying AGI claim. |
+| bcherny /2094865488706973739 | Discusses reasoning effort and latency from stated usage | Specific technical discussion remains valid. The usage claim is that author's, not available owner evidence for Hamza. |
+| GergelyOrosz /2095074561251278854 | A detailed, situated on-call anecdote | Longer technical explanations can stay concrete and personal. Its work history cannot be borrowed. |
+| ID_AA_Carmack /2064720308490092844 | Explains a game house rule through an encounter example | Detail can follow the actual topic rather than becoming a generic engineering lesson. |
+
+Record suffixes above are post IDs. Their full URLs are retained in the local
+source rows and resolve as https://x.com/<handle>/status/<id>. These are stored
+corpus observations, not fresh checks of today's public pages.
+
+### Implications for the repair plan
+
+The sample supports range, situational fit and a clear speaker position. It does
+not support one ideal sentence architecture, length, emotional register or required
+technical contribution. Straight opinions, jokes, excitement and detailed answers
+coexist. Raw engagement cannot isolate wording effects from distribution, topic,
+author reputation, relationships or media. No human-versus-AI authorship inference
+is made from the style alone. Corpus popularity does not make a claim true.
+
+The repository already states the relevant conclusion on4 September: social-act
+selection matters and there is no ideal tweet shape. The new production evidence
+shows an implementation gap between that recorded conclusion and the executor's
+prescriptive handoff. Rereading the CSV reinforces that repair direction. It does
+not justify another persona manifesto or injecting the corpus into every request.
+
+Use selected examples as calibration context for the evaluator, with the actual
+parent where available. Transfer permission to react, not wording, biography or
+relationships. Hamza's preferences and source context outrank these examples.
+Use his own grounded examples first when available. References must include a
+long, appropriate technical answer as well as short social acts, so the evaluator
+does not learn a new universal preference for brevity or excitement.

@@ -725,3 +725,11 @@ voice separately from factual support. Hash requirements, concurrency causation,
 guaranteed repairs and alleged historical cache effects are not accepted as
 established. No implementation, tests, model calls or public restart accompanies
 these plan changes. GQ1 remains the first open implementation task.
+
+November1 corpus reading: parent locates the August style_report.csv and creator
+posts.csv, reads varied authored samples and V4 replies with some matched parents,
+and records the scope/limits in the existing V4_RESEARCH_REASSESSMENT.md. The plan
+uses this for adaptive expression, not a fixed viral formula or imported owner
+biography. The newer review corroborates saved cases but does not establish that
+16-check load caused rationalization or that a past quota failure is still current.
+No implementation, tests, model generation, credential change or public restart.
