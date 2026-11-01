@@ -685,3 +685,8 @@ finish with resource_ceiling_reached and has no active publication attempts.
 Parent finishes it as partial through the bridge. Service and enabled timer
 resume active. No new public result is claimed. writer-generate's first live
 Original/Quote use remains unobserved. Only Hamza marks done.
+
+## Owner-rejected live Reply quality, 1 November
+
+| id | status | depends | owner | acceptance | evidence |
+| RV2-D | review | RV2 | parent | Trace the two rejected live replies through executor intent, Writer candidates/checks and confirmed publication. Diagnose before further prompt changes. | docs/research/REPLY_PRODUCTION_FAILURE_2026-11-01.md and four original request/output records. DeepSeek prescribes the critical thesis, GLM realizes and rationalizes it. Owner rejects quality despite working model routing. No source/prompt repair or model experiment. Service is stopped, timer explicitly stopped to preserve the owner request. Only Hamza marks done. |
