@@ -64,7 +64,7 @@
       "source": "x",
       "author": "anemll",
       "behavior": {
-        "decision": "ACT",
+        "decision": "UNKNOWN",
         "primaryPurpose": null,
         "socialMode": null,
         "informationDepth": null,
