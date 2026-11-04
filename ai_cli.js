@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { growthRuntimeLaunch } from './growth_config.js';
 import { aiLimit, reserveAiRequest } from './ai_policy.js';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -126,13 +127,44 @@ function codexOutputSchema(schema) {
 
 const invocationDeadline = new AsyncLocalStorage();
 
+// The web transport can serialize a JSON answer as Markdown. Decode only
+// CommonMark punctuation escapes, preserving every valid JSON string escape.
+// Valid JSON is returned byte-for-byte; schema validation remains the caller's.
+export function decodeWebStructuredText(text) {
+  try { JSON.parse(text); return text; } catch { /* inspect the transport encoding */ }
+  let source = text.trim();
+  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(source);
+  if (fenced) source = fenced[1];
+  let decoded = '', inString = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index], next = source[index + 1];
+    if (char === '\\' && next !== undefined) {
+      if (inString && /["\\/bfnrtu]/.test(next)) {
+        decoded += char + next;
+        index += 1;
+        continue;
+      }
+      if (/[!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~]/.test(next)) {
+        decoded += next;
+        index += 1;
+        if (next === '"') inString = !inString;
+        continue;
+      }
+    }
+    decoded += char;
+    if (char === '"') inString = !inString;
+  }
+  try { JSON.parse(decoded); return decoded; } catch { return text; }
+}
+
 export function runProcess(command, args, { input = null, timeoutMs = 15_000, maxOutputChars = 16_000, cwd = undefined } = {}) {
+  const launch = command === 'codex' ? growthRuntimeLaunch('codex') : { env: {} };
   maxOutputChars = Math.min(maxOutputChars, aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024));
   const allowedEnv = new Set(['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'LC_ALL', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME', 'OPENAI_API_KEY', 'OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'CODEX_HOME', 'PI_CODING_AGENT_DIR', ...String(process.env.AI_ALLOWED_CLI_ENV || '').split(',').map(x => x.trim()).filter(Boolean)]);
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(launch.binaryPath || command, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: Object.fromEntries(Object.entries(process.env).filter(([name]) => allowedEnv.has(name))),
+      env: { ...Object.fromEntries(Object.entries(process.env).filter(([name]) => allowedEnv.has(name))), ...launch.env },
       cwd,
       detached: process.platform !== 'win32',
     });
@@ -733,22 +765,27 @@ async function runCliStructuredAIUnchecked(profile, { prompt, schema, timeoutMs 
   try {
     const actualModel = await resolveCodexInheritedModel(profile, { timeoutMs: Math.min(timeoutMs, 10_000) });
     await writeFile(schemaPath, JSON.stringify(codexOutputSchema(schema)), 'utf8');
+    const launch = growthRuntimeLaunch('codex');
+    const model = String(actualModel || profile.model);
+    const webModel = model === 'chatgpt-web' || model.startsWith('chatgpt-web/');
     const args = [
       'exec',
       '--ephemeral',
-      '--sandbox', 'read-only',
+      '--sandbox', launch.sandboxMode || 'read-only',
       '--skip-git-repo-check',
       '-C', dir,
       '-c', 'approval_policy="never"',
-      '-c', 'sandbox_workspace_write.network_access=false',
+      '-c', `sandbox_workspace_write.network_access=${launch.networkAccess === true}`,
       '-c', 'features.shell_tool=false',
       '-c', 'mcp_servers={}',
     ];
     if (profile.model && profile.model !== 'inherit') args.push('--model', profile.model);
     if (profile.reasoning) args.push('-c', `model_reasoning_effort=${JSON.stringify(profile.reasoning)}`);
     if (profile.runtimeProfile) args.push('--profile', profile.runtimeProfile);
-    args.push('--output-schema', schemaPath, '--output-last-message', resultPath, '-');
-    await runProcess('codex', args, { input: prompt, timeoutMs, maxOutputChars: aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024) });
+    if (!webModel) args.push('--output-schema', schemaPath);
+    args.push('--output-last-message', resultPath, '-');
+    const input = webModel ? `${prompt}\n\nOUTPUT JSON SCHEMA:\n${JSON.stringify(schema)}\nReturn only the JSON object matching this schema.` : prompt;
+    await runProcess('codex', args, { input, timeoutMs, maxOutputChars: aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024) });
     let text;
     try {
       if ((await stat(resultPath)).size > aiLimit('AI_MAX_RESPONSE_BYTES', 2 * 1024 * 1024)) throw new AiCliError('response_limit', 'Codex output file exceeds deployment limit.');
@@ -757,8 +794,9 @@ async function runCliStructuredAIUnchecked(profile, { prompt, schema, timeoutMs 
       if (error instanceof AiCliError) throw error;
       throw new AiCliError('invalid_structured_output', 'Codex did not produce a structured output file.', { fallbackEligible: true });
     }
+    const decodedText = webModel ? decodeWebStructuredText(text) : text;
     return {
-      text,
+      text: decodedText,
       runtime: 'codex',
       provider: 'runtime_managed',
       model: actualModel || profile.model || 'inherit',
@@ -766,8 +804,8 @@ async function runCliStructuredAIUnchecked(profile, { prompt, schema, timeoutMs 
       inputTokens: null,
       outputTokens: null,
       costUsd: null,
-      nativeStructuredOutput: true,
-      metadata: { protocol: 'runtime_native', structuredOutput: 'runtime_schema' },
+      nativeStructuredOutput: !webModel,
+      metadata: { protocol: 'runtime_native', structuredOutput: webModel ? 'compatible_fallback' : 'runtime_schema', markdownEscapesDecoded: decodedText !== text },
     };
   } finally {
     await rm(dir, { recursive: true, force: true });

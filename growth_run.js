@@ -12,6 +12,8 @@ import {
   renewOperatorLease,
 } from './operator_lease.js';
 import { getOperatorReadiness } from './operator_readiness.js';
+import { discoveryBlock } from './discovery_schedule.js';
+import { growthScheduleConfig } from './growth_config.js';
 import {
   createGrowthRun,
   getGrowthRun,
@@ -291,6 +293,7 @@ export function getGrowthRunStatus(runId, { now = Date.now() } = {}) {
     delegation: { allowed: delegation.allowed, reason: delegation.allowed ? null : delegation.reason, currentRevision: delegation.grant.revision },
     readiness,
     next,
+    schedule: discoveryBlock({ now, schedule: growthScheduleConfig() }),
   };
 }
 

@@ -2,11 +2,32 @@
 # Change models or role bindings here. Use secretRef for a secret reference only.
 version: 1
 
+# Discovery cadence. Wall-clock blocks decide which stream each pass reads, so a
+# session restart continues the rotation instead of resetting it.
+schedule:
+  blockSeconds: 300
+  order: momentum,forYou
+  restWatchMinutes: 60
+  builderRefreshMinutes: 60
+
+ai:
+  totalTimeoutMs: 240000
+
+runtimes:
+  codex:
+    binaryPath: /home/ubuntu/.local/bin/codex
+    codexHome: /home/ubuntu/.local/share/claive/codex-web-home
+    sandboxMode: danger-full-access
+    networkAccess: true
+    # Optional shadowHome sets HOME for this runtime only. Leave unset on ARM.
+    environment:
+      CLAIVE_CODEX_WEB_YOLO: '1'
+
 operator:
   runtime: claive
   engine: codex
-  model: gpt-6-luna
-  reasoning: max
+  model: chatgpt-web/gpt-6-sol
+  reasoning: high
   replyWriterMode: profile
   browserTarget: linux
   browserInterface: agent-browser-cli
@@ -18,29 +39,29 @@ operator:
 roles:
   continuous_scan:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   editorial_scan:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   editorial_final:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   audience_review:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   writer:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   reply_writer:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high
   content_review:
     runtime: codex
-    model: gpt-6-luna
-    reasoning: max
+    model: chatgpt-web/gpt-6-sol
+    reasoning: high

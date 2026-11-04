@@ -5,7 +5,7 @@ import { DomainValidationError } from './errors.js';
 export const DEFAULT_GROWTH_POLICY = Object.freeze({
   version: 1,
   activity: {
-    timeZone: 'Asia/Kolkata', sleepStart: '01:00', sleepEnd: '08:30',
+    timeZone: 'Asia/Kolkata', sleepStart: '01:00', sleepEnd: '06:00',
     discoveryIntervalMinutes: 5,
   },
   lanes: {

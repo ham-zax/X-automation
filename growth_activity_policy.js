@@ -8,7 +8,7 @@ import { DEFAULT_GROWTH_POLICY } from './growth_product_policy.js';
 const MINUTE = 60_000;
 const DEFAULT_TZ = 'Asia/Kolkata';
 const DEFAULT_SLEEP_START = '01:00';
-const DEFAULT_SLEEP_END = '08:30';
+const DEFAULT_SLEEP_END = '06:00';
 const URGENT_TYPES = new Set(['verified_major_launch', 'verified_breakthrough']);
 
 function clockMinutes(value, fallback) {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { normalizeSchedule } from './discovery_schedule.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const GROWTH_CONFIG_VERSION = 1;
@@ -22,6 +23,7 @@ const ROLE_NAMES = new Set([
   'writer', 'reply_writer', 'content_review',
 ]);
 const INHERITED_ROLES = new Set(['reply_writer', 'content_review']);
+const SCHEDULE_KEYS = new Set(['blockSeconds', 'order', 'restWatchMinutes', 'builderRefreshMinutes']);
 
 function isMap(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -173,7 +175,16 @@ export function loadGrowthConfig({ env = process.env, required = false } = {}) {
   } catch (error) {
     throw new Error(`${error.message} (${sourcePath})`);
   }
-  assertKeys(parsed, new Set(['version', 'operator', 'roles']), 'root');
+  assertKeys(parsed, new Set(['version', 'operator', 'roles', 'runtimes', 'ai', 'schedule']), 'root');
+  if (parsed.schedule !== undefined) {
+    assertKeys(parsed.schedule, SCHEDULE_KEYS, 'schedule');
+    normalizeSchedule(parsed.schedule);
+  }
+  const ai = parsed.ai ?? {};
+  assertKeys(ai, new Set(['totalTimeoutMs']), 'ai');
+  if (ai.totalTimeoutMs !== undefined && (!Number.isSafeInteger(ai.totalTimeoutMs) || ai.totalTimeoutMs < 1000 || ai.totalTimeoutMs > 600000)) {
+    throw new Error('Growth config ai.totalTimeoutMs must be an integer from 1000 to 600000.');
+  }
   if (parsed.version !== GROWTH_CONFIG_VERSION) {
     throw new Error(`Growth config version must be ${GROWTH_CONFIG_VERSION}.`);
   }
@@ -182,11 +193,56 @@ export function loadGrowthConfig({ env = process.env, required = false } = {}) {
   const roles = parsed.roles ?? {};
   assertKeys(roles, ROLE_NAMES, 'roles');
   for (const [role, value] of Object.entries(roles)) validateRole(role, value, `roles.${role}`);
-  return { version: parsed.version, operator, roles, sourcePath };
+  const runtimes = parsed.runtimes ?? {};
+  assertKeys(runtimes, new Set(['codex']), 'runtimes');
+  for (const [runtime, launch] of Object.entries(runtimes)) {
+    assertKeys(launch, new Set(['binaryPath', 'codexHome', 'shadowHome', 'environment', 'sandboxMode', 'networkAccess']), `runtimes.${runtime}`);
+    if (launch.sandboxMode !== undefined && !['read-only', 'workspace-write', 'danger-full-access'].includes(launch.sandboxMode)) {
+      throw new Error(`Growth config runtimes.${runtime}.sandboxMode is unsupported.`);
+    }
+    if (launch.networkAccess !== undefined && typeof launch.networkAccess !== 'boolean') {
+      throw new Error(`Growth config runtimes.${runtime}.networkAccess must be boolean.`);
+    }
+    for (const key of ['binaryPath', 'codexHome', 'shadowHome']) {
+      if (launch[key] !== undefined && (typeof launch[key] !== 'string' || !path.isAbsolute(launch[key]))) {
+        throw new Error(`Growth config runtimes.${runtime}.${key} must be an absolute path.`);
+      }
+    }
+    if (launch.environment !== undefined) {
+      if (!isMap(launch.environment)) throw new Error(`Growth config runtimes.${runtime}.environment must be a map.`);
+      for (const [key, value] of Object.entries(launch.environment)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== 'string') {
+          throw new Error(`Growth config runtimes.${runtime}.environment must contain environment names and string values.`);
+        }
+      }
+    }
+  }
+  return { version: parsed.version, operator, roles, runtimes, ai, schedule: parsed.schedule ?? null, sourcePath };
+}
+
+// Shared by the attached operator and tool-less role invocations. Never mutate
+// the parent environment: each child receives its own explicit configuration.
+export function growthRuntimeLaunch(runtime, env = process.env) {
+  const launch = loadGrowthConfig({ env })?.runtimes[runtime] || {};
+  return {
+    binaryPath: launch.binaryPath,
+    sandboxMode: launch.sandboxMode,
+    networkAccess: launch.networkAccess,
+    env: {
+      ...launch.environment,
+      ...(launch.shadowHome ? { HOME: launch.shadowHome } : {}),
+      ...(launch.codexHome ? { CODEX_HOME: launch.codexHome, CLAIVE_CODEX_WEB_HOME: launch.codexHome } : {}),
+      ...(launch.binaryPath ? { CODEX_WORKER_BINARY: launch.binaryPath } : {}),
+    },
+  };
 }
 
 export function growthOperatorConfig(env = process.env) {
   return loadGrowthConfig({ env })?.operator || null;
+}
+
+export function growthScheduleConfig(env = process.env) {
+  return loadGrowthConfig({ env })?.schedule || null;
 }
 
 export function growthRoleConfig(role, env = process.env) {

@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { loadGrowthConfig } from './growth_config.js';
 import https from 'node:https';
 import dns from 'node:dns/promises';
 import net from 'node:net';
@@ -7,7 +8,9 @@ import { resolvePublicDestination } from './research.js';
 import { getAppState, setAppState, runStoreTransaction } from './store.js';
 
 export function aiLimit(name, fallback) {
-  const raw = process.env[name];
+  const raw = name === 'AI_TOTAL_TIMEOUT_MS'
+    ? loadGrowthConfig()?.ai.totalTimeoutMs ?? process.env[name]
+    : process.env[name];
   const value = raw == null || raw === '' ? fallback : Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) throw new Error(`Invalid deployment AI limit: ${name}`);
   return value;

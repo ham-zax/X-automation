@@ -42,6 +42,31 @@ content review. YAML role profiles override saved database bindings. Explicit
 profiles passed by a command remain authoritative. A missing role keeps the
 saved binding. A changed YAML file applies to the next operator or AI call.
 Malformed YAML fails before browser allocation or model dispatch.
+Shared Codex launch settings belong to `runtimes.codex` in the same YAML:
+`binaryPath` selects the executable, `codexHome` selects CODEX_HOME (and the
+Claive web home), optional `shadowHome` sets the child's HOME, and `environment`
+maps environment names to quoted string values. These apply to both the attached
+operator and AI role calls without changing the parent process environment.
+Paths must be absolute. ARM uses its existing home; a shadow home is optional
+and must already contain any files the runtime needs. Keep secrets out of YAML.
+`sandboxMode` and boolean `networkAccess` configure native Codex role calls;
+their defaults remain read-only and no workspace network access. The web provider
+requires a trusted network-enabled environment, so ARM explicitly selects
+danger-full-access with network access: this Codex/web bridge combination does
+not emit the explicit trusted network context required for sandboxed turns.
+Role calls still disable shell and MCP tools.
+Claive's operator sandbox follows its native policy and explicit environment
+settings (ARM sets `CLAIVE_CODEX_WEB_YOLO: '1'` as required for local browser access).
+Claive launch arguments remain governed by its existing engine configuration;
+an environment entry for `CLAIVE_CONFIG` can select that configuration file.
+Web model role calls use the existing compatible-output path: the schema is
+included in the prompt and Growth OS validates the result locally. The web
+bridge's native strict-schema mode rejects Markdown-escaped JSON before the
+application can decode it. The Codex adapter therefore decodes CommonMark
+punctuation escapes for web responses only, preserving valid JSON and valid
+JSON string escapes. It records `markdownEscapesDecoded` in adapter metadata.
+Decoding must produce valid JSON; every required field and enum still passes
+the original schema validator. Other Codex models retain native strict schemas.
 Reply writing can use the operator itself or the configured Reply Writer role.
 See [model selection](../../docs/AGENT_WORKFLOW.md#operator-and-writer-selection)
 and the [live brief](arm/arm-growth-live.md). No Luna model lock remains.
@@ -55,8 +80,9 @@ X_GROWTH_CONFIG_FILE=/home/ubuntu/repo/x_test/ops/systemd/arm/growth-agent.yaml 
 ```
 
 Discovery alternates Trending and For You in the live brief. Trending runs at
-0:00, For You at 2:30, then each source repeats every five minutes when work
-fits the interval. Trending uses `growth-refresh {"kind":"x_momentum"}`.
+0:00, For You at 10:00, then each source repeats every twenty minutes when work
+fits the interval. Saved discoveryIntervalMinutes is ten minutes. Passes never
+overlap; slower context reads or Writer calls push the next pass later. Trending uses `growth-refresh {"kind":"x_momentum"}`.
 For You uses the authenticated owned browser tab and `x-for-you-ingest`.
 The reasoning agent follows this cadence within a finite session. Slow work,
 rest hours and the existing gap between sessions can delay collection.
@@ -166,3 +192,27 @@ max only. Max is its highest available effort. Edit the YAML to select another
 supported model or effort. Do not edit generated or installed copies first.
 Only enable the user timer under the owner's live authorization. Individual sessions
 stay bounded and obey saved rest, health, grant, claim and reconciliation rules.
+
+## Browser budget and Writer deadline, 4 November 2026
+
+The attached brief targets at most three operator-owned active tabs, normally
+one reading tab plus a transport-owned composer. Exceptions need a concrete
+task reason. Unrelated pre-existing tabs remain outside the operator's ownership.
+This is prompt guidance, not a browser-wide hard cap or automatic tab cleanup.
+
+`ai.totalTimeoutMs` in growth-agent.yaml sets the AI invocation ceiling and
+the default Writer deadline. ARM selects 240000 ms. Explicit shorter call
+deadlines still apply. Without this YAML setting, existing 120000 ms defaults
+remain. Validation requires 1000 through 600000 ms. Writer calls reserve their
+full deadline plus two minutes for publication/reconciliation before the session
+ends. The existing 35-minute session and 45-minute process boundary remain.
+
+Discovery runs on wall-clock blocks from the `schedule` section in
+`growth-agent.yaml`. Defaults: 300-second blocks and the order `momentum,forYou`,
+so each stream returns every ten minutes. A pass reads the stream of the current
+block. Work that overruns `endsAt` finishes first, a missed block is skipped, and
+a session restart continues the current block instead of resetting the rotation.
+`restWatchMinutes` allows one momentum-only check per hour during rest.
+`builderRefreshMinutes` adds the GitHub and HN refresh to a momentum block when
+their snapshots are older than that value. No block is a pass timeout, output
+target, or promise that model generation will become faster.

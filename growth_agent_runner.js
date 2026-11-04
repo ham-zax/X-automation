@@ -13,7 +13,7 @@ import {
 import { BROWSER_INTERFACES, browserOperatorContract } from './ops/browser_operator_contract.js';
 import { GROWTH_RUN_STOP_REASONS } from './growth_run.js';
 import { controllerTick } from './semantic_controller.js';
-import { loadGrowthConfig } from './growth_config.js';
+import { loadGrowthConfig, growthRuntimeLaunch } from './growth_config.js';
 
 const HOME = homedir();
 const REPLY_OPERATOR_CONTRACT = REPLY_CONTRACT.replace(/\n+/g, ' ');
@@ -130,6 +130,7 @@ export function runtimeConfig(env = process.env) {
   }
   return {
     runtime,
+    runtimeLaunch: growthRuntimeLaunch(runtime === 'claive' ? claiveEngine : runtime, env),
     claiveEngine,
     model,
     windowMinutes,
@@ -157,7 +158,7 @@ export function runtimeConfig(env = process.env) {
           : String(configured('claudeBin', 'X_GROWTH_CLAUDE_BIN', 'claude')),
     // Native codex executable for the ephemeral bounded-lane runtimeExecution
     // (Claive->Codex passes both executables; native codex reuses its own).
-    codexExecutable: String(configured('codexExecutable', 'X_GROWTH_CODEX_BIN', configured('codexBin', 'X_GROWTH_CODEX_BIN', DEFAULT_CODEX_BIN))),
+    codexExecutable: growthRuntimeLaunch('codex', env).binaryPath || String(configured('codexExecutable', 'X_GROWTH_CODEX_BIN', configured('codexBin', 'X_GROWTH_CODEX_BIN', DEFAULT_CODEX_BIN))),
     configFile: growthConfig?.sourcePath || null,
   };
 }
@@ -408,6 +409,15 @@ ${experimentSection}`;
 // Shared child command owner for attached sessions. Controller main itself does
 // not launch the old elapsed-time loop.
 export function commandFor(config, prompt, { promptFile, engineSessionId, workspace = REPO } = {}) {
+  const command = runtimeCommandFor(config, prompt, { promptFile, engineSessionId, workspace });
+  return {
+    ...command,
+    ...(config.runtime === 'codex' && config.runtimeLaunch?.binaryPath ? { executable: config.runtimeLaunch.binaryPath } : {}),
+    ...(Object.keys(config.runtimeLaunch?.env || {}).length ? { env: { ...command.env, ...config.runtimeLaunch.env } } : {}),
+  };
+}
+
+function runtimeCommandFor(config, prompt, { promptFile, engineSessionId, workspace = REPO } = {}) {
   if (config.runtime === 'claive') {
     if (!promptFile) throw new Error('Claive requires a temporary operational prompt file.');
     const args = [

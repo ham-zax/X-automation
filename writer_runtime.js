@@ -1,4 +1,5 @@
 import { runStructuredAI } from './ai_runtime.js';
+import { aiLimit } from './ai_policy.js';
 import { WRITER_BEHAVIOR_SCHEMA, writerSelectedBehavior } from './behavior.js';
 import { validateWriterEvidenceReferences, draftReviewContext } from './drafting.js';
 import { contentSources, bindContentReview } from './content_review.js';
@@ -113,7 +114,7 @@ export async function independentlyReviewAndSaveDraft(draft, packet, writerOutpu
   });
 }
 
-export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = 120_000, runAI = runStructuredAI, skipReview = false, replyContractText = REPLY_CONTRACT, metadata = {} } = {}) {
+export async function generateWriterOutput(packet, promptDocumentText, { timeoutMs = aiLimit('AI_TOTAL_TIMEOUT_MS', 120_000), runAI = runStructuredAI, skipReview = false, replyContractText = REPLY_CONTRACT, metadata = {} } = {}) {
   const deadline = Date.now() + timeoutMs;
   const isReply = packet.pipeline === 'reply';
   const generationPacket = isReply ? projectReplyPacket(packet) : { ...packet, suggestedBehavior: packet.behavior };
