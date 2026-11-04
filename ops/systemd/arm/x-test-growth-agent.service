@@ -1,7 +1,10 @@
 [Unit]
 Description=XGrowth unattended reasoning operator (claive codex gpt-6-luna, yolo)
-After=network-online.target x-test-dashboard.service
-Wants=network-online.target
+# Every role in growth-agent.yaml uses a chatgpt-web model, whose Responses calls go
+# through the ChatGPT Web bridge on the Lightsail worker. The tunnel unit keeps
+# 127.0.0.1:17841 pointed at that bridge; a run must not start without it.
+After=network-online.target x-test-dashboard.service lightsail-bridge-tunnel.service
+Wants=network-online.target lightsail-bridge-tunnel.service
 
 [Service]
 Type=oneshot
@@ -19,6 +22,11 @@ Environment=X_GROWTH_BROWSER_CDP_PORT=9222
 Environment=X_GROWTH_AGENT_WINDOW_MINUTES=480
 Environment=AI_ALLOW_RUNTIME_MANAGED=true
 Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Refuse to start when the remote bridge is absent: a web-model run started without it
+# fails every model call, and a failed run still spends a lease and rate budget. The gate
+# applies only to the claive runtime with a chatgpt-web config, so the attached live
+# session and native-model drop-ins are never blocked.
+ExecStartPre=/bin/sh -c 'if [ "${X_GROWTH_AGENT_RUNTIME:-}" != "claive" ] || ! grep -q chatgpt-web "${X_GROWTH_CONFIG_FILE:-/dev/null}" 2>/dev/null; then exit 0; fi; for i in $(seq 1 30); do ss -ltn 2>/dev/null | grep -q "127.0.0.1:17841" && exit 0; sleep 2; done; echo "ChatGPT Web bridge is not listening on 127.0.0.1:17841; refusing to start a web-model run" >&2; exit 1'
 ExecStart=/usr/local/bin/node growth_agent_runner.js
 TimeoutStartSec=9h
 TimeoutStopSec=15s
