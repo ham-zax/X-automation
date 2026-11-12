@@ -77,6 +77,7 @@ const results = {
   zero: { schemaVersion: 1, sessionId, outcome: 'zero_with_access', recordedPosts: 0, reason: 'Analytics accessible; no eligible measurable posts.' },
   blocked: { schemaVersion: 1, sessionId, outcome: 'blocked', recordedPosts: 0, reason: 'Login form blocked Account Analytics.' },
   partial: { schemaVersion: 1, sessionId, outcome: 'blocked', recordedPosts: 3, reason: 'Analytics access stopped after three acknowledged posts.' },
+  'abbreviated-block': { schemaVersion: 1, sessionId, outcome: 'blocked', recordedPosts: 226, reason: 'Recorded 226 posts. X rounded impressions on 3 rows to 2.5K or 2.7K, so their exact required values were unavailable.' },
   'wrong-session': { schemaVersion: 1, sessionId: 'analytics-00000000-0000-4000-8000-000000000000', outcome: 'collected', recordedPosts: 1, reason: 'Wrong session claim.' },
   'wrong-version': { schemaVersion: 2, sessionId, outcome: 'collected', recordedPosts: 1, reason: 'Wrong schema claim.' },
   'extra-field': { schemaVersion: 1, sessionId, outcome: 'collected', recordedPosts: 1, reason: 'Extra field claim.', extra: true },
@@ -240,6 +241,21 @@ test('a truthful blocked child fails even when it exits zero', async () => {
     await assertOneLease(dir);
     await assertPromptCleanup(dir);
   }
+});
+
+test('a blocked receipt that only cites abbreviated rows is the collection it recorded', async () => {
+  const dir = await newCase('abbreviated-block');
+  const run = launch(dir, 'abbreviated-block');
+  assert.equal(run.status, 0, run.stderr);
+  const checkpoint = await readCheckpoint(dir);
+  assert.equal(checkpoint.status, 'completed');
+  assert.equal(checkpoint.exitCode, 0);
+  assert.equal(checkpoint.collectionOutcome, 'collected');
+  assert.equal(checkpoint.recordedPosts, 226);
+  assert.match(checkpoint.collectionReason, /rounded impressions/);
+  assert.equal('error' in checkpoint, false);
+  await assertOneLease(dir);
+  await assertPromptCleanup(dir);
 });
 
 test('missing, malformed and oversize outcomes fail closed without leaking content', async () => {

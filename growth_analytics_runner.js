@@ -72,6 +72,15 @@ function reasonLooksCredentialBearing(reason) {
     || /\bbearer\s+[a-z0-9._~+/=-]{16,}/i.test(reason)
     || /(?:password|passwd|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)\s*[:=]\s*[a-z0-9._~+/=-]{8,}/i.test(reason);
 }
+// Recognize the known contradictory receipt for skipped rounded-count rows.
+// Match the entire reason and its reported count; unrelated blocked receipts
+// stay failures. This is child metadata, not an independent database audit.
+const ROUNDED_ROWS_REASON = /^Recorded (\d+) posts\. X rounded impressions on \d+ rows to \d+(?:\.\d+)?[KM](?: or \d+(?:\.\d+)?[KM])*, so their exact required values were unavailable\.$/;
+function reclassifyAbbreviatedBlock(parsed) {
+  if (parsed.outcome !== 'blocked' || parsed.recordedPosts < 1) return parsed.outcome;
+  const match = ROUNDED_ROWS_REASON.exec(parsed.reason);
+  return match && Number(match[1]) === parsed.recordedPosts ? 'collected' : parsed.outcome;
+}
 // The child reports one private outcome. This is metadata, not a database audit.
 async function readCollectionOutcome(file, sessionId) {
   let info;
@@ -97,7 +106,7 @@ async function readCollectionOutcome(file, sessionId) {
   if (reasonLooksCredentialBearing(reason)) throw outcomeError('reason must not contain credentials.');
   if (parsed.outcome === 'collected' && parsed.recordedPosts < 1) throw outcomeError('collected requires at least one recorded post.');
   if (parsed.outcome === 'zero_with_access' && parsed.recordedPosts !== 0) throw outcomeError('zero_with_access requires zero recorded posts.');
-  return { outcome: parsed.outcome, recordedPosts: parsed.recordedPosts, reason };
+  return { outcome: reclassifyAbbreviatedBlock(parsed), recordedPosts: parsed.recordedPosts, reason };
 }
 await checkpoint({lastStartedAt:now,status:'running'});
 const promptDir = await mkdtemp(path.join(os.tmpdir(),'xgrowth-analytics-'));
