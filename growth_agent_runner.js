@@ -425,9 +425,12 @@ function runtimeCommandFor(config, prompt, { promptFile, engineSessionId, worksp
       '--label', 'XGrowth autonomous operator', '--engine', config.claiveEngine,
     ];
     if (config.claiveEngine === 'pi') {
-      args.push('--provider', 'opencode2api', '--reasoning-effort', config.reasoning || 'max');
+      const slash = String(config.model || '').indexOf('/');
+      const piProvider = slash > 0 ? config.model.slice(0, slash) : 'opencode2api';
+      const piModel = slash > 0 ? config.model.slice(slash + 1) : config.model;
+      args.push('--provider', piProvider, '--reasoning-effort', config.reasoning || 'max');
       if (engineSessionId) args.push('--session-id', engineSessionId);
-      if (config.model) args.push('--model', config.model);
+      if (piModel) args.push('--model', piModel);
     } else if (config.claiveEngine === 'codex') {
       // The codex engine rejects --max-model-steps and --output-schema and needs no provider or session flag.
       // Yolo: claive's codex engine drops its Codex sandbox only when CLAIVE_CODEX_YOLO=1 is set for the child.
