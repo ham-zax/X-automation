@@ -39,9 +39,21 @@ function latestAt(values) {
   return values.length ? Math.max(...values) : null;
 }
 
+// Where a reply can still be seen. A 400-reply mega-thread buries root reply #200
+// at one impression, so the crowded case routes to a Quote or a peer subreply
+// instead of competing for the same slot as a fresh, wide-open thread.
+export function deriveSurfaceStrategy({ observedReplies = null, ageHours = null } = {}) {
+  if (observedReplies != null && Number.isFinite(Number(observedReplies))) {
+    const r = Math.max(0, Number(observedReplies));
+    if (r >= 60) return 'quote_or_peer_subreply';
+    if (r <= 18 && (ageHours == null || ageHours <= 3)) return 'early_root_reply';
+  }
+  return 'direct_or_peer_reply';
+}
+
 // A soft ordering signal, not a definition of what is viral or worthwhile.
 // Low measured reach does not disqualify an interesting, relevant conversation.
-function opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours }) {
+function opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours, observedReplies = null }) {
   const relevance = Math.max(0, Math.min(100, nicheScore)) / 12;
   const observedMomentum = Math.log10(1 + Math.max(0, viewsPerHour))
     + 0.6 * Math.log10(1 + Math.max(0, engagementsPerHour));
@@ -49,7 +61,17 @@ function opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHou
   // better conversation than a recent niche-relevant post with modest reach.
   const momentum = observedMomentum / (1 + Math.max(0, ageHours) / 18);
   const freshness = 3 / (1 + Math.max(0, ageHours) / 6);
-  return round3(relevance + momentum + freshness);
+  let score = relevance + momentum + freshness;
+  // Reply-drawer crowding physics. An unobserved reply count leaves the base
+  // score untouched, so a sensor without that metric never ranks below a peer.
+  if (observedReplies != null && Number.isFinite(Number(observedReplies)) && Number(observedReplies) >= 0) {
+    const r = Number(observedReplies);
+    // Early uncrowded slot: the root reply is still near the top of the drawer.
+    if (r <= 18 && ageHours <= 3) score += 1.35 * (1 - r / 24);
+    // Crowded drawer: a late root reply is effectively invisible.
+    if (r >= 60) score -= Math.min(2.4, Math.log10(r / 40) * 1.5);
+  }
+  return round3(score);
 }
 
 export function parseStatusUrl(url) {
@@ -131,12 +153,14 @@ export function buildScoutCards(input = {}) {
       builder_notes_and_opinions: 'builder_lessons',
     }[contentStyle];
     const topicWeight = policy?.editorial?.interests?.[interestKey] ?? 50;
-    const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72 })
+    const observedReplies = observed.replies != null ? Number(observed.replies) : null;
+    const score = opportunityScore({ nicheScore, viewsPerHour, engagementsPerHour, ageHours: ageHours ?? 72, observedReplies })
       + (topicWeight - 50) / 25;
     replyCards.push({
       tier: 'T1',
       action: eligibleActions.includes('reply') ? 'reply' : 'quote',
       eligibleActions,
+      surfaceStrategy: deriveSurfaceStrategy({ observedReplies: observed.replies, ageHours }),
       contentStyle,
       hookLabels: sourceShape.hookLabels,
       styleLabels: sourceShape.styleLabels,

@@ -615,7 +615,9 @@ test('preflight runs a momentum block when saved work exists', async () => {
   assert.equal(result.reason, 'momentum_work_available');
   assert.equal(result.precollected.t1Count, 1);
   assert.equal(result.precollected.momentumRefreshed, true);
+  assert.equal(result.precollected.latestRefreshed, true);
   assert.ok(calls.refreshDiscoverySource.includes('x_momentum'));
+  assert.ok(calls.refreshDiscoverySource.includes('x_latest'));
 });
 
 test('preflight runs an awake For You block', async () => {

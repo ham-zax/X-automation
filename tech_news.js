@@ -681,16 +681,74 @@ export async function fetchXUnderTheHoodReport() {
   }
 }
 
+// Sub-second HTTP search lane. Returns null when any query fails, so the caller
+// falls through to the browser observation that always works.
+async function fetchXSearchPostsHttp(queries, limit, filter, perQueryLimit) {
+  let xRead;
+  try {
+    ({ xRead } = await import('./x_reads.js'));
+  } catch {
+    return null;
+  }
+  const mode = filter === 'live' ? 'latest' : 'top';
+  const queryBuckets = [];
+  for (const searchQuery of queries) {
+    let read;
+    try {
+      read = await xRead({ kind: 'search', query: searchQuery, mode, limit: Math.min(40, perQueryLimit) });
+    } catch {
+      return null;
+    }
+    if (read?.ok !== true) return null;
+    queryBuckets.push((Array.isArray(read.posts) ? read.posts : [])
+      .filter((post) => post.id && post.author && post.text)
+      .map((post) => ({
+        source: 'x',
+        id: post.id,
+        username: post.author,
+        author: `@${post.author}`,
+        text: String(post.text || '').replace(/\s+/g, ' ').trim(),
+        likes: Number(post.likes || 0),
+        retweets: Number(post.reposts || 0),
+        replies: Number(post.replies || 0),
+        views: Number(post.views || 0),
+        mediaType: post.photos?.length ? 'image' : null,
+        timestamp: post.at ? Date.parse(post.at) : 0,
+        url: post.url,
+      })));
+  }
+
+  const balanced = [];
+  const seen = new Set();
+  const maxBucketSize = Math.max(0, ...queryBuckets.map((bucket) => bucket.length));
+  for (let index = 0; index < maxBucketSize && balanced.length < limit; index++) {
+    for (const bucket of queryBuckets) {
+      const post = bucket[index];
+      if (!post || seen.has(post.id)) continue;
+      seen.add(post.id);
+      balanced.push(post);
+      if (balanced.length >= limit) break;
+    }
+  }
+  return { posts: balanced, error: null };
+}
+
 async function fetchXSearchPosts(query, limit = 30, filter = 'live', passes = 4) {
   if (!process.env.AUTH_TOKEN) return { posts: [], error: 'Missing AUTH_TOKEN.' };
+
+  const queries = Array.isArray(query) ? query : [query];
+  const perQueryLimit = Math.max(10, Math.ceil(limit / Math.max(1, queries.length)));
+
+  if (process.env.X_GROWTH_FORCE_BROWSER_SEARCH !== '1') {
+    const fast = await fetchXSearchPostsHttp(queries, limit, filter, perQueryLimit);
+    if (fast) return fast;
+  }
 
   const browser = await createBrowser({ headless: true });
   try {
     const page = await createPage(browser);
     await setAuthenticatedXPageCookies(page);
-    const queries = Array.isArray(query) ? query : [query];
     const queryBuckets = [];
-    const perQueryLimit = Math.max(10, Math.ceil(limit / Math.max(1, queries.length)));
 
     for (const searchQuery of queries) {
       await page.goto(`https://x.com/search?q=${encodeURIComponent(searchQuery)}&src=typed_query&f=${filter}`, {

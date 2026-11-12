@@ -206,12 +206,20 @@ export async function runLiveSessionPreflight(options = {}) {
     };
   }
 
+  // Both X streams feed the same scout ranking: x_momentum carries measured
+  // velocity, x_latest carries the fresh <30m uncrowded builder posts whose
+  // reply drawer is still wide open. A partial x_latest failure is recorded,
+  // not treated as a degraded collection on its own.
   let momentumError = null;
-  try {
-    await deps.refreshDiscoverySource('x_momentum', { now });
-  } catch (error) {
-    momentumError = String(error?.message || error);
-  }
+  let latestError = null;
+  await Promise.all(['x_momentum', 'x_latest'].map(async (kind) => {
+    try {
+      await deps.refreshDiscoverySource(kind, { now });
+    } catch (error) {
+      if (kind === 'x_momentum') momentumError = String(error?.message || error);
+      else latestError = String(error?.message || error);
+    }
+  }));
   const builderRefreshMs = Number(block.builderRefreshMinutes || 0) * 60_000;
   const staleBuilders = ['github_trending', 'hn_top']
     .filter((kind) => snapshotAge(deps.getDiscoverSnapshot(kind), now) >= builderRefreshMs);
@@ -243,6 +251,8 @@ export async function runLiveSessionPreflight(options = {}) {
       engageErrors,
       momentumRefreshed: !momentumError,
       momentumError: momentumError || null,
+      latestRefreshed: !latestError,
+      latestError: latestError || null,
       t1Count,
     },
   };

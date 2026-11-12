@@ -157,3 +157,18 @@ test('recent Quote does not disqualify another distinct source from Reply or Quo
   assert.equal(card.action, 'reply');
   assert.deepEqual(card.eligibleActions, ['reply', 'quote']);
 });
+
+test('a fresh uncrowded builder post outranks a crowded mega-thread and names its surface strategy', () => {
+  const result = build({
+    attempts: replies(16),
+    candidates: [
+      cand(50, { observedMetrics: { replies: 4 }, viewsPerHour: 2500 }),
+      cand(51, { observedMetrics: { replies: 300 }, viewsPerHour: 8000 }),
+    ],
+  });
+
+  const cards = replyCards(result);
+  assert.deepEqual(cards.map((card) => card.author), ['author50', 'author51']);
+  assert.equal(cards[0].surfaceStrategy, 'early_root_reply');
+  assert.equal(cards[1].surfaceStrategy, 'quote_or_peer_subreply');
+});
