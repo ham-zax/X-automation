@@ -1,0 +1,392 @@
+{
+  "VA-16": {
+    "decision": "POST",
+    "finalText": "The idea of reviewing a diff and fixing something from a phone is pretty cool. Nice work putting this together!",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "support",
+      "secondaryPurposes": [],
+      "socialMode": "curious_peer",
+      "affectStrategy": "match",
+      "affectProvenance": "inferred",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "React to the builder's project and the phone-based workflow they shared."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "The idea of reviewing a diff and fixing something from a phone is pretty cool. Nice work putting this together!",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a project announcement."},
+            {"rule":2,"status":"PASS","detail":"Offers a specific, supportive reaction."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Encouragement does not assess the project's worth."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Reacts to a detail without turning it into a lesson."},
+            {"rule":8,"status":"PASS","detail":"Adds no invented experience or event."},
+            {"rule":9,"status":"PASS","detail":"Does not claim to have used or verified it."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish the project."},
+            {"rule":15,"status":"PASS","detail":"Clearly expresses a subjective reaction."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "A coding agent with diff sheets on a phone is a fun idea. Thanks for sharing this!",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a project announcement."},
+            {"rule":2,"status":"PASS","detail":"Offers a warm reaction."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the project's worth."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Names a detail as the prompt for a reaction."},
+            {"rule":8,"status":"PASS","detail":"Introduces no invented experience or event."},
+            {"rule":9,"status":"PASS","detail":"Does not imply independent verification."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish the project."},
+            {"rule":15,"status":"PASS","detail":"Fun is a subjective reaction."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It responds warmly to the concrete workflow the builder shared."
+    }
+  },
+  "VA-14": {
+    "decision": "POST",
+    "finalText": "Congrats on 1.6.0! The agent-created canvas sounds especially fun to explore.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "celebration",
+      "secondaryPurposes": [],
+      "socialMode": "supporter",
+      "affectStrategy": "match",
+      "affectProvenance": "inferred",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "Celebrate the release and respond to a feature in the announcement."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "Congrats on 1.6.0! The agent-created canvas sounds especially fun to explore.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a release celebration."},
+            {"rule":2,"status":"PASS","detail":"Celebrates with a specific reaction."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Celebrates without judging worth."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority for the author."},
+            {"rule":7,"status":"PASS","detail":"Reacts to a feature rather than restating a lesson."},
+            {"rule":8,"status":"PASS","detail":"Claims no use or invented event."},
+            {"rule":9,"status":"PASS","detail":"Treats the feature as announced, without asserting verification."},
+            {"rule":10,"status":"PASS","detail":"Makes no certain prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Celebrates the achievement."},
+            {"rule":15,"status":"PASS","detail":"Sounds fun expresses subjective interest."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Congrats on the release! A canvas you can create with an agent sounds like a fun addition.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a release celebration."},
+            {"rule":2,"status":"PASS","detail":"Offers a celebratory reaction."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the milestone's worth."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Uses a feature to ground the reaction."},
+            {"rule":8,"status":"PASS","detail":"Invents no experience or event."},
+            {"rule":9,"status":"PASS","detail":"Does not claim firsthand use."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish the release."},
+            {"rule":15,"status":"PASS","detail":"Fun is presented as a reaction."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It celebrates the specific release and expresses interest without implying firsthand use."
+    }
+  },
+  "VA-18": {
+    "decision": "POST",
+    "finalText": "That comparison is striking: a high cache hit rate doesn't necessarily mean a cheap cached input price.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "judgment",
+      "secondaryPurposes": [],
+      "socialMode": "curious_peer",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "compact_reason",
+      "conversationStage": "initial",
+      "reasonToExist": "React to the distinction illustrated by the provider comparison."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "That comparison is striking: a high cache hit rate doesn't necessarily mean a cheap cached input price.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a shared measurement and comparison."},
+            {"rule":2,"status":"PASS","detail":"Offers a concise reaction to the comparison."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's work or milestone."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Responds to a particular contrast rather than presenting a general lesson as novel."},
+            {"rule":8,"status":"PASS","detail":"The qualified observation follows from the supplied comparison."},
+            {"rule":9,"status":"PASS","detail":"Does not claim to independently verify the figures."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish an achievement."},
+            {"rule":15,"status":"PASS","detail":"Striking is a personal reaction; the comparison is qualified."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "The nearly identical hit rates alongside such different input prices caught my eye. Interesting comparison.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes the provider comparison."},
+            {"rule":2,"status":"PASS","detail":"Offers a specific reaction."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's work or milestone."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Identifies what prompted the reaction."},
+            {"rule":8,"status":"PASS","detail":"The supplied example supports the comparison."},
+            {"rule":9,"status":"PASS","detail":"Does not claim independent verification."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish an achievement."},
+            {"rule":15,"status":"PASS","detail":"Caught my eye is a subjective reaction."},
+            {"rule":16,"status":"PASS","detail":"The response is complete and suitable."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It captures the surprising distinction with a clear qualifier."
+    }
+  },
+  "S-HUMOR": {
+    "decision": "POST",
+    "finalText": "The button is now the most stable part of the application.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "humor",
+      "secondaryPurposes": [],
+      "socialMode": "humorist",
+      "affectStrategy": "match",
+      "affectProvenance": "known",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "Join the author's exaggerated joke about the agent's overreach."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "The button is now the most stable part of the application.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes an exaggerated joke."},
+            {"rule":2,"status":"PASS","detail":"Extends the joke."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's work."},
+            {"rule":6,"status":"PASS","detail":"Sets no actual test or priority."},
+            {"rule":7,"status":"PASS","detail":"Adds a new comic angle."},
+            {"rule":8,"status":"PASS","detail":"The claim is an evident extension of the fictional joke."},
+            {"rule":9,"status":"PASS","detail":"Does not present the scenario as verified."},
+            {"rule":10,"status":"PASS","detail":"Makes no real-world prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no advice."},
+            {"rule":14,"status":"PASS","detail":"Joins an explicitly fictional joke, not a real setback."},
+            {"rule":15,"status":"PASS","detail":"The humorous framing is clear."},
+            {"rule":16,"status":"PASS","detail":"The joke is complete."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Scope creep, but make it a button.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes an exaggerated joke."},
+            {"rule":2,"status":"PASS","detail":"Responds with humor."},
+            {"rule":3,"status":"PASS","detail":"No genuine question to answer."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's work."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Uses a compact comic reframing."},
+            {"rule":8,"status":"PASS","detail":"Invents no personal experience or factual event."},
+            {"rule":9,"status":"PASS","detail":"Does not present the scenario as verified."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no advice."},
+            {"rule":14,"status":"PASS","detail":"Joins an explicitly fictional joke."},
+            {"rule":15,"status":"PASS","detail":"The figurative reaction is clear."},
+            {"rule":16,"status":"PASS","detail":"The joke is complete."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It extends the absurdity of the original without adding a personal anecdote."
+    }
+  },
+  "S-RECIPROCAL": {
+    "decision": "POST",
+    "finalText": "🤝 Looking forward to it!",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "relationship",
+      "secondaryPurposes": [],
+      "socialMode": "curious_peer",
+      "affectStrategy": "match",
+      "affectProvenance": "known",
+      "informationDepth": "social_only",
+      "conversationStage": "reciprocal",
+      "reasonToExist": "Acknowledge the peer's response to the earlier invitation warmly."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "🤝 Looking forward to it!",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a reciprocal invitation to connect."},
+            {"rule":2,"status":"PASS","detail":"Offers a brief warm acknowledgment."},
+            {"rule":3,"status":"PASS","detail":"The invitation is acknowledged directly."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the person or milestone."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Does not repeat the previous greeting."},
+            {"rule":8,"status":"PASS","detail":"Claims no existing relationship or shared history."},
+            {"rule":9,"status":"PASS","detail":"Does not imply an event has already happened."},
+            {"rule":10,"status":"PASS","detail":"Expresses anticipation without predicting an outcome."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no advice or assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish the milestone."},
+            {"rule":15,"status":"PASS","detail":"Anticipation is a subjective reaction."},
+            {"rule":16,"status":"PASS","detail":"A short acknowledgment fits the exchange."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "🤝 Sounds good!",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a reciprocal invitation."},
+            {"rule":2,"status":"PASS","detail":"Offers a brief acknowledgment."},
+            {"rule":3,"status":"PASS","detail":"Accepts the invitation conversationally."},
+            {"rule":4,"status":"PASS","detail":"No stated boundary crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the person or milestone."},
+            {"rule":6,"status":"PASS","detail":"Sets no test or priority."},
+            {"rule":7,"status":"PASS","detail":"Does not repeat the earlier greeting."},
+            {"rule":8,"status":"PASS","detail":"Invents no relationship or history."},
+            {"rule":9,"status":"PASS","detail":"Does not imply a completed event."},
+            {"rule":10,"status":"PASS","detail":"Makes no prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"Gives no advice or assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish the milestone."},
+            {"rule":15,"status":"PASS","detail":"The response expresses agreement."},
+            {"rule":16,"status":"PASS","detail":"A short acknowledgment fits the exchange."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It acknowledges the reciprocal invitation with warmth and without repeating the earlier message."
+    }
+  },
+  "S-PREFERENCE": {
+    "decision": "POST",
+    "finalText": "I'd pick Django + PostgreSQL for a fresh start if I wanted an admin interface and common backend pieces ready to use. Go would be tempting for a smaller service.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "judgment",
+      "secondaryPurposes": ["technical_value"],
+      "socialMode": "opinionated_peer",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "compact_reason",
+      "conversationStage": "initial",
+      "reasonToExist": "Answer the requested stack choice with a conditional reason."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "I'd pick Django + PostgreSQL for a fresh start if I wanted an admin interface and common backend pieces ready to use. Go would be tempting for a smaller service.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a genuine request for a stack choice."},
+            {"rule":2,"status":"PASS","detail":"Answers with a conditional preference."},
+            {"rule":3,"status":"PASS","detail":"Names Django and PostgreSQL directly."},
+            {"rule":4,"status":"PASS","detail":"Advice is invited and no boundary is crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's decision."},
+            {"rule":6,"status":"PASS","detail":"States a conditional preference without deciding their priority."},
+            {"rule":7,"status":"PASS","detail":"Adds a reason rather than repeating the question."},
+            {"rule":8,"status":"PASS","detail":"Invents no experience or established favorite."},
+            {"rule":9,"status":"PASS","detail":"Frames the choice hypothetically."},
+            {"rule":10,"status":"PASS","detail":"Makes no certain prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"The requested opinion is not an unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish an achievement or setback."},
+            {"rule":15,"status":"PASS","detail":"I'd pick and tempting identify a current subjective choice."},
+            {"rule":16,"status":"PASS","detail":"The answer is complete and suitable."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "For a new backend, I'd lean Django + PostgreSQL if getting an admin interface out of the box is useful. If it's a small service, Go is appealing too.",
+          "checks": [
+            {"rule":1,"status":"PASS","detail":"Recognizes a genuine request for a stack choice."},
+            {"rule":2,"status":"PASS","detail":"Answers with a conditional preference."},
+            {"rule":3,"status":"PASS","detail":"Names Django and PostgreSQL directly."},
+            {"rule":4,"status":"PASS","detail":"Advice is invited and no boundary is crossed."},
+            {"rule":5,"status":"PASS","detail":"Does not judge the author's decision."},
+            {"rule":6,"status":"PASS","detail":"Leaves the condition to the author."},
+            {"rule":7,"status":"PASS","detail":"Adds a reason for the selection."},
+            {"rule":8,"status":"PASS","detail":"Invents no experience or established favorite."},
+            {"rule":9,"status":"PASS","detail":"Presents a hypothetical current choice."},
+            {"rule":10,"status":"PASS","detail":"Makes no certain prediction."},
+            {"rule":11,"status":"PASS","detail":"Asks no question."},
+            {"rule":12,"status":"PASS","detail":"Asks no question."},
+            {"rule":13,"status":"PASS","detail":"The requested opinion is not an unsolicited assignment."},
+            {"rule":14,"status":"PASS","detail":"Does not diminish an achievement or setback."},
+            {"rule":15,"status":"PASS","detail":"I'd lean and appealing express subjective judgment."},
+            {"rule":16,"status":"PASS","detail":"The answer is complete and suitable."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "It gives a direct choice and a concrete condition without inventing personal history."
+    }
+  }
+}

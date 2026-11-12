@@ -1,0 +1,38 @@
+{
+  "schema": {
+    "valid": false,
+    "errors": [
+      {
+        "path": "$.S-PREFERENCE.replyReview.candidates[1].checks[1].status_detail",
+        "message": "Additional property is not allowed."
+      }
+    ]
+  },
+  "cases": {
+    "VA-16": {
+      "valid": true,
+      "text": "Congrats on shipping this! Running a coding agent on real projects straight from a phone is not something I saw coming."
+    },
+    "VA-14": {
+      "valid": true,
+      "text": "Congrats on 1.6.0! A canvas the agent can create is the feature that jumps out at me."
+    },
+    "VA-18": {
+      "valid": false,
+      "error": "Invalid Writer behavior: discovery does not support social_only depth without a social secondary purpose.",
+      "text": "9x on the same model, and it mostly traces back to whether the endpoint discounts cached tokens. That spread is bigger than I'd have guessed."
+    },
+    "S-HUMOR": {
+      "valid": true,
+      "text": "The database was clearly holding the button back anyway."
+    },
+    "S-RECIPROCAL": {
+      "valid": true,
+      "text": "Deal 🤝 good to have you here."
+    },
+    "S-PREFERENCE": {
+      "valid": true,
+      "text": "Starting from zero today, I'd take Django + PostgreSQL. Auth, admin and migrations ship with it, so a first version comes together fast. I'd reach for Go once the thing turns into mostly services."
+    }
+  }
+}

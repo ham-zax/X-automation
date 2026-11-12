@@ -14,3 +14,4 @@ dashboard.tailwind.generated.css
 .x-backups/
 .secrets/
 .x-web-owner-password
+.pi/

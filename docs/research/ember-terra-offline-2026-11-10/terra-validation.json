@@ -1,0 +1,32 @@
+{
+  "schema": {
+    "valid": true,
+    "errors": []
+  },
+  "cases": {
+    "VA-16": {
+      "valid": true,
+      "text": "The idea of reviewing a diff and fixing something from a phone is pretty cool. Nice work putting this together!"
+    },
+    "VA-14": {
+      "valid": true,
+      "text": "Congrats on 1.6.0! The agent-created canvas sounds especially fun to explore."
+    },
+    "VA-18": {
+      "valid": true,
+      "text": "That comparison is striking: a high cache hit rate doesn't necessarily mean a cheap cached input price."
+    },
+    "S-HUMOR": {
+      "valid": true,
+      "text": "The button is now the most stable part of the application."
+    },
+    "S-RECIPROCAL": {
+      "valid": true,
+      "text": "🤝 Looking forward to it!"
+    },
+    "S-PREFERENCE": {
+      "valid": true,
+      "text": "I'd pick Django + PostgreSQL for a fresh start if I wanted an admin interface and common backend pieces ready to use. Go would be tempting for a smaller service."
+    }
+  }
+}

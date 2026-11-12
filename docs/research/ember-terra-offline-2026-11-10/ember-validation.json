@@ -1,0 +1,37 @@
+{
+  "schema": {
+    "valid": true,
+    "errors": []
+  },
+  "cases": {
+    "VA-16": {
+      "valid": false,
+      "error": "Invalid Writer behavior: Non-neutral affect requires known, inferred, or strategic provenance.",
+      "text": "Fixing a bug from the phone instead of just reading the issue is a wild shift. The diff sheets in chat sound especially useful."
+    },
+    "VA-14": {
+      "valid": false,
+      "error": "Invalid Writer behavior: Non-neutral affect requires known, inferred, or strategic provenance.",
+      "text": "Congrats on 1.6.0! Canvas created through an agent plugin sounds fun to try."
+    },
+    "VA-18": {
+      "valid": false,
+      "error": "Invalid Writer behavior: Non-neutral affect requires known, inferred, or strategic provenance.",
+      "text": "The ~9x spread on GLM-5.3 caught my eye. Same model, wildly different cost per task is a lot."
+    },
+    "S-HUMOR": {
+      "valid": false,
+      "error": "Invalid Writer behavior: Non-neutral affect requires known, inferred, or strategic provenance.",
+      "text": "The button being centered after all that is the perfect punchline 😄"
+    },
+    "S-RECIPROCAL": {
+      "valid": false,
+      "error": "Invalid Writer behavior: Non-neutral affect requires known, inferred, or strategic provenance.",
+      "text": "Let's do it — glad to connect here."
+    },
+    "S-PREFERENCE": {
+      "valid": true,
+      "text": "For a from-scratch backend I'd go with Django + PostgreSQL if I were starting fresh. That feels like the simplest path to a complete backend for me."
+    }
+  }
+}

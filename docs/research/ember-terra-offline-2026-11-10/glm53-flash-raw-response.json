@@ -1,0 +1,392 @@
+{
+  "VA-16": {
+    "decision": "POST",
+    "finalText": "Congrats on shipping this! Running a coding agent on real projects straight from a phone is not something I saw coming.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "celebration",
+      "secondaryPurposes": ["discovery", "relationship"],
+      "socialMode": "enthusiast",
+      "affectStrategy": "match",
+      "affectProvenance": "inferred",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "A launch post from a builder gets a congrats with honest surprise; it responds to the moment without grading the work or claiming a try."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "Congrats on shipping this! Running a coding agent on real projects straight from a phone is not something I saw coming.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a launch announcement; the reply reads it as one."},
+            {"rule": 2, "status": "PASS", "detail": "Congrats with surprise fits a release share."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary or no-suggestions request appears."},
+            {"rule": 5, "status": "PASS", "detail": "No verdict on worthiness; 'Congrats' reacts without grading."},
+            {"rule": 6, "status": "PASS", "detail": "No real test is appointed and no priority is set."},
+            {"rule": 7, "status": "PASS", "detail": "No feature is restated as a lesson."},
+            {"rule": 8, "status": "PASS", "detail": "'not something I saw coming' is stated surprise, not an invented event."},
+            {"rule": 9, "status": "PASS", "detail": "'shipping this' matches a live link and an open-source release."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'I saw coming' stays a personal expectation."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists, so no SKIP."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "The resume cards for when a long task gets interrupted are a nice touch. Congrats on the release — and open source on top.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a launch announcement; the reply hooks the recovery detail."},
+            {"rule": 2, "status": "PASS", "detail": "Support with a concrete detail fits the share."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "'a nice touch' is taste on one design choice, not a worthiness verdict."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The detail marks what prompts the reaction, not a lesson."},
+            {"rule": 8, "status": "PASS", "detail": "'resume cards' and 'open source' come from the post text."},
+            {"rule": 9, "status": "PASS", "detail": "'the release' matches a shipped launch."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'a nice touch' stays personal taste."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "A answers the launch itself, which is the main event, while B hooks one feature and reads closer to a spec comment."
+    }
+  },
+  "VA-14": {
+    "decision": "POST",
+    "finalText": "Congrats on 1.6.0! A canvas the agent can create is the feature that jumps out at me.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "celebration",
+      "secondaryPurposes": ["discovery", "relationship"],
+      "socialMode": "enthusiast",
+      "affectStrategy": "match",
+      "affectProvenance": "inferred",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "A release announcement with a feature list earns a congrats that picks one detail; it answers the moment without restating the list."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "Congrats on 1.6.0! A canvas the agent can create is the feature that jumps out at me.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a release announcement; the reply reads it as one."},
+            {"rule": 2, "status": "PASS", "detail": "Congrats with a picked detail fits."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "'jumps out at me' flags attention, not a grade."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "One feature is named as the prompt, not restated as insight."},
+            {"rule": 8, "status": "PASS", "detail": "'canvas the agent can create' matches the first listed feature."},
+            {"rule": 9, "status": "PASS", "detail": "'1.6.0' matches the announced shipped release."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'jumps out at me' stays personal."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Congrats on the release! Remote Claude Code support is the detail I'd be poking at first.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a release announcement; the reply picks the remote-support detail."},
+            {"rule": 2, "status": "PASS", "detail": "Congrats with a concrete hook fits."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No worthiness verdict appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The detail marks the prompt, not a lesson."},
+            {"rule": 8, "status": "PASS", "detail": "'Remote Claude Code support' matches the post list."},
+            {"rule": 9, "status": "PASS", "detail": "'the release' matches the shipped 1.6.0."},
+            {"rule": 10, "status": "PASS", "detail": "'I'd be poking at first' is a hypothetical, not a claimed plan or history."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'I'd be poking at first' stays a personal hypothetical."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "Both congrats fit; A reacts to the headline feature with plain surprise, while 'I'd be poking at first' in B hints at an intent the context does not need."
+    }
+  },
+  "VA-18": {
+    "decision": "POST",
+    "finalText": "9x on the same model, and it mostly traces back to whether the endpoint discounts cached tokens. That spread is bigger than I'd have guessed.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "discovery",
+      "secondaryPurposes": [],
+      "socialMode": "curious_peer",
+      "affectStrategy": "match",
+      "affectProvenance": "inferred",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "Fresh benchmark data gets a reaction to its headline spread; surprise shows the post landed without restating the analysis as a lesson."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "9x on the same model, and it mostly traces back to whether the endpoint discounts cached tokens. That spread is bigger than I'd have guessed.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is new benchmark data being shared; the reply reacts to the headline spread."},
+            {"rule": 2, "status": "PASS", "detail": "A surprised observation fits a data share."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade on the work; the reaction targets the finding."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The causal detail compresses the source as the prompt, then adds a reaction."},
+            {"rule": 8, "status": "PASS", "detail": "'9x' and the cached-token pricing cause come from the post."},
+            {"rule": 9, "status": "PASS", "detail": "'mostly traces back' keeps the source's hedged causal claim."},
+            {"rule": 10, "status": "PASS", "detail": "'bigger than I'd have guessed' predicts nothing."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'I'd have guessed' frames the surprise as personal."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "The 41% to 100% cache hit range across endpoints is the number that jumps out at me.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is new benchmark data; the reply reacts to one range."},
+            {"rule": 2, "status": "PASS", "detail": "A single-number reaction fits a data share."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade on the work appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The number is named as the prompt, not explained back."},
+            {"rule": 8, "status": "PASS", "detail": "'41% to 100%' matches the posted range."},
+            {"rule": 9, "status": "PASS", "detail": "No shipped-versus-planned claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'jumps out at me' stays personal."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "A engages the headline spread together with its stated cause and honest surprise; B is a thinner single-number reaction."
+    }
+  },
+  "S-HUMOR": {
+    "decision": "POST",
+    "finalText": "The database was clearly holding the button back anyway.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "humor",
+      "secondaryPurposes": ["social_presence"],
+      "socialMode": "humorist",
+      "affectStrategy": "amplify",
+      "affectProvenance": "known",
+      "informationDepth": "social_only",
+      "conversationStage": "initial",
+      "reasonToExist": "The post is an exaggerated joke, so playing along is the fitting act; no real setback needs care."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "The database was clearly holding the button back anyway.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is an exaggerated joke; the reply joins it."},
+            {"rule": 2, "status": "PASS", "detail": "Humor is the fitting act for a joke."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade on anyone's work appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The reply extends the punchline instead of restating it."},
+            {"rule": 8, "status": "PASS", "detail": "'holding the button back' invents nothing real; it plays inside the author's fictional scenario."},
+            {"rule": 9, "status": "PASS", "detail": "No shipped-versus-planned claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "The setback is fictional and the joke is invited, so the humor is welcome."},
+            {"rule": 15, "status": "PASS", "detail": "The quip stays inside the joke, not a claim about everyone."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Centered button, no database. Worth it.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is an exaggerated joke; the reply joins it."},
+            {"rule": 2, "status": "PASS", "detail": "Humor is the fitting act for a joke."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade on anyone's work appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The reply tallies the punchline instead of restating the setup."},
+            {"rule": 8, "status": "PASS", "detail": "'no database. Worth it.' plays inside the fictional scenario and invents nothing real."},
+            {"rule": 9, "status": "PASS", "detail": "No shipped-versus-planned claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "The setback is fictional and the joke is invited."},
+            {"rule": 15, "status": "PASS", "detail": "The quip stays inside the joke."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "A extends the joke's own logic about the agent's priorities, which builds on the punchline; B tallies it and lands slightly flatter."
+    }
+  },
+  "S-RECIPROCAL": {
+    "decision": "POST",
+    "finalText": "Deal 🤝 good to have you here.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "relationship",
+      "secondaryPurposes": ["social_presence"],
+      "socialMode": "supporter",
+      "affectStrategy": "bridge",
+      "affectProvenance": "known",
+      "informationDepth": "social_only",
+      "conversationStage": "reciprocal",
+      "reasonToExist": "They answered my open invite with a direct connect request, so accepting and welcoming turns it into a real connection."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "Welcome aboard 👋",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a direct connect request answering my open invite."},
+            {"rule": 2, "status": "PASS", "detail": "A short welcome fits the request."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The reply neither repeats my earlier greeting nor paraphrases theirs."},
+            {"rule": 8, "status": "PASS", "detail": "Nothing about the person is invented."},
+            {"rule": 9, "status": "PASS", "detail": "No state claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "No universal claim is made."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Deal 🤝 good to have you here.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a direct connect request; 'Deal' accepts it."},
+            {"rule": 2, "status": "PASS", "detail": "Acceptance plus welcome fits the request."},
+            {"rule": 3, "status": "PASS", "detail": "No question is asked in the source."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears."},
+            {"rule": 5, "status": "PASS", "detail": "No grade appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The reply does not repeat my earlier 'Always happy to connect with builders' line."},
+            {"rule": 8, "status": "PASS", "detail": "Nothing about the person is invented; the emoji mirrors theirs."},
+            {"rule": 9, "status": "PASS", "detail": "No state claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "No advice is offered."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "No universal claim is made."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        }
+      ],
+      "selection": "B",
+      "reason": "B accepts the connect directly, which is the act their message asks for; A is fine but closes without accepting."
+    }
+  },
+  "S-PREFERENCE": {
+    "decision": "POST",
+    "finalText": "Starting from zero today, I'd take Django + PostgreSQL. Auth, admin and migrations ship with it, so a first version comes together fast. I'd reach for Go once the thing turns into mostly services.",
+    "evidenceUsed": [],
+    "behavior": {
+      "primaryPurpose": "technical_value",
+      "secondaryPurposes": [],
+      "socialMode": "opinionated_peer",
+      "affectStrategy": "neutral",
+      "affectProvenance": "none",
+      "informationDepth": "compact_reason",
+      "conversationStage": "initial",
+      "reasonToExist": "A direct either/or question invites a pick, so a hypothetical choice with one line of reasoning answers it without claiming stack history."
+    },
+    "replyReview": {
+      "candidates": [
+        {
+          "id": "A",
+          "text": "Starting from zero today, I'd take Django + PostgreSQL. Auth, admin and migrations ship with it, so a first version comes together fast. I'd reach for Go once the thing turns into mostly services.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a genuine either/or question."},
+            {"rule": 2, "status": "PASS", "detail": "A direct pick answers the invitation for a choice."},
+            {"rule": 3, "status": "PASS", "detail": "A genuine question is asked, so the reply answers it."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears; advice is invited."},
+            {"rule": 5, "status": "PASS", "detail": "No grade on the asker appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The reasoning is new, not a restated point."},
+            {"rule": 8, "status": "PASS", "detail": "'I'd take' is a stated hypothetical; Django's bundled auth, admin and migrations are general product facts, not claimed history."},
+            {"rule": 9, "status": "PASS", "detail": "No shipped-versus-planned claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "'comes together fast' is hedged opinion, not a certain prediction."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "The advice is invited by the question."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "'Starting from zero today, I'd take' frames the pick as personal."},
+            {"rule": 16, "status": "PASS", "detail": "A suitable act exists."}
+          ]
+        },
+        {
+          "id": "B",
+          "text": "Depends on the shape. CRUD-heavy product: Django + PostgreSQL. Heavy services or throughput: Go + PostgreSQL. NestJS if TypeScript is already home base.",
+          "checks": [
+            {"rule": 1, "status": "PASS", "detail": "Main event is a genuine either/or question."},
+            {"rule": 2, "status": "UNCERTAIN", "status_detail": "", "status": "UNCERTAIN", "detail": "'Depends on the shape' never gives the pick that 'Which would you pick' asks for."},
+            {"rule": 3, "status": "PASS", "detail": "The source's question gets an answer, though conditionally."},
+            {"rule": 4, "status": "PASS", "detail": "No boundary appears; advice is invited."},
+            {"rule": 5, "status": "PASS", "detail": "No grade appears."},
+            {"rule": 6, "status": "PASS", "detail": "No test or priority is appointed."},
+            {"rule": 7, "status": "PASS", "detail": "The mappings are new content, not a restated point."},
+            {"rule": 8, "status": "PASS", "detail": "No personal history is claimed; the conditions are hypothetical."},
+            {"rule": 9, "status": "PASS", "detail": "No shipped-versus-planned claim is made."},
+            {"rule": 10, "status": "PASS", "detail": "No certain outcome is predicted."},
+            {"rule": 11, "status": "PASS", "detail": "The reply asks nothing."},
+            {"rule": 12, "status": "PASS", "detail": "No filler question."},
+            {"rule": 13, "status": "PASS", "detail": "The advice is invited by the question."},
+            {"rule": 14, "status": "PASS", "detail": "Nothing is diminished."},
+            {"rule": 15, "status": "PASS", "detail": "The mappings stay conditional, not universal facts."},
+            {"rule": 16, "status": "PASS", "detail": "A usable act exists."}
+          ]
+        }
+      ],
+      "selection": "A",
+      "reason": "The question asks for a pick, and A gives one with a line of reasoning; B answers a different question with a decision tree."
+    }
+  }
+}

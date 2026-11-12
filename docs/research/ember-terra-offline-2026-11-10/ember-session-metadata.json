@@ -1,0 +1,19 @@
+{
+  "sessionId": "01a1c2d9-62a6-7cb0-b22a-a922854ba686",
+  "model": "muse-ember-1.0",
+  "promptMatch": true,
+  "modelCompleted": {
+    "duration_ms": 24340,
+    "estimated_prompt_tokens": 65806,
+    "kind": "model_completed",
+    "model": "muse-ember-1.0",
+    "usage": {
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cached_tokens": 0,
+      "input_tokens": 44752,
+      "output_tokens": 14170,
+      "reasoning_tokens": 7988
+    }
+  }
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "VA-16",
+    "source": {
+      "author": "DanKornas",
+      "text": "Your phone can be where you fix the bug — not just where you read the issue.\n\nAndroidHarness is a native Android AI coding-agent app for builders who want to work on real code projects directly from an Android device.\n\nIt helps you make and inspect changes without a PC or root by combining file tools, a Linux toolchain, GitHub workflows, and browser control inside a chat interface.\n\nKey features:\n\n• On-device project work – reads and edits files, runs shell commands, and supports git from the phone\n• Inspectable agent actions – every tool call has a card, with diff sheets and recorded check outcomes available in chat\n• GitHub workflows – import repositories, commit selected files, push changes, and verify the resulting remote commit\n• Browser and preview tools – inspect web links or workspace previews, then navigate, snapshot, click, type, and capture screenshots\n• Recovery for longer tasks – a foreground service, resume cards, and a persistent message queue help work continue through interruptions\n\nIt’s open-source (MIT license).\n\nLink in the reply 👇",
+      "url": "https://x.com/DanKornas/status/2110065413073633316"
+    },
+    "conversationContext": [],
+    "evidence": [],
+    "notes": "Source claims are unverified. The source post is sufficient for a social reaction, not independent confirmation."
+  },
+  {
+    "id": "VA-14",
+    "source": {
+      "author": "xoofx",
+      "text": "Just released CodeAlta 1.6.0, and you won't believe what is packed: 🎉\n- Canvas 🖼️ that can be created with an agent via a plugin\n- Statistics 📊\n- Welcome page for getting started 🤗\n- Integrated documentation - ask the agent 📝\n- Claude Code Remote support\nand more... 1/2 https://t.co/nAuq2uIctn",
+      "url": "https://x.com/xoofx/status/2108943711740527003"
+    },
+    "conversationContext": [],
+    "evidence": [],
+    "notes": "Source claims are unverified. The source post is sufficient for a social reaction, not independent confirmation."
+  },
+  {
+    "id": "VA-18",
+    "source": {
+      "author": "ArtificialAnlys",
+      "text": "Cache hit rates and Cost per Task by provider are now live on Artificial Analysis: Cost per Task for GLM-5.3 (max) varies ~9x across providers, driven by a combination of cache hit rate and token pricing\n\nAgentic workloads resend the full conversation history every turn, so most input tokens are cacheable, and cache pricing and cache hit rates drive most of the gap in Cost per Task. We already use measured cache hit rates to calculate Cost per Task, and are now publishing them for each model endpoint we track.\n\nWhat's new:\n➤ Cache hit rates are now visible for all first-party and third-party endpoints, measured by running multi-turn agentic coding tasks and reading cached tokens from each provider's usage response. Cache hit rate is the share of cacheable input tokens served from cache.\n➤ Cost per Task is now available by provider for open weights models, calculated from each provider's input, output, cache hit and cache write prices, applied at its measured cache hit rate. To standardize across providers for a given model, we use the same input, output and cacheable token counts from the model's Intelligence Index run.\n\nKey takeaways:\n➤ Cost per Task on GLM-5.3 (max) spans ~9x across providers, from $0.92 on Makora to $8.68 on Nebius. Both serve nearly all cacheable input from cache (98% and 100%) and charge the same output price ($4.40 per 1M tokens), so the gap comes from input pricing: Makora charges $0.10 per 1M cached input tokens, while Nebius offers no cached input discount on its shared serverless endpoints and bills all input at the full $1.40.\n➤ Cache hit rate ranges from 41% to 100% across 21 providers (25 endpoints). 15 endpoints are at 98% or above, and eight are at 100%: Modal, DeepInfra, Parasail, Together AI, DigitalOcean, Nebius, Novita and Z AI's first-party API. Multiverse Computing is lowest at 41%, followed by Bitdeer at 50%.",
+      "url": "https://x.com/ArtificialAnlys/status/2110087600480702881"
+    },
+    "conversationContext": [],
+    "evidence": [],
+    "notes": "Source claims are unverified. The source post is sufficient for a social reaction, not independent confirmation."
+  },
+  {
+    "id": "S-HUMOR",
+    "source": {
+      "author": "synthetic_builder",
+      "text": "I asked my coding agent to add some padding to a button. It migrated the frontend, rewrote auth, and deleted the database. At least the button is centered."
+    },
+    "conversationContext": [],
+    "notes": "Fictional, exaggerated joke. Join the joke if fitting; no invented personal experience."
+  },
+  {
+    "id": "S-RECIPROCAL",
+    "source": {
+      "author": "synthetic_peer",
+      "text": "@ham_zax Hey, let’s connect! 🤝"
+    },
+    "conversationContext": [
+      {
+        "author": "ham_zax",
+        "text": "Congrats on getting close to 2k! Always happy to connect with builders 👋"
+      }
+    ],
+    "notes": "The source is a reply to your supplied earlier message. Do not invent anything else about the person. Silence is allowed."
+  },
+  {
+    "id": "S-PREFERENCE",
+    "source": {
+      "author": "synthetic_dev",
+      "text": "Starting a backend from scratch. Which would you pick: Node + NestJS + PostgreSQL, Django + PostgreSQL, or Go + PostgreSQL?"
+    },
+    "conversationContext": [],
+    "notes": "No saved favorite stack or firsthand experience is available. A current hypothetical choice or conditional advice is allowed; do not invent an established personal preference or history."
+  }
+]

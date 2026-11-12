@@ -1,0 +1,1328 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "VA-16",
+    "VA-14",
+    "VA-18",
+    "S-HUMOR",
+    "S-RECIPROCAL",
+    "S-PREFERENCE"
+  ],
+  "properties": {
+    "VA-16": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "VA-14": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "VA-18": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "S-HUMOR": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "S-RECIPROCAL": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "S-PREFERENCE": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "finalText",
+        "evidenceUsed",
+        "behavior",
+        "replyReview"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "POST",
+            "DO_NOT_POST"
+          ]
+        },
+        "finalText": {
+          "type": "string"
+        },
+        "behavior": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "primaryPurpose",
+            "secondaryPurposes",
+            "socialMode",
+            "affectStrategy",
+            "affectProvenance",
+            "informationDepth",
+            "conversationStage",
+            "reasonToExist"
+          ],
+          "properties": {
+            "primaryPurpose": {
+              "enum": [
+                "technical_value",
+                "profile_proof",
+                "discovery",
+                "relationship",
+                "support",
+                "celebration",
+                "humor",
+                "taste",
+                "judgment",
+                "learning",
+                "correction",
+                "de_escalation",
+                "social_presence"
+              ]
+            },
+            "secondaryPurposes": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "technical_value",
+                  "profile_proof",
+                  "discovery",
+                  "relationship",
+                  "support",
+                  "celebration",
+                  "humor",
+                  "taste",
+                  "judgment",
+                  "learning",
+                  "correction",
+                  "de_escalation",
+                  "social_presence"
+                ]
+              }
+            },
+            "socialMode": {
+              "enum": [
+                "builder",
+                "experimenter",
+                "explainer",
+                "curious_peer",
+                "enthusiast",
+                "skeptic",
+                "opinionated_peer",
+                "taste_maker",
+                "supporter",
+                "humorist",
+                "listener",
+                "personal_update"
+              ]
+            },
+            "affectStrategy": {
+              "enum": [
+                "neutral",
+                "match",
+                "amplify",
+                "contrast",
+                "de_escalate",
+                "bridge",
+                "reward",
+                "energize",
+                "understate"
+              ]
+            },
+            "affectProvenance": {
+              "enum": [
+                "none",
+                "known",
+                "inferred",
+                "strategic"
+              ]
+            },
+            "informationDepth": {
+              "enum": [
+                "social_only",
+                "judgment",
+                "compact_reason",
+                "technical_explanation",
+                "reusable_artifact"
+              ]
+            },
+            "conversationStage": {
+              "enum": [
+                "initial",
+                "reciprocal",
+                "ongoing",
+                "familiar",
+                "self_extension"
+              ]
+            },
+            "reasonToExist": {
+              "type": "string"
+            }
+          }
+        },
+        "replyReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "candidates",
+            "selection",
+            "reason"
+          ],
+          "properties": {
+            "candidates": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id",
+                  "text",
+                  "checks"
+                ],
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "A",
+                      "B"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "checks": {
+                    "type": "array",
+                    "minItems": 16,
+                    "maxItems": 16,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "rule",
+                        "status",
+                        "detail"
+                      ],
+                      "properties": {
+                        "rule": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 16
+                        },
+                        "status": {
+                          "enum": [
+                            "PASS",
+                            "FAIL",
+                            "UNCERTAIN"
+                          ]
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "selection": {
+              "enum": [
+                "A",
+                "B",
+                null
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "evidenceUsed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
