@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { runtimeConfig, runChild, commandFor, classifyChildResult, readBackoffState, writeBackoffState, nextBackoffState, backoffGateEnabled } from '../growth_agent_runner.js';
 import { browserOperatorContract } from './browser_operator_contract.js';
 import { leaseAgentBrowserTab } from './agent_browser_session.js';
+import { reconcileExitedSessionRun, runLiveSessionPreflight } from './live_session_preflight.mjs';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_REPO_DIR = path.resolve(MODULE_DIR, '..');
@@ -17,9 +18,34 @@ const DEFAULT_STATE_DIR = '/home/ubuntu/.local/state/x_test';
 const BRIEF_PATH = 'ops/systemd/arm/arm-growth-live.md';
 const PROMPT_FILE = 'arm-growth-live.prompt.md';
 const SESSION_ID = /^[A-Za-z0-9_-]{1,96}$/;
-const CHILD_TIMEOUT_MS = 2_700_000;
+// One 5-minute block plus Writer and send reserve. The systemd timer wakes the
+// next block; a session never loops into a second one.
+const CHILD_TIMEOUT_MS = 900_000;
 const KILL_GRACE_MS = 5_000;
 const ERROR_TEXT_LIMIT = 500;
+
+const WRITER_PREPARATION = Object.freeze({
+  operator: 'Reload persona-model with {"consumer":"writer"}. Before writing the first public text of the session, read docs/CONTENT_OPERATING_STANDARD.md; for an Original, Thread or Quote also docs/POST_GENERATION_PROMPT.md.',
+  profile: 'Profile Writer mode is active: server-side reply-generate and writer-generate automatically load persona-model, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md. Do not call persona-model or read those Writer prompt files yourself.',
+});
+
+function preflightContext(gate) {
+  if (!gate) return 'Preflight: manual/unpreflighted session; run normal block checks.';
+  const pre = gate.precollected || null;
+  const facts = [];
+  if (pre?.stream) facts.push(`stream=${pre.stream}`);
+  if (pre?.mentionsOk === true) facts.push(`mentions=${Number(pre.mentionsCount || 0)}`);
+  if (pre?.engageRefreshed === true) facts.push('engage-refresh=clean');
+  else if (Array.isArray(pre?.engageErrors) && pre.engageErrors.length) facts.push(`engage-refresh=errors(${pre.engageErrors.length})`);
+  if (pre?.momentumRefreshed === true) facts.push('x_momentum=clean');
+  else if (pre?.momentumError) facts.push('x_momentum=error');
+  if (Number.isFinite(Number(pre?.t1Count))) facts.push(`t1=${Number(pre.t1Count)}`);
+  const head = ['Preflight mode=' + (gate.mode || 'single_block'), gate.reason ? 'reason=' + gate.reason : '']
+    .filter(Boolean).join(' ');
+  return facts.length
+    ? `${head}; ${facts.join(' ')}. Do not repeat those identical refresh calls in this block.`
+    : `${head}.`;
+}
 
 function boundedText(value) {
   return String(value?.message || value).slice(0, ERROR_TEXT_LIMIT);
@@ -67,6 +93,21 @@ export async function runAttachedLiveSession(options = {}) {
     return { sessionId, status: 'backoff', targetId: null, operator };
   }
   const startedAt = Date.now();
+  // A caller that supplies its own repoDir is a test harness or a manual run, so
+  // it keeps the old behaviour unless it passes a preflight explicitly. The CLI
+  // and production callers use the default repoDir and get the real gate.
+  const preflight = options.preflight !== undefined
+    ? options.preflight
+    : (options.repoDir ? null : runLiveSessionPreflight);
+  let gate = null;
+  if (preflight) {
+    gate = await preflight({ repoDir, stateDir, sessionId, config });
+    if (gate?.action === 'skip') {
+      console.log(`Attached live session skipped: ${JSON.stringify({ sessionId, reason: gate.reason,
+        ...(gate.detail ? { detail: gate.detail } : {}) })}`);
+      return { sessionId, status: 'skipped', reason: gate.reason, targetId: null, operator };
+    }
+  }
 
   let lease;
   let failure = null;
@@ -92,6 +133,8 @@ export async function runAttachedLiveSession(options = {}) {
         ? REPLY_CONTRACT
         : 'The saved reply_writer receives the full Reply contract server-side. Use reply-generate and preserve its selected text and provenance as described above; do not draft a replacement reply.')
       .replace('{{REPLY_WORKFLOW}}', () => replyWorkflowInstruction(operator.replyWriterMode))
+      .replace('{{WRITER_PREPARATION}}', () => WRITER_PREPARATION[operator.replyWriterMode] || WRITER_PREPARATION.profile)
+      .replaceAll('{{PREFLIGHT_CONTEXT}}', () => preflightContext(gate))
       .replaceAll('{{SESSION}}', () => sessionId)
       .replaceAll('{{OWNED_TAB}}', () => lease.targetId);
     if (prompt.includes('{{')) throw new Error('Unfilled placeholder in the brief.');
@@ -107,7 +150,7 @@ export async function runAttachedLiveSession(options = {}) {
     const command = commandFor({ ...config,
       ...(options.claiveBin && config.runtime === 'claive' ? { executable: options.claiveBin } : {}),
     }, prompt, { promptFile, workspace: repoDir });
-    if (config.runtime === 'claive') command.args.push('--turn-timeout', '2700');
+    if (config.runtime === 'claive') command.args.push('--turn-timeout', '900');
     command.env = { ...command.env, CODEX_WORKER_BINARY: config.codexExecutable,
       X_GROWTH_OPERATOR_BROWSER_TAB: lease.targetId,
       X_GROWTH_OPERATOR_RUNTIME: config.runtime,
@@ -130,6 +173,15 @@ export async function runAttachedLiveSession(options = {}) {
     } finally {
       process.removeListener('SIGTERM', onTerm);
       process.removeListener('SIGINT', onInt);
+    }
+    // A crashed child leaves its run active and its lease held. Release both now
+    // so the next block is not blocked by a session that is already gone.
+    if (failure && preflight) {
+      try {
+        await (options.reconcileSession || reconcileExitedSessionRun)({ sessionId, now: Date.now() });
+      } catch (error) {
+        console.error(`Attached session reconciliation failed: ${boundedText(error)}`);
+      }
     }
   }
 
@@ -155,7 +207,11 @@ export async function runAttachedLiveSession(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   runAttachedLiveSession()
-    .then(result => console.log(result.status === 'backoff' ? `Attached live session deferred: ${result.sessionId}` : `Attached live session finished: ${result.sessionId}, browser target ${result.targetId}`))
+    .then(result => {
+      if (result.status === 'backoff') console.log(`Attached live session deferred: ${result.sessionId}`);
+      else if (result.status === 'skipped') console.log(`Attached live session skipped: ${result.sessionId}, reason ${result.reason}`);
+      else console.log(`Attached live session finished: ${result.sessionId}, browser target ${result.targetId}`);
+    })
     .catch(error => {
       console.error(`Attached live session failed: ${boundedText(error)}`);
       process.exitCode = 1;

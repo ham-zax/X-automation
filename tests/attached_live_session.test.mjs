@@ -4,6 +4,8 @@ import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { discoveryBlock } from '../discovery_schedule.js';
+import { reconcileExitedSessionRun, runLiveSessionPreflight } from '../ops/live_session_preflight.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const scratch = await mkdtemp(path.join(tmpdir(), 'attached-live-'));
@@ -20,7 +22,7 @@ after(async () => {
 
 const BASELINE = Object.freeze(['EE7FB04B22D884108A739F63B939DFB0', '805FD13B9236394CB0A18B0BBBB6FA7E']);
 const TARGET = 'A1B2C3D4E5F60718293A4B5C6D7E8F90';
-const BRIEF = 'Session {{SESSION}} owns {{OWNED_TAB}}.\n{{BROWSER_CONTRACT}}\n{{REPLY_CONTRACT}}\n';
+const BRIEF = 'Session {{SESSION}} owns {{OWNED_TAB}}.\n{{BROWSER_CONTRACT}}\n{{REPLY_CONTRACT}}\n{{WRITER_PREPARATION}}\n{{PREFLIGHT_CONTEXT}}\n';
 let sequence = 0;
 
 function config(overrides = {}) {
@@ -134,6 +136,10 @@ test(`success renders the exact owned target and releases that one lease once ($
   assert.ok(prompt.includes(`Use only launcher-owned target ${TARGET}`));
   assert.equal(prompt.includes('Write as @ham_zax'), replyWriterMode === 'operator');
   assert.equal(prompt.includes('saved reply_writer receives the full Reply contract server-side'), replyWriterMode === 'profile');
+  assert.equal(prompt.includes('Reload persona-model'), replyWriterMode === 'operator');
+  assert.equal(prompt.includes('read docs/CONTENT_OPERATING_STANDARD.md'), replyWriterMode === 'operator');
+  assert.equal(prompt.includes('Profile Writer mode is active'), replyWriterMode === 'profile');
+  assert.ok(prompt.includes('Preflight: manual/unpreflighted session; run normal block checks.'));
   assert.equal(prompt.includes('`tab new '), false);
   assert.equal(prompt.includes('`tab close '), false);
   assert.equal(prompt.includes('{{'), false);
@@ -152,7 +158,7 @@ test(`success renders the exact owned target and releases that one lease once ($
     '--model', 'gpt-6-luna',
     '--reasoning-effort', 'max',
     '--web',
-    '--turn-timeout', '2700',
+    '--turn-timeout', '900',
   ]);
   assert.deepEqual(command.env, {
     CODEX_WORKER_BINARY: '/fake/codex',
@@ -164,7 +170,7 @@ test(`success renders the exact owned target and releases that one lease once ($
     X_GROWTH_OPERATOR_REASONING: 'max',
     X_GROWTH_REPLY_WRITER_MODE: replyWriterMode,
   });
-  assert.deepEqual(options, { cwd: repoDir, timeoutMs: 2_700_000, killGraceMs: 5_000 });
+  assert.deepEqual(options, { cwd: repoDir, timeoutMs: 900_000, killGraceMs: 5_000 });
 
   assert.equal(capture.lines[0].level, 'log');
   assert.ok(capture.lines[0].text.includes('luna-arm-test-1'));
@@ -402,4 +408,240 @@ test('manual browser callers retain their tab allocation command reference', asy
   assert.ok(contract.includes('`tab new <url>`'));
   assert.ok(contract.includes('`tab close <targetId>`'));
   assert.equal(contract.includes('Use only launcher-owned target'), false);
+});
+
+test('a preflight skip allocates no tab, spawns no child and creates no state', async () => {
+  const repoDir = await makeRepo();
+  const stateDir = path.join(scratch, `state-${++sequence}`);
+  const lease = fakeLease();
+  const child = fakeRun();
+  const requests = [];
+  const capture = captureConsole();
+  let result;
+  try {
+    result = await runAttachedLiveSession({
+      repoDir, stateDir, sessionId: 'preflight-skip', config: config(),
+      leaseTab: lease.leaseTab, run: child.run,
+      preflight: async (request) => {
+        requests.push(request);
+        return { action: 'skip', reason: 'rest_window' };
+      },
+    });
+  } finally { capture.restore(); }
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].sessionId, 'preflight-skip');
+  assert.equal(requests[0].repoDir, repoDir);
+  assert.equal(requests[0].stateDir, stateDir);
+  assert.equal(lease.calls.allocate.length, 0);
+  assert.equal(child.calls.length, 0);
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.reason, 'rest_window');
+  assert.equal(result.targetId, null);
+  assert.equal(await pathMissing(stateDir), true);
+  assert.ok(capture.lines.some(line => line.text.includes('Attached live session skipped')
+    && line.text.includes('rest_window')));
+});
+
+test('a preflight run gate renders its precollected context into the brief', async () => {
+  const repoDir = await makeRepo();
+  const stateDir = path.join(scratch, `state-${++sequence}`);
+  const lease = fakeLease();
+  const child = fakeRun();
+  const capture = captureConsole();
+  try {
+    await runAttachedLiveSession({
+      repoDir, stateDir, sessionId: 'preflight-run', config: config(),
+      leaseTab: lease.leaseTab, run: child.run,
+      preflight: async () => ({
+        action: 'run', mode: 'single_block', reason: 'momentum_work_available',
+        precollected: { stream: 'momentum', mentionsOk: true, mentionsCount: 3, engageRefreshed: true,
+          engageErrors: [], momentumRefreshed: true, momentumError: null, t1Count: 2 },
+      }),
+    });
+  } finally { capture.restore(); }
+  const prompt = await readFile(path.join(stateDir, 'arm-growth-live.prompt.md'), 'utf8');
+  assert.ok(prompt.includes('Preflight mode=single_block reason=momentum_work_available'));
+  assert.ok(prompt.includes('stream=momentum'));
+  assert.ok(prompt.includes('engage-refresh=clean'));
+  assert.ok(prompt.includes('x_momentum=clean'));
+  assert.ok(prompt.includes('t1=2'));
+  assert.equal(prompt.includes('{{'), false);
+});
+
+test('the real brief renders with no unfilled placeholder', async () => {
+  const repoDir = path.join(scratch, `repo-${++sequence}`);
+  await mkdir(path.join(repoDir, 'ops/systemd/arm'), { recursive: true });
+  await writeFile(path.join(repoDir, 'ops/systemd/arm/arm-growth-live.md'),
+    await readFile(path.join(root, 'ops/systemd/arm/arm-growth-live.md'), 'utf8'));
+  const stateDir = path.join(scratch, `state-${++sequence}`);
+  const lease = fakeLease();
+  const child = fakeRun();
+  const capture = captureConsole();
+  try {
+    await runAttachedLiveSession({
+      repoDir, stateDir, sessionId: 'real-brief', config: config(),
+      leaseTab: lease.leaseTab, run: child.run,
+      preflight: async () => ({ action: 'run', mode: 'single_block', reason: 'for_you_block',
+        precollected: { stream: 'forYou', mentionsOk: true, mentionsCount: 1,
+          engageRefreshed: true, engageErrors: [] } }),
+    });
+  } finally { capture.restore(); }
+  const prompt = await readFile(path.join(stateDir, 'arm-growth-live.prompt.md'), 'utf8');
+  assert.equal(prompt.includes('{{'), false);
+  assert.ok(prompt.includes('"maxDurationMinutes":12'));
+  assert.equal(prompt.includes('35 minutes'), false);
+});
+
+const BLOCK_MS = 300_000;const SCHEDULE = Object.freeze({ blockSeconds: 300, order: ['momentum', 'forYou'],
+  restWatchMinutes: 60, builderRefreshMinutes: 60 });
+// Block 5_666_666 is even, so it is a momentum block; the next one is For You.
+const MOMENTUM_NOW = 5_666_666 * BLOCK_MS + 1_000;
+const FORYOU_NOW = 5_666_667 * BLOCK_MS + 1_000;
+
+function preflightDeps(overrides = {}) {
+  const calls = { finishGrowthRun: [], releaseOperatorLease: [], refreshDiscoverySource: [] };
+  const deps = {
+    store: {},
+    getOperatorLeaseStatus: () => ({ active: false }),
+    getPublicationReconciliationReadiness: () => ({ activeCount: 0 }),
+    listSocialAttempts: () => [],
+    listGrowthRuns: () => [],
+    finishGrowthRun: (runId, options) => {
+      calls.finishGrowthRun.push({ runId, options });
+      return { run: { runId, status: options.status } };
+    },
+    releaseOperatorLease: (leaseId) => {
+      calls.releaseOperatorLease.push(leaseId);
+      return { released: true };
+    },
+    getGrowthOperatorDelegation: () => ({ state: 'running', mode: 'live' }),
+    getAccountHealthSummary: () => ({ health: { state: 'healthy' } }),
+    discoveryBlock: (request) => discoveryBlock(request),
+    growthScheduleConfig: () => SCHEDULE,
+    getGrowthProductPolicy: () => ({ activity: {} }),
+    activityWindow: () => ({ rest: false, localTime: '12:00', timeZone: 'Asia/Kolkata' }),
+    getDiscoverSnapshot: () => ({ fetchedAt: null, candidates: [] }),
+    refreshDiscoverySource: async (kind) => {
+      calls.refreshDiscoverySource.push(kind);
+      return { kind, error: null };
+    },
+    buildScoutCards: () => ({ pace: { urgentCandidates: 0 }, cards: [] }),
+    readScoutInput: () => ({ now: 0 }),
+    listEngagementItems: () => [],
+    listQueueItems: () => [],
+    readXMentions: async () => ({ ok: true, posts: [] }),
+    refreshEngagementOpportunities: async () => ({ errors: [] }),
+    ...overrides,
+  };
+  return { deps, calls };
+}
+
+test('preflight skips while another operator lease is active', async () => {
+  const { deps } = preflightDeps({
+    getOperatorLeaseStatus: () => ({ active: true, runId: 'run-active',
+      sessionId: 'session-active', expiresAt: 1_700_000_000_000 }),
+  });
+  const result = await runLiveSessionPreflight({ now: MOMENTUM_NOW, env: {}, deps });
+  assert.deepEqual(result, {
+    action: 'skip',
+    reason: 'operator_lease_active',
+    detail: { runId: 'run-active', sessionId: 'session-active', expiresAt: 1_700_000_000_000 },
+  });
+});
+
+test('preflight runs recovery for an unfinished attempt even during the rest window', async () => {
+  for (const overrides of [
+    { getPublicationReconciliationReadiness: () => ({ activeCount: 1 }) },
+    { listSocialAttempts: () => [{ state: 'mutation_started' }] },
+  ]) {
+    const { deps } = preflightDeps({ ...overrides, activityWindow: () => ({ rest: true }) });
+    const result = await runLiveSessionPreflight({ now: MOMENTUM_NOW, env: {}, deps });
+    assert.equal(result.action, 'run');
+    assert.equal(result.mode, 'recovery');
+    assert.equal(result.reason, 'unfinished_attempts');
+    assert.equal(result.precollected, null);
+    assert.equal(result.block.stream, 'momentum');
+  }
+});
+
+test('preflight closes an abandoned active run with an expired lease and zero attempts', async () => {
+  const { deps, calls } = preflightDeps({
+    listGrowthRuns: () => [{ runId: 'run-abandoned', sessionId: 'old-session', leaseId: 'lease-old' }],
+  });
+  const result = await runLiveSessionPreflight({ now: FORYOU_NOW, env: {}, deps });
+  assert.deepEqual(calls.finishGrowthRun.map(call => call.runId), ['run-abandoned']);
+  assert.deepEqual(calls.finishGrowthRun[0].options, {
+    status: 'partial',
+    stopReason: 'capability_unavailable',
+    stopDetail: 'Closed abandoned active run with expired lease and zero unfinished attempts before new session.',
+    now: FORYOU_NOW,
+  });
+  assert.deepEqual(result.healedRunIds, ['run-abandoned']);
+  assert.equal(result.action, 'run');
+  assert.equal(result.reason, 'for_you_block');
+});
+
+test('preflight skips the rest window before the momentum watch interval', async () => {
+  const { deps, calls } = preflightDeps({
+    activityWindow: () => ({ rest: true }),
+    getDiscoverSnapshot: (kind) => (kind === 'x_momentum'
+      ? { fetchedAt: MOMENTUM_NOW - 10 * 60_000 }
+      : { fetchedAt: null }),
+  });
+  const result = await runLiveSessionPreflight({ now: MOMENTUM_NOW, env: {}, deps });
+  assert.equal(result.action, 'skip');
+  assert.equal(result.reason, 'rest_window');
+  assert.equal(result.block.stream, 'momentum');
+  assert.deepEqual(calls.refreshDiscoverySource, []);
+});
+
+test('preflight skips an awake momentum block with no eligible work', async () => {
+  const { deps } = preflightDeps();
+  const result = await runLiveSessionPreflight({ now: MOMENTUM_NOW, env: {}, deps });
+  assert.equal(result.action, 'skip');
+  assert.equal(result.reason, 'momentum_no_eligible_work');
+  assert.equal(result.block.stream, 'momentum');
+});
+
+test('preflight runs a momentum block when saved work exists', async () => {
+  const { deps, calls } = preflightDeps({
+    buildScoutCards: () => ({ pace: { urgentCandidates: 0 }, cards: [{ tier: 'T1' }, { tier: 'T2' }] }),
+  });
+  const result = await runLiveSessionPreflight({ now: MOMENTUM_NOW, env: {}, deps });
+  assert.equal(result.action, 'run');
+  assert.equal(result.mode, 'single_block');
+  assert.equal(result.reason, 'momentum_work_available');
+  assert.equal(result.precollected.t1Count, 1);
+  assert.equal(result.precollected.momentumRefreshed, true);
+  assert.ok(calls.refreshDiscoverySource.includes('x_momentum'));
+});
+
+test('preflight runs an awake For You block', async () => {
+  const { deps } = preflightDeps();
+  const result = await runLiveSessionPreflight({ now: FORYOU_NOW, env: {}, deps });
+  assert.equal(result.action, 'run');
+  assert.equal(result.mode, 'single_block');
+  assert.equal(result.reason, 'for_you_block');
+  assert.deepEqual(result.precollected, {
+    stream: 'forYou', mentionsOk: true, mentionsCount: 0, engageRefreshed: true, engageErrors: [],
+  });
+});
+
+test('an exited session closes its run only when nothing is in flight', async () => {
+  const { deps, calls } = preflightDeps({
+    listGrowthRuns: () => [{ runId: 'run-crashed', sessionId: 'crashed-session', leaseId: 'lease-crashed' }],
+  });
+  const reconciled = await reconcileExitedSessionRun({ sessionId: 'crashed-session', now: MOMENTUM_NOW, deps });
+  assert.deepEqual(reconciled.reconciledRunIds, ['run-crashed']);
+  assert.deepEqual(reconciled.releasedLeaseIds, ['lease-crashed']);
+  assert.equal(calls.finishGrowthRun[0].options.stopDetail,
+    'Session exited abnormally with zero unfinished attempts.');
+
+  const blocked = preflightDeps({
+    listGrowthRuns: () => [{ runId: 'run-crashed', sessionId: 'crashed-session', leaseId: 'lease-crashed' }],
+    getPublicationReconciliationReadiness: () => ({ activeCount: 1 }),
+  });
+  const refused = await reconcileExitedSessionRun({ sessionId: 'crashed-session', now: MOMENTUM_NOW, deps: blocked.deps });
+  assert.deepEqual(refused.reconciledRunIds, []);
+  assert.equal(blocked.calls.finishGrowthRun.length, 0);
 });
