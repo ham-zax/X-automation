@@ -96,7 +96,8 @@ async function pathMissing(target) {
   }
 }
 
-test('success renders the exact owned target and releases that one lease once', async () => {
+for (const replyWriterMode of ['profile', 'operator']) {
+test(`success renders the exact owned target and releases that one lease once (${replyWriterMode})`, async () => {
   const repoDir = await makeRepo();
   const stateDir = path.join(scratch, `state-${++sequence}`);
   const lease = fakeLease();
@@ -108,7 +109,7 @@ test('success renders the exact owned target and releases that one lease once', 
       repoDir,
       stateDir,
       sessionId: 'luna-arm-test-1',
-      config: config(),
+      config: config({ replyWriterMode }),
       leaseTab: lease.leaseTab,
       run: child.run,
       claiveBin: '/fake/claive',
@@ -131,7 +132,8 @@ test('success renders the exact owned target and releases that one lease once', 
   assert.ok(prompt.includes(TARGET));
   assert.ok(prompt.includes('Browser interface: agent-browser-cli'));
   assert.ok(prompt.includes(`Use only launcher-owned target ${TARGET}`));
-  assert.ok(prompt.includes('Write as @ham_zax'));
+  assert.equal(prompt.includes('Write as @ham_zax'), replyWriterMode === 'operator');
+  assert.equal(prompt.includes('saved reply_writer receives the full Reply contract server-side'), replyWriterMode === 'profile');
   assert.equal(prompt.includes('`tab new '), false);
   assert.equal(prompt.includes('`tab close '), false);
   assert.equal(prompt.includes('{{'), false);
@@ -160,7 +162,7 @@ test('success renders the exact owned target and releases that one lease once', 
     X_GROWTH_OPERATOR_RUNTIME: 'claive',
     X_GROWTH_OPERATOR_MODEL: 'gpt-6-luna',
     X_GROWTH_OPERATOR_REASONING: 'max',
-    X_GROWTH_REPLY_WRITER_MODE: 'profile',
+    X_GROWTH_REPLY_WRITER_MODE: replyWriterMode,
   });
   assert.deepEqual(options, { cwd: repoDir, timeoutMs: 2_700_000, killGraceMs: 5_000 });
 
@@ -173,9 +175,10 @@ test('success renders the exact owned target and releases that one lease once', 
     targetId: TARGET,
     cleanup: { targetId: TARGET, cleaned: true, warnings: [] },
     operator: { runtime: 'claive', engine: 'codex', model: 'gpt-6-luna', reasoning: 'max',
-      replyWriterMode: 'profile', source: 'launcher_command_configuration' },
+      replyWriterMode, source: 'launcher_command_configuration' },
   });
 });
+}
 
 test('a rejected child stays the primary error and the lease is still released', async () => {
   const repoDir = await makeRepo();

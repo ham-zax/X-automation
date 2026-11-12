@@ -88,7 +88,9 @@ export async function runAttachedLiveSession(options = {}) {
     if (!contract) throw new Error('No browser contract for this target.');
     const prompt = template
       .replace('{{BROWSER_CONTRACT}}', () => contract)
-      .replace('{{REPLY_CONTRACT}}', () => REPLY_CONTRACT)
+      .replace('{{REPLY_CONTRACT}}', () => operator.replyWriterMode === 'operator'
+        ? REPLY_CONTRACT
+        : 'The saved reply_writer receives the full Reply contract server-side. Use reply-generate and preserve its selected text and provenance as described above; do not draft a replacement reply.')
       .replace('{{REPLY_WORKFLOW}}', () => replyWorkflowInstruction(operator.replyWriterMode))
       .replaceAll('{{SESSION}}', () => sessionId)
       .replaceAll('{{OWNED_TAB}}', () => lease.targetId);
