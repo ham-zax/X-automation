@@ -491,3 +491,26 @@ test('an approved commit is trusted under verified_client without the static gat
   assert.equal(status.trustPolicy, 'verified_client');
   assert.equal(await pinLink(scenario.home), path.join('releases', scenario.candidateSha));
 });
+
+test('verified_client resolves const string-array mapped dynamic imports and still enforces the allowlist', async () => {
+  const allowedMapped = await prepareScenario('verified-mapped-allow', {
+    candidateSource: verifiedScraperSource({
+      prelude: "const NODE_MODULES = ['node:path', 'node:os'];\nawait Promise.all(NODE_MODULES.map((name) => import(/* @vite-ignore */ name)));",
+    }),
+  });
+  const okRun = runUpdater(allowedMapped, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+  assert.equal(okRun.status, 0, okRun.stderr);
+  assert.equal((await readStatus(allowedMapped.home)).pinnedCommit, allowedMapped.candidateSha);
+
+  const disallowedMapped = await prepareScenario('verified-mapped-deny', {
+    candidateSource: verifiedScraperSource({
+      prelude: "const NODE_MODULES = ['node:path', 'node:net'];\nawait Promise.all(NODE_MODULES.map((name) => import(/* @vite-ignore */ name)));",
+    }),
+  });
+  const denyRun = runUpdater(disallowedMapped, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+  assert.equal(denyRun.status, 0, denyRun.stderr);
+  const denyStatus = await readStatus(disallowedMapped.home);
+  assertPinUntouched(denyStatus, disallowedMapped);
+  assert.match(denyStatus.candidate.result, /failed: verify:.*node:net/);
+  assert.equal(await readLog(disallowedMapped.smokeLog), null);
+});

@@ -164,14 +164,47 @@ function assertNoSymlinkComponents(root, file) {
   }
 }
 
+function stringLiteralArrays(text) {
+  const arrays = new Map();
+  for (const match of text.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*\[([^\]]*)\]/g)) {
+    const name = match[1];
+    if (new RegExp(`\\b${name}\\s*(?:\\.\\s*(?:push|pop|shift|unshift|splice|fill|copyWithin)\\b|\\[[^\\]]*\\]\\s*=|=(?!=))`).test(text.slice(match.index + match[0].length))) continue;
+    const rawItems = match[2].trim();
+    if (!rawItems) { arrays.set(name, []); continue; }
+    const items = [];
+    let valid = true;
+    for (const part of rawItems.split(',')) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const lit = /^(['"])([^'"\n]+)\1$/.exec(trimmed);
+      if (!lit) { valid = false; break; }
+      items.push(lit[2]);
+    }
+    if (valid) arrays.set(name, items);
+  }
+  return arrays;
+}
+
 function moduleSpecifiers(text, label) {
   const specifiers = [];
+  const constArrays = stringLiteralArrays(text);
   for (const match of text.matchAll(/\bimport\s+(?:[^'"();]*?\bfrom\s*)?(['"])([^'"\n]+)\1/g)) specifiers.push(match[2]);
   for (const match of text.matchAll(/\bexport\s+(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*(['"])([^'"\n]+)\1/g)) specifiers.push(match[2]);
   for (const match of text.matchAll(/\bimport\s*\(\s*/g)) {
-    const literal = /^(['"])([^'"\n]*)\1/.exec(text.slice(match.index + match[0].length));
-    if (!literal) throw new Error(`${label} uses a dynamic import without a plain string literal`);
-    specifiers.push(literal[2]);
+    const after = text.slice(match.index + match[0].length);
+    const literal = /^(['"])([^'"\n]*)\1\s*\)/.exec(after);
+    if (literal) {
+      specifiers.push(literal[2]);
+      continue;
+    }
+    const ident = /^([A-Za-z_$][\w$]*)\s*\)/.exec(after);
+    const before = text.slice(Math.max(0, match.index - 120), match.index);
+    const mapped = ident && new RegExp(`\\b([A-Za-z_$][\\w$]*)\\s*\\.\\s*map\\s*\\(\\s*(?:\\(\\s*${ident[1]}\\s*\\)|${ident[1]})\\s*=>\\s*$`).exec(before);
+    if (mapped && constArrays.has(mapped[1])) {
+      specifiers.push(...constArrays.get(mapped[1]));
+      continue;
+    }
+    throw new Error(`${label} uses a dynamic import without a plain string literal`);
   }
   return specifiers;
 }

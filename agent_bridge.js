@@ -3204,6 +3204,14 @@ async function main() {
 
   if (command === 'persona-model') {
     const consumer = String(payload.consumer || '').trim();
+    if (consumer === 'orchestrator' && payload.detail !== true) {
+      result({
+        slice: getPersonaSlice(consumer),
+        compact: true,
+        detailHint: DETAIL_HINT,
+      });
+      return;
+    }
     result({
       model: getPersonaModelSummary(),
       ...(consumer ? { slice: getPersonaSlice(consumer) } : {}),

@@ -69,7 +69,8 @@ test('Reply projection keeps explicit repair, relationship and research context'
 test('Reply projection carries the full persona identity, beliefs and language realization', () => {
   const p = packet();
   const projected = contracts.projectReplyPacket(p);
-  assert.equal(projected.persona.identity, p.account.identity);
+  assert.equal(projected.persona.identity.statement, p.persona.identity.statement);
+  assert.equal(projected.persona.identity.label, p.persona.identity.label);
   assert.deepEqual(projected.persona.beliefs, p.persona.candidateBeliefs.map(belief => belief.statement));
   assert.deepEqual(projected.persona.language.allow, p.persona.languageRealization.allow);
   assert.deepEqual(projected.persona.language.avoid, p.persona.languageRealization.avoid);
@@ -77,10 +78,7 @@ test('Reply projection carries the full persona identity, beliefs and language r
   assert.equal(projected.persona.voiceCalibration, undefined);
   assert.equal(projected.persona.accountEvidencePatterns, undefined);
   assert.equal(JSON.stringify(projected.persona).includes('systems_consequence_signature'), false);
-  const withStatement = contracts.projectReplyPacket({ ...p, account: { ...p.account, identity: p.persona.identity } });
-  assert.equal(withStatement.persona.identity.statement, p.persona.identity.statement);
-  assert.equal(withStatement.persona.identity.label, p.persona.identity.label);
-  assert.deepEqual(contracts.projectReplyPacket(withStatement), withStatement);
+  assert.deepEqual(contracts.projectReplyPacket(projected), projected);
 });
 
 test('Non-Reply generation retains its existing document and schema', async () => {
@@ -147,11 +145,13 @@ test('Real bridge returns the Reply contract and accepts its lean output', () =>
 test('persona-model orchestrator slice stays compact and carries projects, beliefs and the decision guide', () => {
   const bridge = (command, payload) => JSON.parse(execFileSync(process.execPath, [path.join(repo, 'agent_bridge.js'), command], { cwd: scratch, input: JSON.stringify(payload), encoding: 'utf8' }));
   const body = bridge('persona-model', { consumer: 'orchestrator' });
+  assert.equal(body.compact, true);
+  assert.equal(body.model, undefined);
   assert.ok(Array.isArray(body.slice.verifiedProjects) && body.slice.verifiedProjects.length > 0);
   assert.ok(Array.isArray(body.slice.beliefs) && body.slice.beliefs.length > 0);
   assert.equal(typeof body.slice.decisionGuide.preferredQuestion, 'string');
   assert.ok(Array.isArray(body.slice.decisionGuide.avoid) && body.slice.decisionGuide.avoid.length > 0);
   assert.equal(body.slice.voiceCalibration, undefined);
   assert.equal(body.slice.accountEvidencePatterns, undefined);
-  assert.ok(Buffer.byteLength(JSON.stringify(body.slice)) < 4500);
+  assert.ok(Buffer.byteLength(JSON.stringify(body)) < 4500);
 });

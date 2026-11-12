@@ -38,7 +38,9 @@ export function replyOutputSchema(packet = {}) {
 export function projectReplyPacket(packet) {
   const persona = packet.persona || {};
   const draft = packet.currentDraft;
-  const rawIdentity = packet.account?.identity || persona.identity;
+  const rawIdentity = (persona.identity && typeof persona.identity === 'object' && persona.identity.statement)
+    ? persona.identity
+    : (packet.account?.identity || persona.identity);
   const identity = rawIdentity && typeof rawIdentity === 'object' && rawIdentity.statement
     ? { label: rawIdentity.label || 'developer and builder in tech', statement: rawIdentity.statement }
     : (typeof rawIdentity === 'string' && rawIdentity ? rawIdentity : rawIdentity?.label || 'developer and builder in tech');
