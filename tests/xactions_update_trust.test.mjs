@@ -23,6 +23,7 @@ after(async () => { await rm(scratch, { recursive: true, force: true }); });
 const AUTH_TOKEN = 'xr13-dummy-auth-token';
 const PIN_LOG_ENV = 'XR13_PIN_LOG';
 const CANDIDATE_LOG_ENV = 'XR13_CANDIDATE_LOG';
+const SMOKE_LOG_ENV = 'XACTIONS_SMOKE_LOG';
 const COMMIT_DATE = '2026-10-01T00:00:00+00:00';
 const PACKAGE_JSON = `${JSON.stringify({ name: 'xactions-fixture', version: '1.0.0', type: 'module' }, null, 2)}\n`;
 const PINNED_AT = '2026-10-27T00:00:00.000Z';
@@ -87,16 +88,52 @@ async function writeRelease(dir, source) {
   await writeFile(path.join(dir, 'src', 'client', 'index.js'), source);
 }
 
+// A candidate that satisfies the verified_client gate: it reads only an XACTIONS_*
+// variable, so the production allowlist stays strict and no test-only name is
+// allowed through. `prelude` injects the one line a rejection case needs.
+function verifiedScraperSource({ logEnv = SMOKE_LOG_ENV, failing = false, prelude = '' } = {}) {
+  return `import fs from 'node:fs';
+${prelude}
+const logFile = process.env.${logEnv};
+const log = (line) => { if (logFile) fs.appendFileSync(logFile, \`\${line}\n\`); };
+log('import');
+const POST = Object.freeze({
+  id: '1900000000000000001',
+  username: 'ham_zax',
+  text: 'XR-13 disposable fixture post',
+  inReplyToStatusId: null,
+  conversationId: '1900000000000000001',
+  timeParsed: new Date('${COMMIT_DATE}'),
+  likes: 1,
+  replies: 0,
+  retweets: 0,
+  views: 10,
+});
+
+export class Scraper {
+  constructor(options) { log('construct'); this.options = options; }
+  async setCookies(cookies) { log(\`cookies:\${cookies.map((cookie) => cookie.name).join(',')}\`); }
+  async *searchTweets(query) {
+    log(\`search:\${query}\`);
+    if (${failing}) return;
+    yield POST;
+  }
+  async getTweet(id) { log(\`post:\${id}\`); return { ...POST, id }; }
+}
+`;
+}
+
 // One disposable upstream repo (pin commit, then candidate commit), one disposable
 // XActions home with a working pinned fake release, and one scratch cwd without a
 // .env file.
-async function prepareScenario(name, { failingCandidate = false, missingSrc = false } = {}) {
+async function prepareScenario(name, { failingCandidate = false, missingSrc = false, candidateSource = null } = {}) {
   const base = path.join(scratch, name);
   const source = path.join(base, 'upstream');
   const home = path.join(base, 'xactions');
   const work = path.join(base, 'work');
   const pinLog = path.join(base, 'pin.log');
   const candidateLog = path.join(base, 'candidate.log');
+  const smokeLog = path.join(base, 'smoke.log');
   await mkdir(source, { recursive: true });
   await mkdir(work, { recursive: true });
 
@@ -107,7 +144,7 @@ async function prepareScenario(name, { failingCandidate = false, missingSrc = fa
   const pinSha = git(source, 'rev-parse', 'HEAD');
 
   if (missingSrc) await rm(path.join(source, 'src'), { recursive: true, force: true });
-  else await writeRelease(source, scraperSource({ logEnv: CANDIDATE_LOG_ENV, failing: failingCandidate }));
+  else await writeRelease(source, candidateSource ?? scraperSource({ logEnv: CANDIDATE_LOG_ENV, failing: failingCandidate }));
   git(source, 'add', '-A');
   git(source, 'commit', '-q', '-m', 'fixture candidate');
   const candidateSha = git(source, 'rev-parse', 'HEAD');
@@ -128,7 +165,7 @@ async function prepareScenario(name, { failingCandidate = false, missingSrc = fa
     checks: [],
   }, null, 2)}\n`);
 
-  return { base, source, home, work, pinLog, candidateLog, pinSha, candidateSha };
+  return { base, source, home, work, pinLog, candidateLog, smokeLog, pinSha, candidateSha };
 }
 
 function runUpdater(scenario, extraEnv = {}) {
@@ -139,6 +176,7 @@ function runUpdater(scenario, extraEnv = {}) {
     X_ACCOUNT: 'ham_zax',
     [PIN_LOG_ENV]: scenario.pinLog,
     [CANDIDATE_LOG_ENV]: scenario.candidateLog,
+    [SMOKE_LOG_ENV]: scenario.smokeLog,
     X_GROWTH_XACTIONS_HOME: scenario.home,
     X_GROWTH_XACTIONS_REPO: `file://${scenario.source}`,
     ...extraEnv,
@@ -322,4 +360,134 @@ test('AUTO_PROMOTE=false keeps the pin after an approved pass', async () => {
   assert.equal(status.candidate.commit, scenario.candidateSha);
   assert.match(status.candidate.result, /approved and passed/);
   assert.match(status.candidate.result, /AUTO_PROMOTE=false/);
+});
+
+test('verified_client verifies a clean candidate, smoke-tests it and promotes', async () => {
+  const scenario = await prepareScenario('verified-clean', { candidateSource: verifiedScraperSource() });
+  const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+
+  assert.equal(run.error, undefined);
+  assert.equal(run.status, 0, run.stderr);
+  const smokeLog = await readLog(scenario.smokeLog);
+  assert.match(smokeLog, /import/);
+  assert.match(smokeLog, /construct/);
+  assert.match(smokeLog, /cookies:auth_token/);
+  assert.match(smokeLog, /search:from:ham_zax filter:replies/);
+  assert.equal(smokeLog.includes(AUTH_TOKEN), false, 'the fixture must not see the token value');
+  assert.equal(await readLog(scenario.candidateLog), null, 'the clean fixture reads no XR13 variable');
+
+  const status = await readStatus(scenario.home);
+  assert.equal(status.healthy, true);
+  assert.equal(status.reason, null);
+  assert.equal(status.pinnedCommit, scenario.candidateSha);
+  assert.equal(status.pinnedCommitDate, COMMIT_DATE);
+  assert.equal(status.previousCommit, scenario.pinSha);
+  assert.equal(status.candidate, null);
+  assert.equal(status.approvedCommit, null);
+  assert.equal(status.trustPolicy, 'verified_client');
+  assert.deepEqual(status.checks.map((check) => check.name), ['load', 'own-replies', 'mentions', 'search', 'post', 'thread']);
+  assert.ok(status.checks.every((check) => check.ok));
+  assert.equal(await pinLink(scenario.home), path.join('releases', scenario.candidateSha));
+});
+
+test('verified_client rejects a candidate that reads a credential before it executes', async () => {
+  const scenario = await prepareScenario('verified-token', {
+    candidateSource: verifiedScraperSource({ prelude: 'const stolen = process.env.AUTH_TOKEN;' }),
+  });
+  const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+
+  assert.equal(run.status, 0, run.stderr);
+  const status = await readStatus(scenario.home);
+  assertPinUntouched(status, scenario);
+  assert.equal(status.candidate.commit, scenario.candidateSha);
+  assert.equal(status.candidate.commitDate, COMMIT_DATE);
+  assert.match(status.candidate.result, /^failed: verify:/);
+  assert.match(status.candidate.result, /AUTH_TOKEN/);
+  assert.equal(await readLog(scenario.smokeLog), null, 'a rejected candidate must never execute');
+  assert.equal(fs.existsSync(path.join(scenario.home, 'releases', scenario.candidateSha)), false, 'the rejected export is removed');
+  assert.equal(await pinLink(scenario.home), path.join('releases', scenario.pinSha));
+  assert.match(await readLog(scenario.pinLog), /cookies:auth_token/);
+  assert.equal(run.stdout.includes(AUTH_TOKEN), false);
+  assert.equal(run.stderr.includes(AUTH_TOKEN), false);
+});
+
+test('verified_client rejects a candidate that imports a process module', async () => {
+  const scenario = await prepareScenario('verified-child-process', {
+    candidateSource: verifiedScraperSource({ prelude: "import cp from 'node:child_process';" }),
+  });
+  const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+
+  assert.equal(run.status, 0, run.stderr);
+  const status = await readStatus(scenario.home);
+  assertPinUntouched(status, scenario);
+  assert.match(status.candidate.result, /^failed: verify:/);
+  assert.match(status.candidate.result, /child_process/);
+  assert.equal(await readLog(scenario.smokeLog), null, 'a rejected candidate must never execute');
+  assert.equal(fs.existsSync(path.join(scenario.home, 'releases', scenario.candidateSha)), false);
+  assert.equal(await pinLink(scenario.home), path.join('releases', scenario.pinSha));
+});
+
+test('verified_client rejects a candidate that imports outside src', async () => {
+  const scenario = await prepareScenario('verified-escape', {
+    candidateSource: verifiedScraperSource({ prelude: "import outside from '../../outside.js';" }),
+  });
+  const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client' });
+
+  assert.equal(run.status, 0, run.stderr);
+  const status = await readStatus(scenario.home);
+  assertPinUntouched(status, scenario);
+  assert.match(status.candidate.result, /^failed: verify:/);
+  assert.match(status.candidate.result, /outside src/);
+  assert.equal(await readLog(scenario.smokeLog), null);
+  assert.equal(fs.existsSync(path.join(scenario.home, 'releases', scenario.candidateSha)), false);
+});
+
+test('an invalid trust policy stops before fetch or smoke execution', async () => {
+  const scenario = await prepareScenario('bad-policy');
+  const before = await readFile(path.join(scenario.home, 'status.json'), 'utf8');
+  for (const value of ['auto', 'verified', 'VERIFIED_CLIENT', 'trusted_client']) {
+    const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: value });
+    assert.equal(run.status, 2, `${value}: ${run.stderr}`);
+    assert.match(run.stderr, /X_GROWTH_XACTIONS_TRUST_POLICY/);
+    assert.equal(fs.existsSync(path.join(scenario.home, 'repo.git')), false, 'no fetch may start');
+    assert.equal(await readLog(scenario.pinLog), null, 'no pin smoke may run');
+    assert.equal(await readLog(scenario.candidateLog), null);
+    assert.equal(await readLog(scenario.smokeLog), null);
+    assert.equal(await readFile(path.join(scenario.home, 'status.json'), 'utf8'), before);
+    assert.deepEqual(fs.readdirSync(path.join(scenario.home, 'releases')), [scenario.pinSha]);
+  }
+});
+
+test('manual trust policy keeps an unapproved candidate inert', async () => {
+  const scenario = await prepareScenario('manual-policy', { candidateSource: verifiedScraperSource() });
+  const run = runUpdater(scenario, { X_GROWTH_XACTIONS_TRUST_POLICY: 'manual' });
+
+  assert.equal(run.status, 0, run.stderr);
+  const status = await readStatus(scenario.home);
+  assertPinUntouched(status, scenario);
+  assert.equal(status.candidate.commit, scenario.candidateSha);
+  assert.match(status.candidate.result, /awaiting owner review/i);
+  assert.equal(await readLog(scenario.smokeLog), null, 'manual policy never runs candidate code');
+  assert.equal(fs.existsSync(path.join(scenario.home, 'releases', scenario.candidateSha)), false);
+  assert.equal(await pinLink(scenario.home), path.join('releases', scenario.pinSha));
+});
+
+test('an approved commit is trusted under verified_client without the static gate', async () => {
+  const scenario = await prepareScenario('verified-approved');
+  const run = runUpdater(scenario, {
+    X_GROWTH_XACTIONS_TRUST_POLICY: 'verified_client',
+    X_GROWTH_XACTIONS_APPROVED_COMMIT: scenario.candidateSha,
+  });
+
+  assert.equal(run.status, 0, run.stderr);
+  const candidateLog = await readLog(scenario.candidateLog);
+  assert.match(candidateLog, /import/);
+  assert.match(candidateLog, /cookies:auth_token/);
+  const status = await readStatus(scenario.home);
+  assert.equal(status.healthy, true);
+  assert.equal(status.pinnedCommit, scenario.candidateSha);
+  assert.equal(status.previousCommit, scenario.pinSha);
+  assert.equal(status.candidate, null);
+  assert.equal(status.trustPolicy, 'verified_client');
+  assert.equal(await pinLink(scenario.home), path.join('releases', scenario.candidateSha));
 });

@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/home/ubuntu/repo/x_test
 Environment=PATH=/home/ubuntu/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=X_GROWTH_XACTIONS_TRUST_POLICY=verified_client
 ExecStart=/usr/local/bin/node ops/xactions_update.mjs
 TimeoutStartSec=10min
 TimeoutStopSec=15s

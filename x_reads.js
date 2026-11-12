@@ -18,6 +18,42 @@ const RESPONSE_PARENT_LIMIT = 100;
 const RESPONSE_ERROR_LIMIT = 300;
 const TWEET_ID_PATTERN = /^\d{5,25}$/;
 const HANDLE_PATTERN = /^[a-z0-9_]{1,15}$/;
+const SENSITIVE_HEADERS = new Set(['cookie', 'authorization', 'x-csrf-token']);
+const TXID_DICT_PATH = '/fa0311/x-client-transaction-id-pair-dict/main/pair.json';
+
+function headerEntries(headers) {
+  if (!headers) return [];
+  if (Array.isArray(headers)) return headers.map((entry) => [entry?.[0], entry?.[1]]);
+  if (typeof headers.entries === 'function') return [...headers.entries()];
+  return Object.entries(headers);
+}
+
+function withoutSensitiveHeaders(headers) {
+  const kept = headerEntries(headers).filter(([name]) => !SENSITIVE_HEADERS.has(String(name).toLowerCase()));
+  if (Array.isArray(headers)) return kept;
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) return new Headers(kept);
+  return Object.fromEntries(kept);
+}
+
+// An X read may only reach X itself, its static media hosts, or the transaction-id
+// dictionary. Auxiliary hosts get no cookies, no auth headers and no body, so an
+// account credential can never leave x.com/twitter.com.
+export function sanitizeXReadRequest(url, options = {}) {
+  const parsed = new URL(String(url));
+  if (parsed.protocol !== 'https:') throw new Error(`Refusing non-HTTPS X read URL: ${parsed.protocol}`);
+  const host = parsed.hostname.toLowerCase();
+  const isXHost = host === 'x.com' || host.endsWith('.x.com') || host === 'twitter.com' || host.endsWith('.twitter.com');
+  const isTwimg = host === 'twimg.com' || host.endsWith('.twimg.com');
+  const isTxIdDict = host === 'raw.githubusercontent.com' && parsed.pathname === TXID_DICT_PATH && parsed.search === '';
+  if (!isXHost && !isTwimg && !isTxIdDict) throw new Error(`Refusing non-X read host: ${host}`);
+  if (isXHost) return { url: parsed.toString(), options };
+  const method = String(options?.method || 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') throw new Error(`Refusing ${method} to auxiliary host ${host}`);
+  const sanitizedOptions = { ...(options && typeof options === 'object' ? options : {}) };
+  delete sanitizedOptions.body;
+  if (sanitizedOptions.headers != null) sanitizedOptions.headers = withoutSensitiveHeaders(sanitizedOptions.headers);
+  return { url: parsed.toString(), options: sanitizedOptions };
+}
 
 export function xactionsHome(env = process.env) {
   return path.resolve(env.X_GROWTH_XACTIONS_HOME || '.xactions-upstream');
@@ -109,9 +145,10 @@ export async function createXReader({ dir, env = process.env, scraper: injected,
     const loaded = await loadScraper({ dir, env });
     source = loaded.source;
     scraper = new loaded.Scraper({ fetch: async (url, options = {}) => {
-      const response = await fetch(url, {
-        ...options,
-        signal: options.signal ? AbortSignal.any([options.signal, AbortSignal.timeout(READ_TIMEOUT_MS)]) : AbortSignal.timeout(READ_TIMEOUT_MS),
+      const request = sanitizeXReadRequest(url, options);
+      const response = await fetch(request.url, {
+        ...request.options,
+        signal: request.options.signal ? AbortSignal.any([request.options.signal, AbortSignal.timeout(READ_TIMEOUT_MS)]) : AbortSignal.timeout(READ_TIMEOUT_MS),
       });
       if (response.ok && /json/i.test(response.headers.get('content-type') || '')) {
         captureNoteTexts(await response.clone().json(), sourceTexts);
