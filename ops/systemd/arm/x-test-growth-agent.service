@@ -1,10 +1,10 @@
 [Unit]
-Description=XGrowth unattended reasoning operator (claive codex gpt-6-luna, yolo)
-# Every role in growth-agent.yaml uses a chatgpt-web model, whose Responses calls go
-# through the ChatGPT Web bridge on the Lightsail worker. The tunnel unit keeps
-# 127.0.0.1:17841 pointed at that bridge; a run must not start without it.
-After=network-online.target x-test-dashboard.service lightsail-bridge-tunnel.service
-Wants=network-online.target lightsail-bridge-tunnel.service
+Description=XGrowth unattended reasoning operator (claive codex gpt-6.1-terra)
+# Every role in growth-agent.yaml selects native Codex, which runs directly and
+# needs no remote bridge. The ExecStartPre check below remains only for a future
+# config that selects a chatgpt-web model.
+After=network-online.target x-test-dashboard.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot

@@ -13,55 +13,51 @@ schedule:
 ai:
   totalTimeoutMs: 240000
 
+# Native Codex only. No codexHome, sandbox or network override: the runtime uses
+# ~/.codex and the safe read-only role defaults.
 runtimes:
   codex:
     binaryPath: /home/ubuntu/.local/bin/codex
-    codexHome: /home/ubuntu/.local/share/claive/codex-web-home
-    sandboxMode: danger-full-access
-    networkAccess: true
-    # Optional shadowHome sets HOME for this runtime only. Leave unset on ARM.
-    environment:
-      CLAIVE_CODEX_WEB_YOLO: '1'
 
 operator:
   runtime: claive
   engine: codex
-  model: chatgpt-web/gpt-6-sol
-  reasoning: high
+  model: gpt-6.1-terra
+  reasoning: low
   replyWriterMode: profile
   browserTarget: linux
   browserInterface: agent-browser-cli
   browserMcpServer: xgrowth_browser
   browserFastBackend: cloakbrowser
   cdpPort: '9222'
-  windowMinutes: 20
+  windowMinutes: 12
 
 roles:
   continuous_scan:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   editorial_scan:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   editorial_final:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   audience_review:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   writer:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   reply_writer:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low
   content_review:
     runtime: codex
-    model: chatgpt-web/gpt-6-sol
-    reasoning: high
+    model: gpt-6.1-terra
+    reasoning: low

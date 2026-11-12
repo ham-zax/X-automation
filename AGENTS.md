@@ -10,14 +10,14 @@ Your global instructions cover tools, working style and the engineering workflow
 file adds only what is specific to this repository. Where the two disagree on how to
 operate X or Growth OS state, this file wins.
 
-## Owner re-arm instruction — 3 November 2026
+## Owner re-arm instruction — 12 November 2026
 
 Hamza explicitly re-arms persistent live Growth OS operation on ARM using
-Claive Codex with `chatgpt-web/gpt-6-sol` at high reasoning effort. The operator
+native Codex with `gpt-6.1-terra` at `low` reasoning effort. The operator
 and its recurring timer may run under the saved owner policy and delegation.
-This supersedes the 1 November stop instruction. Model and role settings live
-in `ops/systemd/arm/growth-agent.yaml`. All sending, claim, reconciliation and
-single-operator rules below still apply.
+This supersedes the 3 November re-arm and the 1 November stop instruction.
+Model and role settings live in `ops/systemd/arm/growth-agent.yaml`. All
+sending, claim, reconciliation and single-operator rules below still apply.
 
 ## What you are trying to do
 

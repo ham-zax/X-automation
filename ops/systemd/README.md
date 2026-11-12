@@ -50,13 +50,15 @@ operator and AI role calls without changing the parent process environment.
 Paths must be absolute. ARM uses its existing home; a shadow home is optional
 and must already contain any files the runtime needs. Keep secrets out of YAML.
 `sandboxMode` and boolean `networkAccess` configure native Codex role calls;
-their defaults remain read-only and no workspace network access. The web provider
-requires a trusted network-enabled environment, so ARM explicitly selects
-danger-full-access with network access: this Codex/web bridge combination does
-not emit the explicit trusted network context required for sandboxed turns.
+their defaults remain read-only and no workspace network access. ARM now leaves
+both unset, so native Codex uses `~/.codex` and the safe read-only defaults.
+A future chatgpt-web selection would need a trusted network-enabled environment
+again: that Codex/web bridge combination does not emit the explicit trusted
+network context required for sandboxed turns.
 Role calls still disable shell and MCP tools.
 Claive's operator sandbox follows its native policy and explicit environment
-settings (ARM sets `CLAIVE_CODEX_WEB_YOLO: '1'` as required for local browser access).
+settings. ARM no longer sets `CLAIVE_CODEX_WEB_YOLO`, because no role selects a
+web model; add it back only with a chatgpt-web selection that needs local browser access.
 Claive launch arguments remain governed by its existing engine configuration;
 an environment entry for `CLAIVE_CONFIG` can select that configuration file.
 Web model role calls use the existing compatible-output path: the schema is
@@ -88,11 +90,13 @@ The reasoning agent follows this cadence within a finite session. Slow work,
 rest hours and the existing gap between sessions can delay collection.
 The systemd timer starts sessions, not individual discovery passes.
 The versioned `arm/cadence.conf` replaces the old host-only thirty-minute override.
-Its empty `OnActiveSec` resets the entire inherited timer list, then declares
-one initial wake after a minute and a wake five minutes after session exit.
+Its empty `OnActiveSec` and `OnUnitInactiveSec` clear the inherited monotonic
+timers, then `OnCalendar=*:0/5` wakes on five-minute wall-clock boundaries aligned
+with the `discovery_schedule.js` blocks, so a five-minute For You pass cannot shift
+later wakes onto only odd or even blocks. Active runs coalesce naturally.
 Install it at `~/.config/systemd/user/x-test-growth-agent.timer.d/cadence.conf`,
-reload the user manager, and restart the timer. Check `TimersMonotonic` for
-`OnUnitInactiveUSec=5min`; an active timer alone does not prove the cadence.
+reload the user manager, and restart the timer. Check `TimersCalendar` for
+`OnCalendar=*:0/5`; an active timer alone does not prove the cadence.
 
 The launcher passes its owned target as `X_GROWTH_OPERATOR_BROWSER_TAB`.
 The publication transport uses it for its initial read instead of allocating an
@@ -133,12 +137,16 @@ Historical deployment evidence lives in `docs/ARM_24X7_HANDOFF.md`.
 The installed ARM operator and dashboard point to the same YAML file. A unit
 reload is needed only after changing the unit pointer, not after editing YAML.
 
-## DeepSeek selection, 31 October
+## DeepSeek selection, 31 October — retired 12 November
 
-The versioned `arm/deepseek.conf` drop-in selects OpenCode with
+The versioned `arm/deepseek.conf` drop-in selected OpenCode with
 `opencode2api/deepseek-v4.1-flash-free`, max effort and profile Reply mode.
-The current saved Writer role selects profile15: Pi, the same DeepSeek model,
-max effort and no fallback. Model bindings remain runtime state, not Git data.
+Both that drop-in and `arm/experiment.conf` (`X_GROWTH_AGENT_EXPERIMENT=1`) are
+retired and removed from the repository; native Codex `gpt-6.1-terra` at `low`
+in `arm/growth-agent.yaml` is the only operator selection. Remove any installed
+copy under `x-test-growth-agent.service.d/` and reload the user manager.
+The historical record below describes the retired selection, not current state.
+Model bindings remain runtime state, not Git data.
 
 The installed OpenCode executable supports operator sessions. Its SDK/server
 structured-output interface does not match the existing Writer adapter. The
@@ -186,10 +194,10 @@ copy of an already-running service. No operator runtime/model switch is deployed
 
 Latest live selection: install `ops/systemd/arm/luna.conf` as the service drop-in
 after checks. It points the service at `arm/growth-agent.yaml`. The current file
-selects Luna 6 max for the operator and all seven AI roles. Current engine
-inventory permits this Claive Codex model and effort. Luna supports medium or
-max only. Max is its highest available effort. Edit the YAML to select another
-supported model or effort. Do not edit generated or installed copies first.
+selects native Codex `gpt-6.1-terra` at `low` reasoning for the operator and all
+seven AI roles, with no `codexHome`, sandbox or network override, so the runtime
+uses `~/.codex` and the safe read-only role defaults. Edit the YAML to select
+another supported model or effort. Do not edit generated or installed copies first.
 Only enable the user timer under the owner's live authorization. Individual sessions
 stay bounded and obey saved rest, health, grant, claim and reconciliation rules.
 

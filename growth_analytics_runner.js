@@ -42,6 +42,28 @@ const RESULT_LIMIT_BYTES = 16 * 1024;
 const RESULT_FIELDS = ['schemaVersion','sessionId','outcome','recordedPosts','reason'];
 const COLLECTION_OUTCOMES = new Set(['collected','zero_with_access','blocked']);
 const boundedError = value => String(value?.message || value || 'unknown error').trim().slice(0,500);
+// The collector follows the same operator selection as the Growth agent, so a
+// model change in growth-agent.yaml reaches both. A missing, unreadable or
+// non-Codex config keeps the previous hardcoded selection instead of failing
+// the collection.
+const DEFAULT_GROWTH_CONFIG_FILE = path.join(repo,'ops/systemd/arm/growth-agent.yaml');
+async function analyticsRuntimeSelection() {
+  const legacy = { model:'gpt-6-luna', reasoning:'max' };
+  try {
+    const env = { ...process.env };
+    if (!env.X_GROWTH_CONFIG_FILE && existsSync(DEFAULT_GROWTH_CONFIG_FILE)) {
+      env.X_GROWTH_CONFIG_FILE = DEFAULT_GROWTH_CONFIG_FILE;
+    }
+    const { runtimeConfig } = await import('./growth_agent_runner.js');
+    const config = runtimeConfig(env);
+    const codex = config.runtime === 'codex'
+      || (config.runtime === 'claive' && config.claiveEngine === 'codex');
+    if (!codex) return legacy;
+    return { model: config.model || 'gpt-6.1-terra', reasoning: config.reasoning || 'low' };
+  } catch {
+    return legacy;
+  }
+}
 function outcomeError(message) { return new Error(`Analytics collection outcome invalid: ${message}`); }
 // A reason is untrusted child text. Reject obvious credential material so it
 // never reaches the checkpoint or journal through the failure error.
@@ -93,9 +115,10 @@ try {
   await writeFile(promptFile,`${template}\nCollection begins at ${new Date(now).toISOString()} (UTC).\nUse ONLY the existing authenticated Chrome on CDP ${cdpPort} with ${browserCli} --cdp ${cdpPort} --session ${sessionId} --pin-tab <command>. This job owns exact tab ${browserTabLease.targetId}. First navigate that OWN tab to https://x.com/ham_zax and verify authentication. Do not switch to another tab or create new tabs. The launcher closes ONLY this exact job-owned tab when done; never close shared Chrome.\nPrivate outcome values for this invocation, as JSON literals:\nX_GROWTH_ANALYTICS_SESSION_ID=${JSON.stringify(sessionId)}\nX_GROWTH_ANALYTICS_RESULT_FILE=${JSON.stringify(resultFile)}\nUse exactly these values. This private file is the only additional file you may write; write it before every normal completion.\n`,{mode:0o600});
   const bin = process.env.X_GROWTH_CLAIVE_BIN || path.join(os.homedir(),'.local/bin/claive');
   if (!existsSync(bin)) throw new Error('Claive binary not found');
+  const selection = await analyticsRuntimeSelection();
   const args = ['run','--workspace',repo,'--prompt-file',promptFile,
     '--label','XGrowth daily analytics collector','--engine','codex',
-    '--model','gpt-6-luna','--reasoning-effort','max','--web'];
+    '--model',selection.model,'--reasoning-effort',selection.reasoning,'--web'];
   const child=spawn(bin,args,{cwd:repo,stdio:'inherit',env:{...process.env,
     CLAIVE_CODEX_YOLO:'1',CLAIVE_CODEX_USE_USER_CONFIG:'1',
     X_GROWTH_ANALYTICS_RESULT_FILE:resultFile,X_GROWTH_ANALYTICS_SESSION_ID:sessionId},});
