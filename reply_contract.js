@@ -38,6 +38,22 @@ export function replyOutputSchema(packet = {}) {
 export function projectReplyPacket(packet) {
   const persona = packet.persona || {};
   const draft = packet.currentDraft;
+  const rawIdentity = packet.account?.identity || persona.identity;
+  const identity = rawIdentity && typeof rawIdentity === 'object' && rawIdentity.statement
+    ? { label: rawIdentity.label || 'developer and builder in tech', statement: rawIdentity.statement }
+    : (typeof rawIdentity === 'string' && rawIdentity ? rawIdentity : rawIdentity?.label || 'developer and builder in tech');
+  const stances = Array.isArray(persona.stances)
+    ? persona.stances
+    : Array.isArray(persona.currentStances)
+      ? persona.currentStances.map((s) => ({ subject: s.subject, position: s.position })).filter((s) => s.subject && s.position)
+      : [];
+  const beliefs = Array.isArray(persona.beliefs)
+    ? persona.beliefs
+    : Array.isArray(persona.candidateBeliefs)
+      ? persona.candidateBeliefs.map((b) => (typeof b === 'string' ? b : b?.statement)).filter(Boolean)
+      : [];
+  const allow = persona.languageRealization?.allow || persona.language?.allow;
+  const avoid = persona.languageRealization?.avoid || persona.language?.avoid;
   return {
     pipeline: 'reply', candidate: packet.candidate,
     suggestedBehavior: Object.hasOwn(packet, 'suggestedBehavior') ? packet.suggestedBehavior : packet.behavior,
@@ -46,12 +62,16 @@ export function projectReplyPacket(packet) {
     suggestionPolicy: 'The executor suggests an act. Choose the act that fits the actual conversation. The suggestion is not evidence or an owner instruction.',
     persona: {
       version: persona.version,
-      identity: packet.account?.identity || (typeof persona.identity === 'string' ? persona.identity : persona.identity?.label) || 'developer and builder in tech',
+      identity,
       affectBoundary: persona.affectPolicy?.boundary || persona.affectBoundary,
       language: {
-        defaultRegister: 'builder-to-builder, spoken when appropriate, precise when consequence requires it',
+        defaultRegister: persona.languageRealization?.defaultRegister || persona.language?.defaultRegister || 'builder-to-builder, spoken when appropriate, precise when consequence requires it',
         stoppingRule: persona.languageRealization?.stoppingRule || persona.language?.stoppingRule,
+        ...(Array.isArray(allow) && allow.length ? { allow } : {}),
+        ...(Array.isArray(avoid) && avoid.length ? { avoid } : {}),
       },
+      ...(stances.length ? { stances } : {}),
+      ...(beliefs.length ? { beliefs } : {}),
       provenance: persona.technicalProvenanceSandbox || persona.provenance,
       ...(persona.dailyTone ? { dailyTone: persona.dailyTone } : {}),
     },

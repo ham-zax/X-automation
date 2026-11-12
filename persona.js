@@ -79,6 +79,34 @@ export function getPersonaModelSummary(options = {}) {
 
 export function getPersonaSlice(consumer, options = {}) {
   const model = getActivePersonaModel(options);
+  if (consumer === 'orchestrator') {
+    return {
+      version: String(model.version),
+      status: String(model.status || ''),
+      identity: model.identity || {},
+      dailyTone: getDailyPersonaTone(),
+      currentStances: getCurrentPersonaStances({ limit: 50 }).map((stance) => ({
+        subject: stance.subject,
+        position: stance.position,
+        confidence: stance.confidence,
+      })),
+      beliefs: (model.candidateBeliefs || [])
+        .filter((belief) => ['owner_decision', 'account_evidence_supported', 'known_direction'].includes(belief.status))
+        .map((belief) => belief.statement),
+      decisionGuide: {
+        preferredQuestion: model.behaviorPolicy?.preferredDecisionQuestion || '',
+        growthPosture: model.behaviorPolicy?.growthPosture || '',
+        silenceRule: model.behaviorPolicy?.silenceRule || '',
+        relationshipRule: model.relationshipPolicy?.statusRule || '',
+        avoid: model.behaviorPolicy?.avoid || [],
+      },
+      verifiedProjects: (model.technicalProvenanceSandbox?.verifiedProjects || []).map((project) => ({
+        name: project.name,
+        description: project.description,
+        status: project.status,
+      })),
+    };
+  }
   const shared = {
     version: String(model.version),
     status: String(model.status || ''),

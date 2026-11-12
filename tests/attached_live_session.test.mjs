@@ -136,7 +136,8 @@ test(`success renders the exact owned target and releases that one lease once ($
   assert.ok(prompt.includes(`Use only launcher-owned target ${TARGET}`));
   assert.equal(prompt.includes('Write as @ham_zax'), replyWriterMode === 'operator');
   assert.equal(prompt.includes('saved reply_writer receives the full Reply contract server-side'), replyWriterMode === 'profile');
-  assert.equal(prompt.includes('Reload persona-model'), replyWriterMode === 'operator');
+  assert.equal(prompt.includes('Reload persona-model with {"consumer":"writer"}'), replyWriterMode === 'operator');
+  assert.equal(prompt.includes('persona-model with {"consumer":"orchestrator"}'), replyWriterMode === 'profile');
   assert.equal(prompt.includes('read docs/CONTENT_OPERATING_STANDARD.md'), replyWriterMode === 'operator');
   assert.equal(prompt.includes('Profile Writer mode is active'), replyWriterMode === 'profile');
   assert.ok(prompt.includes('Preflight: manual/unpreflighted session; run normal block checks.'));

@@ -26,7 +26,7 @@ const ERROR_TEXT_LIMIT = 500;
 
 const WRITER_PREPARATION = Object.freeze({
   operator: 'Reload persona-model with {"consumer":"writer"}. Before writing the first public text of the session, read docs/CONTENT_OPERATING_STANDARD.md; for an Original, Thread or Quote also docs/POST_GENERATION_PROMPT.md.',
-  profile: 'Profile Writer mode is active: server-side reply-generate and writer-generate automatically load persona-model, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md. Do not call persona-model or read those Writer prompt files yourself.',
+  profile: 'Profile Writer mode is active: call persona-model with {"consumer":"orchestrator"} once at startup for Hamza identity, stances, beliefs and projects. Server-side reply-generate and writer-generate automatically load the full writer persona, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md; do not read those Writer prompt files yourself.',
 });
 
 function preflightContext(gate) {
