@@ -1,8 +1,10 @@
 import { buildWriterPacket, applyWriterOutput } from './drafting.js';
 import { generateWriterOutput } from './writer_runtime.js';
 import { REPLY_CONTRACT, projectReplyPacket, replyOutputSchema } from './reply_contract.js';
+import { selectDynamicExpressionPlan, recordDynamicExpressionOutcome } from './dynamic_expression.js';
 import { xRead } from './x_reads.js';
 import { extractTweetIdFromUrl, validateActInput } from './act.js';
+import * as store from './store.js';
 import { getCandidate, getDraftByCandidate, saveDraft, upsertCandidates, ensureQueueItem, saveQueueItem, getBlockingActAttemptForTarget, requireActWriterSelection, recordServerWriterGeneration, runStoreTransaction } from './store.js';
 
 export function operatorModelReport(env = process.env) {
@@ -94,8 +96,10 @@ export async function generateActReply(payload, { generate = generateWriterOutpu
   const candidate = { ...savedAtStart, key: candidateKey || targetUrl, source: 'x', url: targetUrl,
     title: `@${url.pathname.split('/')[1]}`, text: sourceText };
   const writerBase = draftAtStart || { body: '', editor: { pipeline: 'reply' } };
+  const plan = selectDynamicExpressionPlan(store, { candidateKey: candidate.key, sourceText });
   const packet = buildWriterPacket({ candidate, ...context, queueItem: { pipeline: 'reply', behavior: payload.behavior },
-    draft: writerBase, topicBrief: payload.resolvedTopicBrief || null });
+    draft: writerBase, topicBrief: payload.resolvedTopicBrief || null, recentReplies: plan.recentReplies });
+  packet.dynamicExperiment = plan.dynamicExperiment;
   packet.suggestedBehavior = payload.behavior || null;
   if (payload.feedback) packet.executorFeedback = String(payload.feedback);
   const operator = operatorModelReport(env);
@@ -124,6 +128,8 @@ export async function generateActReply(payload, { generate = generateWriterOutpu
       saveQueueItem({ ...queue, behavior: applied.editor.behavior });
       const prepared = saveDraft({ ...current, ...applied, id: current?.id, candidateKey: candidate.key, status: 'draft' }, { expectedUpdatedAt: draftAtStart?.updatedAt });
       recordServerWriterGeneration(prepared, { execution: output.execution, runId: payload.runId, sessionId: payload.sessionId, packet });
+      recordDynamicExpressionOutcome(store, { draftId: prepared.id, candidateKey: candidate.key,
+        armId: plan.dynamicExperiment.armId, selectedCandidate: output.replyReview?.selection || 'A' });
       return prepared;
     });
   }

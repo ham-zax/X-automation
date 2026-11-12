@@ -81,6 +81,19 @@ test('Reply projection carries the full persona identity, beliefs and language r
   assert.deepEqual(contracts.projectReplyPacket(projected), projected);
 });
 
+test('Reply projection preserves recent replies and the dynamic experiment idempotently', () => {
+  const dynamicExperiment = { armId: 'sharp_micro', label: 'Sharp micro', domains: ['systems'],
+    candidateBDirective: 'Drop one unforgettable 4-12 word human line and stop.', cadenceConstraint: 'Vary sentence rhythm.' };
+  const p = { ...packet(), recentReplies: ['one', 'two', 'three', 'four', 'five', 'six', 'seven'], dynamicExperiment };
+  const projected = contracts.projectReplyPacket(p);
+  assert.deepEqual(projected.recentReplies, ['one', 'two', 'three', 'four', 'five', 'six']);
+  assert.deepEqual(projected.dynamicExperiment, dynamicExperiment);
+  assert.deepEqual(contracts.projectReplyPacket(projected), projected);
+  const bare = contracts.projectReplyPacket(packet());
+  assert.equal(bare.recentReplies, undefined);
+  assert.equal(bare.dynamicExperiment, undefined);
+});
+
 test('Non-Reply generation retains its existing document and schema', async () => {
   const p = drafting.buildWriterPacket({ candidate, queueItem: { pipeline: 'original', behavior }, draft: null });
   let seen;

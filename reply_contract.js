@@ -88,6 +88,8 @@ export function projectReplyPacket(packet) {
     } } : {}),
     ...(packet.writingStrategy ? { writingStrategy: packet.writingStrategy } : {}),
     ...(packet.topicBrief ? { topicBrief: packet.topicBrief } : {}),
+    ...(Array.isArray(packet.recentReplies) && packet.recentReplies.length ? { recentReplies: packet.recentReplies.slice(0, 6) } : {}),
+    ...(packet.dynamicExperiment ? { dynamicExperiment: packet.dynamicExperiment } : {}),
     promptDocument: 'docs/REPLY_GENERATION_PROMPT_V2.md',
   };
 }

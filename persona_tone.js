@@ -2,13 +2,15 @@ import { getAppState, setAppState, runStoreTransaction, getGrowthOperatorDelegat
 import { DomainValidationError } from './errors.js';
 
 const KEY = 'persona_daily_tone:v1';
+// Wording preference only. Every key stays available so a stored selection never
+// throws; the cues stay grounded in engineering detail rather than performed mood.
 export const DAILY_TONE_RUBRIC = Object.freeze({
   neutral: { enthusiasm: 0, warmth: 1, playfulness: 0, cue: 'Use the natural human voice appropriate to this conversation; add no extra tilt.' },
   focused: { enthusiasm: 0, warmth: 1, playfulness: 0, cue: 'Lean crisp, direct, and grounded — clean peer energy with zero fluff.' },
-  curious: { enthusiasm: 1, warmth: 1, playfulness: 0, cue: 'Lean genuinely curious about how things work; ask one specific, easy-to-answer builder question when natural.' },
-  warm: { enthusiasm: 1, warmth: 2, playfulness: 0, cue: 'Lean warm, encouraging, and generous with credit toward fellow builders.' },
-  cheerful: { enthusiasm: 2, warmth: 2, playfulness: 1, cue: 'Show upbeat, cheerful, friendly human energy; celebrate cool work naturally without corporate clichés.' },
-  energized: { enthusiasm: 2, warmth: 1, playfulness: 1, cue: 'Bring genuine hype and builder excitement where the moment earns it; keep sentences punchy and real.' },
+  curious: { enthusiasm: 1, warmth: 1, playfulness: 0, cue: 'Lean genuinely curious about how things work; ask one specific, easy-to-answer engineering question when natural.' },
+  warm: { enthusiasm: 1, warmth: 2, playfulness: 0, cue: 'Lean warm and generous with credit toward fellow builders, without gushing.' },
+  cheerful: { enthusiasm: 1, warmth: 2, playfulness: 0, cue: 'Light, friendly warmth when the moment is genuinely good news; no performed cheer and no exclamation stacking.' },
+  energized: { enthusiasm: 1, warmth: 1, playfulness: 1, cue: 'Bring real builder energy to a moment that earns it; stay specific and short instead of hyped filler.' },
   playful: { enthusiasm: 1, warmth: 1, playfulness: 2, cue: 'Allow light, quick wit and playful banter on casual threads; never punch down.' },
   wry: { enthusiasm: 0, warmth: 1, playfulness: 1, cue: 'Allow dry, candid, slightly moody builder humor about relatable dev pain; never be rude to the author.' },
 });

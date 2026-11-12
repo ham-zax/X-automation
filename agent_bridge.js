@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { REPLY_CONTRACT, projectReplyPacket, replyOutputSchema, normalizeReplyOutput } from './reply_contract.js';
+import { getDynamicExpressionSummary } from './dynamic_expression.js';
 import { getDailyPersonaTone, setDailyPersonaTone, DAILY_TONE_RUBRIC } from './persona_tone.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -3206,6 +3207,12 @@ async function main() {
     return;
   }
 
+  if (command === 'dynamic-expression') {
+    const store = await import('./store.js');
+    result(getDynamicExpressionSummary(store));
+    return;
+  }
+
   if (command === 'persona-model') {
     const consumer = String(payload.consumer || '').trim();
     if (consumer === 'orchestrator' && payload.detail !== true) {
@@ -3319,7 +3326,7 @@ async function main() {
     return;
   }
 
-  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-generate|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
+  throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-generate|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|dynamic-expression|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
 // The compact projections above are importable for tests; the CLI only runs when
