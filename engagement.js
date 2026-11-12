@@ -400,10 +400,11 @@ export function rankEngagementOpportunities(opportunities = [], { now, learnedRu
 function sourceAffectHints(text = '') {
   const value = String(text || '');
   return {
-    excited: /(?:🚀|🔥|🎉|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(value),
-    hostile: /\b(?:idiot|stupid|dumb|fraud|liar|garbage|trash|hate|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(value),
+    excited: /(?:🚀|🔥|🎉|💥|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(value),
+    showcase: /\b(?:(?:i|we)\s+(?:(?:just|finally|recently)\s+)?(?:built|made|created|shipped|released|launched|open[- ]sourced|put together|wrote)|daily driving|it'?s open source|check out (?:my|our)|try out)\b/i.test(value),
+    hostile: /\b(?:idiot|moron|fraud|liar|garbage|trash|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(value),
     humorous: /(?:😂|🤣|\blol\b|\bhaha\b|\brofl\b|\bmeme\b|\bworks on my machine\b|\byak shave\b)/i.test(value),
-    taste: /\b(?:beautiful|ugly|clean|clunky|elegant|polished|design|ui|ux|dx|interface|ergonomic)\b/i.test(value),
+    taste: /\b(?:beautiful|ugly|clean|clunky|elegant|polished|design|ui|ux|dx|interface|ergonomic|stupid|annoying)\b/i.test(value),
   };
 }
 
@@ -434,7 +435,7 @@ function selectContributionCandidate(candidates = [], {
 
   if (affect.hostile) return find('humor') || find('independent_judgment') || social || technical || learning;
   if (affect.humorous) return find('humor') || social || technical || learning;
-  if (affect.excited && (familiar || momentum || growthObjective !== 'technical_authority')) {
+  if ((affect.excited || affect.showcase) && (familiar || momentum || growthObjective !== 'technical_authority')) {
     return find('support') || find('celebration') || social || technical || learning;
   }
   if (growthObjective === 'relationships' && (familiar || social)) return social || learning || technical;
@@ -487,18 +488,19 @@ export function proposeEngagementContribution(candidate = {}, {
   if (affect.humorous) add('social', 'humor', 'Join the joke or add one context-dependent builder observation when humor is the strongest complete contribution.');
   if (affect.excited) add('social', familiar ? 'support' : 'celebration', familiar
     ? 'Recognize the person or project with specific warmth appropriate to the existing relationship.'
-    : 'Participate in the launch or milestone with a concise, context-specific reaction; do not force a technical caveat afterward.');
+    : 'Participate in the launch or milestone with warm, specific builder appreciation; do not interrogate edge cases or force a technical caveat afterward.');
+  else if (affect.showcase) add('social', 'support', 'Appreciate what the builder shipped in plain everyday words and validate the real problem solved or smart design choice visible in the post; do not quiz them on edge cases.');
   if (affect.taste) add('social', 'social_observation', 'Express a grounded product, design, interface, or developer-experience judgment about the visible object.');
 
   if (measurementClaim) add('technical', 'caveat_or_edge_case', 'Address a workload, version, environment, or interpretation condition only if it materially changes how the measured result should be used.');
   if (/(?:\$\s?\d|\b(?:price|pricing|cost|costs|spent|spend|spending|credits?|budget)\b)/i.test(text)) {
-    add('learning', 'informed_question', 'Ask or state one concrete cost assumption that would change the practical decision; do not manufacture a question when the source already answers it.');
+    add('technical', 'independent_judgment', 'Validate or state one concrete cost or workflow trade-off visible in the post in plain words; do not interrogate a builder showcase or manufacture a question.');
   }
   if (/\b(?:compare|comparison|vs\.?|versus|trade-?off|better|worse)\b/i.test(text)) {
     add('technical', 'comparison', 'Compare the approaches on one real developer constraint that is present in the source or in Hamza\'s established stance.');
   }
   if (/(?:github\.com|\b(?:repository|repo|resource|guide|bookmark|list of|websites?)\b)/i.test(text)) {
-    add('learning', 'informed_question', 'Ask what concrete task made the resource useful or name the use case the source makes visible; do not repeat the recommendation.');
+    add('technical', 'independent_judgment', 'Name why the visible workflow or use case is genuinely useful in plain words; ask a question only when the author explicitly invites feedback.');
   }
   const workflowTool = /\b(?:api|sdk|cli|config|configuration|install|deploy|agent\w*|model|codex|claude|cursor)\b/i.test(text);
   const workflowAction = /\b(?:use|using|used|run|running|setup|workflow|integrat\w*|ship\w*|build\w*|adopt\w*|migrat\w*|release\w*|launch\w*)\b/i.test(text);

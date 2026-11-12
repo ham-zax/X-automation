@@ -659,7 +659,11 @@ export function evaluateDraftQuality(candidate, draft, pipeline, {
   const relationship = username ? getRelationshipProfile(username) : null;
   return scoreDraft(draft, candidate, {
     pipeline,
-    behavior: queueItem?.behavior?.decision === 'ACT' ? queueItem.behavior : draft?.editor?.behavior || null,
+    behavior: draft?.editor?.writerBehaviorSelected && draft?.editor?.behavior?.decision === 'ACT'
+      ? draft.editor.behavior
+      : queueItem?.behavior?.decision === 'ACT'
+        ? queueItem.behavior
+        : draft?.editor?.behavior || null,
     relationship,
     evidence,
     recentPosts: listRecentPublishedContent({ kind: 'main', limit: 20, excludeCandidateKey: candidate.key }),

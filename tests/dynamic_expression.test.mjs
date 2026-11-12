@@ -37,30 +37,38 @@ function attemptStub(attempts) {
   };
 }
 
-test('candidate domains separate frontend, systems, hype_or_take and humor', () => {
+test('candidate domains separate showcase, frontend, systems, hype_or_take and humor', () => {
   assert.deepEqual(expression.classifyCandidateDomains('Our React hydration waterfall is killing the frame budget on mobile.'), ['frontend']);
   assert.deepEqual(expression.classifyCandidateDomains('Postgres p99 tail and idempotent retry keys under backpressure.'), ['systems']);
   assert.ok(expression.classifyCandidateDomains('Hot take: AI wrappers will replace all engineers in 6 months').includes('hype_or_take'));
   const humor = expression.classifyCandidateDomains('lol we deleted the database on a friday deploy');
   assert.ok(humor.includes('humor'));
-  assert.deepEqual(expression.classifyCandidateDomains('shipped a small thing today'), ['general_tech', 'social']);
+  assert.deepEqual(expression.classifyCandidateDomains('shipped a small thing today'), ['showcase']);
+  const imapShowcase = expression.classifyCandidateDomains("I built my own IMAP MCP server. It's open source.");
+  assert.ok(imapShowcase.includes('showcase'));
+  assert.equal(imapShowcase.includes('hype_or_take'), false);
+  assert.deepEqual(expression.classifyCandidateDomains('Looking forward to the weekend.'), ['general_tech', 'social']);
   assert.deepEqual(expression.classifyCandidateDomains(''), ['general_tech', 'social']);
 });
 
-test('cadence entropy blocks question streaks, praise openers and one-note length', () => {
+test('cadence entropy blocks even a single recent question, varies praise openers and avoids compression riddles', () => {
+  const singleQuestion = expression.computeCadenceEntropy(['What stack is that?', 'Nice write-up.', 'Clean setup.']);
+  assert.equal(singleQuestion.questionStreak, 1);
+  assert.ok(singleQuestion.constraints.some((item) => item.includes('do NOT end with a question mark')));
   const questions = expression.computeCadenceEntropy(['What stack is that?', 'How did you measure it?', 'Nice write-up.']);
   assert.equal(questions.questionStreak, 2);
   assert.ok(questions.constraints.some((item) => item.includes('do NOT end with a question mark')));
   const praise = expression.computeCadenceEntropy(['Congrats on the launch!', 'Nice one.', 'Love the canvas.']);
   assert.equal(praise.praiseOpenerCount, 3);
   assert.ok(praise.constraints.some((item) => item.includes("zero 'Congrats/Nice' opener")));
-  const long = expression.computeCadenceEntropy(['x'.repeat(160), 'y'.repeat(150), 'z'.repeat(140)]);
-  assert.ok(long.constraints.some((item) => item.includes('under 110 characters')));
+  const long = expression.computeCadenceEntropy(['x'.repeat(210), 'y'.repeat(195), 'z'.repeat(190)]);
+  assert.ok(long.constraints.some((item) => item.includes('under 140 characters')));
+  assert.ok(long.constraints.some((item) => item.includes('never compressed into a metaphor or riddle')));
   const short = expression.computeCadenceEntropy(['ok', 'nice', 'yep']);
-  assert.ok(short.constraints.some((item) => item.includes('sharper 1-2 sentence')));
+  assert.ok(short.constraints.some((item) => item.includes('1-2 plain, clear sentences')));
   const empty = expression.computeCadenceEntropy([]);
   assert.equal(empty.avgChars, 0);
-  assert.equal(empty.cadenceConstraint, 'Vary sentence rhythm naturally from recentReplies; stop the instant the point lands.');
+  assert.ok(empty.cadenceConstraint.includes('plain, natural developer English'));
 });
 
 test('consecutive selections rotate arms instead of repeating one shape', () => {
@@ -88,6 +96,30 @@ test('a question streak also rules out the curiosity arm', () => {
   assert.equal(plan.recentReplies.length, 2);
   assert.notEqual(plan.dynamicExperiment.armId, 'builder_curiosity');
   assert.ok(plan.dynamicExperiment.cadenceConstraint.includes('do NOT end with a question mark'));
+});
+
+test('live act-published replies (draft status=draft, queue status=published) feed recentReplies and block questions', () => {
+  const actKey = 'https://x.com/harryjwang/status/7060';
+  const now = Date.now() + 10_000;
+  store.upsertCandidates([{ key: actKey, url: actKey, source: 'x', title: '@harryjwang', text: 'I built an IMAP MCP server.', timestamp: now }]);
+  const q = store.ensureQueueItem(actKey, { pipeline: 'reply', lane: 'engagement', status: 'drafting' });
+  store.saveQueueItem({ ...q, status: 'published', publishedAt: now, outputTweetId: '706099', approvedText: 'How does retry work?' });
+  store.saveDraft({ candidateKey: actKey, body: 'How does retry work?', editor: { pipeline: 'reply' }, status: 'draft' });
+  store.recordCandidateAction({ candidateKey: actKey, action: 'reply', outputTweetId: '706099', outputUrl: 'https://x.com/ham_zax/status/706099', commentary: 'How does retry work?', createdAt: now });
+
+  const recentContent = store.listRecentPublishedContent({ kind: 'reply', limit: 5 });
+  assert.equal(recentContent[0].text, 'How does retry work?');
+
+  const showcasePlan = expression.selectDynamicExpressionPlan(store, {
+    candidateKey: 'https://x.com/joelmoss/status/7061',
+    sourceText: 'So I built a little Rails app that runs PR reviews, and BAM! 💥',
+    now: now + 1000,
+  });
+  assert.equal(showcasePlan.recentReplies[0], 'How does retry work?');
+  assert.ok(showcasePlan.dynamicExperiment.domains.includes('showcase'));
+  assert.equal(['sarcastic_pushback', 'independent_counterpoint', 'builder_curiosity'].includes(showcasePlan.dynamicExperiment.armId), false);
+  assert.ok(showcasePlan.dynamicExperiment.cadenceConstraint.includes('Builder showcase detected'));
+  assert.ok(showcasePlan.dynamicExperiment.cadenceConstraint.includes('do NOT end with a question mark'));
 });
 
 test('published post metrics reconcile into arm rewards after two hours', () => {

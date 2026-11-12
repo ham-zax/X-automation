@@ -6075,24 +6075,29 @@ export function listRecentPublishedContent({ kind = 'main', limit = 20, excludeC
         AND EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key AND a.action IN ('direct', 'quote')))
         OR (q.pipeline IS NULL AND d.status = 'published'
           AND NOT EXISTS (SELECT 1 FROM candidate_actions a WHERE a.candidate_key = d.candidate_key)))`;
-  const where = [routeClause, "(q.status = 'approved' OR d.status = 'published')"];
+  const where = [routeClause, "(q.status IN ('approved', 'published') OR d.status = 'published' OR COALESCE(q.output_tweet_id, '') <> '')"];
   const params = [];
   if (excludeCandidateKey) {
     where.push('d.candidate_key <> ?');
     params.push(excludeCandidateKey);
   }
   params.push(Math.max(1, Math.min(100, Number(limit || 20))));
-  const rows = db.prepare(`SELECT d.*, q.pipeline AS queue_pipeline
+  const rows = db.prepare(`SELECT d.*, q.pipeline AS queue_pipeline, q.published_at AS queue_published_at, q.updated_at AS queue_updated_at
     FROM drafts d LEFT JOIN queue_items q ON q.candidate_key = d.candidate_key
     WHERE ${where.join(' AND ')}
-    ORDER BY MAX(d.updated_at, COALESCE(q.updated_at, 0)) DESC LIMIT ?`).all(...params);
+    ORDER BY MAX(d.updated_at, COALESCE(q.published_at, 0), COALESCE(q.updated_at, 0)) DESC LIMIT ?`).all(...params);
   return rows.map((row) => {
     const draft = decodeDraft(row);
     const pipeline = row.queue_pipeline && row.queue_pipeline !== 'triage'
       ? row.queue_pipeline
       : (kind === 'reply' ? 'reply' : 'original');
     const text = pipeline === 'thread' ? String(draft.threadParts?.[0] || '') : String(draft.body || '');
-    return { candidateKey: draft.candidateKey, pipeline, text, updatedAt: draft.updatedAt || null };
+    const updatedAt = Math.max(
+      Number(draft.updatedAt || 0),
+      Number(row.queue_published_at || 0),
+      Number(row.queue_updated_at || 0),
+    ) || null;
+    return { candidateKey: draft.candidateKey, pipeline, text, updatedAt };
   }).filter((item) => item.text.trim());
 }
 

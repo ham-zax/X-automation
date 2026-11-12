@@ -220,11 +220,13 @@ function contentGateContext(candidateKey, pipeline, { requireContentReview = nul
     : null;
   const candidate = getCandidate(candidateKey);
   const relationship = candidate ? relationshipContext(candidate) : null;
-  const persistedBehavior = queueItem?.behavior?.decision === 'ACT'
-    ? queueItem.behavior
-    : draft?.editor?.behavior?.decision === 'ACT'
-      ? draft.editor.behavior
-      : null;
+  const persistedBehavior = draft?.editor?.writerBehaviorSelected && draft?.editor?.behavior?.decision === 'ACT'
+    ? draft.editor.behavior
+    : queueItem?.behavior?.decision === 'ACT'
+      ? queueItem.behavior
+      : draft?.editor?.behavior?.decision === 'ACT'
+        ? draft.editor.behavior
+        : null;
   const behavior = persistedBehavior || selectBehaviorDecision({
     pipeline,
     contribution: {

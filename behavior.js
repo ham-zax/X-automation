@@ -296,7 +296,7 @@ function socialSourceSignals(sourceText = '') {
     celebration: /(?:🚀|🔥|🎉|\b(?:launched|launching|shipped|released|milestone|congrats?|excited|proud|finally live|we did it)\b)/i.test(source)
       || /\b(?:now has|just hit|just reached|just crossed|just passed)\s+(?:(?:over|more than)\s+)?\d[\d,.]*(?:\s*[km])?\s+(?:users|customers|downloads|stars)\b/i.test(source),
     gratitude: /\b(?:thank(?:s| you)?|appreciate|credit|helped)\b/i.test(source),
-    showcase: /\b(?:i|we)\s+(?:(?:just|finally)\s+)?(?:built|made|created|shipped|released|launched|put together)\b/i.test(source),
+    showcase: /(?:💥|\b(?:(?:i|we)\s+(?:(?:just|finally|recently)\s+)?(?:built|made|created|shipped|released|launched|open[- ]sourced|put together|wrote)|daily driving|it'?s open source|check out (?:my|our)|try out))\b/i.test(source),
     participationRequest: /\b(?:feedback|ideas?|suggestions?|what features?|should (?:i|we) make more|what should (?:i|we) (?:add|build|change|make)|what would you (?:add|build|change|want)|what do you (?:want|think))\b/i.test(source),
     humor: /(?:😂|🤣|\blol\b|\bhaha\b|\brofl\b|\bmeme\b|\bworks on my machine\b|\byak shave\b)/i.test(source),
     hostile: /\b(?:idiot|stupid|dumb|fraud|liar|garbage|trash|hate|coward|clown|bullshit|scam)\b|(?:🤡|😡)/i.test(source),

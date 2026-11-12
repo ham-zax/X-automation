@@ -13,73 +13,76 @@ const MEASUREMENT_DELAY_MS = 2 * 60 * 60 * 1000;
 export const EXPRESSION_ARMS = Object.freeze([
   Object.freeze({
     id: 'systems_tradeoff',
-    label: 'Systems seam & failure mode',
-    domains: Object.freeze(['systems', 'general_tech']),
-    directive: 'Pinpoint the real load-bearing backend/systems seam — retry idempotency, p99 tail amplification, split-brain lease, cache stampede, backpressure, write contention, or KV-cache cost — in 1-2 casual Slack-style sentences. Zero textbook definitions.',
+    label: 'Practical builder recognition',
+    domains: Object.freeze(['systems', 'showcase', 'general_tech']),
+    directive: 'In 1-2 plain, easy-to-read sentences, validate why the practical engineering choice in the post makes sense or name the everyday headache it avoids, using clear subjects from the post. Zero metaphors, zero riddles, zero audit questions.',
   }),
   Object.freeze({
     id: 'frontend_craft',
-    label: 'Frontend & UI mechanics',
-    domains: Object.freeze(['frontend', 'general_tech']),
-    directive: 'Look at it with a senior frontend/UI engineer eye: client vs server state ownership, render waterfall, 60/120fps frame pacing, optimistic UI rollback when mutations fail, layout thrash, keyboard/TUI feel, or clean primitives vs prop soup.',
+    label: 'UI & product taste',
+    domains: Object.freeze(['frontend', 'showcase', 'general_tech']),
+    directive: 'Respond in plain everyday English to the tangible user or developer experience in the post — validate why a clean interaction, escape hatch, or workflow decision feels right in practice. Use the post’s own nouns; never parrot canned jargon or quiz the author.',
   }),
   Object.freeze({
     id: 'sharp_micro',
-    label: 'Deadpan micro-line',
+    label: 'Plain human one-liner',
     domains: Object.freeze(['any']),
-    directive: 'Write one razor-sharp 3-11 word human line (<= 78 chars) — dry observation, crisp verdict, or deadpan punchline, lowercase allowed if natural — and stop cold with zero follow-up.',
+    directive: 'Write one natural, effortless human sentence (5-16 plain words) — warm recognition, relatable reaction, or dry literal wit — whose meaning is obvious on first read without decoding any clever phrase or metaphor.',
   }),
   Object.freeze({
     id: 'sarcastic_pushback',
-    label: 'Dry sarcasm or blunt pushback',
-    domains: Object.freeze(['hype_or_take', 'systems', 'frontend', 'general_tech']),
-    directive: 'Bring dry sarcasm, eye-roll understatement, or blunt negative pushback aimed strictly at the hype, overengineered abstraction, benchmark theater, or questionable take — never personal abuse or cruelty toward the human.',
+    label: 'Dry reality check on hype',
+    domains: Object.freeze(['hype_or_take']),
+    directive: 'Use plain-spoken dry wit or honest pushback aimed strictly at impersonal hype, fake benchmarks, or engagement-bait claims — never at an honest builder sharing work, never as personal abuse, and never as a cryptic riddle.',
   }),
   Object.freeze({
     id: 'builder_curiosity',
-    label: 'Hard-part shop talk question',
+    label: 'Warm peer curiosity',
     domains: Object.freeze(['systems', 'frontend', 'general_tech']),
-    directive: 'Skip generic praise: point straight at the trickiest engineering seam in what they built and ask the single concrete shop-talk question a fellow engineer actually wants to answer.',
+    directive: 'Start by warmly appreciating or validating what is cool about what they shared, then ask one easy, flattering question a fellow builder enjoys answering — never an edge-case audit, retry/security interrogation, or cold quiz.',
   }),
   Object.freeze({
     id: 'independent_counterpoint',
-    label: 'Grounded peer counterpoint',
+    label: 'Clear peer perspective',
     domains: Object.freeze(['systems', 'frontend', 'hype_or_take', 'general_tech']),
-    directive: "Take a clear, independent engineering stance — name the exact scale, latency, or UX condition where the claim breaks or where the boring alternative wins, with zero diplomatic hedging.",
+    directive: 'Share a calm, plain-English developer perspective on when one approach works better than another, spending the extra plain words needed so every referent is clear on first read. Never nitpick a builder’s launch.',
   }),
   Object.freeze({
     id: 'dry_wit_or_camaraderie',
-    label: 'Raw human wit or commiseration',
-    domains: Object.freeze(['humor', 'social', 'any']),
-    directive: 'Drop the technical analyzer completely: pure deadpan wit, commiserating over cursed bugs/prod pain (rare expressive profanity allowed only if it genuinely fits the absurd situation, never at a person), or low-key peer respect.',
+    label: 'Builder appreciation & camaraderie',
+    domains: Object.freeze(['showcase', 'humor', 'social', 'any']),
+    directive: 'Make the author genuinely glad you showed up: on launches and builds, offer warm builder appreciation and validate the real pain they solved or a smart choice visible in their post (zero invented facts, zero interrogation); on dev pain or humor, commiserate on their side in plain words.',
   }),
 ]);
 
 export const REGISTER_MODES = Object.freeze([
-  Object.freeze({ id: 'slack_peer', cue: '11pm teammate on Slack — casual, direct, technical shorthand, zero ceremony.' }),
-  Object.freeze({ id: 'deadpan_terse', cue: 'Dry, understated, minimal words — let the implication do the heavy lifting.' }),
-  Object.freeze({ id: 'sharp_skeptic', cue: 'Healthy practitioner skepticism — allergic to hype, focused on what survives prod.' }),
-  Object.freeze({ id: 'craft_geek', cue: 'Genuinely geeking out on a subtle UI or systems implementation detail.' }),
-  Object.freeze({ id: 'candid_blunt', cue: 'Unfiltered, honest developer take — say the quiet part plainly without being a jerk.' }),
+  Object.freeze({ id: 'warm_builder', cue: 'Warm, appreciative peer — genuinely happy to see someone shipping good work; specific and human, never corporate.' }),
+  Object.freeze({ id: 'plain_direct', cue: 'Plain everyday developer English — clear subjects, zero metaphors, understood effortlessly on first read.' }),
+  Object.freeze({ id: 'relatable_peer', cue: 'Friendly teammate in Slack — validates the real-world annoyance or smart design choice without overcomplicating it.' }),
+  Object.freeze({ id: 'dry_literal', cue: 'Light, natural wit that comes straight from the literal situation — never a quotable aphorism or riddle.' }),
+  Object.freeze({ id: 'grounded_skeptic', cue: 'Allergic to impersonal hype, grounded in plain practical reality, respectful toward real builders.' }),
 ]);
 
-const FRONTEND_DOMAIN_PATTERN = /\b(?:ui|ux|tui|css|dom|html|react|next\.?js|solid|vue|svelte|tailwind|canvas|webgl|webgpu|shader|animation|layout|render|hydration|optimistic|viewport|keyboard|component|frontend|front-end|design system|frame|scroll|cursor|modal|state)\b/i;
-const SYSTEMS_DOMAIN_PATTERN = /\b(?:backend|distributed|postgres|sqlite|database|redis|queue|kafka|cache|idempoten|retry|lease|lock|consensus|p99|throughput|backpressure|stream|protocol|rust|golang|\bgo\b|kernel|memory|cpu|docker|systemd|agent|llm|token|kv|inference|schema|api|server|benchmark|latency)\b/i;
+const FRONTEND_DOMAIN_PATTERN = /\b(?:ui|ux|tui|css|dom|html|react|next\.?js|solid|vue|svelte|tailwind|canvas|webgl|webgpu|shader|animation|layout|render|hydration|optimistic|viewport|keyboard|component|frontend|front-end|design system|frame|scroll|cursor|modal|state|onboarding)\b/i;
+const SYSTEMS_DOMAIN_PATTERN = /\b(?:backend|distributed|postgres|sqlite|database|redis|queue|kafka|cache|idempoten|retry|lease|lock|consensus|p99|throughput|backpressure|stream|protocol|rust|golang|\bgo\b|kernel|memory|cpu|docker|systemd|agent|subagent|mcp|llm|token|kv|inference|schema|api|server|benchmark|latency)\b/i;
+const SHOWCASE_DOMAIN_PATTERN = /(?:💥|\b(?:(?:i|we)\s+(?:(?:just|finally|recently)\s+)?(?:built|made|created|shipped|released|launched|open[- ]sourced|put together|wrote)|shipped|launching|just released|daily driving|it'?s open source|check out (?:my|our)|try out))\b/i;
 const HYPE_OR_TAKE_PATTERN = /\b(?:10x|100x|dead|rip\s+\w+|replace\s+(?:all\s+)?(?:devs|developers|engineers|programmers)|revolutionary|game.?changer|unpopular opinion|hot take|no.?code|microservices|enterprise|agi|wrapper|slop|hype|insane|mind.?blowing|hotter take|everyone is wrong)\b/i;
 const HUMOR_DOMAIN_PATTERN = /\b(?:lol|lmao|haha|deleted the database|prod|friday deploy|padding|centered|joke|meme|cursed|wtf)\b/i;
-const PRAISE_OPENER_PATTERN = /^(?:congrats|nice|love|great|cool|awesome|amazing)\b/i;
+const INVITED_QUESTION_PATTERN = /\b(?:feedback|thoughts|ideas?|suggestions?|what should (?:i|we)|what would you|how are you|anyone else)\b|\?\s*$/i;
+const PRAISE_OPENER_PATTERN = /^(?:congrats|congratulations|nice|love|great|cool|awesome|amazing)\b/i;
 
 export function classifyCandidateDomains(text = '') {
   const value = String(text || '');
   const domains = [];
+  if (SHOWCASE_DOMAIN_PATTERN.test(value)) domains.push('showcase');
   if (FRONTEND_DOMAIN_PATTERN.test(value)) domains.push('frontend');
   if (SYSTEMS_DOMAIN_PATTERN.test(value)) domains.push('systems');
-  if (HYPE_OR_TAKE_PATTERN.test(value)) domains.push('hype_or_take');
+  if (HYPE_OR_TAKE_PATTERN.test(value) && !domains.includes('showcase')) domains.push('hype_or_take');
   if (HUMOR_DOMAIN_PATTERN.test(value)) domains.push('humor');
   return domains.length ? domains : ['general_tech', 'social'];
 }
 
-// recentReplies is newest-first, matching listRecentPublishedContent ordering.
+// recentReplies is newest-first across both candidate_actions and published drafts.
 export function computeCadenceEntropy(recentReplies = []) {
   const normalized = (Array.isArray(recentReplies) ? recentReplies : [])
     .map((item) => (typeof item === 'string' ? item : item && typeof item === 'object' ? item.text : ''))
@@ -87,33 +90,35 @@ export function computeCadenceEntropy(recentReplies = []) {
     .filter(Boolean)
     .slice(0, 6);
   const newest = normalized.slice(0, 3);
-  const questionStreak = newest.filter((text) => text.endsWith('?')).length;
+  const questionStreak = newest.filter((text) => text.includes('?')).length;
+  const totalQuestions = normalized.filter((text) => text.includes('?')).length;
   const praiseOpenerCount = newest.filter((text) => PRAISE_OPENER_PATTERN.test(text)).length;
   const lowercaseCount = newest.filter((text) => /^[a-z]/.test(text)).length;
   const avgChars = normalized.length
     ? normalized.reduce((sum, text) => sum + text.length, 0) / normalized.length
     : 0;
   const constraints = [];
-  if (questionStreak >= 2) {
-    constraints.push('Recent replies already asked questions — do NOT end with a question mark this turn; land a crisp statement, observation, or quip.');
+  if (questionStreak >= 1 || totalQuestions >= 2) {
+    constraints.push('Recent replies already asked questions — do NOT end with a question mark or ask any question this turn; write a warm, plain statement, appreciation, or relatable observation.');
   }
   if (praiseOpenerCount >= 2) {
-    constraints.push("Recent replies opened with praise/Congrats — start directly on the concrete technical detail, contrast, or humor with zero 'Congrats/Nice' opener.");
+    constraints.push("Recent replies opened with praise/Congrats — keep warm appreciation, just vary the opening words by starting directly on the concrete detail or problem solved (zero 'Congrats/Nice' opener).");
   }
-  if (normalized.length >= 3 && avgChars > 135) {
-    constraints.push('Recent replies ran medium-long — keep this one tight and punchy (under 110 characters) unless a critical technical nuance requires more.');
-  } else if (normalized.length >= 3 && avgChars < 65) {
-    constraints.push('Recent replies were ultra-short — if the source has real technical meat, bring a sharper 1-2 sentence architectural or UI insight.');
+  if (normalized.length >= 3 && avgChars > 185) {
+    constraints.push('Recent replies ran long — keep this one concise (under 140 characters) in plain everyday words, never compressed into a metaphor or riddle.');
+  } else if (normalized.length >= 3 && avgChars < 60) {
+    constraints.push('Recent replies were ultra-short — spend 1-2 plain, clear sentences so the thought is effortless to read on first glance.');
   }
   if (newest.length === 3 && lowercaseCount === 3) {
     constraints.push('Mix casing naturally — use normal sentence capitalization this turn so lowercase never becomes a robotic tic.');
   }
   return {
     questionStreak,
+    totalQuestions,
     praiseOpenerCount,
     avgChars: Math.round(avgChars || 0),
     constraints,
-    cadenceConstraint: constraints.join(' ') || 'Vary sentence rhythm naturally from recentReplies; stop the instant the point lands.',
+    cadenceConstraint: constraints.join(' ') || 'Write in plain, natural developer English; spend the extra clear words that make the meaning effortless on first read.',
   };
 }
 
@@ -273,31 +278,73 @@ function hashUnit(seed) {
 
 function selectRegisterMode({ domains, armId, candidateKey, historyLength }) {
   if (armId === 'sarcastic_pushback' || domains.includes('hype_or_take')) {
-    return REGISTER_MODES.find((m) => m.id === 'sharp_skeptic');
+    return REGISTER_MODES.find((m) => m.id === 'grounded_skeptic');
+  }
+  if (domains.includes('showcase')) {
+    const warmModes = REGISTER_MODES.filter((m) => ['warm_builder', 'relatable_peer', 'plain_direct'].includes(m.id));
+    const slot = Math.floor(hashUnit(`${candidateKey}::reg::${historyLength}`) * warmModes.length);
+    return warmModes[slot % warmModes.length];
   }
   if (armId === 'sharp_micro') {
-    return REGISTER_MODES.find((m) => m.id === 'deadpan_terse');
+    return REGISTER_MODES.find((m) => m.id === 'dry_literal');
   }
-  const slot = Math.floor(hashUnit(`${candidateKey}::reg::${historyLength}`) * REGISTER_MODES.length);
-  return REGISTER_MODES[slot % REGISTER_MODES.length];
+  const regularModes = REGISTER_MODES.filter((m) => m.id !== 'grounded_skeptic');
+  const slot = Math.floor(hashUnit(`${candidateKey}::reg::${historyLength}`) * regularModes.length);
+  return regularModes[slot % regularModes.length];
 }
 
 function armScore(stats, { candidateKey, armId, totalPulls, domains, exploratoryRoll }) {
   const jitter = hashUnit(`${candidateKey}::${armId}`);
-  const domainBoost = (armId === 'sarcastic_pushback' && domains.includes('hype_or_take')) ? 0.28
-    : (armId === 'frontend_craft' && domains.includes('frontend')) ? 0.18
-      : (armId === 'systems_tradeoff' && domains.includes('systems')) ? 0.18
-        : 0;
+  const questionPenalty = armId === 'builder_curiosity' ? -0.22 : 0;
+  const domainBoost = (armId === 'dry_wit_or_camaraderie' && domains.includes('showcase')) ? 0.35
+    : (armId === 'sarcastic_pushback' && domains.includes('hype_or_take')) ? 0.28
+      : (armId === 'frontend_craft' && domains.includes('frontend')) ? 0.18
+        : (armId === 'systems_tradeoff' && domains.includes('systems')) ? 0.18
+          : 0;
   // Exploratory roll (~22% of turns) deliberately surfaces wildcards and under-pulled arms.
   if (exploratoryRoll) {
-    return (1 / (1 + stats.pulls * 0.35)) + domainBoost + jitter * 0.45;
+    return (1 / (1 + stats.pulls * 0.35)) + domainBoost + questionPenalty + jitter * 0.45;
   }
   if (stats.measuredCount < 2 && stats.pulls < 3) {
-    return 1.5 - stats.pulls * 0.2 + domainBoost + jitter * 0.15;
+    return 1.5 - stats.pulls * 0.2 + domainBoost + questionPenalty + jitter * 0.15;
   }
   const mean = stats.measuredCount > 0 ? stats.rewardSum / stats.measuredCount : 0.45;
   const total = Math.max(2, totalPulls);
-  return mean + 0.55 * Math.sqrt(Math.log(total) / Math.max(1, stats.pulls)) + domainBoost + jitter * 0.08;
+  return mean + 0.55 * Math.sqrt(Math.log(total) / Math.max(1, stats.pulls)) + domainBoost + questionPenalty + jitter * 0.08;
+}
+
+function readRecentReplyHistory(store, limit = 6) {
+  const merged = [];
+  try {
+    if (typeof store.listRecentPublishedReplies === 'function') {
+      for (const item of store.listRecentPublishedReplies({ limit: limit + 4 }) || []) {
+        const text = String(item?.text || item?.outputText || '').trim();
+        if (text) merged.push({ text, at: Number(item?.createdAt || 0) });
+      }
+    }
+  } catch {
+    // Fall back to published draft records if candidate_actions read fails.
+  }
+  try {
+    if (typeof store.listRecentPublishedContent === 'function') {
+      for (const item of store.listRecentPublishedContent({ kind: 'reply', limit: limit + 4 }) || []) {
+        const text = String(item?.text || item?.body || '').trim();
+        if (text) merged.push({ text, at: Number(item?.publishedAt || item?.updatedAt || 0) });
+      }
+    }
+  } catch {
+    // Optional store query in minimal test stubs.
+  }
+  merged.sort((left, right) => right.at - left.at);
+  const seen = new Set();
+  const unique = [];
+  for (const entry of merged) {
+    if (seen.has(entry.text)) continue;
+    seen.add(entry.text);
+    unique.push(entry.text);
+    if (unique.length >= limit) break;
+  }
+  return unique;
 }
 
 export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceText = '', now = Date.now() } = {}) {
@@ -307,26 +354,22 @@ export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceTe
   } catch {
     state = readState(store);
   }
-  let recentReplies = [];
-  try {
-    const recentPublished = typeof store.listRecentPublishedContent === 'function'
-      ? store.listRecentPublishedContent({ kind: 'reply', limit: 6 })
-      : [];
-    recentReplies = (Array.isArray(recentPublished) ? recentPublished : [])
-      .map((item) => String(item?.text || item?.body || '').trim())
-      .filter(Boolean);
-  } catch {
-    recentReplies = [];
-  }
+  const recentReplies = readRecentReplyHistory(store, 6);
   const entropy = computeCadenceEntropy(recentReplies);
   const domains = classifyCandidateDomains(sourceText);
-  const eligible = EXPRESSION_ARMS.filter((arm) => arm.domains.includes('any')
-    || arm.domains.some((domain) => domains.includes(domain)));
+  const isShowcase = domains.includes('showcase');
+  const invitedQuestion = INVITED_QUESTION_PATTERN.test(String(sourceText || ''));
+  const eligible = EXPRESSION_ARMS.filter((arm) => {
+    if (isShowcase && ['sarcastic_pushback', 'independent_counterpoint'].includes(arm.id)) return false;
+    if (isShowcase && !invitedQuestion && arm.id === 'builder_curiosity') return false;
+    return arm.domains.includes('any') || arm.domains.some((domain) => domains.includes(domain));
+  });
   // Hard anti-streak: the last two arms sit out while any alternative remains.
   const recentArmIds = state.history.slice(-2).map((entry) => entry.armId);
   const rotated = eligible.filter((arm) => !recentArmIds.includes(arm.id));
   const pool = rotated.length ? rotated : eligible;
-  const withoutQuestions = entropy.questionStreak >= 2 ? pool.filter((arm) => arm.id !== 'builder_curiosity') : pool;
+  const blockCuriosity = entropy.questionStreak >= 1 || entropy.totalQuestions >= 2;
+  const withoutQuestions = blockCuriosity ? pool.filter((arm) => arm.id !== 'builder_curiosity') : pool;
   const candidates = withoutQuestions.length ? withoutQuestions : pool;
   const totalPulls = EXPRESSION_ARMS.reduce((sum, arm) => sum + state.arms[arm.id].pulls, 0);
   const exploratoryRoll = totalPulls >= 6 && hashUnit(`${candidateKey}::explore::${state.history.length}`) < 0.22;
@@ -338,6 +381,9 @@ export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceTe
   }
   const arm = best.arm;
   const register = selectRegisterMode({ domains, armId: arm.id, candidateKey, historyLength: state.history.length });
+  const showcaseRule = isShowcase
+    ? 'Builder showcase detected — make them feel appreciated and glad you showed up by validating what they built or the pain it solves in plain words; NEVER interrogate or quiz them on edge cases. '
+    : '';
   return {
     recentReplies,
     dynamicExperiment: {
@@ -348,7 +394,7 @@ export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceTe
       registerMode: register.id,
       registerCue: register.cue,
       candidateBDirective: `${arm.directive} Register: ${register.cue}`,
-      cadenceConstraint: entropy.cadenceConstraint,
+      cadenceConstraint: `${showcaseRule}${entropy.cadenceConstraint}`,
     },
   };
 }
