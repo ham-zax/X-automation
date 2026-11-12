@@ -130,7 +130,7 @@ test('persona calibration preserves uncertainty and factual authority', () => {
   assert.ok(slice.voiceCalibration.preserveExamples.some(item => item.text === 'what?'));
   assert.ok(slice.voiceCalibration.repairPairs.every(item => item.source === 'counterfactual_audit_edit'));
   assert.equal(slice.technicalProvenanceSandbox.verifiedResults.length, 0);
-  assert.ok(slice.technicalProvenanceSandbox.verifiedProjects.some(item => item.name === 'ZenGate'));
+  assert.equal(slice.technicalProvenanceSandbox.verifiedProjects.length, 0);
 });
 
 test('cached eligible replies lose eligibility when the current source or review changes', () => {

@@ -98,13 +98,8 @@ export function getPersonaSlice(consumer, options = {}) {
         growthPosture: model.behaviorPolicy?.growthPosture || '',
         silenceRule: model.behaviorPolicy?.silenceRule || '',
         relationshipRule: model.relationshipPolicy?.statusRule || '',
-        avoid: model.behaviorPolicy?.avoid || [],
       },
-      verifiedProjects: (model.technicalProvenanceSandbox?.verifiedProjects || []).map((project) => ({
-        name: project.name,
-        description: project.description,
-        status: project.status,
-      })),
+      projectBoundary: model.technicalProvenanceSandbox?.policy || 'Do not mention personal projects.',
     };
   }
   const shared = {

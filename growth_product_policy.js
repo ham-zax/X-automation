@@ -22,7 +22,7 @@ export const DEFAULT_GROWTH_POLICY = Object.freeze({
     // These are topic preferences, not a restrictive whitelist.
     interests: { code_demos: 90, ai_breakthroughs: 90, tool_discoveries: 85,
       builder_lessons: 80, industry_commentary: 55 },
-    voiceGuidance: 'Write like a curious builder. Show executable code or a concrete example when it makes the insight useful. Never invent experience.',
+    voiceGuidance: 'Sound like a real, magnetic human developer in 2026 — warm, curious, cheerful, playful, or candidly opinionated with zero arrogance and zero AI filler. Never mention personal projects. Spark real two-way conversations and share practical builder signal worth bookmarking and following.',
     prioritizeReplies: true,
   },
   breakthrough: {

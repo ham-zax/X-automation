@@ -142,15 +142,16 @@ test('Real bridge returns the Reply contract and accepts its lean output', () =>
   assert.equal(store.listPublicationAttempts({ limit: 10 }).length, 0);
 });
 
-test('persona-model orchestrator slice stays compact and carries projects, beliefs and the decision guide', () => {
+test('persona-model orchestrator slice stays compact and carries beliefs, project boundary and the decision guide', () => {
   const bridge = (command, payload) => JSON.parse(execFileSync(process.execPath, [path.join(repo, 'agent_bridge.js'), command], { cwd: scratch, input: JSON.stringify(payload), encoding: 'utf8' }));
   const body = bridge('persona-model', { consumer: 'orchestrator' });
   assert.equal(body.compact, true);
   assert.equal(body.model, undefined);
-  assert.ok(Array.isArray(body.slice.verifiedProjects) && body.slice.verifiedProjects.length > 0);
+  assert.equal(body.slice.verifiedProjects, undefined);
+  assert.equal(typeof body.slice.projectBoundary, 'string');
   assert.ok(Array.isArray(body.slice.beliefs) && body.slice.beliefs.length > 0);
   assert.equal(typeof body.slice.decisionGuide.preferredQuestion, 'string');
-  assert.ok(Array.isArray(body.slice.decisionGuide.avoid) && body.slice.decisionGuide.avoid.length > 0);
+  assert.equal(typeof body.slice.decisionGuide.growthPosture, 'string');
   assert.equal(body.slice.voiceCalibration, undefined);
   assert.equal(body.slice.accountEvidencePatterns, undefined);
   assert.ok(Buffer.byteLength(JSON.stringify(body)) < 4500);

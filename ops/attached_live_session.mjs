@@ -26,7 +26,7 @@ const ERROR_TEXT_LIMIT = 500;
 
 const WRITER_PREPARATION = Object.freeze({
   operator: 'Reload persona-model with {"consumer":"writer"}. Before writing the first public text of the session, read docs/CONTENT_OPERATING_STANDARD.md; for an Original, Thread or Quote also docs/POST_GENERATION_PROMPT.md.',
-  profile: 'Profile Writer mode is active: call persona-model with {"consumer":"orchestrator"} once at startup for Hamza identity, stances, beliefs and projects. Server-side reply-generate and writer-generate automatically load the full writer persona, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md; do not read those Writer prompt files yourself.',
+  profile: 'Profile Writer mode is active: call persona-model with {"consumer":"orchestrator"} once at startup for Hamza identity, stances, beliefs and engagement posture (never mention personal projects). If operator-status shows persona.dailyTone.active is false and observed candidates exist, pick a natural human mood for today (cheerful, energized, curious, playful, warm, wry, or focused) via persona-tone-set with observed candidate keys and influence<=0.1. Server-side reply-generate and writer-generate automatically load the full writer persona, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md; do not read those Writer prompt files yourself.',
 });
 
 function preflightContext(gate) {

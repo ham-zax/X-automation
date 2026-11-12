@@ -2239,6 +2239,10 @@ async function main() {
   }
 
   if (command === 'growth-policy') {
+    if (payload.confirmSave === true && payload.policy && typeof payload.policy === 'object') {
+      const { saveGrowthProductPolicy } = await import('./store.js');
+      saveGrowthProductPolicy(payload.policy);
+    }
     result(getGrowthProductPolicyView());
     return;
   }
