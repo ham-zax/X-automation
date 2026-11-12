@@ -4,6 +4,7 @@ import { getDailyPersonaTone, setDailyPersonaTone, DAILY_TONE_RUBRIC } from './p
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { applyWriterOutput, buildWriterPacket, composeDraft, scoreDraft } from './drafting.js';
 import { independentlyReviewAndSaveDraft } from './writer_runtime.js';
@@ -631,6 +632,80 @@ function compactPublicationAttempts(response) {
     counts: getPublicationAttemptCounts(),
     omittedTerminal: Math.max(0, terminal.length - COMPACT_TERMINAL_ATTEMPT_LIMIT),
     readiness: response.readiness,
+    compact: true,
+    detailHint: DETAIL_HINT,
+  };
+}
+
+// Writer provenance is the same four fields on every path; the raw execution record
+// also carries the full request and response envelope.
+export function compactWriterExecution(execution) {
+  if (!execution || typeof execution !== 'object') return execution ?? null;
+  return {
+    invocationId: execution.invocationId ?? null,
+    runtime: execution.runtime ?? null,
+    model: execution.model ?? null,
+    reasoning: execution.reasoning ?? null,
+  };
+}
+
+// Reply preparation carries the 2x16 candidate check array and the operator model
+// report. `act` needs the text, the target and the writer provenance.
+export function compactReplyGenerateResult(prepared) {
+  // Operator mode returns the packet, contract and schema the operator writes from;
+  // there is no generated text to compact.
+  if (prepared?.status === 'operator_writes') return prepared;
+  return {
+    status: prepared.status,
+    text: prepared.text,
+    writerInvocationId: prepared.writerInvocationId,
+    writer: compactWriterExecution(prepared.writer),
+    draftId: prepared.draftId,
+    behavior: prepared.behavior,
+    targetTweetId: prepared.targetTweetId,
+    targetUrl: prepared.targetUrl,
+    candidateKey: prepared.candidateKey,
+    ...(prepared.topicBrief ? { topicBrief: prepared.topicBrief } : {}),
+    publicationAuthority: prepared.publicationAuthority ?? false,
+    reviewSummary: prepared.replyReview
+      ? { selection: prepared.replyReview.selection ?? null, reason: prepared.replyReview.reason ?? '' }
+      : null,
+    compact: true,
+    detailHint: DETAIL_HINT,
+  };
+}
+
+// Writer generation returns the full quality analysis, the draft editor record and
+// the queue item engagement packet. The operator needs the text, the review verdict
+// and the routing state.
+export function compactWriterGenerateResult(generated, detail = false) {
+  const writer = generated.output.execution;
+  if (detail === true) {
+    return { draft: generated.saved, queueItem: generated.queueItem, analysis: generated.analysis,
+      decision: generated.output.decision, writerInvocationId: writer?.invocationId || null,
+      writer, publicationAuthority: false };
+  }
+  const saved = generated.saved;
+  const queueItem = generated.queueItem;
+  return {
+    draft: saved ? {
+      ...omitKeys(saved, ['editor']),
+      contentReview: saved.editor?.contentReview ? {
+        passed: Boolean(saved.editor.contentReview.passed),
+        available: saved.editor.contentReview.available ?? true,
+        issues: saved.editor.contentReview.issues || [],
+        voiceIssues: saved.editor.contentReview.voiceIssues || [],
+      } : null,
+      behavior: saved.editor?.behavior ?? null,
+    } : saved,
+    queueItem: queueItem ? {
+      ...omitKeys(queueItem, ['engagement']),
+      engagePriority: queueItem.engagement?.engagePriority ?? null,
+    } : queueItem,
+    decision: generated.output.decision,
+    writerInvocationId: writer?.invocationId || null,
+    writer: compactWriterExecution(writer),
+    publicationAuthority: false,
     compact: true,
     detailHint: DETAIL_HINT,
   };
@@ -1537,8 +1612,7 @@ async function main() {
     const { generateDraftCandidate } = await import('./web_api.js');
     const generated = await generateDraftCandidate(workflow.draft, { runId: payload.runId, sessionId: payload.sessionId });
     requireGrowthRunLease(payload.runId, payload.sessionId || '');
-    result({ draft: generated.saved, queueItem: generated.queueItem, analysis: generated.analysis,
-      decision: generated.output.decision, writerInvocationId: generated.output.execution?.invocationId || null, writer: generated.output.execution, publicationAuthority: false });
+    result(compactWriterGenerateResult(generated, payload.detail === true));
     return;
   }
 
@@ -1848,6 +1922,10 @@ async function main() {
     const store = await import('./store.js');
     const input = scoutModule.readScoutInput(store, { now: Date.now() });
     const { pace, cards } = scoutModule.buildScoutCards({ ...input, limit: payload.limit });
+    if (payload.paceOnly === true) {
+      result({ generatedAt: input.now, pace, compact: true, detailHint: DETAIL_HINT });
+      return;
+    }
     result(payload.detail === true
       ? { generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards }
       : { generatedAt: input.now, pace, cardGuidance: scoutModule.SCOUT_CARD_GUIDANCE, cards: cards.map(compactScoutCard), compact: true, detailHint: DETAIL_HINT });
@@ -1887,7 +1965,7 @@ async function main() {
       : await (await import('./topic_research.js')).resolveTopicBriefCitation(payload.topicBrief);
     const prepared = await (await import('./act_reply_writer.js')).generateActReply({ ...payload, resolvedTopicBrief });
     requireGrowthRunLease(payload.runId, payload.sessionId);
-    result(prepared);
+    result(payload.detail === true ? prepared : compactReplyGenerateResult(prepared));
     return;
   }
 
@@ -3232,11 +3310,15 @@ async function main() {
   throw new Error('Usage: node agent_bridge.js <social-discover|social-status|social-list|social-claim|social-start|social-repost-menu-start|social-resolve|editorial-plan|editorial-refresh|editorial-recommendation|editorial-select|editorial-dismiss|editorial-add-source|editorial-outcomes|writing-strategy|writing-strategy-recommend|writing-strategy-select|learn-classify-published|ai-config|ai-runtimes|ai-select-default|ai-bind-role|x-for-you-ingest|x-signal-watchlist|x-signal-watchlist-update|ingest|inspect|create-draft|writer-generate|writer-packet|apply-writer-output|mission-approve|update-draft|queue|operator-status|topic-collect|topic-read|topic-brief-save|topic-brief-read|operator-readiness|operator-priority-set|agent-runtime-heartbeat|growth-run-begin|growth-run-status|growth-run-resume|growth-run-next|growth-run-finish|growth-focus|growth-focus-expand|publication-attempts|publication-attempt-send-start|publication-attempt-resolve|act-target-status|reply-generate|act|operator-lease-acquire|operator-lease-renew|operator-lease-release|operator-memory-review|schedule-next|schedule-inspect|browser-publish-claim|route|workflow|research|performance|analytics|analytics-record|growth-refresh|growth-next|measurements|experiments|experiment-create|experiment-assign|experiment-update|experiment-summary|learning|learning-refresh|learning-accept|learning-retire|decide|record-action|record-disposition|engage-next|engage-refresh|engage-draft|browser-reply-claim|engage-resolve|account-health|health-observe|health-under-the-hood|persona-tone|persona-tone-set|persona-model|persona-stances|persona-stance-record|behavior-select|relationship-targets|relationship-context|relationship-inspect|relationship-events|audience-sync|audience-review|audience> < JSON');
 }
 
-main().catch((error) => {
-  process.stderr.write(`${JSON.stringify({ error: error.message,
-    ...(error.code === 'reply_input_invalid' ? {
-      code: error.code, retryable: error.retryable, phase: error.phase, nextStep: error.nextStep,
-    } : {}),
-  })}\n`);
-  process.exit(1);
-});
+// The compact projections above are importable for tests; the CLI only runs when
+// this file is the entry point.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`${JSON.stringify({ error: error.message,
+      ...(error.code === 'reply_input_invalid' ? {
+        code: error.code, retryable: error.retryable, phase: error.phase, nextStep: error.nextStep,
+      } : {}),
+    })}\n`);
+    process.exit(1);
+  });
+}

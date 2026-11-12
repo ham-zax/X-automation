@@ -134,7 +134,7 @@ export async function generateWriterOutput(packet, promptDocumentText, { timeout
     isReply ? replyContractText : promptDocumentText,
     '',
     'WRITER PACKET:',
-    JSON.stringify(generationPacket, null, 2),
+    JSON.stringify(generationPacket),
   ].join('\n');
   const result = await runAI({
     role: packet.pipeline === 'reply' ? 'reply_writer' : 'writer',
