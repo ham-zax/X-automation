@@ -48,7 +48,7 @@ const boundedError = value => String(value?.message || value || 'unknown error')
 // the collection.
 const DEFAULT_GROWTH_CONFIG_FILE = path.join(repo,'ops/systemd/arm/growth-agent.yaml');
 async function analyticsRuntimeSelection() {
-  const legacy = { model:'gpt-6-luna', reasoning:'max' };
+  const fallback = { model:'gpt-6.1-terra', reasoning:'low' };
   try {
     const env = { ...process.env };
     if (!env.X_GROWTH_CONFIG_FILE && existsSync(DEFAULT_GROWTH_CONFIG_FILE)) {
@@ -58,10 +58,10 @@ async function analyticsRuntimeSelection() {
     const config = runtimeConfig(env);
     const codex = config.runtime === 'codex'
       || (config.runtime === 'claive' && config.claiveEngine === 'codex');
-    if (!codex) return legacy;
+    if (!codex) return fallback;
     return { model: config.model || 'gpt-6.1-terra', reasoning: config.reasoning || 'low' };
   } catch {
-    return legacy;
+    return fallback;
   }
 }
 function outcomeError(message) { return new Error(`Analytics collection outcome invalid: ${message}`); }

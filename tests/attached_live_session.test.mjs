@@ -492,7 +492,8 @@ test('the real brief renders with no unfilled placeholder', async () => {
   assert.equal(prompt.includes('35 minutes'), false);
 });
 
-const BLOCK_MS = 300_000;const SCHEDULE = Object.freeze({ blockSeconds: 300, order: ['momentum', 'forYou'],
+const BLOCK_MS = 300_000;
+const SCHEDULE = Object.freeze({ blockSeconds: 300, order: ['momentum', 'forYou'],
   restWatchMinutes: 60, builderRefreshMinutes: 60 });
 // Block 5_666_666 is even, so it is a momentum block; the next one is For You.
 const MOMENTUM_NOW = 5_666_666 * BLOCK_MS + 1_000;
