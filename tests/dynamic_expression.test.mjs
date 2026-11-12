@@ -37,9 +37,10 @@ function attemptStub(attempts) {
   };
 }
 
-test('candidate domains separate frontend, systems and humor', () => {
+test('candidate domains separate frontend, systems, hype_or_take and humor', () => {
   assert.deepEqual(expression.classifyCandidateDomains('Our React hydration waterfall is killing the frame budget on mobile.'), ['frontend']);
   assert.deepEqual(expression.classifyCandidateDomains('Postgres p99 tail and idempotent retry keys under backpressure.'), ['systems']);
+  assert.ok(expression.classifyCandidateDomains('Hot take: AI wrappers will replace all engineers in 6 months').includes('hype_or_take'));
   const humor = expression.classifyCandidateDomains('lol we deleted the database on a friday deploy');
   assert.ok(humor.includes('humor'));
   assert.deepEqual(expression.classifyCandidateDomains('shipped a small thing today'), ['general_tech', 'social']);
@@ -128,7 +129,7 @@ test('recorded outcomes count pulls, B wins and stay bounded', () => {
   assert.equal(after.wins, before.wins + 1);
   assert.throws(() => expression.recordDynamicExpressionOutcome(store, { armId: 'invented_arm' }), /Unknown dynamic expression arm/);
   const summary = expression.getDynamicExpressionSummary(store);
-  assert.equal(summary.arms.length, 6);
+  assert.equal(summary.arms.length, 7);
   assert.equal(summary.stateKey, 'dynamic_expression_state_v1');
   assert.ok(summary.recent.length <= 5);
   assert.ok(summary.pendingReconciliation >= 1);
@@ -139,7 +140,7 @@ test('the bridge exposes the read-only dynamic-expression summary', () => {
     cwd: directory, encoding: 'utf8', input: '{}', env: process.env,
   }));
   assert.equal(parsed.stateKey, 'dynamic_expression_state_v1');
-  assert.equal(parsed.arms.length, 6);
+  assert.equal(parsed.arms.length, 7);
   assert.ok(parsed.arms.some((arm) => arm.armId === 'systems_tradeoff' && arm.measuredCount === 1));
   assert.equal(typeof parsed.totals.pulls, 'number');
   assert.equal(parsed.totals.measuredCount, 1);

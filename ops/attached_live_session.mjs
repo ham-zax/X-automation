@@ -26,7 +26,7 @@ const ERROR_TEXT_LIMIT = 500;
 
 const WRITER_PREPARATION = Object.freeze({
   operator: 'Reload persona-model with {"consumer":"writer"}. Before writing the first public text of the session, read docs/CONTENT_OPERATING_STANDARD.md; for an Original, Thread or Quote also docs/POST_GENERATION_PROMPT.md.',
-  profile: 'Profile Writer mode is active: call persona-model with {"consumer":"orchestrator"} once at startup for Hamza identity, stances, beliefs and engagement posture (never mention personal projects). If operator-status shows persona.dailyTone.active is false and observed candidates exist, pick a natural human mood for today (cheerful, energized, curious, playful, warm, wry, or focused) via persona-tone-set with observed candidate keys and influence<=0.1. Server-side reply-generate and writer-generate automatically load the full writer persona, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md; do not read those Writer prompt files yourself.',
+  profile: 'Profile Writer mode is active: call persona-model with {"consumer":"orchestrator"} once at startup for Hamza senior frontend+systems identity, stances, beliefs and engagement posture (never mention personal projects). Per-post experimental dynamism runs automatically inside reply-generate; do not force a static mood across the session. Server-side reply-generate and writer-generate automatically load the full writer persona, docs/CONTENT_OPERATING_STANDARD.md, and docs/POST_GENERATION_PROMPT.md; do not read those Writer prompt files yourself.',
 });
 
 function preflightContext(gate) {
@@ -39,6 +39,8 @@ function preflightContext(gate) {
   else if (Array.isArray(pre?.engageErrors) && pre.engageErrors.length) facts.push(`engage-refresh=errors(${pre.engageErrors.length})`);
   if (pre?.momentumRefreshed === true) facts.push('x_momentum=clean');
   else if (pre?.momentumError) facts.push('x_momentum=error');
+  if (pre?.latestRefreshed === true) facts.push('x_latest=clean');
+  else if (pre?.latestError) facts.push('x_latest=error');
   if (Number.isFinite(Number(pre?.t1Count))) facts.push(`t1=${Number(pre.t1Count)}`);
   const head = ['Preflight mode=' + (gate.mode || 'single_block'), gate.reason ? 'reason=' + gate.reason : '']
     .filter(Boolean).join(' ');

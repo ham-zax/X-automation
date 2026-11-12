@@ -22,7 +22,7 @@ export const DEFAULT_GROWTH_POLICY = Object.freeze({
     // These are topic preferences, not a restrictive whitelist.
     interests: { code_demos: 90, ai_breakthroughs: 90, tool_discoveries: 85,
       builder_lessons: 80, industry_commentary: 55 },
-    voiceGuidance: 'Sound like a real, magnetic human developer in 2026 — warm, curious, cheerful, playful, or candidly opinionated with zero arrogance and zero AI filler. Never mention personal projects. Spark real two-way conversations and share practical builder signal worth bookmarking and following.',
+    voiceGuidance: 'Write like a battle-tested senior frontend and systems engineer on X — sharp on state boundaries, UI/render craft, tail latency, and failure modes, with real situational range (curious shop-talk, deadpan wit, or dry sarcasm on hype/slop). Never arrogant toward honest builders, never personally abusive, and never mention personal projects.',
     prioritizeReplies: true,
   },
   breakthrough: {

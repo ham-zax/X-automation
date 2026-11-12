@@ -1,7 +1,7 @@
-// Closed-loop expression selection for Reply. Six expression arms compete under a
-// contextual UCB1 bandit with deterministic hash jitter, and a cadence-entropy guard
-// keeps consecutive replies from collapsing into one shape. No model call happens
-// here: selection is arithmetic over persisted state, so it is cheap and replayable.
+// Closed-loop experimental dynamism engine for Reply & social expression.
+// Combines a 7-arm domain-aware Contextual UCB1 + stochastic exploration bandit,
+// dynamic register modulation, and a rolling anti-monotony entropy guard — backed
+// by real published X outcome reconciliation in app_state (zero extra LLM calls).
 import { DomainValidationError } from './errors.js';
 
 export const DYNAMIC_EXPRESSION_STATE_KEY = 'dynamic_expression_state_v1';
@@ -13,52 +13,68 @@ const MEASUREMENT_DELAY_MS = 2 * 60 * 60 * 1000;
 export const EXPRESSION_ARMS = Object.freeze([
   Object.freeze({
     id: 'systems_tradeoff',
-    label: 'Systems trade-off',
+    label: 'Systems seam & failure mode',
     domains: Object.freeze(['systems', 'general_tech']),
-    directive: 'Surface the concrete architectural invariant, failure mode, tail-latency bottleneck, state/lease boundary, or retry/cache trade-off in 1-2 crisp peer sentences. Zero textbook definitions.',
+    directive: 'Pinpoint the real load-bearing backend/systems seam — retry idempotency, p99 tail amplification, split-brain lease, cache stampede, backpressure, write contention, or KV-cache cost — in 1-2 casual Slack-style sentences. Zero textbook definitions.',
   }),
   Object.freeze({
     id: 'frontend_craft',
-    label: 'Frontend craft',
+    label: 'Frontend & UI mechanics',
     domains: Object.freeze(['frontend', 'general_tech']),
-    directive: 'Spot the real UI/DX engineering detail: client/server state split, render waterfall, frame budget, optimistic rollback, layout/interaction feel, keyboard/TUI ergonomics, or component API surface.',
+    directive: 'Look at it with a senior frontend/UI engineer eye: client vs server state ownership, render waterfall, 60/120fps frame pacing, optimistic UI rollback when mutations fail, layout thrash, keyboard/TUI feel, or clean primitives vs prop soup.',
   }),
   Object.freeze({
     id: 'sharp_micro',
-    label: 'Sharp micro',
+    label: 'Deadpan micro-line',
     domains: Object.freeze(['any']),
-    directive: 'Drop one unforgettable 4-12 word human line (<= 80 chars) — punchy contrast, deadpan observation, or crisp verdict — and stop immediately.',
+    directive: 'Write one razor-sharp 3-11 word human line (<= 78 chars) — dry observation, crisp verdict, or deadpan punchline, lowercase allowed if natural — and stop cold with zero follow-up.',
+  }),
+  Object.freeze({
+    id: 'sarcastic_pushback',
+    label: 'Dry sarcasm or blunt pushback',
+    domains: Object.freeze(['hype_or_take', 'systems', 'frontend', 'general_tech']),
+    directive: 'Bring dry sarcasm, eye-roll understatement, or blunt negative pushback aimed strictly at the hype, overengineered abstraction, benchmark theater, or questionable take — never personal abuse or cruelty toward the human.',
   }),
   Object.freeze({
     id: 'builder_curiosity',
-    label: 'Builder curiosity',
+    label: 'Hard-part shop talk question',
     domains: Object.freeze(['systems', 'frontend', 'general_tech']),
-    directive: 'Point at one non-obvious implementation choice in their post and ask the single concrete engineering question the author actually wants to geek out on.',
+    directive: 'Skip generic praise: point straight at the trickiest engineering seam in what they built and ask the single concrete shop-talk question a fellow engineer actually wants to answer.',
   }),
   Object.freeze({
     id: 'independent_counterpoint',
-    label: 'Independent counterpoint',
-    domains: Object.freeze(['systems', 'frontend', 'general_tech']),
-    directive: "Offer a respectful, grounded peer counterpoint or sharp boundary condition ('works great until X / the real win is Y, not Z') with zero arrogance.",
+    label: 'Grounded peer counterpoint',
+    domains: Object.freeze(['systems', 'frontend', 'hype_or_take', 'general_tech']),
+    directive: "Take a clear, independent engineering stance — name the exact scale, latency, or UX condition where the claim breaks or where the boring alternative wins, with zero diplomatic hedging.",
   }),
   Object.freeze({
     id: 'dry_wit_or_camaraderie',
-    label: 'Dry wit or camaraderie',
+    label: 'Raw human wit or commiseration',
     domains: Object.freeze(['humor', 'social', 'any']),
-    directive: 'Pure human wit, deadpan dev commiseration, or low-key peer respect — zero technical lecture, zero corporate praise.',
+    directive: 'Drop the technical analyzer completely: pure deadpan wit, commiserating over cursed bugs/prod pain (rare expressive profanity allowed only if it genuinely fits the absurd situation, never at a person), or low-key peer respect.',
   }),
 ]);
 
-const FRONTEND_DOMAIN_PATTERN = /\b(?:ui|ux|tui|css|dom|html|react|next\.?js|solid|vue|svelte|tailwind|canvas|webgl|webgpu|shader|animation|layout|render|hydration|optimistic|viewport|keyboard|component|frontend|front-end|design system|latency|frame)\b/i;
-const SYSTEMS_DOMAIN_PATTERN = /\b(?:backend|distributed|postgres|sqlite|database|redis|queue|kafka|cache|idempoten|retry|lease|lock|consensus|p99|throughput|backpressure|stream|protocol|rust|golang|\bgo\b|kernel|memory|cpu|docker|systemd|agent|llm|token|kv|inference|schema|api|server|benchmark)\b/i;
-const HUMOR_DOMAIN_PATTERN = /\b(?:lol|lmao|haha|deleted the database|prod|friday deploy|padding|centered|joke|meme)\b/i;
-const PRAISE_OPENER_PATTERN = /^(?:congrats|nice|love|great|cool)\b/i;
+export const REGISTER_MODES = Object.freeze([
+  Object.freeze({ id: 'slack_peer', cue: '11pm teammate on Slack — casual, direct, technical shorthand, zero ceremony.' }),
+  Object.freeze({ id: 'deadpan_terse', cue: 'Dry, understated, minimal words — let the implication do the heavy lifting.' }),
+  Object.freeze({ id: 'sharp_skeptic', cue: 'Healthy practitioner skepticism — allergic to hype, focused on what survives prod.' }),
+  Object.freeze({ id: 'craft_geek', cue: 'Genuinely geeking out on a subtle UI or systems implementation detail.' }),
+  Object.freeze({ id: 'candid_blunt', cue: 'Unfiltered, honest developer take — say the quiet part plainly without being a jerk.' }),
+]);
+
+const FRONTEND_DOMAIN_PATTERN = /\b(?:ui|ux|tui|css|dom|html|react|next\.?js|solid|vue|svelte|tailwind|canvas|webgl|webgpu|shader|animation|layout|render|hydration|optimistic|viewport|keyboard|component|frontend|front-end|design system|frame|scroll|cursor|modal|state)\b/i;
+const SYSTEMS_DOMAIN_PATTERN = /\b(?:backend|distributed|postgres|sqlite|database|redis|queue|kafka|cache|idempoten|retry|lease|lock|consensus|p99|throughput|backpressure|stream|protocol|rust|golang|\bgo\b|kernel|memory|cpu|docker|systemd|agent|llm|token|kv|inference|schema|api|server|benchmark|latency)\b/i;
+const HYPE_OR_TAKE_PATTERN = /\b(?:10x|100x|dead|rip\s+\w+|replace\s+(?:all\s+)?(?:devs|developers|engineers|programmers)|revolutionary|game.?changer|unpopular opinion|hot take|no.?code|microservices|enterprise|agi|wrapper|slop|hype|insane|mind.?blowing|hotter take|everyone is wrong)\b/i;
+const HUMOR_DOMAIN_PATTERN = /\b(?:lol|lmao|haha|deleted the database|prod|friday deploy|padding|centered|joke|meme|cursed|wtf)\b/i;
+const PRAISE_OPENER_PATTERN = /^(?:congrats|nice|love|great|cool|awesome|amazing)\b/i;
 
 export function classifyCandidateDomains(text = '') {
   const value = String(text || '');
   const domains = [];
   if (FRONTEND_DOMAIN_PATTERN.test(value)) domains.push('frontend');
   if (SYSTEMS_DOMAIN_PATTERN.test(value)) domains.push('systems');
+  if (HYPE_OR_TAKE_PATTERN.test(value)) domains.push('hype_or_take');
   if (HUMOR_DOMAIN_PATTERN.test(value)) domains.push('humor');
   return domains.length ? domains : ['general_tech', 'social'];
 }
@@ -73,6 +89,7 @@ export function computeCadenceEntropy(recentReplies = []) {
   const newest = normalized.slice(0, 3);
   const questionStreak = newest.filter((text) => text.endsWith('?')).length;
   const praiseOpenerCount = newest.filter((text) => PRAISE_OPENER_PATTERN.test(text)).length;
+  const lowercaseCount = newest.filter((text) => /^[a-z]/.test(text)).length;
   const avgChars = normalized.length
     ? normalized.reduce((sum, text) => sum + text.length, 0) / normalized.length
     : 0;
@@ -87,6 +104,9 @@ export function computeCadenceEntropy(recentReplies = []) {
     constraints.push('Recent replies ran medium-long — keep this one tight and punchy (under 110 characters) unless a critical technical nuance requires more.');
   } else if (normalized.length >= 3 && avgChars < 65) {
     constraints.push('Recent replies were ultra-short — if the source has real technical meat, bring a sharper 1-2 sentence architectural or UI insight.');
+  }
+  if (newest.length === 3 && lowercaseCount === 3) {
+    constraints.push('Mix casing naturally — use normal sentence capitalization this turn so lowercase never becomes a robotic tic.');
   }
   return {
     questionStreak,
@@ -167,8 +187,6 @@ function writeState(store, state) {
   return state;
 }
 
-// Latest captured metrics per tweet, keyed by tweet id. getPerformanceSnapshot is the
-// existing store reader over post_metrics; a missing reader simply defers rewards.
 function readPostMetrics(store) {
   const metrics = new Map();
   if (typeof store.getPerformanceSnapshot !== 'function') return metrics;
@@ -219,7 +237,6 @@ export function reconcileDynamicExpressionRewards(store, { now = Date.now() } = 
     if (!post) continue;
     const publishedAt = Number(post.published_at) || Number(attempt.reconciledAt) || Number(attempt.createdAt) || 0;
     const measuredAt = Number(post.captured_at) || 0;
-    // A reward needs a measurement that is at least two hours past publication.
     if (!publishedAt || !measuredAt || measuredAt - publishedAt < MEASUREMENT_DELAY_MS) continue;
     const views = nonNegative(post.views);
     const likes = nonNegative(post.likes);
@@ -244,25 +261,43 @@ export function reconcileDynamicExpressionRewards(store, { now = Date.now() } = 
   return { reconciled, pending: state.history.filter((entry) => entry.reconciledAt == null).length, state };
 }
 
-// Deterministic per (candidate, arm) jitter: same input always breaks ties the same way.
-function hashJitter(candidateKey, armId) {
-  const input = `${String(candidateKey || '')}::${String(armId || '')}`;
+function hashUnit(seed) {
   let hash = 2166136261;
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index);
+  const text = String(seed || '');
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
   return ((hash >>> 0) % 10000) / 10000;
 }
 
-function armScore(stats, { candidateKey, armId, totalPulls }) {
-  const jitter = hashJitter(candidateKey, armId);
+function selectRegisterMode({ domains, armId, candidateKey, historyLength }) {
+  if (armId === 'sarcastic_pushback' || domains.includes('hype_or_take')) {
+    return REGISTER_MODES.find((m) => m.id === 'sharp_skeptic');
+  }
+  if (armId === 'sharp_micro') {
+    return REGISTER_MODES.find((m) => m.id === 'deadpan_terse');
+  }
+  const slot = Math.floor(hashUnit(`${candidateKey}::reg::${historyLength}`) * REGISTER_MODES.length);
+  return REGISTER_MODES[slot % REGISTER_MODES.length];
+}
+
+function armScore(stats, { candidateKey, armId, totalPulls, domains, exploratoryRoll }) {
+  const jitter = hashUnit(`${candidateKey}::${armId}`);
+  const domainBoost = (armId === 'sarcastic_pushback' && domains.includes('hype_or_take')) ? 0.28
+    : (armId === 'frontend_craft' && domains.includes('frontend')) ? 0.18
+      : (armId === 'systems_tradeoff' && domains.includes('systems')) ? 0.18
+        : 0;
+  // Exploratory roll (~22% of turns) deliberately surfaces wildcards and under-pulled arms.
+  if (exploratoryRoll) {
+    return (1 / (1 + stats.pulls * 0.35)) + domainBoost + jitter * 0.45;
+  }
   if (stats.measuredCount < 2 && stats.pulls < 3) {
-    return 1.5 - stats.pulls * 0.2 + jitter * 0.15;
+    return 1.5 - stats.pulls * 0.2 + domainBoost + jitter * 0.15;
   }
   const mean = stats.measuredCount > 0 ? stats.rewardSum / stats.measuredCount : 0.45;
   const total = Math.max(2, totalPulls);
-  return mean + 0.55 * Math.sqrt(Math.log(total) / Math.max(1, stats.pulls)) + jitter * 0.08;
+  return mean + 0.55 * Math.sqrt(Math.log(total) / Math.max(1, stats.pulls)) + domainBoost + jitter * 0.08;
 }
 
 export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceText = '', now = Date.now() } = {}) {
@@ -291,23 +326,28 @@ export function selectDynamicExpressionPlan(store, { candidateKey = '', sourceTe
   const recentArmIds = state.history.slice(-2).map((entry) => entry.armId);
   const rotated = eligible.filter((arm) => !recentArmIds.includes(arm.id));
   const pool = rotated.length ? rotated : eligible;
-  // A question streak also rules out the curiosity arm so Candidate B cannot force one.
   const withoutQuestions = entropy.questionStreak >= 2 ? pool.filter((arm) => arm.id !== 'builder_curiosity') : pool;
   const candidates = withoutQuestions.length ? withoutQuestions : pool;
   const totalPulls = EXPRESSION_ARMS.reduce((sum, arm) => sum + state.arms[arm.id].pulls, 0);
+  const exploratoryRoll = totalPulls >= 6 && hashUnit(`${candidateKey}::explore::${state.history.length}`) < 0.22;
+
   let best = null;
   for (const arm of candidates) {
-    const score = armScore(state.arms[arm.id], { candidateKey, armId: arm.id, totalPulls });
+    const score = armScore(state.arms[arm.id], { candidateKey, armId: arm.id, totalPulls, domains, exploratoryRoll });
     if (!best || score > best.score) best = { arm, score };
   }
   const arm = best.arm;
+  const register = selectRegisterMode({ domains, armId: arm.id, candidateKey, historyLength: state.history.length });
   return {
     recentReplies,
     dynamicExperiment: {
       armId: arm.id,
       label: arm.label,
       domains,
-      candidateBDirective: arm.directive,
+      exploratory: exploratoryRoll,
+      registerMode: register.id,
+      registerCue: register.cue,
+      candidateBDirective: `${arm.directive} Register: ${register.cue}`,
       cadenceConstraint: entropy.cadenceConstraint,
     },
   };
